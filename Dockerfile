@@ -3,10 +3,13 @@ FROM node:20-alpine
 LABEL maintainer="Oculair Media"
 LABEL description="Huly to Vibe Kanban bidirectional sync service"
 
-# Install dependencies
+# Install build dependencies for better-sqlite3 and other native modules
 RUN apk add --no-cache \
     git \
-    curl
+    curl \
+    python3 \
+    make \
+    g++
 
 # Create app directory
 WORKDIR /app

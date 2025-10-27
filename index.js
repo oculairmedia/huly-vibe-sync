@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
+import { createSyncDatabase } from './lib/database.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -42,54 +43,40 @@ const config = {
   },
 };
 
-// Sync state file for tracking last sync timestamps
-// Use /app/logs which is mounted from ./logs in docker-compose
-const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json');
+// Database initialization (replaces JSON file state management)
+const DB_PATH = path.join(__dirname, 'logs', 'sync-state.db');
+const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json'); // For migration
 
-// Project activity cache for skipping empty projects
-const projectActivityCache = new Map();
+// Initialize database
+let db;
+try {
+  db = createSyncDatabase(DB_PATH);
+  console.log('[DB] Database initialized successfully');
 
-/**
- * Load last sync state
- */
-function loadSyncState() {
-  try {
-    if (fs.existsSync(SYNC_STATE_FILE)) {
-      const state = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
-      console.log(`[Sync] Loaded state - Last sync: ${state.lastSync ? new Date(state.lastSync).toISOString() : 'never'}`);
+  // One-time migration from JSON to SQLite
+  if (fs.existsSync(SYNC_STATE_FILE)) {
+    // Check if database is empty (new database)
+    const lastSync = db.getLastSync();
+    if (!lastSync) {
+      console.log('[Migration] Detected existing JSON state file, importing data...');
+      try {
+        const oldState = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
+        db.importFromJSON(oldState);
 
-      // Load project activity cache
-      if (state.projectActivity) {
-        Object.entries(state.projectActivity).forEach(([key, value]) => {
-          projectActivityCache.set(key, value);
-        });
+        // Backup old file
+        const backupFile = `${SYNC_STATE_FILE}.backup-${Date.now()}`;
+        fs.renameSync(SYNC_STATE_FILE, backupFile);
+        console.log(`[Migration] ✓ Migration complete, old file backed up to ${backupFile}`);
+      } catch (migrationError) {
+        console.error('[Migration] ✗ Failed to migrate JSON data:', migrationError.message);
+        console.error('[Migration] Continuing with empty database...');
       }
-
-      return state;
     }
-  } catch (error) {
-    console.warn('[Sync] Could not load sync state:', error.message);
   }
-  return { lastSync: null, projectTimestamps: {}, projectActivity: {} };
-}
-
-/**
- * Save sync state
- */
-function saveSyncState(state) {
-  try {
-    const dir = path.dirname(SYNC_STATE_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    // Include project activity cache in state
-    state.projectActivity = Object.fromEntries(projectActivityCache);
-
-    fs.writeFileSync(SYNC_STATE_FILE, JSON.stringify(state, null, 2));
-  } catch (error) {
-    console.error('[Sync] Could not save sync state:', error.message);
-  }
+} catch (dbError) {
+  console.error('[DB] Failed to initialize database:', dbError.message);
+  console.error('[DB] Exiting...');
+  process.exit(1);
 }
 
 console.log('Huly → Vibe Kanban Sync Service');
@@ -837,9 +824,15 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
   console.log(`Starting bidirectional sync at ${new Date().toISOString()}`);
   console.log('='.repeat(60));
 
-  // Load sync state for incremental sync
-  const syncState = loadSyncState();
+  // Start tracking this sync run
+  const syncId = db.startSyncRun();
   const syncStartTime = Date.now();
+
+  // Get last sync timestamp from database
+  const lastSync = db.getLastSync();
+  if (lastSync) {
+    console.log(`[Sync] Last sync: ${new Date(lastSync).toISOString()}`);
+  }
 
   // Setup heartbeat logging
   const heartbeatInterval = setInterval(() => {
@@ -863,29 +856,23 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     // Use lowercase names for case-insensitive matching
     const vibeProjectsByName = new Map(vibeProjects.map(p => [p.name.toLowerCase(), p]));
 
-    // Filter projects if skip empty is enabled
+    // Filter projects if skip empty is enabled (using database instead of Map)
     let projectsToProcess = hulyProjects;
     if (config.sync.skipEmpty) {
-      const activeProjects = [];
-      const skippedProjects = [];
+      console.log('[DB] Querying projects to sync (skipping recently checked empty projects)...');
+      const projectsNeedingSync = db.getProjectsToSync(300000); // 5 minute cache
+      const projectsNeedingSyncSet = new Set(projectsNeedingSync.map(p => p.identifier));
 
-      for (const project of hulyProjects) {
-        const projectIdentifier = project.identifier || project.name;
-        const cachedActivity = projectActivityCache.get(projectIdentifier);
+      const activeProjects = hulyProjects.filter(project => {
+        const identifier = project.identifier || project.name;
+        return projectsNeedingSyncSet.has(identifier);
+      });
 
-        // Skip if we know it's empty and hasn't been synced recently
-        if (cachedActivity && cachedActivity.issueCount === 0 &&
-            Date.now() - cachedActivity.lastChecked < 300000) { // 5 minutes
-          skippedProjects.push(project.name);
-          continue;
-        }
-
-        activeProjects.push(project);
-      }
-
+      const skippedCount = hulyProjects.length - activeProjects.length;
       projectsToProcess = activeProjects;
-      if (skippedProjects.length > 0) {
-        console.log(`[Skip] ${skippedProjects.length} empty projects cached: ${skippedProjects.slice(0, 5).join(', ')}${skippedProjects.length > 5 ? '...' : ''}`);
+
+      if (skippedCount > 0) {
+        console.log(`[Skip] ${skippedCount} empty projects (cached in database)`);
       }
     }
 
@@ -893,6 +880,16 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     const processProject = async (hulyProject) => {
       try {
         console.log(`\n--- Processing Huly project: ${hulyProject.name} ---`);
+
+        const projectIdentifier = hulyProject.identifier || hulyProject.name;
+        const filesystemPath = extractFilesystemPath(hulyProject.description);
+
+        // Upsert project to database
+        db.upsertProject({
+          identifier: projectIdentifier,
+          name: hulyProject.name,
+          filesystem_path: filesystemPath,
+        });
 
         // Check if project exists in Vibe (case-insensitive)
         let vibeProject = vibeProjectsByName.get(hulyProject.name.toLowerCase());
@@ -906,28 +903,38 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
             vibeProject = createdProject;
             // Add to map for subsequent iterations
             vibeProjectsByName.set(hulyProject.name.toLowerCase(), vibeProject);
+
+            // Update database with Vibe ID
+            db.upsertProject({
+              identifier: projectIdentifier,
+              name: hulyProject.name,
+              vibe_id: vibeProject.id,
+              filesystem_path: filesystemPath,
+            });
           } else {
             console.log(`[Skip] Could not create project: ${hulyProject.name}`);
             return { success: false, project: hulyProject.name };
           }
         } else {
           console.log(`[Vibe] ✓ Found existing project: ${hulyProject.name}`);
+
+          // Update database with Vibe ID
+          db.upsertProject({
+            identifier: projectIdentifier,
+            name: hulyProject.name,
+            vibe_id: vibeProject.id,
+            filesystem_path: filesystemPath,
+          });
         }
 
-        // Fetch issues from both systems (with incremental sync support)
-        const projectIdentifier = hulyProject.identifier || hulyProject.name;
-        const lastProjectSync = syncState.projectTimestamps[projectIdentifier] || syncState.lastSync;
+        // Fetch issues from both systems (with incremental sync support from database)
+        const dbProject = db.getProject(projectIdentifier);
+        const lastProjectSync = dbProject?.last_sync_at || lastSync;
         const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeProject.id);
 
-        // Update project activity cache
-        projectActivityCache.set(projectIdentifier, {
-          issueCount: hulyIssues.length,
-          lastChecked: Date.now(),
-        });
-
-        // Update project timestamp
-        syncState.projectTimestamps[projectIdentifier] = syncStartTime;
+        // Update project activity in database
+        db.updateProjectActivity(projectIdentifier, hulyIssues.length);
 
         console.log(`\n[Sync] Huly: ${hulyIssues.length} issues, Vibe: ${vibeTasks.length} tasks`);
 
@@ -936,10 +943,29 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         const vibeTasksByTitle = new Map(vibeTasks.map(t => [t.title.toLowerCase(), t]));
 
         for (const hulyIssue of hulyIssues) {
+          // Save issue to database
+          db.upsertIssue({
+            identifier: hulyIssue.identifier,
+            project_identifier: projectIdentifier,
+            title: hulyIssue.title,
+            description: hulyIssue.description,
+            status: hulyIssue.status,
+            priority: hulyIssue.priority,
+          });
+
           const existingTask = vibeTasksByTitle.get(hulyIssue.title.toLowerCase());
 
           if (!existingTask) {
-            await createVibeTask(vibeClient, vibeProject.id, hulyIssue);
+            const createdTask = await createVibeTask(vibeClient, vibeProject.id, hulyIssue);
+
+            if (createdTask) {
+              // Update database with Vibe task ID
+              db.upsertIssue({
+                identifier: hulyIssue.identifier,
+                project_identifier: projectIdentifier,
+                vibe_task_id: createdTask.id,
+              });
+            }
           } else {
             // Task exists, check if description needs updating
             const hulyIdentifier = extractHulyIdentifier(existingTask.description);
@@ -955,6 +981,13 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
               console.log(`[Vibe] Updating task "${existingTask.title}" status: ${existingTask.status} → ${vibeStatus}`);
               await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus);
             }
+
+            // Update database with Vibe task ID
+            db.upsertIssue({
+              identifier: hulyIssue.identifier,
+              project_identifier: projectIdentifier,
+              vibe_task_id: existingTask.id,
+            });
           }
 
           // Small delay to avoid overwhelming the API
@@ -995,6 +1028,9 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     // Count successful and failed projects
     const projectsProcessed = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
     const projectsFailed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
+    const errors = results
+      .filter(r => r.value?.error)
+      .map(r => ({ project: r.value.project, error: r.value.error }));
 
     console.log('\n' + '='.repeat(60));
     console.log(`Bidirectional sync completed at ${new Date().toISOString()}`);
@@ -1007,12 +1043,30 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     }
     console.log('='.repeat(60));
 
-    // Save sync state for next incremental sync
-    syncState.lastSync = syncStartTime;
-    saveSyncState(syncState);
+    // Save sync completion to database
+    db.setLastSync(syncStartTime);
+    db.completeSyncRun(syncId, {
+      projectsProcessed,
+      projectsFailed,
+      issuesSynced: 0, // Could track this
+      errors,
+      durationMs: Date.now() - syncStartTime,
+    });
+
+    // Show database stats
+    const dbStats = db.getStats();
+    console.log(`[DB] Stats: ${dbStats.activeProjects} active, ${dbStats.emptyProjects} empty, ${dbStats.totalIssues} total issues`);
     console.log(`[Sync] State saved - Next sync will be incremental from ${new Date(syncStartTime).toISOString()}`);
   } catch (error) {
     console.error('\n[ERROR] Sync failed:', error);
+
+    // Record failed sync in database
+    db.completeSyncRun(syncId, {
+      projectsProcessed: 0,
+      projectsFailed: 0,
+      errors: [{ error: error.message }],
+      durationMs: Date.now() - syncStartTime,
+    });
   } finally {
     clearInterval(heartbeatInterval);
   }
