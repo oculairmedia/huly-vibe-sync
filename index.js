@@ -4,38 +4,77 @@
  * Huly → Vibe Kanban Sync Service
  *
  * Syncs projects and issues from Huly to Vibe Kanban
- * Uses both Huly MCP and Vibe Kanban MCP servers
+ * Uses Huly REST API and Vibe Kanban MCP servers
  */
 
 import fetch from 'node-fetch';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { createHulyRestClient } from './lib/HulyRestClient.js';
 
 // Configuration
 const config = {
   huly: {
-    mcpUrl: process.env.HULY_MCP_URL || 'http://192.168.50.90:3457/mcp',
+    apiUrl: process.env.HULY_API_URL || process.env.HULY_MCP_URL || 'http://192.168.50.90:3457/api',
+    useRestApi: process.env.HULY_USE_REST !== 'false', // Default to REST API
   },
   vibeKanban: {
     mcpUrl: process.env.VIBE_MCP_URL || 'http://192.168.50.90:9717/mcp',
-    apiUrl: process.env.VIBE_API_URL || 'http://192.168.50.90:3106/api',
+    apiUrl: process.env.VIBE_API_URL || 'http://192.168.50.90:3105/api',
   },
   sync: {
     interval: parseInt(process.env.SYNC_INTERVAL || '300000'), // 5 minutes default
     dryRun: process.env.DRY_RUN === 'true',
+    incremental: process.env.INCREMENTAL_SYNC !== 'false', // Default to true
   },
   stacks: {
     baseDir: process.env.STACKS_DIR || '/opt/stacks',
   },
 };
 
+// Sync state file for tracking last sync timestamps
+const SYNC_STATE_FILE = path.join(config.stacks.baseDir, 'huly-vibe-sync', 'logs', '.sync-state.json');
+
+/**
+ * Load last sync state
+ */
+function loadSyncState() {
+  try {
+    if (fs.existsSync(SYNC_STATE_FILE)) {
+      const state = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
+      console.log(`[Sync] Loaded state - Last sync: ${state.lastSync ? new Date(state.lastSync).toISOString() : 'never'}`);
+      return state;
+    }
+  } catch (error) {
+    console.warn('[Sync] Could not load sync state:', error.message);
+  }
+  return { lastSync: null, projectTimestamps: {} };
+}
+
+/**
+ * Save sync state
+ */
+function saveSyncState(state) {
+  try {
+    const dir = path.dirname(SYNC_STATE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(SYNC_STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    console.error('[Sync] Could not save sync state:', error.message);
+  }
+}
+
 console.log('Huly → Vibe Kanban Sync Service');
 console.log('Configuration:', {
-  hulyMcp: config.huly.mcpUrl,
+  hulyApi: config.huly.apiUrl,
+  hulyMode: config.huly.useRestApi ? 'REST API' : 'MCP',
   vibeMcp: config.vibeKanban.mcpUrl,
   stacksDir: config.stacks.baseDir,
   syncInterval: `${config.sync.interval / 1000}s`,
+  incrementalSync: config.sync.incremental,
   dryRun: config.sync.dryRun,
 });
 
@@ -403,19 +442,34 @@ function parseIssuesFromText(text, projectId) {
 /**
  * Fetch issues for a specific Huly project
  */
-async function fetchHulyIssues(hulyClient, projectIdentifier) {
-  console.log(`[Huly] Fetching issues for project ${projectIdentifier}...`);
+async function fetchHulyIssues(hulyClient, projectIdentifier, lastSyncTime = null) {
+  const isIncremental = config.sync.incremental && lastSyncTime;
+
+  if (isIncremental) {
+    console.log(`[Huly] Incremental fetch for ${projectIdentifier} (modified after ${new Date(lastSyncTime).toISOString()})`);
+  } else {
+    console.log(`[Huly] Full fetch for project ${projectIdentifier}...`);
+  }
 
   try {
-    // First, get the list of issues (summary only)
-    const listResult = await hulyClient.callTool('huly_query', {
+    // Use search mode with modified_after filter for incremental sync
+    const queryParams = {
       entity_type: 'issue',
-      mode: 'list',
+      mode: isIncremental ? 'search' : 'list',
       project_identifier: projectIdentifier,
       options: {
         limit: 100,
       },
-    });
+    };
+
+    // Add time filter for incremental sync
+    if (isIncremental) {
+      queryParams.filters = {
+        modified_after: new Date(lastSyncTime).toISOString(),
+      };
+    }
+
+    const listResult = await hulyClient.callTool('huly_query', queryParams);
 
     // Huly MCP returns formatted text, not JSON
     const text = typeof listResult === 'string' ? listResult : listResult.toString();
@@ -718,6 +772,10 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
   console.log(`Starting bidirectional sync at ${new Date().toISOString()}`);
   console.log('='.repeat(60));
 
+  // Load sync state for incremental sync
+  const syncState = loadSyncState();
+  const syncStartTime = Date.now();
+
   // Setup heartbeat logging
   const heartbeatInterval = setInterval(() => {
     console.log(`[HEARTBEAT] Sync still running... ${new Date().toISOString()}`);
@@ -767,10 +825,14 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         }
 
 
-        // Fetch issues from both systems
+        // Fetch issues from both systems (with incremental sync support)
         const projectIdentifier = hulyProject.identifier || hulyProject.name;
-        const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier);
+        const lastProjectSync = syncState.projectTimestamps[projectIdentifier] || syncState.lastSync;
+        const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeProject.id);
+
+        // Update project timestamp
+        syncState.projectTimestamps[projectIdentifier] = syncStartTime;
 
         console.log(`\n[Sync] Huly: ${hulyIssues.length} issues, Vibe: ${vibeTasks.length} tasks`);
 
@@ -824,6 +886,11 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     console.log(`Bidirectional sync completed at ${new Date().toISOString()}`);
     console.log(`Processed ${projectsProcessed}/${hulyProjects.length} projects`);
     console.log('='.repeat(60));
+
+    // Save sync state for next incremental sync
+    syncState.lastSync = syncStartTime;
+    saveSyncState(syncState);
+    console.log(`[Sync] State saved - Next sync will be incremental from ${new Date(syncStartTime).toISOString()}`);
   } catch (error) {
     console.error('\n[ERROR] Sync failed:', error);
   } finally {
@@ -861,24 +928,33 @@ async function listVibeTasks(projectId) {
 async function main() {
   console.log('\nStarting sync service...\n');
 
-  // Initialize MCP clients
-  const hulyClient = new MCPClient(config.huly.mcpUrl, 'Huly');
+  // Initialize Huly client (REST API or MCP)
+  let hulyClient;
+  if (config.huly.useRestApi) {
+    console.log('[Huly] Using REST API client');
+    console.log(`  - API URL: ${config.huly.apiUrl}`);
+    hulyClient = createHulyRestClient(config.huly.apiUrl, { name: 'Huly REST' });
+  } else {
+    console.log('[Huly] Using MCP client');
+    console.log(`  - MCP URL: ${config.huly.apiUrl}`);
+    hulyClient = new MCPClient(config.huly.apiUrl, 'Huly');
+  }
+
+  // Initialize Vibe Kanban MCP client
   const vibeClient = new MCPClient(config.vibeKanban.mcpUrl, 'Vibe Kanban');
+  console.log('[Vibe] Using MCP client');
+  console.log(`  - MCP URL: ${config.vibeKanban.mcpUrl}\n`);
 
-  console.log('[MCP] Connecting to servers:');
-  console.log(`  - Huly: ${config.huly.mcpUrl}`);
-  console.log(`  - Vibe: ${config.vibeKanban.mcpUrl}\n`);
-
-  // Initialize MCP sessions
+  // Initialize clients
   try {
     await hulyClient.initialize();
     await vibeClient.initialize();
   } catch (error) {
-    console.error('\n[ERROR] Failed to initialize MCP sessions:', error);
+    console.error('\n[ERROR] Failed to initialize clients:', error);
     process.exit(1);
   }
 
-  console.log('\n[MCP] All sessions initialized successfully\n');
+  console.log('\n[✓] All clients initialized successfully\n');
 
   // Wrapper function to run sync with timeout
   const runSyncWithTimeout = async () => {

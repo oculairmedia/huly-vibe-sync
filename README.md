@@ -7,12 +7,14 @@ Bidirectional synchronization service between [Huly](https://huly.io) and [Vibe 
 ## Features
 
 - ✅ **Bidirectional Sync**: Projects and issues from Huly → Tasks in Vibe Kanban
+- ✅ **REST API Integration**: Fast, efficient Huly REST API client for optimal performance
+- ✅ **Incremental Sync**: Only fetches issues modified since last sync (timestamp-based)
 - ✅ **Full Description Support**: Multi-line issue descriptions preserved with all formatting
 - ✅ **Status Synchronization**: Task status changes sync both ways
 - ✅ **Filesystem Path Mapping**: Automatic project path detection from Huly descriptions
 - ✅ **Configurable Intervals**: Run once, continuous sync, or on-demand
 - ✅ **Docker Support**: Fully containerized with health checks
-- ✅ **MCP Protocol**: Uses Model Context Protocol for reliable communication
+- ✅ **MCP Fallback**: Optional MCP protocol support for backwards compatibility
 
 ## Quick Start
 

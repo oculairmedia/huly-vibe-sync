@@ -2,17 +2,21 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    build: .
+    image: ghcr.io/oculairmedia/huly-vibe-sync:latest
     container_name: huly-vibe-sync
     restart: unless-stopped
     environment:
-      # MCP Server URLs
-      - HULY_MCP_URL=${HULY_MCP_URL:-http://192.168.50.90:3457/mcp}
+      # Huly API Configuration
+      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3457/api}
+      - HULY_USE_REST=${HULY_USE_REST:-true}
+
+      # Vibe Kanban Configuration
       - VIBE_MCP_URL=${VIBE_MCP_URL:-http://192.168.50.90:9717/mcp}
-      - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3106/api}
+      - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
       # Sync Configuration
       - SYNC_INTERVAL=${SYNC_INTERVAL:-300000}  # 5 minutes default
+      - INCREMENTAL_SYNC=${INCREMENTAL_SYNC:-true}
       - DRY_RUN=${DRY_RUN:-false}
 
       # Stacks Directory
