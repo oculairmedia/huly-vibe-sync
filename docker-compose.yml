@@ -29,8 +29,8 @@ services:
       # Logs directory
       - ./logs:/app/logs
 
-      # Access to stacks directory (read-only for path extraction)
-      - /opt/stacks:/opt/stacks:ro
+      # Access to stacks directory (read-write for state persistence)
+      - /opt/stacks:/opt/stacks:rw
 
     network_mode: host
 

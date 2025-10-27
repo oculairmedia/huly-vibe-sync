@@ -27,6 +27,9 @@ const config = {
     interval: parseInt(process.env.SYNC_INTERVAL || '300000'), // 5 minutes default
     dryRun: process.env.DRY_RUN === 'true',
     incremental: process.env.INCREMENTAL_SYNC !== 'false', // Default to true
+    parallel: process.env.PARALLEL_SYNC === 'true', // Parallel processing
+    maxWorkers: parseInt(process.env.MAX_WORKERS || '5'), // Max concurrent workers
+    skipEmpty: process.env.SKIP_EMPTY_PROJECTS === 'true', // Skip projects with 0 issues
   },
   stacks: {
     baseDir: process.env.STACKS_DIR || '/opt/stacks',
@@ -36,6 +39,9 @@ const config = {
 // Sync state file for tracking last sync timestamps
 const SYNC_STATE_FILE = path.join(config.stacks.baseDir, 'huly-vibe-sync', 'logs', '.sync-state.json');
 
+// Project activity cache for skipping empty projects
+const projectActivityCache = new Map();
+
 /**
  * Load last sync state
  */
@@ -44,12 +50,20 @@ function loadSyncState() {
     if (fs.existsSync(SYNC_STATE_FILE)) {
       const state = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
       console.log(`[Sync] Loaded state - Last sync: ${state.lastSync ? new Date(state.lastSync).toISOString() : 'never'}`);
+
+      // Load project activity cache
+      if (state.projectActivity) {
+        Object.entries(state.projectActivity).forEach(([key, value]) => {
+          projectActivityCache.set(key, value);
+        });
+      }
+
       return state;
     }
   } catch (error) {
     console.warn('[Sync] Could not load sync state:', error.message);
   }
-  return { lastSync: null, projectTimestamps: {} };
+  return { lastSync: null, projectTimestamps: {}, projectActivity: {} };
 }
 
 /**
@@ -61,6 +75,10 @@ function saveSyncState(state) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
+
+    // Include project activity cache in state
+    state.projectActivity = Object.fromEntries(projectActivityCache);
+
     fs.writeFileSync(SYNC_STATE_FILE, JSON.stringify(state, null, 2));
   } catch (error) {
     console.error('[Sync] Could not save sync state:', error.message);
@@ -75,6 +93,9 @@ console.log('Configuration:', {
   stacksDir: config.stacks.baseDir,
   syncInterval: `${config.sync.interval / 1000}s`,
   incrementalSync: config.sync.incremental,
+  parallelProcessing: config.sync.parallel,
+  maxWorkers: config.sync.maxWorkers,
+  skipEmptyProjects: config.sync.skipEmpty,
   dryRun: config.sync.dryRun,
 });
 
@@ -517,6 +538,19 @@ async function fetchHulyIssues(hulyClient, projectIdentifier, lastSyncTime = nul
 }
 
 /**
+ * Process batch of promises with concurrency limit
+ */
+async function processBatch(items, batchSize, processFunction) {
+  const results = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.allSettled(batch.map(processFunction));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+/**
  * List existing Vibe Kanban projects (using HTTP API for reliability)
  */
 async function listVibeProjects(vibeClient) {
@@ -798,9 +832,34 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     // Use lowercase names for case-insensitive matching
     const vibeProjectsByName = new Map(vibeProjects.map(p => [p.name.toLowerCase(), p]));
 
-    // Sync each Huly project
-    let projectsProcessed = 0;
-    for (const hulyProject of hulyProjects) {
+    // Filter projects if skip empty is enabled
+    let projectsToProcess = hulyProjects;
+    if (config.sync.skipEmpty) {
+      const activeProjects = [];
+      const skippedProjects = [];
+
+      for (const project of hulyProjects) {
+        const projectIdentifier = project.identifier || project.name;
+        const cachedActivity = projectActivityCache.get(projectIdentifier);
+
+        // Skip if we know it's empty and hasn't been synced recently
+        if (cachedActivity && cachedActivity.issueCount === 0 &&
+            Date.now() - cachedActivity.lastChecked < 300000) { // 5 minutes
+          skippedProjects.push(project.name);
+          continue;
+        }
+
+        activeProjects.push(project);
+      }
+
+      projectsToProcess = activeProjects;
+      if (skippedProjects.length > 0) {
+        console.log(`[Skip] ${skippedProjects.length} empty projects cached: ${skippedProjects.slice(0, 5).join(', ')}${skippedProjects.length > 5 ? '...' : ''}`);
+      }
+    }
+
+    // Function to process a single project
+    const processProject = async (hulyProject) => {
       try {
         console.log(`\n--- Processing Huly project: ${hulyProject.name} ---`);
 
@@ -818,18 +877,23 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
             vibeProjectsByName.set(hulyProject.name.toLowerCase(), vibeProject);
           } else {
             console.log(`[Skip] Could not create project: ${hulyProject.name}`);
-            continue;
+            return { success: false, project: hulyProject.name };
           }
         } else {
           console.log(`[Vibe] ✓ Found existing project: ${hulyProject.name}`);
         }
-
 
         // Fetch issues from both systems (with incremental sync support)
         const projectIdentifier = hulyProject.identifier || hulyProject.name;
         const lastProjectSync = syncState.projectTimestamps[projectIdentifier] || syncState.lastSync;
         const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeProject.id);
+
+        // Update project activity cache
+        projectActivityCache.set(projectIdentifier, {
+          issueCount: hulyIssues.length,
+          lastChecked: Date.now(),
+        });
 
         // Update project timestamp
         syncState.projectTimestamps[projectIdentifier] = syncStartTime;
@@ -874,17 +938,42 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
           // Small delay (reduced from 100ms to 50ms for consistency)
           await new Promise(resolve => setTimeout(resolve, 50));
         }
+
+        return { success: true, project: hulyProject.name };
       } catch (error) {
         console.error(`\n[ERROR] Failed to process project ${hulyProject.name}:`, error.message);
         console.log('[INFO] Continuing with next project...');
-        // Continue with next project instead of crashing
+        return { success: false, project: hulyProject.name, error: error.message };
       }
-      projectsProcessed++;
+    };
+
+    // Process projects (parallel or sequential based on config)
+    let results;
+    if (config.sync.parallel) {
+      console.log(`[Sync] Processing ${projectsToProcess.length} projects in parallel (max ${config.sync.maxWorkers} workers)...`);
+      results = await processBatch(projectsToProcess, config.sync.maxWorkers, processProject);
+    } else {
+      console.log(`[Sync] Processing ${projectsToProcess.length} projects sequentially...`);
+      results = [];
+      for (const project of projectsToProcess) {
+        const result = await processProject(project);
+        results.push({ status: 'fulfilled', value: result });
+      }
     }
+
+    // Count successful and failed projects
+    const projectsProcessed = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const projectsFailed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
 
     console.log('\n' + '='.repeat(60));
     console.log(`Bidirectional sync completed at ${new Date().toISOString()}`);
-    console.log(`Processed ${projectsProcessed}/${hulyProjects.length} projects`);
+    console.log(`Processed ${projectsProcessed}/${projectsToProcess.length} projects successfully`);
+    if (projectsFailed > 0) {
+      console.log(`Failed: ${projectsFailed} projects`);
+    }
+    if (config.sync.skipEmpty && projectsToProcess.length < hulyProjects.length) {
+      console.log(`Skipped: ${hulyProjects.length - projectsToProcess.length} cached empty projects`);
+    }
     console.log('='.repeat(60));
 
     // Save sync state for next incremental sync
