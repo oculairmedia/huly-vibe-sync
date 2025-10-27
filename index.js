@@ -27,6 +27,7 @@ const config = {
   vibeKanban: {
     mcpUrl: process.env.VIBE_MCP_URL || 'http://192.168.50.90:9717/mcp',
     apiUrl: process.env.VIBE_API_URL || 'http://192.168.50.90:3105/api',
+    useRestApi: process.env.VIBE_USE_REST !== 'false', // Default to REST API
   },
   sync: {
     interval: parseInt(process.env.SYNC_INTERVAL || '300000'), // 5 minutes default
@@ -95,7 +96,8 @@ console.log('Huly → Vibe Kanban Sync Service');
 console.log('Configuration:', {
   hulyApi: config.huly.apiUrl,
   hulyMode: config.huly.useRestApi ? 'REST API' : 'MCP',
-  vibeMcp: config.vibeKanban.mcpUrl,
+  vibeApi: config.vibeKanban.apiUrl,
+  vibeMode: 'REST API',
   stacksDir: config.stacks.baseDir,
   syncInterval: `${config.sync.interval / 1000}s`,
   incrementalSync: config.sync.incremental,
@@ -680,21 +682,32 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
       ? `${hulyIssue.description}\n\n---\nHuly Issue: ${hulyIssue.identifier}`
       : `Synced from Huly: ${hulyIssue.identifier}`;
 
-    const result = await vibeClient.callTool('create_task', {
-      project_id: vibeProjectId,
-      title: hulyIssue.title,
-      description: description,
+    const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
+
+    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: vibeProjectId,
+        title: hulyIssue.title,
+        description: description,
+        status: vibeStatus,
+      }),
     });
 
-    console.log(`[Vibe] ✓ Created task: ${hulyIssue.title}`);
-
-    // Update status if not todo
-    const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
-    if (vibeStatus !== 'todo' && result.id) {
-      await updateVibeTaskStatus(vibeClient, result.id, vibeStatus);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
-    return result;
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Task creation failed');
+    }
+
+    console.log(`[Vibe] ✓ Created task: ${hulyIssue.title}`);
+    return result.data;
   } catch (error) {
     console.error(`[Vibe] ✗ Error creating task ${hulyIssue.title}:`, error.message);
     return null;
@@ -711,10 +724,22 @@ async function updateVibeTaskStatus(vibeClient, taskId, status) {
   }
 
   try {
-    await vibeClient.callTool('update_task', {
-      task_id: taskId,
-      status: status,
+    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Task update failed');
+    }
 
     console.log(`[Vibe] ✓ Updated task ${taskId} status to: ${status}`);
   } catch (error) {
@@ -1035,17 +1060,16 @@ async function main() {
     hulyClient = new MCPClient(config.huly.apiUrl, 'Huly');
   }
 
-  // Initialize Vibe Kanban MCP client
-  const vibeClient = new MCPClient(config.vibeKanban.mcpUrl, 'Vibe Kanban');
-  console.log('[Vibe] Using MCP client');
-  console.log(`  - MCP URL: ${config.vibeKanban.mcpUrl}\n`);
+  // Vibe Kanban uses REST API (no client initialization needed)
+  const vibeClient = null; // Not used when using REST API
+  console.log('[Vibe] Using REST API');
+  console.log(`  - API URL: ${config.vibeKanban.apiUrl}\n`);
 
-  // Initialize clients
+  // Initialize Huly client
   try {
     await hulyClient.initialize();
-    await vibeClient.initialize();
   } catch (error) {
-    console.error('\n[ERROR] Failed to initialize clients:', error);
+    console.error('\n[ERROR] Failed to initialize Huly client:', error);
     process.exit(1);
   }
 
