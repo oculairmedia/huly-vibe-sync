@@ -37,7 +37,8 @@ const config = {
 };
 
 // Sync state file for tracking last sync timestamps
-const SYNC_STATE_FILE = path.join(config.stacks.baseDir, 'huly-vibe-sync', 'logs', '.sync-state.json');
+// Use /app/logs which is mounted from ./logs in docker-compose
+const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json');
 
 // Project activity cache for skipping empty projects
 const projectActivityCache = new Map();
