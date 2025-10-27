@@ -19,6 +19,7 @@ RUN npm install --production
 
 # Copy application files
 COPY index.js ./
+COPY lib ./lib
 COPY *.md ./
 
 # Create logs directory
