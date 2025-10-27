@@ -9,12 +9,29 @@ Bidirectional synchronization service between [Huly](https://huly.io) and [Vibe 
 - ✅ **Bidirectional Sync**: Projects and issues from Huly → Tasks in Vibe Kanban
 - ✅ **REST API Integration**: Fast, efficient Huly REST API client for optimal performance
 - ✅ **Incremental Sync**: Only fetches issues modified since last sync (timestamp-based)
+- ⚡ **Parallel Processing**: Concurrent project sync with configurable workers (default: 5)
+- 🚀 **Smart Caching**: Skips empty projects to reduce API load
+- ⏱️ **Fast Sync**: 10-second intervals for near real-time updates (~3-5s per cycle)
 - ✅ **Full Description Support**: Multi-line issue descriptions preserved with all formatting
 - ✅ **Status Synchronization**: Task status changes sync both ways
 - ✅ **Filesystem Path Mapping**: Automatic project path detection from Huly descriptions
 - ✅ **Configurable Intervals**: Run once, continuous sync, or on-demand
 - ✅ **Docker Support**: Fully containerized with health checks
 - ✅ **MCP Fallback**: Optional MCP protocol support for backwards compatibility
+
+## Performance
+
+**Current Configuration (Optimized):**
+- **Sync Interval**: 10 seconds (configurable)
+- **Incremental Sync Time**: 3-5 seconds (only fetches changed issues)
+- **Active Projects**: Processes only ~8-10 projects with issues (skips 30+ empty)
+- **Parallel Workers**: 5 concurrent project syncs
+- **Near Real-Time**: Changes sync within 10-15 seconds
+
+**Previous (Sequential):**
+- Sync Interval: 30 seconds
+- Full Sync Time: 25-30 seconds
+- All 44 projects processed sequentially
 
 ## Quick Start
 
@@ -52,6 +69,47 @@ Pre-built Docker images are automatically published to GitHub Container Registry
 - **Commit SHA**: `ghcr.io/oculairmedia/huly-vibe-sync:main-<sha>`
 
 Images are built for both `linux/amd64` and `linux/arm64` platforms.
+
+## Configuration
+
+### Environment Variables
+
+See `.env.example` for all available options. Key settings:
+
+```bash
+# Core Settings
+HULY_API_URL=http://192.168.50.90:3457/api
+HULY_USE_REST=true
+VIBE_MCP_URL=http://192.168.50.90:9717/mcp
+
+# Sync Behavior
+SYNC_INTERVAL=10000           # 10 seconds (default: 10000ms)
+INCREMENTAL_SYNC=true         # Only fetch changed issues
+PARALLEL_SYNC=true            # Process projects concurrently
+MAX_WORKERS=5                 # Max concurrent API calls
+SKIP_EMPTY_PROJECTS=true      # Skip projects with 0 issues
+
+# Dry Run Mode
+DRY_RUN=false                 # Set to true for testing
+```
+
+### Performance Tuning
+
+**For faster sync:**
+- Reduce `SYNC_INTERVAL` to 5000 (5 seconds) or 3000 (3 seconds)
+- Increase `MAX_WORKERS` to 8-10 (monitor API load)
+- Enable `SKIP_EMPTY_PROJECTS=true` (recommended)
+
+**For lower API load:**
+- Increase `SYNC_INTERVAL` to 30000 (30 seconds) or higher
+- Reduce `MAX_WORKERS` to 3
+- Set `PARALLEL_SYNC=false` for sequential processing
+
+**Monitor performance:**
+```bash
+docker logs huly-vibe-sync 2>&1 | grep "Slow tool execution"
+docker logs huly-vibe-sync 2>&1 | grep "sync completed"
+```
 
 ## Full Documentation
 
