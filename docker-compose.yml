@@ -15,8 +15,11 @@ services:
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
       # Sync Configuration
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-300000}  # 5 minutes default
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000}  # 10 seconds default
       - INCREMENTAL_SYNC=${INCREMENTAL_SYNC:-true}
+      - PARALLEL_SYNC=${PARALLEL_SYNC:-true}
+      - MAX_WORKERS=${MAX_WORKERS:-5}
+      - SKIP_EMPTY_PROJECTS=${SKIP_EMPTY_PROJECTS:-true}
       - DRY_RUN=${DRY_RUN:-false}
 
       # Stacks Directory
