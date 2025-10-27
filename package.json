@@ -1,0 +1,28 @@
+{
+  "name": "huly-vibe-sync",
+  "version": "1.0.0",
+  "description": "Bidirectional sync service between Huly and Vibe Kanban",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "DRY_RUN=true SYNC_INTERVAL=0 node index.js",
+    "sync-once": "SYNC_INTERVAL=0 node index.js",
+    "test": "node test-extract.js"
+  },
+  "keywords": [
+    "huly",
+    "vibe-kanban",
+    "sync",
+    "mcp",
+    "bidirectional-sync"
+  ],
+  "author": "Oculair Media",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

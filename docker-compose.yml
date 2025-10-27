@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  huly-vibe-sync:
+    build: .
+    container_name: huly-vibe-sync
+    restart: unless-stopped
+    environment:
+      # MCP Server URLs
+      - HULY_MCP_URL=${HULY_MCP_URL:-http://192.168.50.90:3457/mcp}
+      - VIBE_MCP_URL=${VIBE_MCP_URL:-http://192.168.50.90:9717/mcp}
+      - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3106/api}
+
+      # Sync Configuration
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-300000}  # 5 minutes default
+      - DRY_RUN=${DRY_RUN:-false}
+
+      # Stacks Directory
+      - STACKS_DIR=${STACKS_DIR:-/opt/stacks}
+
+      # Node Environment
+      - NODE_ENV=production
+
+    volumes:
+      # Logs directory
+      - ./logs:/app/logs
+
+      # Access to stacks directory (read-only for path extraction)
+      - /opt/stacks:/opt/stacks:ro
+
+    network_mode: host
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
