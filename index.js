@@ -14,7 +14,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createSyncDatabase } from './lib/database.js';
-import { createLettaService } from './lib/LettaService.js';
+import { 
+  createLettaService,
+  buildProjectMeta,
+  buildBoardConfig,
+  buildBoardMetrics,
+  buildHotspots,
+  buildBacklogSummary,
+  buildChangeLog,
+} from './lib/LettaService.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -1082,6 +1090,60 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         const lastProjectSync = dbProject?.last_sync_at || lastSync;
         const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeProject.id);
+
+        // Update Letta PM agent memory with project state (after fetching data)
+        if (lettaService && !config.sync.dryRun) {
+          try {
+            const lettaInfo = db.getProjectLettaInfo(projectIdentifier);
+            if (lettaInfo && lettaInfo.letta_agent_id) {
+              const memoryUpdateStart = Date.now();
+              console.log(`\n[Letta] Building project state snapshot for agent ${lettaInfo.letta_agent_id}...`);
+              
+              // Build all memory blocks
+              const projectMeta = buildProjectMeta(
+                hulyProject,
+                vibeProject,
+                filesystemPath,
+                getGitUrl(filesystemPath)
+              );
+              
+              const boardConfig = buildBoardConfig();
+              const boardMetrics = buildBoardMetrics(hulyIssues, vibeTasks);
+              const hotspots = buildHotspots(hulyIssues, vibeTasks);
+              const backlogSummary = buildBacklogSummary(hulyIssues, vibeTasks);
+              const changeLog = buildChangeLog(
+                hulyIssues,
+                lastProjectSync,
+                db,
+                projectIdentifier
+              );
+              
+              // Collect all blocks for upsert
+              const memoryBlocks = [
+                { label: 'project', value: projectMeta },
+                { label: 'board_config', value: boardConfig },
+                { label: 'board_metrics', value: boardMetrics },
+                { label: 'hotspots', value: hotspots },
+                { label: 'backlog_summary', value: backlogSummary },
+                { label: 'change_log', value: changeLog },
+              ];
+              
+              // Upsert memory blocks
+              await lettaService.upsertMemoryBlocks(lettaInfo.letta_agent_id, memoryBlocks);
+              
+              // Update last sync timestamp
+              db.setProjectLettaSyncAt(projectIdentifier, Date.now());
+              
+              const memoryUpdateTime = Date.now() - memoryUpdateStart;
+              console.log(`[Letta] ✓ Memory updated in ${memoryUpdateTime}ms`);
+            }
+          } catch (lettaMemoryError) {
+            console.error(`[Letta] Error updating memory for ${hulyProject.name}:`, lettaMemoryError.message);
+            console.error(`[Letta] Continuing sync without memory update`);
+          }
+        } else if (config.sync.dryRun) {
+          console.log(`[Letta] DRY RUN: Would update PM agent memory with current state`);
+        }
 
         // Update project activity in database
         db.updateProjectActivity(projectIdentifier, hulyIssues.length);
