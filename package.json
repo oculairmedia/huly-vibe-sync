@@ -20,6 +20,9 @@
   "author": "Oculair Media",
   "license": "MIT",
   "dependencies": {
+    "@letta-ai/letta-client": "^0.0.68665",
+    "better-sqlite3": "^9.2.2",
+    "dotenv": "^17.2.3",
     "node-fetch": "^3.3.2"
   },
   "engines": {
