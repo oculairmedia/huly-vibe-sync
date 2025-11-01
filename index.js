@@ -7,11 +7,13 @@
  * Uses Huly REST API and Vibe Kanban MCP servers
  */
 
+import 'dotenv/config';
 import fetch from 'node-fetch';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createSyncDatabase } from './lib/database.js';
 import { 
@@ -46,6 +48,7 @@ const config = {
     parallel: process.env.PARALLEL_SYNC === 'true', // Parallel processing
     maxWorkers: parseInt(process.env.MAX_WORKERS || '5'), // Max concurrent workers
     skipEmpty: process.env.SKIP_EMPTY_PROJECTS === 'true', // Skip projects with 0 issues
+    apiDelay: parseInt(process.env.API_DELAY || '10'), // Delay between API calls (ms) - reduced from 50ms
   },
   stacks: {
     baseDir: process.env.STACKS_DIR || '/opt/stacks',
@@ -57,6 +60,16 @@ const config = {
     hulyMcpUrl: process.env.HULY_MCP_URL || 'http://192.168.50.90:3457/mcp',
     vibeMcpUrl: process.env.VIBE_MCP_URL,
   },
+};
+
+// Health tracking
+const healthStats = {
+  startTime: Date.now(),
+  lastSyncTime: null,
+  lastSyncDuration: null,
+  syncCount: 0,
+  errorCount: 0,
+  lastError: null,
 };
 
 // Database initialization (replaces JSON file state management)
@@ -1056,6 +1069,31 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 config.letta.vibeMcpUrl
               );
               
+              // Attach project root folder to agent filesystem if path exists
+              if (filesystemPath) {
+                try {
+                  console.log(`[Letta] Attaching project root folder: ${filesystemPath}`);
+                  const fsFolder = await lettaService.ensureFolder(`${projectIdentifier}-root`, filesystemPath);
+                  await lettaService.attachFolderToAgent(agent.id, fsFolder.id);
+                  console.log(`[Letta] ✓ Project root folder attached to agent filesystem`);
+                  
+                  // Upload project files to folder (first time only)
+                  if (process.env.LETTA_UPLOAD_PROJECT_FILES === 'true') {
+                    console.log(`[Letta] Discovering and uploading project files...`);
+                    const files = await lettaService.discoverProjectFiles(filesystemPath);
+                    if (files.length > 0) {
+                      await lettaService.uploadProjectFiles(fsFolder.id, filesystemPath, files, 50);
+                      console.log(`[Letta] ✓ Project files uploaded to agent folder`);
+                    } else {
+                      console.log(`[Letta] No files found to upload`);
+                    }
+                  }
+                } catch (fsFolderError) {
+                  console.error(`[Letta] Error attaching filesystem folder:`, fsFolderError.message);
+                  console.error(`[Letta] Continuing without filesystem folder`);
+                }
+              }
+              
               // Persist to database
               db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
               console.log(`[Letta] ✓ Agent created and persisted: ${agent.id}`);
@@ -1073,6 +1111,29 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                   config.letta.hulyMcpUrl,
                   config.letta.vibeMcpUrl
                 );
+                
+                // Attach project root folder if path exists
+                if (filesystemPath) {
+                  try {
+                    console.log(`[Letta] Attaching project root folder: ${filesystemPath}`);
+                    const fsFolder = await lettaService.ensureFolder(`${projectIdentifier}-root`, filesystemPath);
+                    await lettaService.attachFolderToAgent(agent.id, fsFolder.id);
+                    console.log(`[Letta] ✓ Project root folder attached to agent filesystem`);
+                    
+                    // Upload project files to folder (first time only)
+                    if (process.env.LETTA_UPLOAD_PROJECT_FILES === 'true') {
+                      console.log(`[Letta] Discovering and uploading project files...`);
+                      const files = await lettaService.discoverProjectFiles(filesystemPath);
+                      if (files.length > 0) {
+                        await lettaService.uploadProjectFiles(fsFolder.id, filesystemPath, files, 50);
+                        console.log(`[Letta] ✓ Project files uploaded to agent folder`);
+                      }
+                    }
+                  } catch (fsFolderError) {
+                    console.error(`[Letta] Error attaching filesystem folder:`, fsFolderError.message);
+                  }
+                }
+                
                 db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
                 console.log(`[Letta] ✓ Agent recreated: ${agent.id}`);
               }
@@ -1136,6 +1197,41 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
               
               const memoryUpdateTime = Date.now() - memoryUpdateStart;
               console.log(`[Letta] ✓ Memory updated in ${memoryUpdateTime}ms`);
+              
+              // Upload README if enabled and filesystem path exists
+              if (process.env.LETTA_ATTACH_REPO_DOCS === 'true' && filesystemPath) {
+                try {
+                  const readmeUploadStart = Date.now();
+                  console.log(`[Letta] Checking for README in ${filesystemPath}...`);
+                  
+                  const path = await import('path');
+                  const readmePath = path.join(filesystemPath, 'README.md');
+                  
+                  // Ensure folder exists
+                  const folder = await lettaService.ensureFolder(projectIdentifier);
+                  db.setProjectLettaFolderId(projectIdentifier, folder.id);
+                  
+                  // Ensure source exists
+                  const source = await lettaService.ensureSource(`${projectIdentifier}-README`, folder.id);
+                  db.setProjectLettaSourceId(projectIdentifier, source.id);
+                  
+                  // Upload README
+                  const fileMetadata = await lettaService.uploadReadme(source.id, readmePath, projectIdentifier);
+                  
+                  if (fileMetadata) {
+                    // Attach source to agent (idempotent)
+                    await lettaService.attachSourceToAgent(lettaInfo.letta_agent_id, source.id);
+                    
+                    const readmeUploadTime = Date.now() - readmeUploadStart;
+                    console.log(`[Letta] ✓ README uploaded and attached in ${readmeUploadTime}ms`);
+                  } else {
+                    console.log(`[Letta] No README found, skipping upload`);
+                  }
+                } catch (readmeUploadError) {
+                  console.error(`[Letta] Error uploading README for ${hulyProject.name}:`, readmeUploadError.message);
+                  console.error(`[Letta] Continuing sync without README upload`);
+                }
+              }
             }
           } catch (lettaMemoryError) {
             console.error(`[Letta] Error updating memory for ${hulyProject.name}:`, lettaMemoryError.message);
@@ -1262,8 +1358,8 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
             });
           }
 
-          // Small delay to avoid overwhelming the API
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // Small delay to avoid overwhelming the API (configurable)
+          await new Promise(resolve => setTimeout(resolve, config.sync.apiDelay));
         }
 
         // Phase 2: Sync Vibe → Huly (update statuses)
@@ -1271,8 +1367,8 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         for (const vibeTask of vibeTasks) {
           await syncVibeTaskToHuly(hulyClient, vibeTask, hulyIssues, projectIdentifier, phase1UpdatedTasks);
 
-          // Small delay (reduced from 100ms to 50ms for consistency)
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // Small delay to avoid overwhelming the API (configurable)
+          await new Promise(resolve => setTimeout(resolve, config.sync.apiDelay));
         }
 
         return { success: true, project: hulyProject.name };
@@ -1345,6 +1441,93 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
 }
 
 /**
+ * Health check HTTP server
+ * Provides /health endpoint for monitoring
+ */
+function startHealthServer() {
+  const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || '3099');
+  
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health') {
+      const uptime = Date.now() - healthStats.startTime;
+      const health = {
+        status: 'healthy',
+        service: 'huly-vibe-sync',
+        version: '1.0.0',
+        uptime: {
+          milliseconds: uptime,
+          seconds: Math.floor(uptime / 1000),
+          human: formatDuration(uptime),
+        },
+        sync: {
+          lastSyncTime: healthStats.lastSyncTime 
+            ? new Date(healthStats.lastSyncTime).toISOString() 
+            : null,
+          lastSyncDuration: healthStats.lastSyncDuration 
+            ? `${healthStats.lastSyncDuration}ms` 
+            : null,
+          totalSyncs: healthStats.syncCount,
+          errorCount: healthStats.errorCount,
+          successRate: healthStats.syncCount > 0 
+            ? `${(((healthStats.syncCount - healthStats.errorCount) / healthStats.syncCount) * 100).toFixed(2)}%`
+            : 'N/A',
+        },
+        lastError: healthStats.lastError 
+          ? {
+              message: healthStats.lastError.message,
+              timestamp: new Date(healthStats.lastError.timestamp).toISOString(),
+              age: formatDuration(Date.now() - healthStats.lastError.timestamp),
+            }
+          : null,
+        config: {
+          syncInterval: `${config.sync.interval / 1000}s`,
+          apiDelay: `${config.sync.apiDelay}ms`,
+          parallelSync: config.sync.parallel,
+          maxWorkers: config.sync.maxWorkers,
+          dryRun: config.sync.dryRun,
+          lettaEnabled: !!config.letta.enabled,
+        },
+        memory: {
+          rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+          heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+          heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
+        },
+      };
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(health, null, 2));
+    } else if (req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Huly-Vibe Sync Service\nHealth check: /health');
+    } else {
+      res.writeHead(404);
+      res.end('Not Found');
+    }
+  });
+  
+  server.listen(HEALTH_PORT, () => {
+    console.log(`[Health] Health check endpoint running at http://localhost:${HEALTH_PORT}/health`);
+  });
+  
+  return server;
+}
+
+/**
+ * Format duration in human-readable format
+ */
+function formatDuration(ms) {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
+/**
  * List tasks for a Vibe project (using HTTP API)
  */
 async function listVibeTasks(projectId) {
@@ -1401,17 +1584,43 @@ async function main() {
 
   console.log('\n[✓] All clients initialized successfully\n');
 
+  // Start health check server
+  startHealthServer();
+
   // Wrapper function to run sync with timeout
   const runSyncWithTimeout = async () => {
+    const syncStartTime = Date.now();
     try {
       await withTimeout(
         syncHulyToVibe(hulyClient, vibeClient),
         900000, // 15-minute timeout for entire sync
         'Full sync cycle'
       );
+      
+      // Update health stats on success
+      healthStats.lastSyncTime = Date.now();
+      healthStats.lastSyncDuration = Date.now() - syncStartTime;
+      healthStats.syncCount++;
+      
+      // Clear Letta cache after successful sync to prevent memory leak
+      if (lettaService) {
+        lettaService.clearCache();
+      }
     } catch (error) {
       console.error('\n[TIMEOUT] Sync exceeded 15-minute timeout:', error.message);
       console.log('[INFO] Will retry in next cycle...\n');
+      
+      // Update health stats on error
+      healthStats.errorCount++;
+      healthStats.lastError = {
+        message: error.message,
+        timestamp: Date.now(),
+      };
+      
+      // Clear cache even on error to prevent memory buildup
+      if (lettaService) {
+        lettaService.clearCache();
+      }
     }
   };
 
