@@ -8,7 +8,10 @@
     "start": "node index.js",
     "dev": "DRY_RUN=true SYNC_INTERVAL=0 node index.js",
     "sync-once": "SYNC_INTERVAL=0 node index.js",
-    "test": "node test-extract.js"
+    "test": "node test-extract.js",
+    "manage": "node manage-agents.js",
+    "agents": "node manage-agents.js list-agents",
+    "migrate": "node migrate-agents-to-v1.js"
   },
   "keywords": [
     "huly",
