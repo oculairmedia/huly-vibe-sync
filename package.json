@@ -11,7 +11,8 @@
     "test": "node test-extract.js",
     "manage": "node manage-agents.js",
     "agents": "node manage-agents.js list-agents",
-    "migrate": "node migrate-agents-to-v1.js"
+    "migrate": "node migrate-agents-to-v1.js",
+    "control-agent": "node create-control-agent.js"
   },
   "keywords": [
     "huly",
