@@ -1,0 +1,5 @@
+# Local agent state (personal to this instance)
+settings.local.json
+
+# Agent logs
+*.log

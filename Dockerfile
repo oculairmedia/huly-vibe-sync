@@ -25,8 +25,13 @@ COPY index.js ./
 COPY lib ./lib
 COPY *.md ./
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Copy Letta configuration (shared settings, local state will be generated)
+COPY .letta ./.letta
+
+# Create logs directory and ensure .letta is writable by node user
+RUN mkdir -p /app/logs && \
+    chown -R node:node /app/.letta /app/logs && \
+    chmod -R 755 /app/.letta
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

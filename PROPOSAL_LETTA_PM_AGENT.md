@@ -30,6 +30,25 @@ Data Flow (simplified):
 3) Letta agent tools → MCP servers (Huly/Vibe) for read–write when invoked
 
 ---
+## Alignment with Letta Code (Research Preview)
+- Memory model alignment:
+  - Use standard blocks: `persona` (global), `human` (optional global), `project` (shared project memory)
+  - The PM harness writes structured state into `project` plus domain blocks: `board_metrics`, `hotspots`, `backlog_summary`, `change_log`
+- Persistence interop:
+  - Primary persistence remains in this service's SQLite DB (per‑project `letta_agent_id`)
+  - Optional synergy: write `.letta/settings.local.json` in each repo so Letta Code auto‑resumes the same agent (behind a config flag, default OFF)
+- Tools and permissions:
+  - Attach only MCP tools (Huly/Vibe) to the PM agent; do not attach local dev tools (Bash/Read/Write) in the service context
+  - Default to plan‑like gating; writes only via explicit MCP calls that the service mediates
+- Developer workflow:
+  - Developers can connect via the Letta Code CLI to the same agent for collaboration. Example:
+
+```bash
+letta -p "Show board metrics" --agent <AGENT_ID> --tools ""
+```
+
+---
+
 
 ## Database Changes
 Add columns to `projects` to track the per‑project agent and optional file store:
@@ -79,9 +98,9 @@ Fallback (no new dep): direct REST with fetch to Letta endpoints. SDK is recomme
 
 ## Agent Specification (One PM Agent per Project)
 - Naming: `Huly/<PROJECT_IDENTIFIER> PM Agent`
-- Persona memory block:
-  - Role: Project/Kanban PM; optimize flow, clarity, and actionability
-  - Constraints: Prefer concise, cite evidence from board/docs; propose tool calls, do not apply without gate
+- Memory blocks (base):
+  - persona: Project/Kanban PM; optimize flow, clarity, and actionability
+  - human: Optional developer/team preferences (style, conventions) to align with Letta Code’s global memory model
 - Models: From env (`LETTA_MODEL`, `LETTA_EMBEDDING`), aligned to your llms config
 - Tools (read‑write via MCP):
   - Huly MCP (e.g., `huly_query`, `huly_issue_ops`)
@@ -113,7 +132,7 @@ await letta.agents.tools.add(agent.id, vibeTool.id);
 On each sync for a project:
 1) Ensure agent exists (store/reuse `letta_agent_id`)
 2) Build snapshot from current Huly issues and Vibe tasks:
-   - `project_meta`: project name, identifier, repo path, git URL, vibe project id
+   - `project`: project name, identifier, repo path, git URL, vibe project id
    - `board_config`: status mapping and WIP policies (from existing mapping functions)
    - `board_metrics`: counts by status, WIP, done rates (windowed if available)
    - `hotspots`: blocked items, ageing WIP, overdue (if due dates are present)
@@ -126,7 +145,7 @@ On each sync for a project:
 Memory upsert (conceptual):
 ```ts
 await letta.agents.blocks.upsert(agentId, [
-  { label: 'project_meta', value: JSON.stringify(meta) },
+  { label: 'project', value: JSON.stringify(meta) },
   { label: 'board_config', value: JSON.stringify(config) },
   { label: 'board_metrics', value: JSON.stringify(metrics) },
   { label: 'hotspots', value: JSON.stringify(hotspots) },
@@ -170,14 +189,37 @@ await letta.sources.files.upsertText({ agentId, folderId, path: 'README.md', tex
   - Wraps SDK calls: ensureAgent, attachTools, upsertBlocks, ensureFolder/Source, uploadReadme
 
 ---
+## Developer CLI Interop with Letta Code
+- Purpose: allow humans to collaborate with the per‑project PM agent directly from the repo directory
+- How to connect:
+  - Obtain the `agent_id` (logged by the service; also stored in DB `projects.letta_agent_id`)
+  - From the repo root, run:
+
+```bash
+letta -p "Review current hotspots and suggest next actions" --agent <AGENT_ID> --tools ""
+```
+
+- Notes:
+  - `--tools ""` prevents the CLI from loading local Bash/Write tools; the agent still has server‑side MCP tools attached
+  - Model can be adjusted in‑session using `/model` in the CLI
+  - Optional: we can emit `.letta/settings.local.json` so `letta` auto‑resumes the project agent (behind a config flag)
+
+---
+
 
 ## Configuration
-Required:
+Required (Service):
 - `LETTA_BASE_URL`, `LETTA_PASSWORD`
 - `HULY_MCP_URL`, `VIBE_MCP_URL` (reachable by Letta for tool calling)
-Optional:
+
+Optional (Service):
 - `LETTA_MODEL`, `LETTA_EMBEDDING`
 - `LETTA_ATTACH_REPO_DOCS=true|false` (default true for README only)
+- Default permission semantics: “plan” (read/advise); write actions happen only via explicit MCP tool calls gated by the sync service
+
+Developer CLI (Letta Code) compatibility:
+- `LETTA_API_KEY` (for cloud) and/or `LETTA_BASE_URL` for self‑host
+- Use: `letta -p "Show board metrics" --agent <AGENT_ID> --tools ""` to avoid loading local Bash/Write tools; the agent will still have MCP tools attached server‑side
 
 Respect existing `DRY_RUN`: no Letta writes in dry‑run mode.
 

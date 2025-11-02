@@ -1,0 +1,34 @@
+ {
+  "version": "1.0.0",
+  "description": "Shared Letta project settings (can be committed)",
+  "project": {
+    "name": "huly-vibe-sync",
+    "description": "Bidirectional sync service between Huly and Vibe Kanban with Letta PM agents",
+    "memory": {
+      "project_context": "This is a sync service that maintains bidirectional synchronization between Huly issue tracker and Vibe Kanban board. Each Huly project has a corresponding Letta PM agent that provides intelligent project management capabilities."
+    }
+  },
+  "agent_settings": {
+    "model": "anthropic/claude-sonnet-4-5",
+    "embedding": "letta/letta-free",
+    "tools": {
+      "huly": [
+        "huly_query",
+        "huly_issue_ops",
+        "huly_entity"
+      ],
+      "vibe": [
+        "list_projects",
+        "list_tasks",
+        "get_task",
+        "update_task",
+        "list_task_attempts",
+        "get_task_attempt",
+        "get_branch_status"
+      ]
+    }
+  },
+  "localSharedBlockIds": {
+    "project": "block-986b6e48-08dc-46da-808b-c6bbc4f1a95b"
+  }
+}

@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import http from 'http';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createSyncDatabase } from './lib/database.js';
+import { fetchWithPool, getPoolStats } from './lib/http.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -186,7 +187,7 @@ class MCPClient {
       headers['mcp-session-id'] = this.sessionId;
     }
 
-    const response = await fetch(this.url, {
+    const response = await fetchWithPool(this.url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -349,8 +350,21 @@ function parseProjectsFromText(text) {
 function extractFilesystemPath(description) {
   if (!description) return null;
 
-  const match = description.match(/Filesystem:\s*(.+?)$/m);
-  return match ? match[1].trim() : null;
+  // Match patterns like: Path:, Filesystem:, Directory:, Location:
+  const patterns = [
+    /(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+    if (match) {
+      const path = match[1].trim();
+      // Clean up common suffixes
+      return path.replace(/[,;.]$/, '').trim();
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -545,7 +559,7 @@ async function listVibeProjects(vibeClient) {
   console.log('\n[Vibe] Listing existing projects...');
 
   try {
-    const response = await fetch(`${config.vibeKanban.apiUrl}/projects`);
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/projects`);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -597,7 +611,7 @@ async function createVibeProject(hulyProject) {
   try {
     const gitRepoPath = determineGitRepoPath(hulyProject);
 
-    const response = await fetch(`${config.vibeKanban.apiUrl}/projects`, {
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/projects`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -664,7 +678,7 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
 
     const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
 
-    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks`, {
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -704,7 +718,7 @@ async function updateVibeTaskStatus(vibeClient, taskId, status) {
   }
 
   try {
-    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -737,7 +751,7 @@ async function updateVibeTaskDescription(vibeClient, taskId, description) {
   }
 
   try {
-    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description }),
@@ -981,11 +995,20 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     // Use lowercase names for case-insensitive matching
     const vibeProjectsByName = new Map(vibeProjects.map(p => [p.name.toLowerCase(), p]));
 
-    // Filter projects if skip empty is enabled (using database instead of Map)
+    // Filter projects if skip empty is enabled (using database with change detection)
     let projectsToProcess = hulyProjects;
     if (config.sync.skipEmpty) {
-      console.log('[DB] Querying projects to sync (skipping recently checked empty projects)...');
-      const projectsNeedingSync = db.getProjectsToSync(300000); // 5 minute cache
+      console.log('[DB] Querying projects to sync (checking for changes and skipping recently checked empty projects)...');
+      
+      // Compute description hashes for all projects
+      const { SyncDatabase } = await import('./lib/database.js');
+      const descriptionHashes = {};
+      for (const project of hulyProjects) {
+        const identifier = project.identifier || project.name;
+        descriptionHashes[identifier] = SyncDatabase.computeDescriptionHash(project.description);
+      }
+      
+      const projectsNeedingSync = db.getProjectsToSync(300000, descriptionHashes); // 5 minute cache
       const projectsNeedingSyncSet = new Set(projectsNeedingSync.map(p => p.identifier));
 
       const activeProjects = hulyProjects.filter(project => {
@@ -1008,12 +1031,17 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
 
         const projectIdentifier = hulyProject.identifier || hulyProject.name;
         const filesystemPath = extractFilesystemPath(hulyProject.description);
+        
+        // Compute description hash for change detection
+        const { SyncDatabase } = await import('./lib/database.js');
+        const descriptionHash = SyncDatabase.computeDescriptionHash(hulyProject.description);
 
-        // Upsert project to database
+        // Upsert project to database with description hash
         db.upsertProject({
           identifier: projectIdentifier,
           name: hulyProject.name,
           filesystem_path: filesystemPath,
+          description_hash: descriptionHash,
         });
 
         // Check if project exists in Vibe (case-insensitive)
@@ -1094,13 +1122,28 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 }
               }
               
-              // Persist to database
+              // Persist to database and .letta/settings.local.json
               db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
+              lettaService.saveAgentId(projectIdentifier, agent.id);
+              
+              // Save agent ID to project's .letta folder (for letta CLI)
+              if (filesystemPath && fs.existsSync(filesystemPath)) {
+                lettaService.saveAgentIdToProjectFolder(filesystemPath, agent.id);
+              }
+              
               console.log(`[Letta] ✓ Agent created and persisted: ${agent.id}`);
             } else {
               // Agent exists, verify it's still in Letta
               try {
                 await lettaService.getAgent(lettaInfo.letta_agent_id);
+                // Ensure agent ID is persisted to .letta/settings.local.json
+                lettaService.saveAgentId(projectIdentifier, lettaInfo.letta_agent_id);
+                
+                // Save agent ID to project's .letta folder (for letta CLI)
+                if (filesystemPath && fs.existsSync(filesystemPath)) {
+                  lettaService.saveAgentIdToProjectFolder(filesystemPath, lettaInfo.letta_agent_id);
+                }
+                
                 console.log(`[Letta] ✓ Using existing agent: ${lettaInfo.letta_agent_id}`);
               } catch (error) {
                 // Agent was deleted from Letta, recreate
@@ -1135,6 +1178,13 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 }
                 
                 db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
+                lettaService.saveAgentId(projectIdentifier, agent.id);
+                
+                // Save agent ID to project's .letta folder (for letta CLI)
+                if (filesystemPath && fs.existsSync(filesystemPath)) {
+                  lettaService.saveAgentIdToProjectFolder(filesystemPath, agent.id);
+                }
+                
                 console.log(`[Letta] ✓ Agent recreated: ${agent.id}`);
               }
             }
@@ -1492,6 +1542,7 @@ function startHealthServer() {
           heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
           heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
         },
+        connectionPool: getPoolStats(),
       };
       
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1532,7 +1583,7 @@ function formatDuration(ms) {
  */
 async function listVibeTasks(projectId) {
   try {
-    const response = await fetch(`${config.vibeKanban.apiUrl}/tasks?project_id=${projectId}`);
+    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks?project_id=${projectId}`);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

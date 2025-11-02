@@ -6,6 +6,9 @@ package-lock.json
 .env
 .env.local
 
+# Letta agent persistence (local state)
+.letta/settings.local.json
+
 # Logs
 logs/
 *.log

@@ -2,12 +2,14 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: huly-vibe-sync
     restart: unless-stopped
     environment:
       # Huly API Configuration
-      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3457/api}
+      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3458}
       - HULY_USE_REST=${HULY_USE_REST:-true}
 
       # Vibe Kanban Configuration
@@ -16,23 +18,14 @@ services:
 
       # Sync Configuration
       - SYNC_INTERVAL=${SYNC_INTERVAL:-10000}  # 10 seconds default
-      - INCREMENTAL_SYNC=${INCREMENTAL_SYNC:-true}
-      - PARALLEL_SYNC=${PARALLEL_SYNC:-true}
+      - INCREMENTAL_SYNC=false  # Disabled for bidirectional sync - Phase 2 needs full issue list
+      - PARALLEL_SYNC=${PARALLEL_SYNC:-false}
       - MAX_WORKERS=${MAX_WORKERS:-5}
-      - SKIP_EMPTY_PROJECTS=${SKIP_EMPTY_PROJECTS:-true}
+      - SKIP_EMPTY_PROJECTS=false  # Disabled to allow all projects to sync
       - DRY_RUN=${DRY_RUN:-false}
 
       # Stacks Directory
       - STACKS_DIR=${STACKS_DIR:-/opt/stacks}
-
-      # Letta Integration
-      - LETTA_BASE_URL=${LETTA_BASE_URL}
-      - LETTA_PASSWORD=${LETTA_PASSWORD}
-      - HULY_MCP_URL=${HULY_MCP_URL:-http://192.168.50.90:3457/mcp}
-
-      # Performance
-      - API_DELAY=${API_DELAY:-10}
-      - HEALTH_PORT=${HEALTH_PORT:-3099}
 
       # Node Environment
       - NODE_ENV=production
@@ -40,9 +33,6 @@ services:
     volumes:
       # Logs directory
       - ./logs:/app/logs
-
-      # Letta agent persistence (read-write for storing agent IDs)
-      - ./.letta:/app/.letta
 
       # Access to stacks directory (read-write for state persistence)
       - /opt/stacks:/opt/stacks:rw
