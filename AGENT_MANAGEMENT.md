@@ -281,3 +281,82 @@ The management CLI:
 - Operates safely while sync service is running (no conflicts)
 
 Memory blocks are independent - updating one block doesn't affect others.
+
+## Scratchpad Memory Block
+
+### Overview
+
+Each agent has a `scratchpad` memory block - a persistent working memory space where agents can store:
+- **Notes**: Observations and insights about the project
+- **Observations**: Patterns detected across sync cycles
+- **Action Items**: Things to track or suggest
+- **Context**: Long-term preferences, known issues, workflow patterns
+
+### Usage
+
+**The scratchpad is agent-controlled:**
+- Initialized once when agent is created
+- Sync service never overwrites agent's content
+- Agents update it themselves using core_memory tools
+- Persists across all sync cycles
+
+**Viewing scratchpad:**
+```bash
+node manage-agents.js show-agent GRAPH
+```
+
+Look for the `scratchpad` block in the output (7th memory block).
+
+**Scratchpad Structure:**
+```json
+{
+  "notes": [
+    // Agent adds: { timestamp: ISO, content: string, tags: [] }
+  ],
+  "observations": [
+    // Agent adds: { timestamp: ISO, pattern: string, confidence: string }
+  ],
+  "action_items": [
+    // Agent adds: { timestamp: ISO, action: string, priority: string, status: string }
+  ],
+  "context": {
+    // Agent stores long-term context like team preferences
+  },
+  "usage_guide": "..."
+}
+```
+
+### For Existing Agents
+
+All 42 agents have been migrated with scratchpads using `add-scratchpads.js`.
+
+### For New Agents
+
+New agents automatically get a scratchpad during creation (after `attachMcpTools`).
+
+### Agent Instructions
+
+Agents see this usage guide in their scratchpad:
+
+```
+This scratchpad is your persistent working memory across sync cycles.
+
+You can:
+- Add notes about patterns you observe
+- Track action items to follow up on
+- Store context that helps with future analysis
+- Keep reasoning chains between syncs
+
+Update this block using the core_memory tools when you have insights worth preserving.
+The sync service won't overwrite your updates - you control this space.
+```
+
+### Technical Details
+
+- **Location**: 7th memory block (after change_log)
+- **Label**: `scratchpad`
+- **Initialization**: `LettaService.initializeScratchpad(agentId)`
+- **Builder**: `buildScratchpad()` in `lib/LettaService.js`
+- **Size**: ~500 chars when empty, grows as agent adds content
+- **Update frequency**: Agent-controlled (not every sync)
+
