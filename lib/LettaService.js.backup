@@ -242,8 +242,6 @@ export class LettaService {
                   },
                 ],
               },
-              enable_sleeptime: true,  // Enable background learning from conversation history
-              sleeptime_agent_frequency: 5,  // Trigger every 5 steps
             }),
           });
           
