@@ -24,7 +24,7 @@ import {
   buildBoardMetrics,
   buildHotspots,
   buildBacklogSummary,
-  buildChangeLog,
+  buildChangeLog, buildScratchpad,
 } from './lib/LettaService.js';
 
 // ES module __dirname equivalent
@@ -1097,6 +1097,9 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 config.letta.vibeMcpUrl
               );
               
+              // Initialize scratchpad for agent working memory
+              await lettaService.initializeScratchpad(agent.id);
+              
               // Attach project root folder to agent filesystem if path exists
               if (filesystemPath) {
                 try {
@@ -1154,6 +1157,9 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                   config.letta.hulyMcpUrl,
                   config.letta.vibeMcpUrl
                 );
+                
+                // Initialize scratchpad for agent working memory
+                await lettaService.initializeScratchpad(agent.id);
                 
                 // Attach project root folder if path exists
                 if (filesystemPath) {
