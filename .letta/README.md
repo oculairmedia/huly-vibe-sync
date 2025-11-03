@@ -1,16 +1,21 @@
 # Letta Agent Persistence
 
-This directory maintains Letta PM agent state in a Letta-Code-compatible format.
+This directory maintains Letta PM agent state in a **Letta-Code-compatible** format, following patterns from the official Letta CLI tool.
 
 ## Files
 
 ### `settings.json` (Shared, Committable)
 Project-level configuration shared across all instances:
-- Project metadata and context
-- Default agent configuration (model, embedding, tools)
-- Shared memory blocks
+- **Project metadata and context** - Service description and purpose
+- **Control agent configuration** - Template for all PM agents
+- **Default agent settings** - Model, embedding, tools configuration
+- **Memory block definitions** - Persona, human, project blocks
+- **Permissions** - Tool access control (allow/deny patterns)
+- **Shared memory blocks** - Block IDs for team-wide context
 
 This file **can be committed** to git and shared with the team.
+
+**Inspired by Letta Code's hierarchical memory system** - combines global settings (persona, human blocks) with project-specific context.
 
 ### `settings.local.json` (Local, Gitignored)
 Instance-specific agent persistence:
@@ -19,6 +24,8 @@ Instance-specific agent persistence:
 - One agent ID per Huly project
 
 This file is **gitignored** and personal to each deployment instance.
+
+**Follows Letta Code's project-level persistence** - automatically resumes agents per directory.
 
 ## Agent ID Mapping
 
@@ -131,16 +138,47 @@ rm .letta/settings.local.json
 docker-compose restart
 ```
 
+## New Features (Inspired by Letta Code)
+
+### Control Agent System
+The `control_agent` section in `settings.json` defines a template agent that:
+- **Centralizes configuration** - All PM agents inherit tools and persona
+- **Enables consistent behavior** - Same persona across all project agents
+- **Simplifies updates** - Change once, affects all new agents
+- **Auto-provisions on startup** - Creates control agent if missing
+
+### Memory Block Hierarchy
+Following Letta Code's pattern:
+1. **Global blocks** (`persona`, `human`) - Shared across all agents
+2. **Project blocks** - Service-specific context
+3. **Per-agent blocks** - Project-specific scraperchpad
+
+### Permission System
+Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
+```json
+{
+  "permissions": {
+    "allow": ["huly_*", "vibe_*", "filesystem_read_file(*)"],
+    "deny": ["filesystem_write_file(*)", "filesystem_delete_file(*)"],
+    "default_mode": "prompt"
+  }
+}
+```
+
 ## Benefits
 
 1. **Letta-Code Compatibility**: Direct CLI access to PM agents
-2. **Human-Readable**: JSON format for easy inspection and debugging  
-3. **Portable**: Can be backed up, copied, or version controlled (via settings.json)
-4. **Dual Persistence**: Redundancy with database ensures no data loss
-5. **Fast Lookup**: Quick agent ID resolution without database queries
+2. **Hierarchical Memory**: Global + project + agent-specific blocks
+3. **Control Agent Pattern**: Centralized configuration management
+4. **Permission Control**: Fine-grained tool access (allow/deny patterns)
+5. **Human-Readable**: JSON format for easy inspection and debugging  
+6. **Portable**: Can be backed up, copied, or version controlled (via settings.json)
+7. **Dual Persistence**: Redundancy with database ensures no data loss
+8. **Fast Lookup**: Quick agent ID resolution without database queries
 
 ## See Also
 
-- Letta Code Documentation: https://docs.letta.com/letta-code
-- Letta API Documentation: https://docs.letta.com/api-reference
-- Project README: ../README.md
+- **Letta Code Documentation**: https://github.com/letta-ai/letta-code
+- **Letta API Documentation**: https://docs.letta.com/api-reference
+- **Control Agent Guide**: ../CONTROL_AGENT_GUIDE.md
+- **Project README**: ../README.md

@@ -1,4 +1,4 @@
- {
+{
   "version": "1.0.0",
   "description": "Shared Letta project settings (can be committed)",
   "project": {
@@ -9,7 +9,7 @@
     }
   },
   "agent_settings": {
-    "model": "anthropic/claude-sonnet-4-5",
+    "model": "anthropic/sonnet-4-5",
     "embedding": "letta/letta-free",
     "tools": {
       "huly": [
@@ -27,6 +27,56 @@
         "get_branch_status"
       ]
     }
+  },
+  "control_agent": {
+    "name": "Huly-PM-Control",
+    "description": "Template agent for all PM agents - defines default persona, tools, and configuration",
+    "persona": "You are a helpful project management assistant for the Huly issue tracking system integrated with Vibe Kanban.\n\nYour role:\n- Help users understand their project status through Huly issues\n- Track task progress and development attempts in Vibe Kanban\n- Provide insights on issue trends, blockers, and team velocity\n- Answer questions about specific issues, components, or milestones\n- Suggest workflow improvements based on observed patterns\n\nYou have access to:\n- Huly issue data (query, update, create issues)\n- Vibe Kanban task tracking (view tasks, attempts, branch status)\n- File system access (read project files for context)\n\nBest practices:\n- Always cite specific issue IDs when referencing tickets\n- Use data to back up observations and suggestions\n- Keep responses concise and actionable\n- Respect project-specific context in your memory blocks",
+    "tools": [
+      "huly_query",
+      "huly_issue_ops", 
+      "huly_entity",
+      "list_projects",
+      "list_tasks",
+      "get_task",
+      "update_task"
+    ],
+    "sync_behavior": {
+      "auto_provision": true,
+      "update_on_restart": true,
+      "propagate_to_existing_agents": false
+    }
+  },
+  "memory_blocks": {
+    "persona": {
+      "template_source": "control_agent",
+      "customizable_per_project": true,
+      "description": "Agent behavior and role definition - sourced from control agent"
+    },
+    "human": {
+      "block_id": "block-3da80889-c509-4c68-b502-a3f54c28c137",
+      "name": "Meridian",
+      "description": "Shared human block for all agents in this deployment",
+      "content": "User preferences for Letta PM agents (managed by Meridian human block)"
+    },
+    "project": {
+      "block_id": "block-986b6e48-08dc-46da-808b-c6bbc4f1a95b",
+      "description": "Shared project context for huly-vibe-sync service"
+    }
+  },
+  "permissions": {
+    "allow": [
+      "huly_*",
+      "vibe_*",
+      "filesystem_read_file(*)",
+      "filesystem_list_directory(*)",
+      "filesystem_search_files(*)"
+    ],
+    "deny": [
+      "filesystem_write_file(*)",
+      "filesystem_delete_file(*)"
+    ],
+    "default_mode": "prompt"
   },
   "localSharedBlockIds": {
     "project": "block-986b6e48-08dc-46da-808b-c6bbc4f1a95b"
