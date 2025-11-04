@@ -58,7 +58,7 @@ services:
     network_mode: host
 
     healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '\"status\": \"healthy\"'"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -33,9 +33,9 @@ RUN mkdir -p /app/logs && \
     chown -R node:node /app/.letta /app/logs && \
     chmod -R 755 /app/.letta
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "process.exit(0)" || exit 1
+# Health check - query the /health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '"status": "healthy"' || exit 1
 
 # Run as non-root user
 USER node
