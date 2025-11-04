@@ -37,6 +37,14 @@ import {
   getConfigSummary,
   isLettaEnabled,
 } from './lib/config.js';
+import {
+  createHulyService,
+  fetchHulyProjects,
+  fetchHulyIssues,
+  updateHulyIssueStatus,
+  updateHulyIssueDescription,
+  syncVibeTaskToHuly,
+} from './lib/HulyService.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -314,67 +322,7 @@ function parseProjectsFromText(text) {
 }
 
 /**
- * Fetch projects from Huly using REST API
- */
-async function fetchHulyProjects(hulyClient) {
-  console.log('\n[Huly] Fetching projects...');
-
-  try {
-    // Use the REST API's listProjects method
-    const projects = await hulyClient.listProjects();
-
-    console.log(`[Huly] Found ${projects.length} projects`);
-
-    // Debug: show first project structure
-    if (projects.length > 0 && config.sync.dryRun) {
-      console.log('[Huly] Sample project:', JSON.stringify(projects[0], null, 2));
-    }
-
-    return projects;
-  } catch (error) {
-    console.error('[Huly] Error fetching projects:', error.message);
-    return [];
-  }
-}
-
-/**
- * Fetch issues from Huly project
- */
-function extractFullDescription(detailText) {
-  const lines = detailText.split('\n');
-  let inDescription = false;
-  let description = [];
-
-  // Top-level sections that mark the end of description
-  const endSections = ['## Recent Comments', '## Sub-issues', '## Attachments'];
-
-  for (const line of lines) {
-    // Start capturing after ## Description header
-    if (line.trim() === '## Description') {
-      inDescription = true;
-      continue;
-    }
-
-    // Stop at known end sections (not subsections within description)
-    if (inDescription) {
-      const trimmedLine = line.trim();
-      if (endSections.some(section => trimmedLine === section)) {
-        break;
-      }
-    }
-
-    // Capture all description lines (including subsections like ## Summary, etc.)
-    if (inDescription) {
-      description.push(line);
-    }
-  }
-
-  // Join and trim the description
-  return description.join('\n').trim();
-}
-
-/**
- * Parse issues from Huly MCP text response
+ * Parse issues from Huly MCP text response (legacy - kept for MCP compatibility)
  */
 function parseIssuesFromText(text, projectId) {
   const issues = [];
@@ -426,41 +374,6 @@ function parseIssuesFromText(text, projectId) {
   }
 
   return issues;
-}
-
-/**
- * Fetch issues for a specific Huly project
- */
-async function fetchHulyIssues(hulyClient, projectIdentifier, lastSyncTime = null) {
-  const isIncremental = config.sync.incremental && lastSyncTime;
-
-  if (isIncremental) {
-    console.log(`[Huly] Incremental fetch for ${projectIdentifier} (modified after ${new Date(lastSyncTime).toISOString()})`);
-  } else {
-    console.log(`[Huly] Full fetch for project ${projectIdentifier}...`);
-  }
-
-  try {
-    // Use the REST API's listIssues method which returns all issues with full details in one call
-    const options = {
-      limit: 1000, // Fetch up to 1000 issues
-    };
-
-    // Add time filter for incremental sync
-    if (isIncremental) {
-      options.modifiedAfter = new Date(lastSyncTime).toISOString();
-    }
-
-    // The REST API returns complete issue data with descriptions in a single call!
-    const issues = await hulyClient.listIssues(projectIdentifier, options);
-
-    console.log(`[Huly] Found ${issues.length} issues in ${projectIdentifier}`);
-
-    return issues;
-  } catch (error) {
-    console.error(`[Huly] Error fetching issues for ${projectIdentifier}:`, error.message);
-    return [];
-  }
 }
 
 /**
@@ -578,88 +491,6 @@ async function updateVibeTaskDescription(vibeClient, taskId, description) {
 }
 
 /**
- * Update Huly issue status
- */
-async function updateHulyIssueStatus(hulyClient, issueIdentifier, status) {
-  if (config.sync.dryRun) {
-    console.log(`[Huly] [DRY RUN] Would update issue ${issueIdentifier} status to: ${status}`);
-    return true;
-  }
-
-  try {
-    // Check if using REST API client or MCP client
-    if (typeof hulyClient.updateIssue === 'function') {
-      // HulyRestClient
-      await hulyClient.updateIssue(issueIdentifier, 'status', status);
-    } else if (typeof hulyClient.callTool === 'function') {
-      // MCPClient
-      await hulyClient.callTool('huly_issue_ops', {
-        operation: 'update',
-        issue_identifier: issueIdentifier,
-        update: {
-          field: 'status',
-          value: status
-        }
-      });
-    } else {
-      throw new Error('Unsupported client type');
-    }
-
-    console.log(`[Huly] ✓ Updated issue ${issueIdentifier} status to: ${status}`);
-    return true;
-  } catch (error) {
-    console.error(`[Huly] Error updating issue ${issueIdentifier} status:`, error.message);
-    return false;
-  }
-}
-
-/**
- * Update Huly issue description
- */
-async function updateHulyIssueDescription(hulyClient, issueIdentifier, description) {
-  if (config.sync.dryRun) {
-    console.log(`[Huly] [DRY RUN] Would update issue ${issueIdentifier} description`);
-    return true;
-  }
-
-  try {
-    // Check if using REST API client or MCP client
-    if (typeof hulyClient.updateIssue === 'function') {
-      // HulyRestClient
-      await hulyClient.updateIssue(issueIdentifier, 'description', description);
-    } else if (typeof hulyClient.callTool === 'function') {
-      // MCPClient
-      await hulyClient.callTool('huly_issue_ops', {
-        operation: 'update',
-        issue_identifier: issueIdentifier,
-        update: {
-          field: 'description',
-          value: description
-        }
-      });
-    } else {
-      throw new Error('Unsupported client type');
-    }
-
-    console.log(`[Huly] ✓ Updated issue ${issueIdentifier} description`);
-    return true;
-  } catch (error) {
-    console.error(`[Huly] Error updating issue ${issueIdentifier} description:`, error.message);
-    return false;
-  }
-}
-
-/**
- * Map Vibe status to Huly status
- */
-function extractHulyIdentifier(description) {
-  if (!description) return null;
-
-  const match = description.match(/Huly Issue: ([A-Z]+-\d+)/);
-  return match ? match[1] : null;
-}
-
-/**
  * Map Vibe status to Huly status
  */
 /**
@@ -708,7 +539,7 @@ async function syncVibeTaskToHuly(hulyClient, vibeTask, hulyIssues, projectIdent
     if (!hulyDescChanged) {
       // Only Vibe description changed - update Huly
       console.log(`[Vibe→Huly] Updating issue "${vibeTask.title}" description`);
-      await updateHulyIssueDescription(hulyClient, hulyIdentifier, vibeDescWithoutFooter);
+      await updateHulyIssueDescription(hulyClient, hulyIdentifier, vibeDescWithoutFooter, config);
       
       // Update database with new description
       db.upsertIssue({
@@ -732,7 +563,7 @@ async function syncVibeTaskToHuly(hulyClient, vibeTask, hulyIssues, projectIdent
     
     // Vibe changed and Huly didn't - safe to update
     console.log(`[Vibe→Huly] Task "${vibeTask.title}" status changed: ${hulyStatusNormalized} → ${vibeStatusMapped}`);
-    const success = await updateHulyIssueStatus(hulyClient, hulyIdentifier, vibeStatusMapped);
+    const success = await updateHulyIssueStatus(hulyClient, hulyIdentifier, vibeStatusMapped, config);
     
     if (success) {
       // Update database with new status
@@ -968,7 +799,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         // Fetch issues from both systems (with incremental sync support from database)
         const dbProject = db.getProject(projectIdentifier);
         const lastProjectSync = dbProject?.last_sync_at || lastSync;
-        const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
+        const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, config, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeClient, vibeProject.id);
 
         // Update Letta PM agent memory with project state (after fetching data)
