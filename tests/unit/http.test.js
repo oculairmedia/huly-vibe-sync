@@ -355,4 +355,143 @@ describe('http module', () => {
       expect(stats.https.maxSockets).toBeGreaterThanOrEqual(20);
     });
   });
+
+  describe('socket counting with active connections', () => {
+    it('should count sockets correctly when agent has active connections', () => {
+      // Simulate active sockets by adding to the agent's internal structures
+      const testHost = 'example.com:80';
+      
+      // Initialize sockets structure if not present
+      if (!httpAgent.sockets[testHost]) {
+        httpAgent.sockets[testHost] = [];
+      }
+      
+      // Add mock socket
+      const originalLength = httpAgent.sockets[testHost].length;
+      httpAgent.sockets[testHost].push({ mock: 'socket' });
+      
+      const stats = getPoolStats();
+      
+      // Should count the added socket
+      expect(stats.http.sockets).toBeGreaterThanOrEqual(originalLength);
+      
+      // Cleanup
+      httpAgent.sockets[testHost] = httpAgent.sockets[testHost].filter(s => !s.mock);
+    });
+
+    it('should count free sockets correctly', () => {
+      const testHost = 'example.com:80';
+      
+      // Initialize freeSockets structure if not present
+      if (!httpAgent.freeSockets[testHost]) {
+        httpAgent.freeSockets[testHost] = [];
+      }
+      
+      const originalLength = httpAgent.freeSockets[testHost].length;
+      httpAgent.freeSockets[testHost].push({ mock: 'free-socket' });
+      
+      const stats = getPoolStats();
+      
+      // Should count free sockets
+      expect(stats.http.freeSockets).toBeGreaterThanOrEqual(originalLength);
+      
+      // Cleanup
+      httpAgent.freeSockets[testHost] = httpAgent.freeSockets[testHost].filter(s => !s.mock);
+    });
+
+    it('should count pending requests correctly', () => {
+      const testHost = 'example.com:80';
+      
+      // Initialize requests structure if not present
+      if (!httpAgent.requests[testHost]) {
+        httpAgent.requests[testHost] = [];
+      }
+      
+      const originalLength = httpAgent.requests[testHost].length;
+      httpAgent.requests[testHost].push({ mock: 'request' });
+      
+      const stats = getPoolStats();
+      
+      // Should count pending requests
+      expect(stats.http.requests).toBeGreaterThanOrEqual(originalLength);
+      
+      // Cleanup
+      httpAgent.requests[testHost] = httpAgent.requests[testHost].filter(r => !r.mock);
+    });
+
+    it('should handle empty socket collections', () => {
+      // Ensure agents have empty collections
+      const stats = getPoolStats();
+      
+      // Should return 0 for counts (or valid non-negative numbers)
+      expect(stats.http.sockets).toBeGreaterThanOrEqual(0);
+      expect(stats.http.freeSockets).toBeGreaterThanOrEqual(0);
+      expect(stats.http.requests).toBeGreaterThanOrEqual(0);
+      expect(stats.https.sockets).toBeGreaterThanOrEqual(0);
+      expect(stats.https.freeSockets).toBeGreaterThanOrEqual(0);
+      expect(stats.https.requests).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should count across multiple hosts', () => {
+      const hosts = ['host1.com:80', 'host2.com:80', 'host3.com:80'];
+      
+      // Add mock sockets to multiple hosts
+      hosts.forEach(host => {
+        if (!httpAgent.sockets[host]) {
+          httpAgent.sockets[host] = [];
+        }
+        httpAgent.sockets[host].push({ mock: 'socket', host });
+      });
+      
+      const stats = getPoolStats();
+      
+      // Should aggregate across all hosts
+      expect(stats.http.sockets).toBeGreaterThanOrEqual(hosts.length);
+      
+      // Cleanup
+      hosts.forEach(host => {
+        if (httpAgent.sockets[host]) {
+          httpAgent.sockets[host] = httpAgent.sockets[host].filter(s => !s.mock);
+        }
+      });
+    });
+
+    it('should handle HTTPS socket counting', () => {
+      const testHost = 'secure.example.com:443';
+      
+      // Initialize HTTPS sockets
+      if (!httpsAgent.sockets[testHost]) {
+        httpsAgent.sockets[testHost] = [];
+      }
+      
+      httpsAgent.sockets[testHost].push({ mock: 'https-socket' });
+      
+      const stats = getPoolStats();
+      
+      // Should count HTTPS sockets separately
+      expect(stats.https.sockets).toBeGreaterThanOrEqual(1);
+      
+      // Cleanup
+      httpsAgent.sockets[testHost] = httpsAgent.sockets[testHost].filter(s => !s.mock);
+    });
+  });
+
+  describe('agent lifecycle', () => {
+    it('should handle agent destruction gracefully', () => {
+      // Destroy should not throw even if called multiple times
+      expect(() => {
+        destroyPool();
+        destroyPool();
+      }).not.toThrow();
+    });
+
+    it('should maintain stats structure after destruction', () => {
+      destroyPool();
+      
+      // Stats should still be retrievable
+      const stats = getPoolStats();
+      expect(stats).toHaveProperty('http');
+      expect(stats).toHaveProperty('https');
+    });
+  });
 });

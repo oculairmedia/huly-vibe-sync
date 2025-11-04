@@ -15,8 +15,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
+import { createVibeRestClient } from './lib/VibeRestClient.js';
 import { createSyncDatabase } from './lib/database.js';
 import { fetchWithPool, getPoolStats } from './lib/http.js';
+import { withTimeout, processBatch, formatDuration } from './lib/utils.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -138,17 +140,7 @@ console.log('Configuration:', {
   dryRun: config.sync.dryRun,
 });
 
-/**
- * Timeout wrapper for async operations
- */
-async function withTimeout(promise, timeoutMs, operation) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms: ${operation}`)), timeoutMs)
-    )
-  ]);
-}
+// Utility functions imported from lib/utils.js
 
 // Simple MCP client with session support
 class MCPClient {
@@ -540,38 +532,13 @@ async function fetchHulyIssues(hulyClient, projectIdentifier, lastSyncTime = nul
 }
 
 /**
- * Process batch of promises with concurrency limit
- */
-async function processBatch(items, batchSize, processFunction) {
-  const results = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.allSettled(batch.map(processFunction));
-    results.push(...batchResults);
-  }
-  return results;
-}
-
-/**
- * List existing Vibe Kanban projects (using HTTP API for reliability)
+ * List existing Vibe Kanban projects
  */
 async function listVibeProjects(vibeClient) {
   console.log('\n[Vibe] Listing existing projects...');
 
   try {
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/projects`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to list projects');
-    }
-
-    const projects = result.data || [];
+    const projects = await vibeClient.listProjects();
     console.log(`[Vibe] Found ${projects.length} existing projects`);
     return projects;
   } catch (error) {
@@ -598,9 +565,9 @@ function determineGitRepoPath(hulyProject) {
 }
 
 /**
- * Create a project in Vibe Kanban via HTTP API
+ * Create a project in Vibe Kanban
  */
-async function createVibeProject(hulyProject) {
+async function createVibeProject(vibeClient, hulyProject) {
   if (config.sync.dryRun) {
     console.log(`[Vibe] [DRY RUN] Would create project: ${hulyProject.name}`);
     return null;
@@ -611,31 +578,14 @@ async function createVibeProject(hulyProject) {
   try {
     const gitRepoPath = determineGitRepoPath(hulyProject);
 
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/projects`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: hulyProject.name,
-        git_repo_path: gitRepoPath,
-        use_existing_repo: fs.existsSync(gitRepoPath),
-      }),
+    const project = await vibeClient.createProject({
+      name: hulyProject.name,
+      git_repo_path: gitRepoPath,
+      use_existing_repo: fs.existsSync(gitRepoPath),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Project creation failed');
-    }
-
     console.log(`[Vibe] ✓ Created project: ${hulyProject.name}`);
-    return result.data;
+    return project;
   } catch (error) {
     console.error(`[Vibe] ✗ Error creating project ${hulyProject.name}:`, error.message);
     return null;
@@ -678,30 +628,14 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
 
     const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
 
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project_id: vibeProjectId,
-        title: hulyIssue.title,
-        description: description,
-        status: vibeStatus,
-      }),
+    const task = await vibeClient.createTask(vibeProjectId, {
+      title: hulyIssue.title,
+      description: description,
+      status: vibeStatus,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Task creation failed');
-    }
-
     console.log(`[Vibe] ✓ Created task: ${hulyIssue.title}`);
-    return result.data;
+    return task;
   } catch (error) {
     console.error(`[Vibe] ✗ Error creating task ${hulyIssue.title}:`, error.message);
     return null;
@@ -718,23 +652,7 @@ async function updateVibeTaskStatus(vibeClient, taskId, status) {
   }
 
   try {
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Task update failed');
-    }
-
+    await vibeClient.updateTask(taskId, 'status', status);
     console.log(`[Vibe] ✓ Updated task ${taskId} status to: ${status}`);
   } catch (error) {
     console.error(`[Vibe] Error updating task ${taskId} status:`, error.message);
@@ -751,23 +669,7 @@ async function updateVibeTaskDescription(vibeClient, taskId, description) {
   }
 
   try {
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Task description update failed');
-    }
-
+    await vibeClient.updateTask(taskId, 'description', description);
     console.log(`[Vibe] ✓ Updated task ${taskId} description`);
   } catch (error) {
     console.error(`[Vibe] Error updating task ${taskId} description:`, error.message);
@@ -1050,7 +952,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         if (!vibeProject) {
           // Try to create the project via HTTP API
           console.log(`[Vibe] Project not found, attempting to create: ${hulyProject.name}`);
-          const createdProject = await createVibeProject(hulyProject);
+          const createdProject = await createVibeProject(vibeClient, hulyProject);
 
           if (createdProject) {
             vibeProject = createdProject;
@@ -1178,7 +1080,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         const dbProject = db.getProject(projectIdentifier);
         const lastProjectSync = dbProject?.last_sync_at || lastSync;
         const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
-        const vibeTasks = await listVibeTasks(vibeProject.id);
+        const vibeTasks = await listVibeTasks(vibeClient, vibeProject.id);
 
         // Update Letta PM agent memory with project state (after fetching data)
         if (lettaService && !config.sync.dryRun) {
@@ -1542,38 +1444,12 @@ function startHealthServer() {
 }
 
 /**
- * Format duration in human-readable format
+ * List tasks for a Vibe project
  */
-function formatDuration(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-  return `${seconds}s`;
-}
-
-/**
- * List tasks for a Vibe project (using HTTP API)
- */
-async function listVibeTasks(projectId) {
+async function listVibeTasks(vibeClient, projectId) {
   try {
-    const response = await fetchWithPool(`${config.vibeKanban.apiUrl}/tasks?project_id=${projectId}`);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Failed to list tasks');
-    }
-
-    return result.data || [];
+    const tasks = await vibeClient.listTasks(projectId);
+    return tasks || [];
   } catch (error) {
     console.error(`[Vibe] Error listing tasks for project ${projectId}:`, error.message);
     return [];
@@ -1598,16 +1474,19 @@ async function main() {
     hulyClient = new MCPClient(config.huly.apiUrl, 'Huly');
   }
 
-  // Vibe Kanban uses REST API (no client initialization needed)
-  const vibeClient = null; // Not used when using REST API
-  console.log('[Vibe] Using REST API');
-  console.log(`  - API URL: ${config.vibeKanban.apiUrl}\n`);
+  // Initialize Vibe Kanban REST client
+  console.log('[Vibe] Using REST API client');
+  console.log(`  - API URL: ${config.vibeKanban.apiUrl}`);
+  const vibeClient = createVibeRestClient(config.vibeKanban.apiUrl, { name: 'Vibe REST' });
 
-  // Initialize Huly client
+  // Initialize both clients
   try {
-    await hulyClient.initialize();
+    await Promise.all([
+      hulyClient.initialize(),
+      vibeClient.initialize()
+    ]);
   } catch (error) {
-    console.error('\n[ERROR] Failed to initialize Huly client:', error);
+    console.error('\n[ERROR] Failed to initialize clients:', error);
     process.exit(1);
   }
 
