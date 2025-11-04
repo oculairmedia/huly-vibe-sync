@@ -1101,6 +1101,28 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
             
             console.log(`[Letta] ✓ Agent ensured and persisted: ${agent.id}`);
             
+            // Sync tools from control agent (if enabled)
+            if (process.env.LETTA_SYNC_TOOLS_FROM_CONTROL === 'true') {
+              try {
+                console.log(`[Letta] Syncing tools from control agent...`);
+                const forceSync = process.env.LETTA_SYNC_TOOLS_FORCE === 'true';
+                const syncResult = await lettaService.syncToolsFromControl(agent.id, forceSync);
+                
+                if (syncResult.attached > 0 || syncResult.detached > 0) {
+                  console.log(`[Letta] ✓ Tools synced: ${syncResult.attached} attached, ${syncResult.detached} detached`);
+                } else {
+                  console.log(`[Letta] ✓ Tools already in sync with control agent`);
+                }
+                
+                if (syncResult.errors.length > 0) {
+                  console.warn(`[Letta] ⚠️  ${syncResult.errors.length} tool sync errors (check logs)`);
+                }
+              } catch (syncError) {
+                console.error(`[Letta] Error syncing tools from control:`, syncError.message);
+                console.error(`[Letta] Continuing with existing tool configuration`);
+              }
+            }
+            
             // Only do first-time setup if this is a new agent (no DB record)
             if (!lettaInfo || !lettaInfo.letta_agent_id) {
               console.log(`[Letta] Performing first-time setup for new agent`);
