@@ -1085,10 +1085,25 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
           try {
             const lettaInfo = db.getProjectLettaInfo(projectIdentifier);
             
+            // ALWAYS call ensureAgent - it will reuse existing or create new
+            console.log(`[Letta] Ensuring PM agent for project: ${hulyProject.name}`);
+            const agent = await lettaService.ensureAgent(projectIdentifier, hulyProject.name);
+            
+            // CRITICAL: Always persist to database, whether new or reused
+            // This ensures DB stays in sync even if agent was found by name
+            db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
+            lettaService.saveAgentId(projectIdentifier, agent.id);
+            
+            // Save agent ID to project's .letta folder (for letta CLI)
+            if (filesystemPath && fs.existsSync(filesystemPath)) {
+              lettaService.saveAgentIdToProjectFolder(filesystemPath, agent.id);
+            }
+            
+            console.log(`[Letta] ✓ Agent ensured and persisted: ${agent.id}`);
+            
+            // Only do first-time setup if this is a new agent (no DB record)
             if (!lettaInfo || !lettaInfo.letta_agent_id) {
-              // Create new agent
-              console.log(`[Letta] Creating PM agent for project: ${hulyProject.name}`);
-              const agent = await lettaService.ensureAgent(projectIdentifier, hulyProject.name);
+              console.log(`[Letta] Performing first-time setup for new agent`);
               
               // Attach MCP tools
               await lettaService.attachMcpTools(
@@ -1125,74 +1140,9 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 }
               }
               
-              // Persist to database and .letta/settings.local.json
-              db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
-              lettaService.saveAgentId(projectIdentifier, agent.id);
-              
-              // Save agent ID to project's .letta folder (for letta CLI)
-              if (filesystemPath && fs.existsSync(filesystemPath)) {
-                lettaService.saveAgentIdToProjectFolder(filesystemPath, agent.id);
-              }
-              
-              console.log(`[Letta] ✓ Agent created and persisted: ${agent.id}`);
-            } else {
-              // Agent exists, verify it's still in Letta
-              try {
-                await lettaService.getAgent(lettaInfo.letta_agent_id);
-                // Ensure agent ID is persisted to .letta/settings.local.json
-                lettaService.saveAgentId(projectIdentifier, lettaInfo.letta_agent_id);
-                
-                // Save agent ID to project's .letta folder (for letta CLI)
-                if (filesystemPath && fs.existsSync(filesystemPath)) {
-                  lettaService.saveAgentIdToProjectFolder(filesystemPath, lettaInfo.letta_agent_id);
-                }
-                
-                console.log(`[Letta] ✓ Using existing agent: ${lettaInfo.letta_agent_id}`);
-              } catch (error) {
-                // Agent was deleted from Letta, recreate
-                console.log(`[Letta] Agent no longer exists in Letta, recreating...`);
-                const agent = await lettaService.ensureAgent(projectIdentifier, hulyProject.name);
-                await lettaService.attachMcpTools(
-                  agent.id,
-                  config.letta.hulyMcpUrl,
-                  config.letta.vibeMcpUrl
-                );
-                
-                // Initialize scratchpad for agent working memory
-                await lettaService.initializeScratchpad(agent.id);
-                
-                // Attach project root folder if path exists
-                if (filesystemPath) {
-                  try {
-                    console.log(`[Letta] Attaching project root folder: ${filesystemPath}`);
-                    const fsFolder = await lettaService.ensureFolder(`${projectIdentifier}-root`, filesystemPath);
-                    await lettaService.attachFolderToAgent(agent.id, fsFolder.id);
-                    console.log(`[Letta] ✓ Project root folder attached to agent filesystem`);
-                    
-                    // Upload project files to folder (first time only)
-                    if (process.env.LETTA_UPLOAD_PROJECT_FILES === 'true') {
-                      console.log(`[Letta] Discovering and uploading project files...`);
-                      const files = await lettaService.discoverProjectFiles(filesystemPath);
-                      if (files.length > 0) {
-                        await lettaService.uploadProjectFiles(fsFolder.id, filesystemPath, files, 50);
-                        console.log(`[Letta] ✓ Project files uploaded to agent folder`);
-                      }
-                    }
-                  } catch (fsFolderError) {
-                    console.error(`[Letta] Error attaching filesystem folder:`, fsFolderError.message);
-                  }
-                }
-                
-                db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
-                lettaService.saveAgentId(projectIdentifier, agent.id);
-                
-                // Save agent ID to project's .letta folder (for letta CLI)
-                if (filesystemPath && fs.existsSync(filesystemPath)) {
-                  lettaService.saveAgentIdToProjectFolder(filesystemPath, agent.id);
-                }
-                
-                console.log(`[Letta] ✓ Agent recreated: ${agent.id}`);
-              }
+              console.log(`[Letta] ✓ First-time setup complete`);
+              // Agent already exists in DB, ensureAgent() already validated and returned it
+              console.log(`[Letta] ✓ Using existing agent (already validated by ensureAgent)`);
             }
           } catch (lettaError) {
             console.error(`[Letta] Error ensuring agent for ${hulyProject.name}:`, lettaError.message);
