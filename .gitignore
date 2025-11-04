@@ -29,5 +29,10 @@ Thumbs.db
 test-*.js
 !test-extract.js
 
+# Test artifacts
+.test-data/
+coverage/
+html/
+
 # Docker
 docker-compose.override.yml
