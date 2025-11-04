@@ -45,6 +45,15 @@ import {
   updateHulyIssueDescription,
   syncVibeTaskToHuly,
 } from './lib/HulyService.js';
+import {
+  createVibeService,
+  listVibeProjects,
+  createVibeProject,
+  listVibeTasks,
+  createVibeTask,
+  updateVibeTaskStatus,
+  updateVibeTaskDescription,
+} from './lib/VibeService.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -377,120 +386,6 @@ function parseIssuesFromText(text, projectId) {
 }
 
 /**
- * List existing Vibe Kanban projects
- */
-async function listVibeProjects(vibeClient) {
-  console.log('\n[Vibe] Listing existing projects...');
-
-  try {
-    const projects = await vibeClient.listProjects();
-    console.log(`[Vibe] Found ${projects.length} existing projects`);
-    return projects;
-  } catch (error) {
-    console.error('[Vibe] Error listing projects:', error.message);
-    return [];
-  }
-}
-
-/**
- * Create a project in Vibe Kanban
- */
-async function createVibeProject(vibeClient, hulyProject) {
-  if (config.sync.dryRun) {
-    console.log(`[Vibe] [DRY RUN] Would create project: ${hulyProject.name}`);
-    return null;
-  }
-
-  console.log(`[Vibe] Creating project: ${hulyProject.name}`);
-
-  try {
-    const gitRepoPath = determineGitRepoPath(hulyProject);
-
-    const project = await vibeClient.createProject({
-      name: hulyProject.name,
-      git_repo_path: gitRepoPath,
-      use_existing_repo: fs.existsSync(gitRepoPath),
-    });
-
-    console.log(`[Vibe] ✓ Created project: ${hulyProject.name}`);
-    return project;
-  } catch (error) {
-    console.error(`[Vibe] ✗ Error creating project ${hulyProject.name}:`, error.message);
-    return null;
-  }
-}
-
-/**
- * Map Huly issue status to Vibe Kanban task status
- */
-/**
- * Create a task in Vibe Kanban
- */
-async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
-  if (config.sync.dryRun) {
-    console.log(`[Vibe] [DRY RUN] Would create task: ${hulyIssue.title}`);
-    return null;
-  }
-
-  console.log(`[Vibe] Creating task: ${hulyIssue.title}`);
-
-  try {
-    // Add Huly issue ID to description for tracking
-    const description = hulyIssue.description
-      ? `${hulyIssue.description}\n\n---\nHuly Issue: ${hulyIssue.identifier}`
-      : `Synced from Huly: ${hulyIssue.identifier}`;
-
-    const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
-
-    const task = await vibeClient.createTask(vibeProjectId, {
-      title: hulyIssue.title,
-      description: description,
-      status: vibeStatus,
-    });
-
-    console.log(`[Vibe] ✓ Created task: ${hulyIssue.title}`);
-    return task;
-  } catch (error) {
-    console.error(`[Vibe] ✗ Error creating task ${hulyIssue.title}:`, error.message);
-    return null;
-  }
-}
-
-/**
- * Update task status in Vibe Kanban
- */
-async function updateVibeTaskStatus(vibeClient, taskId, status) {
-  if (config.sync.dryRun) {
-    console.log(`[Vibe] [DRY RUN] Would update task ${taskId} status to: ${status}`);
-    return;
-  }
-
-  try {
-    await vibeClient.updateTask(taskId, 'status', status);
-    console.log(`[Vibe] ✓ Updated task ${taskId} status to: ${status}`);
-  } catch (error) {
-    console.error(`[Vibe] Error updating task ${taskId} status:`, error.message);
-  }
-}
-
-/**
- * Update Vibe task description
- */
-async function updateVibeTaskDescription(vibeClient, taskId, description) {
-  if (config.sync.dryRun) {
-    console.log(`[Vibe] [DRY RUN] Would update task ${taskId} description`);
-    return;
-  }
-
-  try {
-    await vibeClient.updateTask(taskId, 'description', description);
-    console.log(`[Vibe] ✓ Updated task ${taskId} description`);
-  } catch (error) {
-    console.error(`[Vibe] Error updating task ${taskId} description:`, error.message);
-  }
-}
-
-/**
  * Map Vibe status to Huly status
  */
 /**
@@ -672,7 +567,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
         if (!vibeProject) {
           // Try to create the project via HTTP API
           console.log(`[Vibe] Project not found, attempting to create: ${hulyProject.name}`);
-          const createdProject = await createVibeProject(vibeClient, hulyProject);
+          const createdProject = await createVibeProject(vibeClient, hulyProject, config);
 
           if (createdProject) {
             vibeProject = createdProject;
@@ -927,7 +822,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
           const existingTask = vibeTasksByTitle.get(hulyIssue.title.toLowerCase());
 
           if (!existingTask) {
-            const createdTask = await createVibeTask(vibeClient, vibeProject.id, hulyIssue);
+            const createdTask = await createVibeTask(vibeClient, vibeProject.id, hulyIssue, config);
 
             if (createdTask) {
               // Update database with Vibe task ID
@@ -954,7 +849,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
               if (dbIssueDesc && dbIssueDesc !== hulyIssue.description) {
                 // Huly description changed - update Vibe
                 console.log(`[Huly→Vibe] Updating task "${existingTask.title}" description`);
-                await updateVibeTaskDescription(vibeClient, existingTask.id, fullHulyDescription);
+                await updateVibeTaskDescription(vibeClient, existingTask.id, fullHulyDescription, config);
                 phase1UpdatedTasks.add(existingTask.id);
               }
             }
@@ -970,7 +865,7 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
               // First time seeing this issue - sync Huly → Vibe if they don't match
               if (!statusesMatch) {
                 console.log(`[Huly→Vibe] First sync for "${existingTask.title}": ${existingTask.status} → ${vibeStatus}`);
-                await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus);
+                await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus, config);
               }
             } else {
               // We have history - check what changed
@@ -981,14 +876,14 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
                 // Both changed - conflict! Huly wins
                 console.log(`[Conflict] Both systems changed "${existingTask.title}". Huly wins: ${hulyIssue.status}`);
                 if (!statusesMatch) {
-                  await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus);
+                  await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus, config);
                   phase1UpdatedTasks.add(existingTask.id);
                 }
               } else if (hulyChanged && !vibeChanged) {
                 // Only Huly changed - update Vibe
                 if (!statusesMatch) {
                   console.log(`[Huly→Vibe] Updating task "${existingTask.title}" status: ${existingTask.status} → ${vibeStatus}`);
-                  await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus);
+                  await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus, config);
                   phase1UpdatedTasks.add(existingTask.id);
                 }
               } else if (vibeChanged && !hulyChanged) {
@@ -1166,16 +1061,6 @@ function startHealthServer() {
 /**
  * List tasks for a Vibe project
  */
-async function listVibeTasks(vibeClient, projectId) {
-  try {
-    const tasks = await vibeClient.listTasks(projectId);
-    return tasks || [];
-  } catch (error) {
-    console.error(`[Vibe] Error listing tasks for project ${projectId}:`, error.message);
-    return [];
-  }
-}
-
 /**
  * Start the sync service
  */
