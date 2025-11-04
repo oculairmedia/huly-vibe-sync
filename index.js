@@ -16,7 +16,7 @@ import { fileURLToPath } from 'url';
 import http from 'http';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createVibeRestClient } from './lib/VibeRestClient.js';
-import { createSyncDatabase } from './lib/database.js';
+import { createSyncDatabase, migrateFromJSON } from './lib/database.js';
 import { fetchWithPool, getPoolStats } from './lib/http.js';
 import { withTimeout, processBatch, formatDuration } from './lib/utils.js';
 import {
@@ -54,6 +54,12 @@ import {
   updateVibeTaskStatus,
   updateVibeTaskDescription,
 } from './lib/VibeService.js';
+import {
+  createHealthServer,
+  initializeHealthStats,
+  recordSuccessfulSync,
+  recordFailedSync,
+} from './lib/HealthService.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -72,14 +78,7 @@ const __dirname = path.dirname(__filename);
 const config = loadConfig();
 
 // Health tracking
-const healthStats = {
-  startTime: Date.now(),
-  lastSyncTime: null,
-  lastSyncDuration: null,
-  syncCount: 0,
-  errorCount: 0,
-  lastError: null,
-};
+const healthStats = initializeHealthStats();
 
 // Database initialization (replaces JSON file state management)
 const DB_PATH = path.join(__dirname, 'logs', 'sync-state.db');
@@ -92,25 +91,7 @@ try {
   console.log('[DB] Database initialized successfully');
 
   // One-time migration from JSON to SQLite
-  if (fs.existsSync(SYNC_STATE_FILE)) {
-    // Check if database is empty (new database)
-    const lastSync = db.getLastSync();
-    if (!lastSync) {
-      console.log('[Migration] Detected existing JSON state file, importing data...');
-      try {
-        const oldState = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
-        db.importFromJSON(oldState);
-
-        // Backup old file
-        const backupFile = `${SYNC_STATE_FILE}.backup-${Date.now()}`;
-        fs.renameSync(SYNC_STATE_FILE, backupFile);
-        console.log(`[Migration] ✓ Migration complete, old file backed up to ${backupFile}`);
-      } catch (migrationError) {
-        console.error('[Migration] ✗ Failed to migrate JSON data:', migrationError.message);
-        console.error('[Migration] Continuing with empty database...');
-      }
-    }
-  }
+  migrateFromJSON(db, SYNC_STATE_FILE);
 } catch (dbError) {
   console.error('[DB] Failed to initialize database:', dbError.message);
   console.error('[DB] Exiting...');
@@ -919,75 +900,6 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
  * Health check HTTP server
  * Provides /health endpoint for monitoring
  */
-function startHealthServer() {
-  const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || '3099');
-  
-  const server = http.createServer((req, res) => {
-    if (req.url === '/health') {
-      const uptime = Date.now() - healthStats.startTime;
-      const health = {
-        status: 'healthy',
-        service: 'huly-vibe-sync',
-        version: '1.0.0',
-        uptime: {
-          milliseconds: uptime,
-          seconds: Math.floor(uptime / 1000),
-          human: formatDuration(uptime),
-        },
-        sync: {
-          lastSyncTime: healthStats.lastSyncTime 
-            ? new Date(healthStats.lastSyncTime).toISOString() 
-            : null,
-          lastSyncDuration: healthStats.lastSyncDuration 
-            ? `${healthStats.lastSyncDuration}ms` 
-            : null,
-          totalSyncs: healthStats.syncCount,
-          errorCount: healthStats.errorCount,
-          successRate: healthStats.syncCount > 0 
-            ? `${(((healthStats.syncCount - healthStats.errorCount) / healthStats.syncCount) * 100).toFixed(2)}%`
-            : 'N/A',
-        },
-        lastError: healthStats.lastError 
-          ? {
-              message: healthStats.lastError.message,
-              timestamp: new Date(healthStats.lastError.timestamp).toISOString(),
-              age: formatDuration(Date.now() - healthStats.lastError.timestamp),
-            }
-          : null,
-        config: {
-          syncInterval: `${config.sync.interval / 1000}s`,
-          apiDelay: `${config.sync.apiDelay}ms`,
-          parallelSync: config.sync.parallel,
-          maxWorkers: config.sync.maxWorkers,
-          dryRun: config.sync.dryRun,
-          lettaEnabled: !!config.letta.enabled,
-        },
-        memory: {
-          rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
-          heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-          heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
-        },
-        connectionPool: getPoolStats(),
-      };
-      
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(health, null, 2));
-    } else if (req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Huly-Vibe Sync Service\nHealth check: /health');
-    } else {
-      res.writeHead(404);
-      res.end('Not Found');
-    }
-  });
-  
-  server.listen(HEALTH_PORT, () => {
-    console.log(`[Health] Health check endpoint running at http://localhost:${HEALTH_PORT}/health`);
-  });
-  
-  return server;
-}
-
 /**
  * List tasks for a Vibe project
  */
@@ -1028,7 +940,7 @@ async function main() {
   console.log('\n[✓] All clients initialized successfully\n');
 
   // Start health check server
-  startHealthServer();
+  createHealthServer(healthStats, config);
 
   // Wrapper function to run sync with timeout
   const runSyncWithTimeout = async () => {
@@ -1041,9 +953,7 @@ async function main() {
       );
       
       // Update health stats on success
-      healthStats.lastSyncTime = Date.now();
-      healthStats.lastSyncDuration = Date.now() - syncStartTime;
-      healthStats.syncCount++;
+      recordSuccessfulSync(healthStats, Date.now() - syncStartTime);
       
       // Clear Letta cache after successful sync to prevent memory leak
       if (lettaService) {
@@ -1054,11 +964,7 @@ async function main() {
       console.log('[INFO] Will retry in next cycle...\n');
       
       // Update health stats on error
-      healthStats.errorCount++;
-      healthStats.lastError = {
-        message: error.message,
-        timestamp: Date.now(),
-      };
+      recordFailedSync(healthStats, error);
       
       // Clear cache even on error to prevent memory buildup
       if (lettaService) {
