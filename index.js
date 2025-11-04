@@ -26,6 +26,12 @@ import {
   getGitUrl,
   determineGitRepoPath,
 } from './lib/textParsers.js';
+import {
+  mapHulyStatusToVibe,
+  mapVibeStatusToHuly,
+  normalizeStatus,
+  areStatusesEquivalent,
+} from './lib/statusMapper.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -540,20 +546,6 @@ async function createVibeProject(vibeClient, hulyProject) {
 /**
  * Map Huly issue status to Vibe Kanban task status
  */
-function mapHulyStatusToVibe(hulyStatus) {
-  if (!hulyStatus) return 'todo';
-
-  const status = hulyStatus.toLowerCase();
-
-  if (status.includes('backlog') || status.includes('todo')) return 'todo';
-  if (status.includes('progress')) return 'inprogress';
-  if (status.includes('review')) return 'inreview';
-  if (status.includes('done') || status.includes('completed')) return 'done';
-  if (status.includes('cancel')) return 'cancelled';
-
-  return 'todo';
-}
-
 /**
  * Create a task in Vibe Kanban
  */
@@ -706,18 +698,6 @@ function extractHulyIdentifier(description) {
 /**
  * Map Vibe status to Huly status
  */
-function mapVibeStatusToHuly(vibeStatus) {
-  const statusMap = {
-    'todo': 'Backlog',
-    'inprogress': 'In Progress',
-    'inreview': 'In Review',
-    'done': 'Done',
-    'cancelled': 'Cancelled'
-  };
-
-  return statusMap[vibeStatus] || 'Backlog';
-}
-
 /**
  * Sync task status changes from Vibe back to Huly (bidirectional)
  */
