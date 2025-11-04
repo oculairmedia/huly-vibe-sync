@@ -160,9 +160,40 @@ This suggests other services or internal Letta processes are also using it:
 - Review Letta's background tasks
 - Consider if sleep-time agents are running
 
-## Other Heavy Containers
+## Other Heavy Containers - Optimization Progress
 
-These containers are unrelated to huly-vibe-sync but worth reviewing:
+### Phase 2: Matrix Client Optimization ✅ COMPLETE
+**Date**: November 2, 2025
+
+| Container | Before | After | Reduction |
+|-----------|--------|-------|-----------|
+| **matrix-synapse-deployment-matrix-client-1** | 14.33% | 0.00% | **~100%** |
+
+**Changes**:
+- File: `/opt/stacks/matrix-synapse-deployment/custom_matrix_client.py`
+- Change: `interval=0.5` → `interval=30` (60x reduction)
+- Impact: 120 syncs/min → 2 syncs/min (98% reduction)
+
+**Details**: See `MATRIX_CLIENT_OPTIMIZATION.md` (previous session)
+
+### Phase 3: Graphiti Visualizer Optimization ⏳ PENDING REBUILD
+**Date**: November 2, 2025
+
+| Container | Before | After (Expected) | Reduction |
+|-----------|--------|------------------|-----------|
+| **graphiti-falkordb-1** | 16.06% | 2-3% | **~85%** |
+
+**Changes Applied**:
+- File: `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs`
+- Change: `Duration::from_secs(5)` → `Duration::from_secs(30)` (6x reduction)
+- Impact: 720 polls/hour → 120 polls/hour (83% reduction)
+- Status: **Code modified, container stopped, rebuild required**
+
+**Details**: See `GRAPHITI_VISUALIZER_OPTIMIZATION.md`
+
+### Remaining Unreviewed Containers
+
+These containers are unrelated to current optimizations:
 
 | Container | CPU % | Notes |
 |-----------|-------|-------|
