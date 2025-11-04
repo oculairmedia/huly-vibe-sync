@@ -32,6 +32,11 @@ import {
   normalizeStatus,
   areStatusesEquivalent,
 } from './lib/statusMapper.js';
+import {
+  loadConfig,
+  getConfigSummary,
+  isLettaEnabled,
+} from './lib/config.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -46,37 +51,8 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configuration
-const config = {
-  huly: {
-    apiUrl: process.env.HULY_API_URL || process.env.HULY_MCP_URL || 'http://192.168.50.90:3457/api',
-    useRestApi: process.env.HULY_USE_REST !== 'false', // Default to REST API
-  },
-  vibeKanban: {
-    mcpUrl: process.env.VIBE_MCP_URL || 'http://192.168.50.90:9717/mcp',
-    apiUrl: process.env.VIBE_API_URL || 'http://192.168.50.90:3105/api',
-    useRestApi: process.env.VIBE_USE_REST !== 'false', // Default to REST API
-  },
-  sync: {
-    interval: parseInt(process.env.SYNC_INTERVAL || '300000'), // 5 minutes default
-    dryRun: process.env.DRY_RUN === 'true',
-    incremental: process.env.INCREMENTAL_SYNC !== 'false', // Default to true
-    parallel: process.env.PARALLEL_SYNC === 'true', // Parallel processing
-    maxWorkers: parseInt(process.env.MAX_WORKERS || '5'), // Max concurrent workers
-    skipEmpty: process.env.SKIP_EMPTY_PROJECTS === 'true', // Skip projects with 0 issues
-    apiDelay: parseInt(process.env.API_DELAY || '10'), // Delay between API calls (ms) - reduced from 50ms
-  },
-  stacks: {
-    baseDir: process.env.STACKS_DIR || '/opt/stacks',
-  },
-  letta: {
-    enabled: process.env.LETTA_BASE_URL && process.env.LETTA_PASSWORD,
-    baseURL: process.env.LETTA_BASE_URL,
-    password: process.env.LETTA_PASSWORD,
-    hulyMcpUrl: process.env.HULY_MCP_URL || 'http://192.168.50.90:3457/mcp',
-    vibeMcpUrl: process.env.VIBE_MCP_URL,
-  },
-};
+// Load and validate configuration
+const config = loadConfig();
 
 // Health tracking
 const healthStats = {
@@ -126,7 +102,7 @@ try {
 
 // Initialize Letta service (if configured)
 let lettaService = null;
-if (config.letta.enabled) {
+if (isLettaEnabled(config)) {
   try {
     lettaService = createLettaService();
     console.log('[Letta] Service initialized successfully');
@@ -139,19 +115,7 @@ if (config.letta.enabled) {
 }
 
 console.log('Huly → Vibe Kanban Sync Service');
-console.log('Configuration:', {
-  hulyApi: config.huly.apiUrl,
-  hulyMode: config.huly.useRestApi ? 'REST API' : 'MCP',
-  vibeApi: config.vibeKanban.apiUrl,
-  vibeMode: 'REST API',
-  stacksDir: config.stacks.baseDir,
-  syncInterval: `${config.sync.interval / 1000}s`,
-  incrementalSync: config.sync.incremental,
-  parallelProcessing: config.sync.parallel,
-  maxWorkers: config.sync.maxWorkers,
-  skipEmptyProjects: config.sync.skipEmpty,
-  dryRun: config.sync.dryRun,
-});
+console.log('Configuration:', getConfigSummary(config));
 
 // Utility functions imported from lib/utils.js
 
