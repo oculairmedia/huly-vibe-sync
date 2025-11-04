@@ -19,6 +19,13 @@ import { createVibeRestClient } from './lib/VibeRestClient.js';
 import { createSyncDatabase } from './lib/database.js';
 import { fetchWithPool, getPoolStats } from './lib/http.js';
 import { withTimeout, processBatch, formatDuration } from './lib/utils.js';
+import {
+  extractFilesystemPath,
+  extractFullDescription,
+  extractHulyIdentifier,
+  getGitUrl,
+  determineGitRepoPath,
+} from './lib/textParsers.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -337,49 +344,6 @@ function parseProjectsFromText(text) {
 }
 
 /**
- * Extract filesystem path from Huly project description
- */
-function extractFilesystemPath(description) {
-  if (!description) return null;
-
-  // Match patterns like: Path:, Filesystem:, Directory:, Location:
-  const patterns = [
-    /(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i,
-  ];
-  
-  for (const pattern of patterns) {
-    const match = description.match(pattern);
-    if (match) {
-      const path = match[1].trim();
-      // Clean up common suffixes
-      return path.replace(/[,;.]$/, '').trim();
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Get git URL from local repository
- */
-function getGitUrl(repoPath) {
-  try {
-    if (!fs.existsSync(path.join(repoPath, '.git'))) {
-      return null;
-    }
-
-    const url = execSync('git remote get-url origin', {
-      cwd: repoPath,
-      encoding: 'utf8',
-    }).trim();
-
-    return url || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
  * Fetch projects from Huly using REST API
  */
 async function fetchHulyProjects(hulyClient) {
@@ -404,9 +368,7 @@ async function fetchHulyProjects(hulyClient) {
 }
 
 /**
- * Extract full description from Huly issue detail response
- * The detail response has a ## Description section with full multi-line content
- * The description ends at specific top-level sections like "Recent Comments"
+ * Fetch issues from Huly project
  */
 function extractFullDescription(detailText) {
   const lines = detailText.split('\n');
@@ -545,23 +507,6 @@ async function listVibeProjects(vibeClient) {
     console.error('[Vibe] Error listing projects:', error.message);
     return [];
   }
-}
-
-/**
- * Determine git repo path for Vibe Kanban project
- */
-function determineGitRepoPath(hulyProject) {
-  // Priority 1: Extract filesystem path from Huly description
-  const filesystemPath = extractFilesystemPath(hulyProject.description);
-  if (filesystemPath && fs.existsSync(filesystemPath)) {
-    console.log(`[Vibe] Using filesystem path from Huly: ${filesystemPath}`);
-    return filesystemPath;
-  }
-
-  // Priority 2: Use placeholder in /opt/stacks (mounted in Docker)
-  const placeholder = `/opt/stacks/huly-sync-placeholders/${hulyProject.identifier}`;
-  console.log(`[Vibe] Using placeholder path: ${placeholder}`);
-  return placeholder;
 }
 
 /**
@@ -749,7 +694,7 @@ async function updateHulyIssueDescription(hulyClient, issueIdentifier, descripti
 }
 
 /**
- * Extract Huly issue identifier from Vibe task description
+ * Map Vibe status to Huly status
  */
 function extractHulyIdentifier(description) {
   if (!description) return null;
