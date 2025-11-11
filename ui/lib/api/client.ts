@@ -4,6 +4,7 @@
  * Base HTTP client with retry logic, error handling, and type safety
  */
 
+import { z } from 'zod'
 import { ApiError } from '../types'
 
 /**
@@ -17,6 +18,19 @@ export class ApiClientError extends Error {
   ) {
     super(message)
     this.name = 'ApiClientError'
+  }
+}
+
+/**
+ * Custom error class for validation errors
+ */
+export class ValidationError extends Error {
+  constructor(
+    message: string,
+    public zodError: z.ZodError
+  ) {
+    super(message)
+    this.name = 'ValidationError'
   }
 }
 
@@ -36,6 +50,7 @@ interface ApiClientConfig {
 interface FetchOptions extends RequestInit {
   timeout?: number
   retries?: number
+  schema?: z.ZodSchema<any>
 }
 
 /**
@@ -121,6 +136,27 @@ export class ApiClient {
   }
 
   /**
+   * Validate response data against a Zod schema
+   */
+  private validateResponse<T>(data: unknown, schema?: z.ZodSchema<T>): T {
+    if (!schema) {
+      return data as T
+    }
+
+    try {
+      return schema.parse(data)
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(
+          'Response validation failed: ' + error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+          error
+        )
+      }
+      throw error
+    }
+  }
+
+  /**
    * GET request
    */
   async get<T>(path: string, options: FetchOptions = {}): Promise<T> {
@@ -140,9 +176,10 @@ export class ApiClient {
         throw await this.parseError(response)
       }
 
-      return await response.json()
+      const data = await response.json()
+      return this.validateResponse(data, options.schema)
     } catch (error) {
-      if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError || error instanceof ValidationError) {
         throw error
       }
       throw new ApiClientError(
@@ -177,9 +214,10 @@ export class ApiClient {
         throw await this.parseError(response)
       }
 
-      return await response.json()
+      const responseData = await response.json()
+      return this.validateResponse(responseData, options.schema)
     } catch (error) {
-      if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError || error instanceof ValidationError) {
         throw error
       }
       throw new ApiClientError(
@@ -214,9 +252,10 @@ export class ApiClient {
         throw await this.parseError(response)
       }
 
-      return await response.json()
+      const responseData = await response.json()
+      return this.validateResponse(responseData, options.schema)
     } catch (error) {
-      if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError || error instanceof ValidationError) {
         throw error
       }
       throw new ApiClientError(
@@ -246,9 +285,10 @@ export class ApiClient {
         throw await this.parseError(response)
       }
 
-      return await response.json()
+      const responseData = await response.json()
+      return this.validateResponse(responseData, options.schema)
     } catch (error) {
-      if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError || error instanceof ValidationError) {
         throw error
       }
       throw new ApiClientError(

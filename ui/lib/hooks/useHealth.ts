@@ -7,19 +7,24 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { HealthResponse, StatsResponse } from '../types'
+import { HealthResponseSchema, StatsResponseSchema } from '../schemas'
 
 /**
  * Fetch health data from /health endpoint
  */
 async function fetchHealth(): Promise<HealthResponse> {
-  return api.get<HealthResponse>('/health')
+  return api.get<HealthResponse>('/health', {
+    schema: HealthResponseSchema,
+  })
 }
 
 /**
  * Fetch stats data from /api/stats endpoint
  */
 async function fetchStats(): Promise<StatsResponse> {
-  return api.get<StatsResponse>('/api/stats')
+  return api.get<StatsResponse>('/api/stats', {
+    schema: StatsResponseSchema,
+  })
 }
 
 /**

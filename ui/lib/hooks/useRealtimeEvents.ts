@@ -7,6 +7,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SSEEvent } from '../types'
+import {
+  SSEConnectedEventSchema,
+  SSESyncStartedEventSchema,
+  SSESyncCompletedEventSchema,
+  SSESyncErrorEventSchema,
+  SSEConfigUpdatedEventSchema,
+  SSEHealthUpdatedEventSchema,
+} from '../schemas'
 
 interface UseRealtimeEventsOptions {
   onConnected?: (clientId: string) => void
@@ -98,47 +106,101 @@ export function useRealtimeEvents(options: UseRealtimeEventsOptions = {}) {
 
       // Handle specific event types
       eventSource.addEventListener('connected', (e) => {
-        const data = JSON.parse(e.data)
-        options.onConnected?.(data.clientId)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSEConnectedEventSchema.parse({
+            type: 'connected',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onConnected?.(event.data.clientId)
+        } catch (error) {
+          console.error('Failed to validate connected event:', error)
+        }
       })
 
       eventSource.addEventListener('sync:started', (e) => {
-        const data = JSON.parse(e.data)
-        options.onSyncStarted?.(data)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSESyncStartedEventSchema.parse({
+            type: 'sync:started',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onSyncStarted?.(event.data)
+        } catch (error) {
+          console.error('Failed to validate sync:started event:', error)
+        }
       })
 
       eventSource.addEventListener('sync:completed', (e) => {
-        const data = JSON.parse(e.data)
-        options.onSyncCompleted?.(data)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSESyncCompletedEventSchema.parse({
+            type: 'sync:completed',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onSyncCompleted?.(event.data)
 
-        // Invalidate health query to refetch updated stats
-        queryClient.invalidateQueries({ queryKey: ['health'] })
-        queryClient.invalidateQueries({ queryKey: ['syncHistory'] })
+          // Invalidate health query to refetch updated stats
+          queryClient.invalidateQueries({ queryKey: ['health'] })
+          queryClient.invalidateQueries({ queryKey: ['syncHistory'] })
+        } catch (error) {
+          console.error('Failed to validate sync:completed event:', error)
+        }
       })
 
       eventSource.addEventListener('sync:error', (e) => {
-        const data = JSON.parse(e.data)
-        options.onSyncError?.(data)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSESyncErrorEventSchema.parse({
+            type: 'sync:error',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onSyncError?.(event.data)
 
-        // Invalidate health query to show error
-        queryClient.invalidateQueries({ queryKey: ['health'] })
+          // Invalidate health query to show error
+          queryClient.invalidateQueries({ queryKey: ['health'] })
+        } catch (error) {
+          console.error('Failed to validate sync:error event:', error)
+        }
       })
 
       eventSource.addEventListener('config:updated', (e) => {
-        const data = JSON.parse(e.data)
-        options.onConfigUpdated?.(data)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSEConfigUpdatedEventSchema.parse({
+            type: 'config:updated',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onConfigUpdated?.(event.data)
 
-        // Invalidate config query to refetch
-        queryClient.invalidateQueries({ queryKey: ['config'] })
-        queryClient.invalidateQueries({ queryKey: ['health'] })
+          // Invalidate config query to refetch
+          queryClient.invalidateQueries({ queryKey: ['config'] })
+          queryClient.invalidateQueries({ queryKey: ['health'] })
+        } catch (error) {
+          console.error('Failed to validate config:updated event:', error)
+        }
       })
 
       eventSource.addEventListener('health:updated', (e) => {
-        const data = JSON.parse(e.data)
-        options.onHealthUpdated?.(data)
+        try {
+          const rawData = JSON.parse(e.data)
+          const event = SSEHealthUpdatedEventSchema.parse({
+            type: 'health:updated',
+            data: rawData,
+            timestamp: new Date().toISOString(),
+          })
+          options.onHealthUpdated?.(event.data)
 
-        // Optionally update health cache directly
-        queryClient.setQueryData(['health'], data)
+          // Optionally update health cache directly
+          queryClient.setQueryData(['health'], event.data)
+        } catch (error) {
+          console.error('Failed to validate health:updated event:', error)
+        }
       })
 
       // Handle errors
