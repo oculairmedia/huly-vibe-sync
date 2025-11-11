@@ -1,10 +1,10 @@
 /**
  * ESLint Configuration for Huly-Vibe-Sync
- * 
+ *
  * Enforces code quality standards for ES modules (Node.js)
  */
 
-export default {
+module.exports = {
   env: {
     node: true,
     es2022: true,
