@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    build: .
+    image: ghcr.io/oculairmedia/huly-vibe-sync:latest
     container_name: huly-vibe-sync
+    pull_policy: always
     restart: unless-stopped
     environment:
       # Huly API Configuration
@@ -63,6 +64,35 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  huly-vibe-sync-ui:
+    image: ghcr.io/oculairmedia/huly-vibe-sync-ui:latest
+    container_name: huly-vibe-sync-ui
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      # API Configuration
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://192.168.50.90:3099}
+      - NEXT_PUBLIC_POLLING_INTERVAL=${NEXT_PUBLIC_POLLING_INTERVAL:-5000}
+
+      # Node Environment
+      - NODE_ENV=production
+
+    ports:
+      - "${UI_PORT:-3100}:3000"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
     logging:
       driver: "json-file"
