@@ -55,11 +55,15 @@ import {
   updateVibeTaskDescription,
 } from './lib/VibeService.js';
 import {
-  createHealthServer,
   initializeHealthStats,
   recordSuccessfulSync,
   recordFailedSync,
 } from './lib/HealthService.js';
+import {
+  createApiServer,
+  broadcastSyncEvent,
+  recordIssueMapping,
+} from './lib/ApiServer.js';
 import { 
   createLettaService,
   buildProjectMeta,
@@ -328,32 +332,54 @@ async function main() {
 
   logger.info('All clients initialized successfully');
 
-  // Start health check server
-  createHealthServer(healthStats, config);
+  // Track sync interval timer (for dynamic config updates)
+  let syncTimer = null;
 
   // Wrapper function to run sync with timeout
-  const runSyncWithTimeout = async () => {
+  const runSyncWithTimeout = async (projectId = null) => {
     const syncStartTime = Date.now();
+
+    // Broadcast sync started event
+    broadcastSyncEvent('sync:started', {
+      projectId,
+      timestamp: new Date().toISOString(),
+    });
+
     try {
       await withTimeout(
-        syncHulyToVibe(hulyClient, vibeClient, db, config, lettaService),
+        syncHulyToVibe(hulyClient, vibeClient, db, config, lettaService, projectId),
         900000, // 15-minute timeout for entire sync
         'Full sync cycle'
       );
-      
+
       // Update health stats on success
-      recordSuccessfulSync(healthStats, Date.now() - syncStartTime);
-      
+      const duration = Date.now() - syncStartTime;
+      recordSuccessfulSync(healthStats, duration);
+
+      // Broadcast sync completed event
+      broadcastSyncEvent('sync:completed', {
+        projectId,
+        duration,
+        status: 'success',
+      });
+
       // Clear Letta cache after successful sync to prevent memory leak
       if (lettaService) {
         lettaService.clearCache();
       }
     } catch (error) {
       logger.error({ err: error, timeoutMs: 900000 }, 'Sync exceeded 15-minute timeout, will retry in next cycle');
-      
+
       // Update health stats on error
       recordFailedSync(healthStats, error);
-      
+
+      // Broadcast sync error event
+      broadcastSyncEvent('sync:error', {
+        projectId,
+        error: error.message,
+        stack: error.stack,
+      });
+
       // Clear cache even on error to prevent memory buildup
       if (lettaService) {
         lettaService.clearCache();
@@ -361,13 +387,43 @@ async function main() {
     }
   };
 
+  // Callback for manual sync trigger via API
+  const handleSyncTrigger = async (projectId = null) => {
+    logger.info({ projectId }, 'Manual sync triggered via API');
+    return runSyncWithTimeout(projectId);
+  };
+
+  // Callback for configuration updates via API
+  const handleConfigUpdate = (updates) => {
+    logger.info({ updates }, 'Configuration updated via API');
+
+    // If sync interval changed, restart the timer
+    if (updates.syncInterval !== undefined && syncTimer) {
+      clearInterval(syncTimer);
+      logger.info({
+        oldInterval: config.sync.interval / 1000,
+        newInterval: updates.syncInterval / 1000
+      }, 'Restarting sync timer with new interval');
+
+      syncTimer = setInterval(() => runSyncWithTimeout(), updates.syncInterval);
+    }
+  };
+
+  // Start API server with extended endpoints
+  createApiServer({
+    config,
+    healthStats,
+    onSyncTrigger: handleSyncTrigger,
+    onConfigUpdate: handleConfigUpdate,
+  });
+
   // Run initial sync
   await runSyncWithTimeout();
 
   // Schedule periodic syncs
   if (config.sync.interval > 0) {
     logger.info({ intervalSeconds: config.sync.interval / 1000 }, 'Scheduling periodic syncs');
-    setInterval(runSyncWithTimeout, config.sync.interval);
+    syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
   } else {
     logger.info('One-time sync completed, exiting');
     process.exit(0);
