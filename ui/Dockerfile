@@ -1,7 +1,7 @@
 # Huly-Vibe Sync UI - Production Dockerfile
 # Multi-stage build for optimized image size
 
-# Stage 1: Dependencies
+# Stage 1: Install dependencies
 FROM node:18-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
@@ -9,15 +9,19 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm ci --only=production --ignore-scripts
+# Install dependencies (production only)
+RUN npm ci --omit=dev
 
-# Stage 2: Builder
+# Stage 2: Builder (needs all dependencies)
 FROM node:18-alpine AS builder
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install ALL dependencies including devDependencies for build
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -26,7 +30,6 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:3099
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 
 # Build Next.js app
 RUN npm run build
