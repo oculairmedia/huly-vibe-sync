@@ -41,3 +41,6 @@ html/
 
 # Docker
 docker-compose.override.yml
+
+# External source repositories
+vibe-kanban-source/
