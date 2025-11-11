@@ -4,7 +4,7 @@ const nextConfig = {
 
   // Proxy API requests to backend
   async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3099';
+    const backendUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3099';
 
     return [
       {
