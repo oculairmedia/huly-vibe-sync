@@ -7,26 +7,33 @@
 import { useMutation, useQuery, useQueryClient, UseQueryOptions } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { Configuration, ConfigResponse, ConfigUpdateRequest } from '../types'
+import { ConfigResponseSchema } from '../schemas'
 
 /**
  * Fetch configuration from /api/config
  */
 async function fetchConfig(): Promise<ConfigResponse> {
-  return api.get<ConfigResponse>('/api/config')
+  return api.get<ConfigResponse>('/api/config', {
+    schema: ConfigResponseSchema,
+  })
 }
 
 /**
  * Update configuration via PATCH /api/config
  */
 async function updateConfig(updates: ConfigUpdateRequest): Promise<ConfigResponse> {
-  return api.patch<ConfigResponse>('/api/config', updates)
+  return api.patch<ConfigResponse>('/api/config', updates, {
+    schema: ConfigResponseSchema,
+  })
 }
 
 /**
  * Reset configuration to defaults via POST /api/config/reset
  */
 async function resetConfig(): Promise<ConfigResponse> {
-  return api.post<ConfigResponse>('/api/config/reset')
+  return api.post<ConfigResponse>('/api/config/reset', undefined, {
+    schema: ConfigResponseSchema,
+  })
 }
 
 /**

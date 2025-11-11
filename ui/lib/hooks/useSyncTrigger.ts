@@ -7,12 +7,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { SyncTriggerRequest, SyncTriggerResponse } from '../types'
+import { SyncTriggerResponseSchema } from '../schemas'
 
 /**
  * Trigger sync via POST /api/sync/trigger
  */
 async function triggerSync(request: SyncTriggerRequest = {}): Promise<SyncTriggerResponse> {
-  return api.post<SyncTriggerResponse>('/api/sync/trigger', request)
+  return api.post<SyncTriggerResponse>('/api/sync/trigger', request, {
+    schema: SyncTriggerResponseSchema,
+  })
 }
 
 /**
