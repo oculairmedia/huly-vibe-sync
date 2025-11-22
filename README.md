@@ -111,6 +111,16 @@ docker logs huly-vibe-sync 2>&1 | grep "Slow tool execution"
 docker logs huly-vibe-sync 2>&1 | grep "sync completed"
 ```
 
-## Full Documentation
+## Documentation
 
+### 📚 Local Documentation
+Comprehensive documentation is organized in the [`docs/`](./docs/) directory:
+- **[Documentation Index](./docs/README.md)** - Complete documentation overview
+- **[API Reference](./docs/api/)** - API specifications and integration guides
+- **[Architecture](./docs/architecture/)** - System design and architecture
+- **[Guides](./docs/guides/)** - Deployment, testing, and agent management
+- **[Deployment Guide](./DEPLOYMENT.md)** - Quick deployment reference
+- **[Testing Guide](./TESTING.md)** - Testing documentation
+
+### 🌐 External Documentation
 See comprehensive documentation in [BookStack](https://docs.oculair.ca) under "MCP Integration Research" → "Huly-Vibe Bidirectional Sync Service"
