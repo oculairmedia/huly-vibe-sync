@@ -58,6 +58,13 @@ export interface StatsResponse {
     total: number
     mappings: number
   }
+  database?: {
+    totalProjects: number
+    activeProjects: number
+    emptyProjects: number
+    totalIssues: number
+    lastSync: string
+  }
 }
 
 export interface ConfigResponse {
@@ -263,4 +270,18 @@ export interface Task {
   description: string
   status: string
   projectId: string
+}
+
+export interface ProjectSummary {
+  identifier: string
+  name: string
+  issue_count: number
+  last_sync_at: number
+  last_checked_at: number
+}
+
+export interface ProjectsResponse {
+  total: number
+  projects: ProjectSummary[]
+  timestamp: string
 }

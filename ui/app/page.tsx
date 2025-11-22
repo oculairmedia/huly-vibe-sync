@@ -10,6 +10,8 @@ import { SyncStatusCard } from '@/components/dashboard/SyncStatusCard'
 import { HealthMetrics } from '@/components/dashboard/HealthMetrics'
 import { QuickActions } from '@/components/dashboard/QuickActions'
 import { ConnectionStatus } from '@/components/dashboard/ConnectionStatus'
+import { DatabaseStats } from '@/components/dashboard/DatabaseStats'
+import { ProjectsList } from '@/components/dashboard/ProjectsList'
 
 export default function DashboardPage() {
   return (
@@ -33,16 +35,28 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {/* Top Row - Sync Status, System Health, Database Stats */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-6">
           {/* Sync Status */}
           <div className="md:col-span-1">
             <SyncStatusCard />
           </div>
 
-          {/* Health Metrics */}
+          {/* System Health */}
           <div className="md:col-span-1">
             <HealthMetrics />
           </div>
+
+          {/* Database Stats */}
+          <div className="md:col-span-1">
+            <DatabaseStats />
+          </div>
+        </div>
+
+        {/* Second Row - Projects List and Quick Actions */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Projects List */}
+          <ProjectsList />
 
           {/* Quick Actions */}
           <div className="md:col-span-1">

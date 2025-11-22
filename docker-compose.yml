@@ -4,7 +4,7 @@ services:
   huly-vibe-sync:
     image: ghcr.io/oculairmedia/huly-vibe-sync:latest
     container_name: huly-vibe-sync
-    pull_policy: always
+    pull_policy: never  # Temporarily use local image for testing
     restart: unless-stopped
     environment:
       # Huly API Configuration
@@ -74,7 +74,7 @@ services:
   huly-vibe-sync-ui:
     image: ghcr.io/oculairmedia/huly-vibe-sync-ui:latest
     container_name: huly-vibe-sync-ui
-    pull_policy: always
+    pull_policy: never  # Temporarily use local image for testing
     restart: unless-stopped
     environment:
       # API Configuration

@@ -413,6 +413,7 @@ async function main() {
   createApiServer({
     config,
     healthStats,
+    db,
     onSyncTrigger: handleSyncTrigger,
     onConfigUpdate: handleConfigUpdate,
   });
