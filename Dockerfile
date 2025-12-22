@@ -4,17 +4,23 @@ LABEL maintainer="Oculair Media"
 LABEL description="Huly to Vibe Kanban bidirectional sync service with Letta Code support"
 
 # Install build dependencies for better-sqlite3 and other native modules
-# Also install bash for Letta Code shell operations
+# Also install bash for Letta Code shell operations and Go for beads
 RUN apk add --no-cache \
     git \
     curl \
     bash \
     python3 \
     make \
-    g++
+    g++ \
+    go
 
 # Install Letta Code CLI globally
 RUN npm install -g @letta-ai/letta-code
+
+# Install beads CLI
+RUN go install github.com/beadified/beads/cmd/bd@latest && \
+    cp /root/go/bin/bd /usr/local/bin/bd && \
+    chmod +x /usr/local/bin/bd
 
 # Create app directory
 WORKDIR /app

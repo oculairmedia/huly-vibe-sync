@@ -2,9 +2,8 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    image: huly-vibe-sync:local-dev
+    image: ghcr.io/oculairmedia/huly-vibe-sync:latest
     container_name: huly-vibe-sync
-    pull_policy: never  # Using local-dev image with folder upload support
     restart: unless-stopped
     environment:
       # Huly API Configuration
