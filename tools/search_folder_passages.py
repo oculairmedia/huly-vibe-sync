@@ -7,7 +7,8 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
     
     Args:
         query: The search query text to find semantically similar passages
-        folder_id: Optional folder/source ID to limit search (e.g., 'source-xxx'). If not provided, searches all folders.
+        folder_id: Optional folder/source ID to limit search (e.g., 'source-xxx'). 
+                   If not provided, automatically uses folders attached to the current agent.
         limit: Maximum number of results to return (default: 10, max: 50)
     
     Returns:
@@ -21,6 +22,33 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
     
     # Limit the results
     limit = min(limit, 50)
+    
+    # Get agent ID from environment (set by Letta when executing tool)
+    agent_id = os.environ.get("LETTA_AGENT_ID", "")
+    
+    # Connect to Letta's PostgreSQL database
+    db_uri = os.environ.get("LETTA_PG_URI", "postgresql://letta:letta@postgres:5432/letta")
+    
+    # If no folder_id provided, look up folders attached to this agent
+    effective_folder_ids = []
+    if folder_id and folder_id != "":
+        effective_folder_ids = [folder_id]
+    elif agent_id:
+        try:
+            conn = psycopg2.connect(db_uri)
+            cur = conn.cursor()
+            # Query the sources_agents junction table to find attached folders
+            cur.execute(
+                "SELECT source_id FROM sources_agents WHERE agent_id = %s",
+                (agent_id,)
+            )
+            rows = cur.fetchall()
+            effective_folder_ids = [row[0] for row in rows]
+            cur.close()
+            conn.close()
+        except Exception as e:
+            # If lookup fails, fall back to searching all folders
+            effective_folder_ids = []
     
     # Get embedding for the query using Ollama
     ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://192.168.50.80:11434")
@@ -44,9 +72,6 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
     if len(embedding) < 4096:
         embedding = embedding + [0.0] * (4096 - len(embedding))
     
-    # Connect to Letta's PostgreSQL database
-    db_uri = os.environ.get("LETTA_PG_URI", "postgresql://letta:letta@postgres:5432/letta")
-    
     try:
         conn = psycopg2.connect(db_uri)
         cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -54,20 +79,24 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
         # Build the query
         embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
         
-        if folder_id and folder_id != "":
-            sql = """
+        if effective_folder_ids:
+            # Search within specific folder(s)
+            placeholders = ",".join(["%s"] * len(effective_folder_ids))
+            sql = f"""
                 SELECT 
                     text,
                     file_name,
                     source_id,
                     1 - (embedding <=> %s::vector) as similarity
                 FROM source_passages
-                WHERE source_id = %s AND is_deleted = false
+                WHERE source_id IN ({placeholders}) AND is_deleted = false
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
             """
-            cur.execute(sql, (embedding_str, folder_id, embedding_str, limit))
+            params = [embedding_str] + effective_folder_ids + [embedding_str, limit]
+            cur.execute(sql, params)
         else:
+            # Search all folders (no agent context or no folders attached)
             sql = """
                 SELECT 
                     text,
@@ -94,6 +123,13 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
                 "source_id": row["source_id"],
                 "similarity": round(float(row["similarity"]), 4)
             })
+        
+        # Add context about what was searched
+        if formatted:
+            if effective_folder_ids:
+                formatted.insert(0, {"_search_context": f"Searched {len(effective_folder_ids)} folder(s) for agent {agent_id[:20]}..." if agent_id else f"Searched folder {effective_folder_ids[0]}"})
+            else:
+                formatted.insert(0, {"_search_context": "Searched all folders (no agent context)"})
         
         return formatted
         
