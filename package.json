@@ -22,7 +22,10 @@
     "manage": "node manage-agents.js",
     "agents": "node manage-agents.js list-agents",
     "migrate": "node migrate-agents-to-v1.js",
-    "control-agent": "node create-control-agent.js"
+    "control-agent": "node create-control-agent.js",
+    "compare-agents": "node tests/compare-agent-sources.js",
+    "migrate-agents-md": "node migrate-agents-md.js",
+    "migrate-agents-db": "node migrate-agents-to-db.js"
   },
   "keywords": [
     "huly",
@@ -37,6 +40,7 @@
     "@letta-ai/letta-client": "^0.0.68665",
     "better-sqlite3": "^9.2.2",
     "dotenv": "^17.2.3",
+    "form-data": "^4.0.5",
     "node-fetch": "^3.3.2",
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.2",
