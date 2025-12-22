@@ -73,6 +73,7 @@ import {
   buildBacklogSummary,
   buildChangeLog, buildScratchpad,
 } from './lib/LettaService.js';
+import { createLettaCodeService } from './lib/LettaCodeService.js';
 import { logger } from './lib/logger.js';
 
 // ES module __dirname equivalent
@@ -113,6 +114,20 @@ if (isLettaEnabled(config)) {
   }
 } else {
   logger.info('Letta PM agent integration disabled (credentials not set)');
+}
+
+// Initialize Letta Code service for filesystem-based agent operations
+let lettaCodeService = null;
+try {
+  lettaCodeService = createLettaCodeService({
+    lettaBaseUrl: config.letta.baseURL,
+    lettaApiKey: config.letta.password,
+    projectRoot: config.stacks.baseDir || '/opt/stacks',
+    stateDir: path.join(__dirname, '.letta-code'),
+  });
+  logger.info('Letta Code service initialized successfully');
+} catch (lettaCodeError) {
+  logger.warn({ err: lettaCodeError }, 'Failed to initialize Letta Code service, filesystem mode disabled');
 }
 
 logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
@@ -416,6 +431,7 @@ async function main() {
     db,
     onSyncTrigger: handleSyncTrigger,
     onConfigUpdate: handleConfigUpdate,
+    lettaCodeService, // Enable filesystem mode for agents
   });
 
   // Run initial sync

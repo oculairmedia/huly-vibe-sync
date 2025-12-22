@@ -1,15 +1,20 @@
 FROM node:20-alpine
 
 LABEL maintainer="Oculair Media"
-LABEL description="Huly to Vibe Kanban bidirectional sync service"
+LABEL description="Huly to Vibe Kanban bidirectional sync service with Letta Code support"
 
 # Install build dependencies for better-sqlite3 and other native modules
+# Also install bash for Letta Code shell operations
 RUN apk add --no-cache \
     git \
     curl \
+    bash \
     python3 \
     make \
     g++
+
+# Install Letta Code CLI globally
+RUN npm install -g @letta-ai/letta-code
 
 # Create app directory
 WORKDIR /app
@@ -28,10 +33,10 @@ COPY *.md ./
 # Copy Letta configuration (shared settings, local state will be generated)
 COPY .letta ./.letta
 
-# Create logs directory and ensure .letta is writable by node user
-RUN mkdir -p /app/logs && \
-    chown -R node:node /app/.letta /app/logs && \
-    chmod -R 755 /app/.letta
+# Create logs directory, .letta-code state dir, and ensure writable by node user
+RUN mkdir -p /app/logs /app/.letta-code && \
+    chown -R node:node /app/.letta /app/.letta-code /app/logs && \
+    chmod -R 755 /app/.letta /app/.letta-code
 
 # Health check - query the /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
