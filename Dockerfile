@@ -18,7 +18,7 @@ RUN apk add --no-cache \
 RUN npm install -g @letta-ai/letta-code
 
 # Install beads CLI
-RUN go install github.com/beadified/beads/cmd/bd@latest && \
+RUN go install github.com/steveyegge/beads/cmd/bd@latest && \
     cp /root/go/bin/bd /usr/local/bin/bd && \
     chmod +x /usr/local/bin/bd
 
