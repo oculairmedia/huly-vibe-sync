@@ -6,14 +6,16 @@ Bidirectional synchronization service between [Huly](https://huly.io) and [Vibe 
 
 ## Features
 
+- ✅ **Three-Way Sync**: Huly ↔ Vibe Kanban ↔ Beads (git-backed issue tracker)
 - ✅ **Bidirectional Sync**: Projects and issues from Huly → Tasks in Vibe Kanban
+- 🆕 **Beads Integration**: Sync with git-backed distributed issue tracker
 - ✅ **REST API Integration**: Fast, efficient Huly REST API client for optimal performance
 - ✅ **Incremental Sync**: Only fetches issues modified since last sync (timestamp-based)
 - ⚡ **Parallel Processing**: Concurrent project sync with configurable workers (default: 5)
 - 🚀 **Smart Caching**: Skips empty projects to reduce API load
 - ⏱️ **Fast Sync**: 10-second intervals for near real-time updates (~3-5s per cycle)
 - ✅ **Full Description Support**: Multi-line issue descriptions preserved with all formatting
-- ✅ **Status Synchronization**: Task status changes sync both ways
+- ✅ **Status Synchronization**: Task status changes sync both ways (Huly, Vibe, Beads)
 - ✅ **Filesystem Path Mapping**: Automatic project path detection from Huly descriptions
 - ✅ **Configurable Intervals**: Run once, continuous sync, or on-demand
 - ✅ **Docker Support**: Fully containerized with health checks
