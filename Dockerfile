@@ -44,6 +44,12 @@ RUN mkdir -p /app/logs /app/.letta-code && \
     chown -R node:node /app/.letta /app/.letta-code /app/logs && \
     chmod -R 755 /app/.letta /app/.letta-code
 
+# Configure git identity for beads commits (as node user)
+USER node
+RUN git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
+    git config --global user.name "Huly Vibe Sync Service"
+USER root
+
 # Health check - query the /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '"status": "healthy"' || exit 1
