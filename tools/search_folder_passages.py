@@ -1,4 +1,4 @@
-def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> list:
+def search_folder_passages(query: str, folder_id: str = "", limit: int = 10, mount: bool = False) -> list:
     """
     Search folder/source passages using semantic vector similarity.
     
@@ -10,9 +10,12 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
         folder_id: Optional folder/source ID to limit search (e.g., 'source-xxx'). 
                    If not provided, automatically uses folders attached to the current agent.
         limit: Maximum number of results to return (default: 10, max: 50)
+        mount: If True, also mount the files found so you can interact with them using
+               file tools (read_file_section, edit_file_content, etc.)
     
     Returns:
-        list: List of matching passages with text, file_name, similarity score, and source_id
+        list: List of matching passages with text, file_name, similarity score, and source_id.
+              If mount=True, also includes instructions for using file tools.
     """
     import os
     import json
@@ -116,10 +119,15 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
         
         # Format results
         formatted = []
+        unique_files = set()
+        
         for row in results:
+            file_name = row["file_name"]
+            if file_name:
+                unique_files.add(file_name)
             formatted.append({
                 "text": row["text"][:1000] if row["text"] else "",  # Truncate long text
-                "file_name": row["file_name"],
+                "file_name": file_name,
                 "source_id": row["source_id"],
                 "similarity": round(float(row["similarity"]), 4)
             })
@@ -130,6 +138,14 @@ def search_folder_passages(query: str, folder_id: str = "", limit: int = 10) -> 
                 formatted.insert(0, {"_search_context": f"Searched {len(effective_folder_ids)} folder(s) for agent {agent_id[:20]}..." if agent_id else f"Searched folder {effective_folder_ids[0]}"})
             else:
                 formatted.insert(0, {"_search_context": "Searched all folders (no agent context)"})
+        
+        # If mount=True, add instructions for mounting the found files
+        if mount and unique_files:
+            mount_instructions = {
+                "_mount_instructions": f"Found {len(unique_files)} unique file(s). To interact with these files, use look_at_file() with the file_name paths shown in the results.",
+                "_files_to_mount": list(unique_files)[:10]  # Limit to first 10 files
+            }
+            formatted.append(mount_instructions)
         
         return formatted
         
