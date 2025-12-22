@@ -39,6 +39,7 @@
   "dependencies": {
     "@letta-ai/letta-client": "^0.0.68665",
     "better-sqlite3": "^9.2.2",
+    "chokidar": "^5.0.0",
     "dotenv": "^17.2.3",
     "form-data": "^4.0.5",
     "node-fetch": "^3.3.2",

@@ -74,6 +74,7 @@ import {
   buildChangeLog, buildScratchpad,
 } from './lib/LettaService.js';
 import { createLettaCodeService } from './lib/LettaCodeService.js';
+import { FileWatcher } from './lib/FileWatcher.js';
 import { logger } from './lib/logger.js';
 
 // ES module __dirname equivalent
@@ -128,6 +129,20 @@ try {
   logger.info('Letta Code service initialized successfully');
 } catch (lettaCodeError) {
   logger.warn({ err: lettaCodeError }, 'Failed to initialize Letta Code service, filesystem mode disabled');
+}
+
+// Initialize FileWatcher for realtime file change detection
+let fileWatcher = null;
+if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
+  try {
+    fileWatcher = new FileWatcher(lettaService, db, {
+      debounceMs: parseInt(process.env.LETTA_FILE_WATCH_DEBOUNCE || '1000', 10),
+      batchIntervalMs: parseInt(process.env.LETTA_FILE_WATCH_BATCH_INTERVAL || '5000', 10),
+    });
+    logger.info('FileWatcher initialized - realtime file sync enabled');
+  } catch (fileWatchError) {
+    logger.warn({ err: fileWatchError }, 'Failed to initialize FileWatcher, falling back to periodic sync');
+  }
 }
 
 logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
@@ -381,6 +396,13 @@ async function main() {
       // Clear Letta cache after successful sync to prevent memory leak
       if (lettaService) {
         lettaService.clearCache();
+      }
+
+      // Sync file watchers to pick up new projects with Letta folders
+      if (fileWatcher) {
+        fileWatcher.syncWatchedProjects().catch(err => {
+          logger.warn({ err }, 'Failed to sync file watchers');
+        });
       }
     } catch (error) {
       logger.error({ err: error, timeoutMs: 900000 }, 'Sync exceeded 15-minute timeout, will retry in next cycle');
