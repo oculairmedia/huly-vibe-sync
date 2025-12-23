@@ -291,7 +291,7 @@ describe('VibeRestClient', () => {
   });
 
   describe('updateProject', () => {
-    it('should call project endpoint with PATCH', async () => {
+    it('should call project endpoint with PUT', async () => {
       const projectId = 'project-uuid-1';
       const updates = { name: 'Updated Name' };
       const updatedProject = createMockVibeProject({ id: projectId, ...updates });
@@ -305,7 +305,7 @@ describe('VibeRestClient', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/projects/${projectId}`,
         expect.objectContaining({
-          method: 'PATCH',
+          method: 'PUT',
           body: JSON.stringify(updates),
         })
       );
@@ -490,7 +490,7 @@ describe('VibeRestClient', () => {
   });
 
   describe('updateTask', () => {
-    it('should call task endpoint with PATCH', async () => {
+    it('should call task endpoint with PUT', async () => {
       const taskId = 'task-uuid-1';
       const field = 'status';
       const value = 'done';
@@ -505,7 +505,7 @@ describe('VibeRestClient', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/tasks/${taskId}`,
         expect.objectContaining({
-          method: 'PATCH',
+          method: 'PUT',
           body: JSON.stringify({ [field]: value }),
         })
       );
@@ -544,7 +544,7 @@ describe('VibeRestClient', () => {
   });
 
   describe('bulkUpdateTasks', () => {
-    it('should call tasks bulk endpoint with PATCH', async () => {
+    it('should call tasks bulk endpoint with PUT', async () => {
       const updates = [
         { task_id: 'task-1', field: 'status', value: 'done' },
         { task_id: 'task-2', field: 'priority', value: 'high' },
@@ -559,7 +559,7 @@ describe('VibeRestClient', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3105/api/tasks/bulk',
         expect.objectContaining({
-          method: 'PATCH',
+          method: 'PUT',
           body: JSON.stringify({ updates }),
         })
       );

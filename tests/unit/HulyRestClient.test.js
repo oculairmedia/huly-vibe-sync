@@ -360,10 +360,10 @@ describe('HulyRestClient', () => {
   });
 
   describe('createIssue', () => {
-    it('should call huly_issue_ops tool', async () => {
+    it('should call REST API issues endpoint', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_issue_ops', createMockCreateIssueResponse()),
+        json: async () => createMockCreateIssueResponse(),
       });
 
       await client.createIssue('TEST', {
@@ -372,15 +372,17 @@ describe('HulyRestClient', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('huly_issue_ops'),
-        expect.any(Object)
+        'http://localhost:3458/api/issues',
+        expect.objectContaining({
+          method: 'POST',
+        })
       );
     });
 
     it('should send issue data in request', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_issue_ops', createMockCreateIssueResponse()),
+        json: async () => createMockCreateIssueResponse(),
       });
 
       const issueData = {
@@ -393,11 +395,10 @@ describe('HulyRestClient', () => {
 
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
-      expect(body.arguments.operation).toBe('create');
-      expect(body.arguments.project_identifier).toBe('TEST');
-      expect(body.arguments.data.title).toBe('New Issue');
-      expect(body.arguments.data.description).toBe('Test description');
-      expect(body.arguments.data.priority).toBe('High');
+      expect(body.project_identifier).toBe('TEST');
+      expect(body.title).toBe('New Issue');
+      expect(body.description).toBe('Test description');
+      expect(body.priority).toBe('High');
     });
 
     it('should return created issue', async () => {
@@ -405,10 +406,10 @@ describe('HulyRestClient', () => {
         identifier: 'TEST-42',
         title: 'New Issue',
       });
-      
+
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_issue_ops', createdIssue),
+        json: async () => createdIssue,
       });
 
       const result = await client.createIssue('TEST', { title: 'New Issue' });
@@ -510,14 +511,14 @@ describe('HulyRestClient', () => {
       const longTitle = 'A'.repeat(1000);
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_issue_ops', createMockCreateIssueResponse()),
+        json: async () => createMockCreateIssueResponse(),
       });
 
       await client.createIssue('TEST', { title: longTitle });
 
       const callArgs = mockFetch.mock.calls[0];
       const body = JSON.parse(callArgs[1].body);
-      expect(body.arguments.data.title).toBe(longTitle);
+      expect(body.title).toBe(longTitle);
     });
 
     it('should handle special characters in identifiers', async () => {

@@ -51,6 +51,12 @@ services:
       # Logs directory
       - ./logs:/app/logs
 
+      # Use local source code (override image bundle)
+      - ./index.js:/app/index.js:ro
+      - ./lib:/app/lib:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+
       # Letta agent persistence (read-write for storing agent IDs)
       - ./.letta:/app/.letta
 

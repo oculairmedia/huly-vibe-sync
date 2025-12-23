@@ -166,7 +166,7 @@ describe('Sync Integration Tests', () => {
       expect(mapVibeStatusToHuly('todo')).toBe('Backlog');
       expect(mapVibeStatusToHuly('inprogress')).toBe('In Progress');
       expect(mapVibeStatusToHuly('done')).toBe('Done');
-      expect(mapVibeStatusToHuly('cancelled')).toBe('Cancelled');
+      expect(mapVibeStatusToHuly('cancelled')).toBe('Canceled');
     });
 
     it('should handle unknown statuses gracefully', () => {

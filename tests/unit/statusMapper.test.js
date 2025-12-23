@@ -92,8 +92,8 @@ describe('statusMapper', () => {
       expect(mapVibeStatusToHuly('done')).toBe('Done');
     });
 
-    it('should map cancelled to Cancelled', () => {
-      expect(mapVibeStatusToHuly('cancelled')).toBe('Cancelled');
+    it("should map cancelled to Canceled", () => {
+      expect(mapVibeStatusToHuly('cancelled')).toBe('Canceled');
     });
 
     it('should default unknown statuses to Backlog', () => {
