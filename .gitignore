@@ -49,3 +49,7 @@ vibe-kanban-source/
 # SQLite databases
 *.db
 logs/*.db
+
+# SQLite WAL sidecars (runtime state)
+*.db-wal
+*.db-shm
