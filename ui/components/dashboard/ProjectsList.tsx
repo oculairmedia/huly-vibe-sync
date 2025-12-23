@@ -4,16 +4,17 @@
  * Displays list of all projects with issue counts
  */
 
-'use client'
+'use client';
 
-import { useProjects } from '@/lib/hooks/useProjects'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { FolderKanban, AlertTriangle } from 'lucide-react'
+import { useProjects } from '@/lib/hooks/useProjects';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { FolderKanban, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export function ProjectsList() {
-  const { data, isLoading, error } = useProjects()
+  const { data, isLoading, error, refetch, isRefetching } = useProjects();
 
   if (isLoading) {
     return (
@@ -24,7 +25,7 @@ export function ProjectsList() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="flex items-center justify-between border-b pb-3">
                 <Skeleton className="h-4 w-1/3" />
                 <Skeleton className="h-4 w-16" />
@@ -33,7 +34,7 @@ export function ProjectsList() {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (error) {
@@ -50,14 +51,14 @@ export function ProjectsList() {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
-  if (!data) return null
+  if (!data) return null;
 
   // Separate projects with and without issues
-  const activeProjects = data.projects.filter((p) => p.issue_count > 0)
-  const emptyProjects = data.projects.filter((p) => p.issue_count === 0)
+  const activeProjects = data.projects.filter(p => p.issue_count > 0);
+  const emptyProjects = data.projects.filter(p => p.issue_count === 0);
 
   return (
     <Card className="md:col-span-2">
@@ -67,10 +68,16 @@ export function ProjectsList() {
             <CardTitle>Projects</CardTitle>
             <CardDescription>All projects synced from Huly</CardDescription>
           </div>
-          <Badge variant="outline">
-            <FolderKanban className="mr-1 h-3 w-3" />
-            {data.total} Total
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
+              <RefreshCw className={`mr-1 h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Badge variant="outline">
+              <FolderKanban className="mr-1 h-3 w-3" />
+              {data.total} Total
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -82,7 +89,7 @@ export function ProjectsList() {
                 Active Projects ({activeProjects.length})
               </h3>
               <div className="space-y-2">
-                {activeProjects.map((project) => (
+                {activeProjects.map(project => (
                   <div
                     key={project.identifier}
                     className="flex items-center justify-between rounded-lg border bg-white p-3 hover:bg-gray-50"
@@ -120,7 +127,7 @@ export function ProjectsList() {
                 Empty Projects ({emptyProjects.length})
               </h3>
               <div className="space-y-2">
-                {emptyProjects.map((project) => (
+                {emptyProjects.map(project => (
                   <div
                     key={project.identifier}
                     className="flex items-center justify-between rounded-lg border border-dashed bg-gray-50 p-3 opacity-60"
@@ -140,5 +147,5 @@ export function ProjectsList() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
