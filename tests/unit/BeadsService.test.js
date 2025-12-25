@@ -554,16 +554,15 @@ describe('BeadsService', () => {
     });
     
     it('should handle priority 0 (P0 urgent)', async () => {
-      // NOTE: Current behavior - priority 0 is falsy so --priority flag is NOT added
-      // This is a potential bug: P0 (urgent) issues won't get priority set explicitly
-      // The issue defaults to P2 on the CLI side, so P0 requires a fix in createBeadsIssue
       mockExecSync.mockReturnValue(createMockCreateOutput({ priority: 0 }));
       
       await createBeadsIssue('/test/project', { title: 'Urgent', priority: 0 });
       
-      // Currently, priority 0 is not passed due to truthy check bug
-      // This test documents current behavior - should be fixed in production code
-      expect(mockExecSync).toHaveBeenCalled();
+      // Priority 0 (P0/urgent) should now be passed correctly
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('--priority=0'),
+        expect.any(Object)
+      );
     });
     
     it('should handle priority 4 (P4 no priority)', async () => {
@@ -577,20 +576,6 @@ describe('BeadsService', () => {
       );
     });
     
-    // TODO: This test documents a bug that should be fixed
-    it.skip('BUG: priority 0 should be passed to CLI but is not due to truthy check', async () => {
-      // This test will fail until the bug in createBeadsIssue is fixed
-      // The fix: change `if (issueData.priority)` to `if (issueData.priority !== undefined)`
-      mockExecSync.mockReturnValue(createMockCreateOutput({ priority: 0 }));
-      
-      await createBeadsIssue('/test/project', { title: 'Urgent', priority: 0 });
-      
-      // Expected behavior after fix:
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('--priority=0'),
-        expect.any(Object)
-      );
-    });
   });
   
   describe('mock infrastructure', () => {
