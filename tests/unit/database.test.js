@@ -664,6 +664,327 @@ describe('SyncDatabase', () => {
     });
   });
 
+  describe('Beads integration', () => {
+    beforeEach(() => {
+      // Create a project for issues to reference
+      db.upsertProject({
+        identifier: 'BEADS',
+        name: 'Beads Test Project',
+      });
+    });
+
+    describe('beads_issue_id column', () => {
+      it('should store beads_issue_id when upserting issue', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue with Beads ID',
+          beads_issue_id: 'project-abc123',
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_issue_id).toBe('project-abc123');
+      });
+
+      it('should preserve beads_issue_id when updating other fields', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Original',
+          beads_issue_id: 'project-abc123',
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Updated Title',
+          // beads_issue_id not provided
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.title).toBe('Updated Title');
+        expect(issue.beads_issue_id).toBe('project-abc123');
+      });
+
+      it('should allow null beads_issue_id', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue without Beads',
+          beads_issue_id: null,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_issue_id).toBeNull();
+      });
+
+      it('should update beads_issue_id when provided', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_issue_id: 'project-old',
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_issue_id: 'project-new',
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_issue_id).toBe('project-new');
+      });
+    });
+
+    describe('beads_status column', () => {
+      it('should store beads_status when upserting issue', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Open Issue',
+          beads_status: 'open',
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_status).toBe('open');
+      });
+
+      it('should store closed status', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Closed Issue',
+          beads_status: 'closed',
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_status).toBe('closed');
+      });
+
+      it('should preserve beads_status when updating other fields', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Original',
+          beads_status: 'open',
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Updated Title',
+          // beads_status not provided
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_status).toBe('open');
+      });
+
+      it('should update beads_status when provided', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_status: 'open',
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_status: 'closed',
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_status).toBe('closed');
+      });
+    });
+
+    describe('beads_modified_at column', () => {
+      it('should store beads_modified_at timestamp', () => {
+        const timestamp = Date.now();
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_modified_at: timestamp,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_modified_at).toBe(timestamp);
+      });
+
+      it('should allow null beads_modified_at', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_modified_at: null,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_modified_at).toBeNull();
+      });
+
+      it('should preserve beads_modified_at when updating other fields', () => {
+        const timestamp = 1234567890;
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Original',
+          beads_modified_at: timestamp,
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Updated Title',
+          // beads_modified_at not provided
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_modified_at).toBe(timestamp);
+      });
+
+      it('should update beads_modified_at when provided', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_modified_at: 1000,
+        });
+
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_modified_at: 2000,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_modified_at).toBe(2000);
+      });
+    });
+
+    describe('combined Beads fields', () => {
+      it('should store all Beads fields together', () => {
+        const timestamp = Date.now();
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Full Beads Issue',
+          beads_issue_id: 'project-full',
+          beads_status: 'open',
+          beads_modified_at: timestamp,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.beads_issue_id).toBe('project-full');
+        expect(issue.beads_status).toBe('open');
+        expect(issue.beads_modified_at).toBe(timestamp);
+      });
+
+      it('should work alongside Huly and Vibe fields', () => {
+        const timestamp = Date.now();
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Multi-system Issue',
+          // Huly fields
+          huly_id: 'huly-123',
+          status: 'In Progress',
+          priority: 'High',
+          huly_modified_at: timestamp - 1000,
+          // Vibe fields
+          vibe_task_id: 456,
+          vibe_status: 'in_progress',
+          vibe_modified_at: timestamp - 500,
+          // Beads fields
+          beads_issue_id: 'project-abc',
+          beads_status: 'open',
+          beads_modified_at: timestamp,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        // Verify all systems' data is stored
+        expect(issue.huly_id).toBe('huly-123');
+        expect(issue.vibe_task_id).toBe(456);
+        expect(issue.beads_issue_id).toBe('project-abc');
+      });
+
+      it('should handle partial Beads updates correctly', () => {
+        // First insert with all fields
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue',
+          beads_issue_id: 'project-abc',
+          beads_status: 'open',
+          beads_modified_at: 1000,
+        });
+
+        // Update with beads_status change (title must be re-provided as upsert overwrites it)
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue', // must include to preserve
+          beads_status: 'closed',
+          beads_modified_at: 2000,
+        });
+
+        const issue = db.getIssue('BEADS-1');
+        expect(issue.title).toBe('Issue'); // preserved by re-providing
+        expect(issue.beads_issue_id).toBe('project-abc'); // preserved via COALESCE
+        expect(issue.beads_status).toBe('closed'); // updated
+        expect(issue.beads_modified_at).toBe(2000); // updated
+      });
+    });
+
+    describe('getAllIssues for Beads sync', () => {
+      it('should return all issues including Beads fields', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Issue 1',
+          beads_issue_id: 'project-1',
+          beads_status: 'open',
+        });
+        db.upsertIssue({
+          identifier: 'BEADS-2',
+          project_identifier: 'BEADS',
+          title: 'Issue 2',
+          beads_issue_id: 'project-2',
+          beads_status: 'closed',
+        });
+
+        const issues = db.getAllIssues();
+        expect(issues.length).toBeGreaterThanOrEqual(2);
+        
+        const beadsIssues = issues.filter(i => i.project_identifier === 'BEADS');
+        expect(beadsIssues).toHaveLength(2);
+        expect(beadsIssues.find(i => i.beads_issue_id === 'project-1')).toBeTruthy();
+        expect(beadsIssues.find(i => i.beads_issue_id === 'project-2')).toBeTruthy();
+      });
+
+      it('should find issue by beads_issue_id via getAllIssues', () => {
+        db.upsertIssue({
+          identifier: 'BEADS-1',
+          project_identifier: 'BEADS',
+          title: 'Target Issue',
+          beads_issue_id: 'project-target',
+        });
+
+        const issues = db.getAllIssues();
+        const found = issues.find(i => i.beads_issue_id === 'project-target');
+        
+        expect(found).toBeTruthy();
+        expect(found.identifier).toBe('BEADS-1');
+      });
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle very long project names', () => {
       const longName = 'A'.repeat(1000);

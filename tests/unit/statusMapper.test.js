@@ -1,7 +1,7 @@
 /**
  * Unit Tests for Status Mapper
  * 
- * Tests bidirectional status mapping between Huly and Vibe Kanban
+ * Tests bidirectional status mapping between Huly, Vibe Kanban, and Beads
  */
 
 import { describe, it, expect } from 'vitest';
@@ -10,6 +10,13 @@ import {
   mapVibeStatusToHuly,
   normalizeStatus,
   areStatusesEquivalent,
+  // Beads mapping functions
+  mapHulyStatusToBeads,
+  mapBeadsStatusToHuly,
+  mapHulyPriorityToBeads,
+  mapBeadsPriorityToHuly,
+  mapHulyTypeToBeads,
+  mapBeadsTypeToHuly,
 } from '../../lib/statusMapper.js';
 
 describe('statusMapper', () => {
@@ -211,6 +218,268 @@ describe('statusMapper', () => {
       expect(mapHulyStatusToVibe('Progressive')).toBe('inprogress'); // Contains "progress"
       expect(mapHulyStatusToVibe('Reviewer')).toBe('inreview'); // Contains "review"
       expect(mapHulyStatusToVibe('Canceled order')).toBe('cancelled'); // Contains "cancel"
+    });
+  });
+});
+
+// ============================================================
+// BEADS MAPPING TESTS
+// ============================================================
+
+describe('beadsStatusMapper', () => {
+  describe('mapHulyStatusToBeads', () => {
+    it('should map null/undefined to open', () => {
+      expect(mapHulyStatusToBeads(null)).toBe('open');
+      expect(mapHulyStatusToBeads(undefined)).toBe('open');
+      expect(mapHulyStatusToBeads('')).toBe('open');
+    });
+
+    it('should map Done to closed', () => {
+      expect(mapHulyStatusToBeads('Done')).toBe('closed');
+      expect(mapHulyStatusToBeads('done')).toBe('closed');
+      expect(mapHulyStatusToBeads('DONE')).toBe('closed');
+    });
+
+    it('should map Completed to closed', () => {
+      expect(mapHulyStatusToBeads('Completed')).toBe('closed');
+      expect(mapHulyStatusToBeads('completed')).toBe('closed');
+    });
+
+    it('should map Cancelled to closed', () => {
+      expect(mapHulyStatusToBeads('Cancelled')).toBe('closed');
+      expect(mapHulyStatusToBeads('cancelled')).toBe('closed');
+      expect(mapHulyStatusToBeads('Canceled')).toBe('closed'); // US spelling
+      expect(mapHulyStatusToBeads('Cancel')).toBe('closed');
+    });
+
+    it('should map all active statuses to open', () => {
+      expect(mapHulyStatusToBeads('Backlog')).toBe('open');
+      expect(mapHulyStatusToBeads('Todo')).toBe('open');
+      expect(mapHulyStatusToBeads('In Progress')).toBe('open');
+      expect(mapHulyStatusToBeads('In Review')).toBe('open');
+    });
+
+    it('should map unknown statuses to open', () => {
+      expect(mapHulyStatusToBeads('Unknown')).toBe('open');
+      expect(mapHulyStatusToBeads('Blocked')).toBe('open');
+      expect(mapHulyStatusToBeads('Pending')).toBe('open');
+    });
+
+    it('should handle case insensitivity', () => {
+      expect(mapHulyStatusToBeads('DONE')).toBe('closed');
+      expect(mapHulyStatusToBeads('dOnE')).toBe('closed');
+      expect(mapHulyStatusToBeads('IN PROGRESS')).toBe('open');
+    });
+  });
+
+  describe('mapBeadsStatusToHuly', () => {
+    it('should map open to Backlog', () => {
+      expect(mapBeadsStatusToHuly('open')).toBe('Backlog');
+    });
+
+    it('should map closed to Done', () => {
+      expect(mapBeadsStatusToHuly('closed')).toBe('Done');
+    });
+
+    it('should default unknown statuses to Backlog', () => {
+      expect(mapBeadsStatusToHuly('unknown')).toBe('Backlog');
+      expect(mapBeadsStatusToHuly('')).toBe('Backlog');
+      expect(mapBeadsStatusToHuly(null)).toBe('Backlog');
+      expect(mapBeadsStatusToHuly(undefined)).toBe('Backlog');
+    });
+  });
+
+  describe('mapHulyPriorityToBeads', () => {
+    it('should map null/undefined to P2 (medium)', () => {
+      expect(mapHulyPriorityToBeads(null)).toBe(2);
+      expect(mapHulyPriorityToBeads(undefined)).toBe(2);
+      expect(mapHulyPriorityToBeads('')).toBe(2);
+    });
+
+    it('should map Urgent/Critical to P0', () => {
+      expect(mapHulyPriorityToBeads('Urgent')).toBe(0);
+      expect(mapHulyPriorityToBeads('urgent')).toBe(0);
+      expect(mapHulyPriorityToBeads('Critical')).toBe(0);
+      expect(mapHulyPriorityToBeads('critical')).toBe(0);
+    });
+
+    it('should map High to P1', () => {
+      expect(mapHulyPriorityToBeads('High')).toBe(1);
+      expect(mapHulyPriorityToBeads('high')).toBe(1);
+      expect(mapHulyPriorityToBeads('HIGH')).toBe(1);
+    });
+
+    it('should map Medium to P2', () => {
+      expect(mapHulyPriorityToBeads('Medium')).toBe(2);
+      expect(mapHulyPriorityToBeads('medium')).toBe(2);
+    });
+
+    it('should map Low to P3', () => {
+      expect(mapHulyPriorityToBeads('Low')).toBe(3);
+      expect(mapHulyPriorityToBeads('low')).toBe(3);
+    });
+
+    it('should map NoPriority/None to P4', () => {
+      expect(mapHulyPriorityToBeads('NoPriority')).toBe(4);
+      expect(mapHulyPriorityToBeads('None')).toBe(4);
+      expect(mapHulyPriorityToBeads('none')).toBe(4);
+      expect(mapHulyPriorityToBeads('Minimal')).toBe(4);
+    });
+
+    it('should default unknown priorities to P2', () => {
+      expect(mapHulyPriorityToBeads('Unknown')).toBe(2);
+      expect(mapHulyPriorityToBeads('Random')).toBe(2);
+    });
+  });
+
+  describe('mapBeadsPriorityToHuly', () => {
+    it('should map P0 to Urgent', () => {
+      expect(mapBeadsPriorityToHuly(0)).toBe('Urgent');
+    });
+
+    it('should map P1 to High', () => {
+      expect(mapBeadsPriorityToHuly(1)).toBe('High');
+    });
+
+    it('should map P2 to Medium', () => {
+      expect(mapBeadsPriorityToHuly(2)).toBe('Medium');
+    });
+
+    it('should map P3 to Low', () => {
+      expect(mapBeadsPriorityToHuly(3)).toBe('Low');
+    });
+
+    it('should map P4 to NoPriority', () => {
+      expect(mapBeadsPriorityToHuly(4)).toBe('NoPriority');
+    });
+
+    it('should default unknown priorities to Medium', () => {
+      expect(mapBeadsPriorityToHuly(5)).toBe('Medium');
+      expect(mapBeadsPriorityToHuly(-1)).toBe('Medium');
+      expect(mapBeadsPriorityToHuly(null)).toBe('Medium');
+      expect(mapBeadsPriorityToHuly(undefined)).toBe('Medium');
+    });
+  });
+
+  describe('mapHulyTypeToBeads', () => {
+    it('should map null/undefined to task', () => {
+      expect(mapHulyTypeToBeads(null)).toBe('task');
+      expect(mapHulyTypeToBeads(undefined)).toBe('task');
+      expect(mapHulyTypeToBeads('')).toBe('task');
+    });
+
+    it('should map Bug/Defect to bug', () => {
+      expect(mapHulyTypeToBeads('Bug')).toBe('bug');
+      expect(mapHulyTypeToBeads('bug')).toBe('bug');
+      expect(mapHulyTypeToBeads('Defect')).toBe('bug');
+      expect(mapHulyTypeToBeads('defect')).toBe('bug');
+    });
+
+    it('should map Feature/Enhancement to feature', () => {
+      expect(mapHulyTypeToBeads('Feature')).toBe('feature');
+      expect(mapHulyTypeToBeads('feature')).toBe('feature');
+      expect(mapHulyTypeToBeads('Enhancement')).toBe('feature');
+      expect(mapHulyTypeToBeads('enhancement')).toBe('feature');
+    });
+
+    it('should map Epic/Initiative to epic', () => {
+      expect(mapHulyTypeToBeads('Epic')).toBe('epic');
+      expect(mapHulyTypeToBeads('epic')).toBe('epic');
+      expect(mapHulyTypeToBeads('Initiative')).toBe('epic');
+    });
+
+    it('should map Chore/Maintenance to chore', () => {
+      expect(mapHulyTypeToBeads('Chore')).toBe('chore');
+      expect(mapHulyTypeToBeads('chore')).toBe('chore');
+      expect(mapHulyTypeToBeads('Maintenance')).toBe('chore');
+    });
+
+    it('should default unknown types to task', () => {
+      expect(mapHulyTypeToBeads('Task')).toBe('task');
+      expect(mapHulyTypeToBeads('Story')).toBe('task');
+      expect(mapHulyTypeToBeads('Unknown')).toBe('task');
+    });
+  });
+
+  describe('mapBeadsTypeToHuly', () => {
+    it('should map task to Task', () => {
+      expect(mapBeadsTypeToHuly('task')).toBe('Task');
+    });
+
+    it('should map bug to Bug', () => {
+      expect(mapBeadsTypeToHuly('bug')).toBe('Bug');
+    });
+
+    it('should map feature to Feature', () => {
+      expect(mapBeadsTypeToHuly('feature')).toBe('Feature');
+    });
+
+    it('should map epic to Epic', () => {
+      expect(mapBeadsTypeToHuly('epic')).toBe('Epic');
+    });
+
+    it('should map chore to Chore', () => {
+      expect(mapBeadsTypeToHuly('chore')).toBe('Chore');
+    });
+
+    it('should default unknown types to Task', () => {
+      expect(mapBeadsTypeToHuly('unknown')).toBe('Task');
+      expect(mapBeadsTypeToHuly('')).toBe('Task');
+      expect(mapBeadsTypeToHuly(null)).toBe('Task');
+    });
+  });
+
+  describe('Beads bidirectional mapping consistency', () => {
+    it('should understand that Beads has limited status granularity', () => {
+      // Multiple Huly statuses map to "open"
+      expect(mapHulyStatusToBeads('Backlog')).toBe('open');
+      expect(mapHulyStatusToBeads('Todo')).toBe('open');
+      expect(mapHulyStatusToBeads('In Progress')).toBe('open');
+      expect(mapHulyStatusToBeads('In Review')).toBe('open');
+      
+      // But "open" only maps back to Backlog (information loss)
+      expect(mapBeadsStatusToHuly('open')).toBe('Backlog');
+    });
+
+    it('should preserve closed status round-trip', () => {
+      // Done -> closed -> Done (preserved)
+      expect(mapBeadsStatusToHuly(mapHulyStatusToBeads('Done'))).toBe('Done');
+      
+      // Cancelled -> closed -> Done (NOT preserved - becomes Done)
+      expect(mapBeadsStatusToHuly(mapHulyStatusToBeads('Cancelled'))).toBe('Done');
+    });
+
+    it('should preserve priority round-trip', () => {
+      // Priority is preserved for all levels
+      expect(mapBeadsPriorityToHuly(mapHulyPriorityToBeads('Urgent'))).toBe('Urgent');
+      expect(mapBeadsPriorityToHuly(mapHulyPriorityToBeads('High'))).toBe('High');
+      expect(mapBeadsPriorityToHuly(mapHulyPriorityToBeads('Medium'))).toBe('Medium');
+      expect(mapBeadsPriorityToHuly(mapHulyPriorityToBeads('Low'))).toBe('Low');
+      expect(mapBeadsPriorityToHuly(mapHulyPriorityToBeads('NoPriority'))).toBe('NoPriority');
+    });
+
+    it('should preserve type round-trip for known types', () => {
+      expect(mapBeadsTypeToHuly(mapHulyTypeToBeads('Bug'))).toBe('Bug');
+      expect(mapBeadsTypeToHuly(mapHulyTypeToBeads('Feature'))).toBe('Feature');
+      expect(mapBeadsTypeToHuly(mapHulyTypeToBeads('Epic'))).toBe('Epic');
+      expect(mapBeadsTypeToHuly(mapHulyTypeToBeads('Chore'))).toBe('Chore');
+    });
+  });
+
+  describe('Beads edge cases', () => {
+    it('should handle status with extra whitespace', () => {
+      expect(mapHulyStatusToBeads('  Done  ')).toBe('closed');
+      expect(mapHulyStatusToBeads('  In Progress  ')).toBe('open');
+    });
+
+    it('should handle priority strings with extra text', () => {
+      expect(mapHulyPriorityToBeads('High Priority')).toBe(1);
+      expect(mapHulyPriorityToBeads('Very Urgent')).toBe(0);
+    });
+
+    it('should handle type strings with partial matches', () => {
+      expect(mapHulyTypeToBeads('Bug Report')).toBe('bug');
+      expect(mapHulyTypeToBeads('Feature Request')).toBe('feature');
     });
   });
 });
