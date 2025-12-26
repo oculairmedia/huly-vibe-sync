@@ -783,4 +783,270 @@ describe('Beads Sync Integration Tests', () => {
       );
     });
   });
+
+  describe('syncHulyIssueToBeads - Deduplication', () => {
+    it('should link to existing Beads issue instead of creating duplicate when titles match exactly', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-1',
+        title: 'Existing Feature',
+        status: 'Backlog',
+        priority: 'Medium',
+        modifiedOn: Date.now(),
+        project: 'TEST',
+      });
+
+      // Existing Beads issue with matching title
+      const existingBeadsIssue = createMockBeadsIssue({
+        id: 'test-existing-abc',
+        title: 'Existing Feature',
+        status: 'open',
+        priority: 2,
+      });
+
+      // Should NOT call create since a matching issue exists
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [existingBeadsIssue], // Pass existing beads issues
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should return the existing issue (linked, not created)
+      expect(result).toBeDefined();
+      expect(result.id).toBe('test-existing-abc');
+
+      // Should NOT have called bd create
+      expect(mockExecSync).not.toHaveBeenCalledWith(
+        expect.stringContaining('bd create'),
+        expect.any(Object)
+      );
+
+      // Database should have the mapping
+      const dbIssue = db.getIssue('TEST-1');
+      expect(dbIssue.beads_issue_id).toBe('test-existing-abc');
+    });
+
+    it('should link when Huly title matches after normalizing priority prefix', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-2',
+        title: '[P1] Important Feature',
+        status: 'In Progress',
+        priority: 'High',
+        modifiedOn: Date.now(),
+        project: 'TEST',
+      });
+
+      // Existing Beads issue without priority prefix
+      const existingBeadsIssue = createMockBeadsIssue({
+        id: 'test-important-xyz',
+        title: 'Important Feature',
+        status: 'open',
+        priority: 1,
+      });
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [existingBeadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('test-important-xyz');
+
+      // Verify linking, not creation
+      expect(mockExecSync).not.toHaveBeenCalledWith(
+        expect.stringContaining('bd create'),
+        expect.any(Object)
+      );
+    });
+
+    it('should link when Beads title contains Huly title (partial match)', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-3',
+        title: 'Fix authentication bug',
+        status: 'Todo',
+        priority: 'Medium',
+        modifiedOn: Date.now(),
+        project: 'TEST',
+      });
+
+      // Existing Beads issue with longer title containing the Huly title
+      const existingBeadsIssue = createMockBeadsIssue({
+        id: 'test-auth-bug',
+        title: '[BUG] Fix authentication bug in login flow',
+        status: 'open',
+        priority: 2,
+      });
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [existingBeadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('test-auth-bug');
+    });
+
+    it('should create new Beads issue when no matching title exists', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-4',
+        title: 'Completely New Feature',
+        status: 'Backlog',
+        priority: 'Low',
+        modifiedOn: Date.now(),
+        project: 'TEST',
+      });
+
+      // Existing issues with different titles
+      const existingBeadsIssues = [
+        createMockBeadsIssue({ id: 'test-other-1', title: 'Unrelated Issue' }),
+        createMockBeadsIssue({ id: 'test-other-2', title: 'Different Feature' }),
+      ];
+
+      const createdIssue = createMockBeadsIssue({
+        id: 'test-new-created',
+        title: 'Completely New Feature',
+      });
+      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        existingBeadsIssues,
+        db,
+        MOCK_CONFIG.default
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('test-new-created');
+
+      // SHOULD have called bd create since no match
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd create'),
+        expect.any(Object)
+      );
+    });
+
+    it('should not match very short titles to prevent false positives', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-5',
+        title: 'Fix bug',
+        status: 'Backlog',
+        priority: 'Medium',
+        modifiedOn: Date.now(),
+        project: 'TEST',
+      });
+
+      // Short title should not partial match
+      const existingBeadsIssue = createMockBeadsIssue({
+        id: 'test-other',
+        title: 'Fix authentication bug in the login system',
+        status: 'open',
+      });
+
+      const createdIssue = createMockBeadsIssue({ id: 'test-new', title: 'Fix bug' });
+      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [existingBeadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should create new (short titles don't partial match for safety)
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd create'),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('syncExistingBeadsIssueToHuly', () => {
+    it('should skip update when Beads issue has no database mapping', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'test-no-mapping',
+        title: 'New Beads Issue',
+        status: 'open',
+        updated_at: new Date().toISOString(),
+      });
+
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-1',
+        title: 'Different Issue',
+        status: 'Backlog',
+        project: 'TEST',
+        modifiedOn: Date.now(),
+      });
+
+      // No database mapping exists for this beads issue
+      // The sync function should handle this gracefully
+
+      const mockHulyClient = {};
+
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      // Should not throw, should handle gracefully
+      await expect(
+        syncBeadsIssueToHuly(
+          mockHulyClient,
+          beadsIssue,
+          [hulyIssue],
+          'TEST',
+          db,
+          MOCK_CONFIG.default
+        )
+      ).resolves.not.toThrow();
+    });
+
+    it('should skip update when Beads issue was just updated in Phase 3a', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'test-just-updated',
+        title: 'Just Updated Issue',
+        status: 'open',
+      });
+
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-1',
+        title: 'Just Updated Issue',
+        status: 'In Progress',
+        project: 'TEST',
+      });
+
+      // Set up database mapping
+      db.upsertIssue({
+        identifier: 'TEST-1',
+        project_identifier: 'TEST',
+        beads_issue_id: 'test-just-updated',
+        title: 'Just Updated Issue',
+        status: 'In Progress',
+        beads_status: 'open',
+      });
+
+      const mockHulyClient = {};
+      const phase3UpdatedIssues = new Set(['test-just-updated']); // Mark as just updated
+
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      // Should skip because issue is in phase3UpdatedIssues set
+      await syncBeadsIssueToHuly(
+        mockHulyClient,
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        MOCK_CONFIG.default,
+        phase3UpdatedIssues
+      );
+
+      // No changes should be made to database
+    });
+  });
 });
