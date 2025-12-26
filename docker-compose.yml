@@ -15,7 +15,7 @@ services:
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
       # Sync Configuration
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000}  # 10 seconds default
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000} # 10 seconds default
       - INCREMENTAL_SYNC=${INCREMENTAL_SYNC:-true}
       - PARALLEL_SYNC=${PARALLEL_SYNC:-true}
       - MAX_WORKERS=${MAX_WORKERS:-5}
@@ -64,24 +64,29 @@ services:
       - /opt/stacks:/opt/stacks:rw
 
     network_mode: host
+    user: root
 
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '\"status\": \"healthy\"'"]
+      test:
+        [
+          'CMD-SHELL',
+          'curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q ''"status": "healthy"''',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 
   huly-vibe-sync-ui:
     image: ghcr.io/oculairmedia/huly-vibe-sync-ui:latest
     container_name: huly-vibe-sync-ui
-    pull_policy: never  # Temporarily use local image for testing
+    pull_policy: never # Temporarily use local image for testing
     restart: unless-stopped
     environment:
       # API Configuration
@@ -93,17 +98,21 @@ services:
       - NODE_ENV=production
 
     ports:
-      - "${UI_PORT:-3110}:3000"
+      - '${UI_PORT:-3110}:3000'
 
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
 
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'

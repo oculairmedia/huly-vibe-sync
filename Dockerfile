@@ -50,12 +50,17 @@ RUN git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
     git config --global user.name "Huly Vibe Sync Service"
 USER root
 
+# Configure git safe directory for root user (when running container as root)
+RUN git config --global --add safe.directory '*' && \
+    git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
+    git config --global user.name "Huly Vibe Sync Service"
+
 # Health check - query the /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '"status": "healthy"' || exit 1
 
-# Run as non-root user
-USER node
+# Note: Container runs as root via docker-compose.yml user: root
+# This allows access to mounted /opt/stacks directories regardless of ownership
 
 # Default command
 CMD ["node", "index.js"]
