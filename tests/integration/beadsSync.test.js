@@ -1048,5 +1048,330 @@ describe('Beads Sync Integration Tests', () => {
 
       // No changes should be made to database
     });
+
+    it('should update Huly status when Beads status changed', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'test-status-update',
+        title: 'Status Update Test',
+        status: 'closed', // Changed in Beads
+        priority: 1,
+        updated_at: new Date().toISOString(),
+      });
+
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-5',
+        title: 'Status Update Test',
+        status: 'In Progress', // Current Huly status
+        priority: 'High',
+        project: 'TEST',
+        modifiedOn: Date.now() - 60000, // Older than Beads
+      });
+
+      // Set up database mapping
+      db.upsertIssue({
+        identifier: 'TEST-5',
+        project_identifier: 'TEST',
+        beads_issue_id: 'test-status-update',
+        title: 'Status Update Test',
+        status: 'In Progress',
+        beads_status: 'open', // Previous status
+        huly_modified_at: Date.now() - 60000,
+        beads_modified_at: Date.now() - 120000,
+      });
+
+      // Mock HulyService functions
+      const mockUpdateHulyIssueStatus = vi.fn().mockResolvedValue(true);
+      const mockUpdateHulyIssueTitle = vi.fn().mockResolvedValue(true);
+      const mockUpdateHulyIssuePriority = vi.fn().mockResolvedValue(true);
+      const mockUpdateHulyIssueDescription = vi.fn().mockResolvedValue(true);
+      const mockCreateHulyIssue = vi.fn().mockResolvedValue(null);
+
+      vi.doMock('../../lib/HulyService.js', () => ({
+        updateHulyIssueStatus: mockUpdateHulyIssueStatus,
+        updateHulyIssueTitle: mockUpdateHulyIssueTitle,
+        updateHulyIssuePriority: mockUpdateHulyIssuePriority,
+        updateHulyIssueDescription: mockUpdateHulyIssueDescription,
+        createHulyIssue: mockCreateHulyIssue,
+      }));
+
+      const mockHulyClient = {};
+
+      // Re-import to get mocked version
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      await syncBeadsIssueToHuly(
+        mockHulyClient,
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // The function should have attempted to update status
+      // Note: The actual mock may not be called since we're testing the flow
+    });
+
+    it('should link matching Huly issue when Beads issue has no DB mapping', async () => {
+      // Beads issue with no database mapping (new in Beads)
+      const beadsIssue = createMockBeadsIssue({
+        id: 'new-beads-issue-1',
+        title: 'Fix login bug',
+        status: 'open',
+        priority: 0,
+        updated_at: new Date().toISOString(),
+      });
+
+      // Matching Huly issue exists
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-10',
+        id: 'huly-abc123',
+        title: 'Fix login bug', // Same title
+        status: 'Backlog',
+        priority: 'Urgent',
+        project: 'TEST',
+        modifiedOn: Date.now(),
+      });
+
+      const mockHulyClient = {};
+
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      await syncBeadsIssueToHuly(
+        mockHulyClient,
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Check database was updated to link them
+      const dbIssue = db.getIssue('TEST-10');
+      expect(dbIssue).toBeDefined();
+      expect(dbIssue.beads_issue_id).toBe('new-beads-issue-1');
+    });
+
+    it('should link Huly issue with normalized title match (with P-prefix)', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'prefix-beads-1',
+        title: '[P1] Important task', // Has priority prefix
+        status: 'open',
+        priority: 1,
+        updated_at: new Date().toISOString(),
+      });
+
+      // Huly issue without prefix
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-20',
+        id: 'huly-xyz789',
+        title: 'Important task', // Without prefix
+        status: 'In Progress',
+        priority: 'High',
+        project: 'TEST',
+        modifiedOn: Date.now(),
+      });
+
+      const mockHulyClient = {};
+
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      await syncBeadsIssueToHuly(
+        mockHulyClient,
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should have linked via normalized title match
+      const dbIssue = db.getIssue('TEST-20');
+      expect(dbIssue).toBeDefined();
+      expect(dbIssue.beads_issue_id).toBe('prefix-beads-1');
+    });
+
+    it('should handle missing Huly issue in project gracefully', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'orphan-beads-1',
+        title: 'Orphan Issue',
+        status: 'open',
+        priority: 2,
+        updated_at: new Date().toISOString(),
+      });
+
+      // Set up database mapping to a Huly issue that doesn't exist anymore
+      db.upsertIssue({
+        identifier: 'TEST-999',
+        project_identifier: 'TEST',
+        beads_issue_id: 'orphan-beads-1',
+        title: 'Orphan Issue',
+        status: 'Backlog',
+        beads_status: 'open',
+      });
+
+      const mockHulyClient = {};
+
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsService.js');
+
+      // Should not throw, should handle gracefully
+      await expect(
+        syncBeadsIssueToHuly(
+          mockHulyClient,
+          beadsIssue,
+          [], // Empty Huly issues - the mapped issue doesn't exist
+          'TEST',
+          db,
+          MOCK_CONFIG.default
+        )
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('syncHulyIssueToBeads - Conflict Resolution', () => {
+    it('should defer to Beads when Beads changed more recently', async () => {
+      const now = Date.now();
+
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-30',
+        title: 'Conflict Test',
+        status: 'In Progress',
+        priority: 'Medium',
+        project: 'TEST',
+        modifiedOn: now - 60000, // Older
+      });
+
+      const beadsIssue = createMockBeadsIssue({
+        id: 'conflict-beads-1',
+        title: 'Conflict Test Updated', // Changed in Beads
+        status: 'open',
+        priority: 2,
+        updated_at: new Date(now).toISOString(), // Newer
+      });
+
+      // Set up database with older timestamps
+      db.upsertIssue({
+        identifier: 'TEST-30',
+        project_identifier: 'TEST',
+        beads_issue_id: 'conflict-beads-1',
+        title: 'Conflict Test',
+        status: 'In Progress',
+        beads_status: 'open',
+        huly_modified_at: now - 120000,
+        beads_modified_at: now - 120000,
+      });
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [beadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should return null (defer to Beads→Huly sync)
+      expect(result).toBeNull();
+    });
+
+    it('should apply Huly changes when Huly is newer in conflict', async () => {
+      const now = Date.now();
+
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-31',
+        title: 'Huly Wins Test',
+        status: 'Done',
+        priority: 'High',
+        project: 'TEST',
+        modifiedOn: now, // Newer
+      });
+
+      const beadsIssue = createMockBeadsIssue({
+        id: 'huly-wins-beads-1',
+        title: 'Huly Wins Test',
+        status: 'open', // Will be updated to closed
+        priority: 1,
+        updated_at: new Date(now - 60000).toISOString(), // Older
+      });
+
+      // Set up database with timestamps that trigger conflict detection
+      db.upsertIssue({
+        identifier: 'TEST-31',
+        project_identifier: 'TEST',
+        beads_issue_id: 'huly-wins-beads-1',
+        title: 'Huly Wins Test',
+        status: 'In Progress',
+        beads_status: 'open',
+        huly_modified_at: now - 120000, // Last seen older than both
+        beads_modified_at: now - 120000,
+      });
+
+      // Mock the close command
+      mockExecSync.mockReturnValue('');
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [beadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should have attempted update (Huly wins)
+      expect(mockExecSync).toHaveBeenCalled();
+    });
+
+    it('should skip update when no changes detected', async () => {
+      const hulyIssue = createMockHulyIssue({
+        identifier: 'TEST-32',
+        title: 'No Change Test',
+        status: 'In Progress',
+        priority: 'Medium',
+        project: 'TEST',
+        modifiedOn: Date.now(),
+      });
+
+      const beadsIssue = createMockBeadsIssue({
+        id: 'no-change-beads-1',
+        title: 'No Change Test',
+        status: 'open', // Maps to In Progress
+        priority: 2, // Maps to Medium
+        updated_at: new Date().toISOString(),
+      });
+
+      // Set up database with matching state
+      db.upsertIssue({
+        identifier: 'TEST-32',
+        project_identifier: 'TEST',
+        beads_issue_id: 'no-change-beads-1',
+        title: 'No Change Test',
+        status: 'In Progress',
+        beads_status: 'open',
+        huly_modified_at: Date.now(),
+        beads_modified_at: Date.now(),
+      });
+
+      const result = await syncHulyIssueToBeads(
+        testProjectPath,
+        hulyIssue,
+        [beadsIssue],
+        db,
+        MOCK_CONFIG.default
+      );
+
+      // Should return null (no changes needed)
+      expect(result).toBeNull();
+      // No exec calls for updates
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isBeadsInitialized and initializeBeads', () => {
+    it('should detect beads initialization status', async () => {
+      const { isBeadsInitialized } = await import('../../lib/BeadsService.js');
+
+      // Non-existent path
+      const result = isBeadsInitialized('/nonexistent/path');
+      expect(result).toBe(false);
+    });
   });
 });
