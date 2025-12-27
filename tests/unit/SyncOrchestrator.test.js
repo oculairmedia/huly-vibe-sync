@@ -31,20 +31,20 @@ vi.mock('../../lib/VibeService.js', () => ({
 vi.mock('../../lib/statusMapper.js', () => ({
   mapHulyStatusToVibe: vi.fn(status => {
     const map = {
-      'Backlog': 'todo',
+      Backlog: 'todo',
       'In Progress': 'inprogress',
       'In Review': 'inreview',
-      'Done': 'done',
+      Done: 'done',
     };
     return map[status] || 'todo';
   }),
   normalizeStatus: vi.fn(status => status?.toLowerCase() || ''),
   mapVibeStatusToHuly: vi.fn(status => {
     const map = {
-      'todo': 'Backlog',
-      'inprogress': 'In Progress',
-      'inreview': 'In Review',
-      'done': 'Done',
+      todo: 'Backlog',
+      inprogress: 'In Progress',
+      inreview: 'In Review',
+      done: 'Done',
     };
     return map[status] || 'Backlog';
   }),
@@ -192,11 +192,7 @@ describe('SyncOrchestrator', () => {
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
 
-      expect(createVibeProject).toHaveBeenCalledWith(
-        mockVibeClient,
-        hulyProject,
-        mockConfig
-      );
+      expect(createVibeProject).toHaveBeenCalledWith(mockVibeClient, hulyProject, mockConfig);
     });
 
     it('should not create Vibe project if already exists', async () => {
@@ -245,12 +241,7 @@ describe('SyncOrchestrator', () => {
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
 
-      expect(createVibeTask).toHaveBeenCalledWith(
-        mockVibeClient,
-        'vibe-1',
-        hulyIssue,
-        mockConfig
-      );
+      expect(createVibeTask).toHaveBeenCalledWith(mockVibeClient, 'vibe-1', hulyIssue, mockConfig);
     });
 
     it('should not create task if already exists', async () => {
@@ -260,12 +251,14 @@ describe('SyncOrchestrator', () => {
         status: 'Backlog',
       };
       fetchHulyIssues.mockResolvedValue([hulyIssue]);
-      listVibeTasks.mockResolvedValue([{
-        id: 'task-1',
-        title: 'Existing Issue',
-        description: 'Synced from Huly Issue: TEST-1',
-        status: 'todo',
-      }]);
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Existing Issue',
+          description: 'Synced from Huly Issue: TEST-1',
+          status: 'todo',
+        },
+      ]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
 
@@ -279,11 +272,13 @@ describe('SyncOrchestrator', () => {
         status: 'Done', // Changed status
       };
       fetchHulyIssues.mockResolvedValue([hulyIssue]);
-      listVibeTasks.mockResolvedValue([{
-        id: 'task-1',
-        description: 'Huly Issue: TEST-1',
-        status: 'todo', // Old status
-      }]);
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          description: 'Huly Issue: TEST-1',
+          status: 'todo', // Old status
+        },
+      ]);
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
         status: 'Backlog', // Last known status
@@ -344,18 +339,11 @@ describe('SyncOrchestrator', () => {
 
       // Should only fetch issues for PROJ1
       expect(fetchHulyIssues).toHaveBeenCalledTimes(1);
-      expect(fetchHulyIssues).toHaveBeenCalledWith(
-        mockHulyClient,
-        'PROJ1',
-        mockConfig,
-        null
-      );
+      expect(fetchHulyIssues).toHaveBeenCalledWith(mockHulyClient, 'PROJ1', mockConfig, null);
     });
 
     it('should skip sync when requested project not found', async () => {
-      fetchHulyProjects.mockResolvedValue([
-        { identifier: 'PROJ1', name: 'Project 1' },
-      ]);
+      fetchHulyProjects.mockResolvedValue([{ identifier: 'PROJ1', name: 'Project 1' }]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig, null, 'NONEXISTENT');
 
@@ -374,11 +362,13 @@ describe('SyncOrchestrator', () => {
     it('should not create tasks in dry run mode', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue([{
-        identifier: 'TEST-1',
-        title: 'Issue',
-        status: 'Backlog',
-      }]);
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Issue',
+          status: 'Backlog',
+        },
+      ]);
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue(null); // Dry run returns null
 
@@ -410,11 +400,13 @@ describe('SyncOrchestrator', () => {
     });
 
     it('should upsert project metadata', async () => {
-      fetchHulyProjects.mockResolvedValue([{
-        identifier: 'TEST',
-        name: 'Test Project',
-        description: 'A test project',
-      }]);
+      fetchHulyProjects.mockResolvedValue([
+        {
+          identifier: 'TEST',
+          name: 'Test Project',
+          description: 'A test project',
+        },
+      ]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test Project' }]);
       fetchHulyIssues.mockResolvedValue([]);
       listVibeTasks.mockResolvedValue([]);
@@ -501,7 +493,7 @@ describe('SyncOrchestrator', () => {
 
     it('should process projects in parallel when enabled', async () => {
       const { processBatch } = await import('../../lib/utils.js');
-      
+
       fetchHulyProjects.mockResolvedValue([
         { identifier: 'PROJ1', name: 'Project 1' },
         { identifier: 'PROJ2', name: 'Project 2' },
@@ -549,6 +541,211 @@ describe('SyncOrchestrator', () => {
         mockConfig,
         lastSyncTime // Falls back to global lastSync when project has no specific sync time
       );
+    });
+  });
+
+  // ============================================================
+  // Timestamp-based Conflict Resolution Tests
+  // ============================================================
+  describe('Phase 2: Vibe→Huly - Timestamp Conflict Resolution', () => {
+    let updateHulyIssueStatus;
+
+    beforeEach(async () => {
+      const HulyService = await import('../../lib/HulyService.js');
+      updateHulyIssueStatus = HulyService.updateHulyIssueStatus;
+
+      fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test Project' }]);
+      listVibeProjects.mockResolvedValue([{ id: 'vibe-1', name: 'Test Project' }]);
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Test Issue',
+          status: 'Done', // Huly shows Done (from Beads sync)
+        },
+      ]);
+    });
+
+    it('should skip Vibe→Huly update when Beads has more recent change', async () => {
+      const now = Date.now();
+      const vibeUpdatedAt = now - 60000; // 1 minute ago
+      const beadsModifiedAt = now - 30000; // 30 seconds ago (more recent)
+
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Test Issue',
+          description: 'Huly Issue: TEST-1',
+          status: 'todo', // Vibe has stale status
+          updated_at: new Date(vibeUpdatedAt).toISOString(),
+        },
+      ]);
+
+      mockDb.getIssue.mockReturnValue({
+        identifier: 'TEST-1',
+        status: 'Done',
+        beads_modified_at: beadsModifiedAt, // Beads was modified more recently
+      });
+
+      await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
+
+      // Should NOT update Huly because Beads has more recent change
+      expect(updateHulyIssueStatus).not.toHaveBeenCalled();
+    });
+
+    it('should allow Vibe→Huly update when Vibe has more recent change', async () => {
+      const now = Date.now();
+      const vibeUpdatedAt = now - 30000; // 30 seconds ago (more recent)
+      const beadsModifiedAt = now - 60000; // 1 minute ago
+
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Test Issue',
+          description: 'Huly Issue: TEST-1',
+          status: 'todo', // Vibe status differs
+          updated_at: new Date(vibeUpdatedAt).toISOString(),
+        },
+      ]);
+
+      // Huly status matches what Beads set (Done), but Vibe has newer change (todo)
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Test Issue',
+          status: 'Done',
+        },
+      ]);
+
+      mockDb.getIssue.mockReturnValue({
+        identifier: 'TEST-1',
+        status: 'Done',
+        beads_modified_at: beadsModifiedAt,
+      });
+
+      updateHulyIssueStatus.mockResolvedValue(true);
+
+      await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
+
+      // Should update Huly because Vibe has more recent change
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(
+        mockHulyClient,
+        'TEST-1',
+        'Backlog', // todo maps to Backlog
+        mockConfig
+      );
+    });
+
+    it('should allow Vibe→Huly update when no Beads timestamp exists', async () => {
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Test Issue',
+          description: 'Huly Issue: TEST-1',
+          status: 'done', // Vibe has different status
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Test Issue',
+          status: 'Backlog', // Huly has different status
+        },
+      ]);
+
+      mockDb.getIssue.mockReturnValue({
+        identifier: 'TEST-1',
+        status: 'Backlog',
+        beads_modified_at: null, // No Beads timestamp
+      });
+
+      updateHulyIssueStatus.mockResolvedValue(true);
+
+      await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
+
+      // Should update because no Beads timestamp to compare
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(
+        mockHulyClient,
+        'TEST-1',
+        'Done',
+        mockConfig
+      );
+    });
+
+    it('should allow Vibe→Huly update when no Vibe timestamp exists', async () => {
+      const beadsModifiedAt = Date.now() - 60000;
+
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Test Issue',
+          description: 'Huly Issue: TEST-1',
+          status: 'done',
+          updated_at: null, // No Vibe timestamp
+        },
+      ]);
+
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Test Issue',
+          status: 'Backlog',
+        },
+      ]);
+
+      mockDb.getIssue.mockReturnValue({
+        identifier: 'TEST-1',
+        status: 'Backlog',
+        beads_modified_at: beadsModifiedAt,
+      });
+
+      updateHulyIssueStatus.mockResolvedValue(true);
+
+      await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
+
+      // Should update because no Vibe timestamp to compare
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(
+        mockHulyClient,
+        'TEST-1',
+        'Done',
+        mockConfig
+      );
+    });
+
+    it('should handle equal timestamps by allowing Vibe update', async () => {
+      const timestamp = Date.now() - 60000;
+
+      listVibeTasks.mockResolvedValue([
+        {
+          id: 'task-1',
+          title: 'Test Issue',
+          description: 'Huly Issue: TEST-1',
+          status: 'done',
+          updated_at: new Date(timestamp).toISOString(),
+        },
+      ]);
+
+      fetchHulyIssues.mockResolvedValue([
+        {
+          identifier: 'TEST-1',
+          title: 'Test Issue',
+          status: 'Backlog',
+        },
+      ]);
+
+      mockDb.getIssue.mockReturnValue({
+        identifier: 'TEST-1',
+        status: 'Backlog',
+        beads_modified_at: timestamp, // Same timestamp
+      });
+
+      updateHulyIssueStatus.mockResolvedValue(true);
+
+      await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
+
+      // Should update because timestamps are equal (Beads not strictly newer)
+      expect(updateHulyIssueStatus).toHaveBeenCalled();
     });
   });
 });
