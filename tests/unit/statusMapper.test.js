@@ -228,57 +228,96 @@ describe('statusMapper', () => {
 
 describe('beadsStatusMapper', () => {
   describe('mapHulyStatusToBeads', () => {
-    it('should map null/undefined to open', () => {
-      expect(mapHulyStatusToBeads(null)).toBe('open');
-      expect(mapHulyStatusToBeads(undefined)).toBe('open');
-      expect(mapHulyStatusToBeads('')).toBe('open');
+    it('should return object with status and label', () => {
+      const result = mapHulyStatusToBeads('In Progress');
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('label');
     });
 
-    it('should map Done to closed', () => {
-      expect(mapHulyStatusToBeads('Done')).toBe('closed');
-      expect(mapHulyStatusToBeads('done')).toBe('closed');
-      expect(mapHulyStatusToBeads('DONE')).toBe('closed');
+    it('should map null/undefined to open with no label', () => {
+      expect(mapHulyStatusToBeads(null)).toEqual({ status: 'open', label: null });
+      expect(mapHulyStatusToBeads(undefined)).toEqual({ status: 'open', label: null });
+      expect(mapHulyStatusToBeads('')).toEqual({ status: 'open', label: null });
     });
 
-    it('should map Completed to closed', () => {
-      expect(mapHulyStatusToBeads('Completed')).toBe('closed');
-      expect(mapHulyStatusToBeads('completed')).toBe('closed');
+    it('should map Done to closed with no label', () => {
+      expect(mapHulyStatusToBeads('Done')).toEqual({ status: 'closed', label: null });
+      expect(mapHulyStatusToBeads('done')).toEqual({ status: 'closed', label: null });
+      expect(mapHulyStatusToBeads('DONE')).toEqual({ status: 'closed', label: null });
     });
 
-    it('should map Cancelled to closed', () => {
-      expect(mapHulyStatusToBeads('Cancelled')).toBe('closed');
-      expect(mapHulyStatusToBeads('cancelled')).toBe('closed');
-      expect(mapHulyStatusToBeads('Canceled')).toBe('closed'); // US spelling
-      expect(mapHulyStatusToBeads('Cancel')).toBe('closed');
+    it('should map Completed to closed with no label', () => {
+      expect(mapHulyStatusToBeads('Completed')).toEqual({ status: 'closed', label: null });
+      expect(mapHulyStatusToBeads('completed')).toEqual({ status: 'closed', label: null });
     });
 
-    it('should map all active statuses to open', () => {
-      expect(mapHulyStatusToBeads('Backlog')).toBe('open');
-      expect(mapHulyStatusToBeads('Todo')).toBe('open');
-      expect(mapHulyStatusToBeads('In Progress')).toBe('open');
-      expect(mapHulyStatusToBeads('In Review')).toBe('open');
+    it('should map Cancelled to closed with huly:Canceled label', () => {
+      expect(mapHulyStatusToBeads('Cancelled')).toEqual({ status: 'closed', label: 'huly:Canceled' });
+      expect(mapHulyStatusToBeads('cancelled')).toEqual({ status: 'closed', label: 'huly:Canceled' });
+      expect(mapHulyStatusToBeads('Canceled')).toEqual({ status: 'closed', label: 'huly:Canceled' });
+      expect(mapHulyStatusToBeads('Cancel')).toEqual({ status: 'closed', label: 'huly:Canceled' });
     });
 
-    it('should map unknown statuses to open', () => {
-      expect(mapHulyStatusToBeads('Unknown')).toBe('open');
-      expect(mapHulyStatusToBeads('Blocked')).toBe('open');
-      expect(mapHulyStatusToBeads('Pending')).toBe('open');
+    it('should map Backlog to open with no label', () => {
+      expect(mapHulyStatusToBeads('Backlog')).toEqual({ status: 'open', label: null });
+    });
+
+    it('should map Todo to open with huly:Todo label', () => {
+      expect(mapHulyStatusToBeads('Todo')).toEqual({ status: 'open', label: 'huly:Todo' });
+    });
+
+    it('should map In Progress to in_progress with no label', () => {
+      expect(mapHulyStatusToBeads('In Progress')).toEqual({ status: 'in_progress', label: null });
+    });
+
+    it('should map In Review to in_progress with huly:In Review label', () => {
+      expect(mapHulyStatusToBeads('In Review')).toEqual({ status: 'in_progress', label: 'huly:In Review' });
+    });
+
+    it('should map unknown statuses to open with no label', () => {
+      expect(mapHulyStatusToBeads('Unknown')).toEqual({ status: 'open', label: null });
+      expect(mapHulyStatusToBeads('Blocked')).toEqual({ status: 'open', label: null });
+      expect(mapHulyStatusToBeads('Pending')).toEqual({ status: 'open', label: null });
     });
 
     it('should handle case insensitivity', () => {
-      expect(mapHulyStatusToBeads('DONE')).toBe('closed');
-      expect(mapHulyStatusToBeads('dOnE')).toBe('closed');
-      expect(mapHulyStatusToBeads('IN PROGRESS')).toBe('open');
+      expect(mapHulyStatusToBeads('DONE').status).toBe('closed');
+      expect(mapHulyStatusToBeads('dOnE').status).toBe('closed');
+      expect(mapHulyStatusToBeads('IN PROGRESS').status).toBe('in_progress');
     });
   });
 
   describe('mapBeadsStatusToHuly', () => {
-    it('should map open to Backlog', () => {
+    it('should map open to Backlog by default', () => {
       expect(mapBeadsStatusToHuly('open')).toBe('Backlog');
     });
 
-    it('should map closed to Done', () => {
+    it('should map open with huly:Todo label to Todo', () => {
+      expect(mapBeadsStatusToHuly('open', ['huly:Todo'])).toBe('Todo');
+    });
+
+    it('should map in_progress to In Progress by default', () => {
+      expect(mapBeadsStatusToHuly('in_progress')).toBe('In Progress');
+    });
+
+    it('should map in_progress with huly:In Review label to In Review', () => {
+      expect(mapBeadsStatusToHuly('in_progress', ['huly:In Review'])).toBe('In Review');
+    });
+
+    it('should map blocked to In Progress (Huly has no blocked status)', () => {
+      expect(mapBeadsStatusToHuly('blocked')).toBe('In Progress');
+    });
+
+    it('should map deferred to Backlog', () => {
+      expect(mapBeadsStatusToHuly('deferred')).toBe('Backlog');
+    });
+
+    it('should map closed to Done by default', () => {
       expect(mapBeadsStatusToHuly('closed')).toBe('Done');
+    });
+
+    it('should map closed with huly:Canceled label to Canceled', () => {
+      expect(mapBeadsStatusToHuly('closed', ['huly:Canceled'])).toBe('Canceled');
     });
 
     it('should default unknown statuses to Backlog', () => {
@@ -286,6 +325,11 @@ describe('beadsStatusMapper', () => {
       expect(mapBeadsStatusToHuly('')).toBe('Backlog');
       expect(mapBeadsStatusToHuly(null)).toBe('Backlog');
       expect(mapBeadsStatusToHuly(undefined)).toBe('Backlog');
+    });
+
+    it('should ignore non-huly labels', () => {
+      expect(mapBeadsStatusToHuly('open', ['bug', 'feature'])).toBe('Backlog');
+      expect(mapBeadsStatusToHuly('closed', ['important', 'urgent'])).toBe('Done');
     });
   });
 
@@ -430,23 +474,33 @@ describe('beadsStatusMapper', () => {
   });
 
   describe('Beads bidirectional mapping consistency', () => {
-    it('should understand that Beads has limited status granularity', () => {
-      // Multiple Huly statuses map to "open"
-      expect(mapHulyStatusToBeads('Backlog')).toBe('open');
-      expect(mapHulyStatusToBeads('Todo')).toBe('open');
-      expect(mapHulyStatusToBeads('In Progress')).toBe('open');
-      expect(mapHulyStatusToBeads('In Review')).toBe('open');
-      
-      // But "open" only maps back to Backlog (information loss)
-      expect(mapBeadsStatusToHuly('open')).toBe('Backlog');
+    it('should use native Beads statuses with labels for disambiguation', () => {
+      // Backlog -> open (no label)
+      expect(mapHulyStatusToBeads('Backlog')).toEqual({ status: 'open', label: null });
+      // Todo -> open + huly:Todo label
+      expect(mapHulyStatusToBeads('Todo')).toEqual({ status: 'open', label: 'huly:Todo' });
+      // In Progress -> in_progress (no label)
+      expect(mapHulyStatusToBeads('In Progress')).toEqual({ status: 'in_progress', label: null });
+      // In Review -> in_progress + huly:In Review label
+      expect(mapHulyStatusToBeads('In Review')).toEqual({ status: 'in_progress', label: 'huly:In Review' });
     });
 
-    it('should preserve closed status round-trip', () => {
+    it('should preserve status round-trip with labels', () => {
       // Done -> closed -> Done (preserved)
-      expect(mapBeadsStatusToHuly(mapHulyStatusToBeads('Done'))).toBe('Done');
+      const doneResult = mapHulyStatusToBeads('Done');
+      expect(mapBeadsStatusToHuly(doneResult.status, doneResult.label ? [doneResult.label] : [])).toBe('Done');
       
-      // Cancelled -> closed -> Done (NOT preserved - becomes Done)
-      expect(mapBeadsStatusToHuly(mapHulyStatusToBeads('Cancelled'))).toBe('Done');
+      // Cancelled -> closed + huly:Canceled -> Canceled (NOW preserved with labels!)
+      const cancelledResult = mapHulyStatusToBeads('Cancelled');
+      expect(mapBeadsStatusToHuly(cancelledResult.status, cancelledResult.label ? [cancelledResult.label] : [])).toBe('Canceled');
+
+      // In Review -> in_progress + huly:In Review -> In Review (preserved!)
+      const reviewResult = mapHulyStatusToBeads('In Review');
+      expect(mapBeadsStatusToHuly(reviewResult.status, reviewResult.label ? [reviewResult.label] : [])).toBe('In Review');
+
+      // Todo -> open + huly:Todo -> Todo (preserved!)
+      const todoResult = mapHulyStatusToBeads('Todo');
+      expect(mapBeadsStatusToHuly(todoResult.status, todoResult.label ? [todoResult.label] : [])).toBe('Todo');
     });
 
     it('should preserve priority round-trip', () => {
@@ -468,8 +522,8 @@ describe('beadsStatusMapper', () => {
 
   describe('Beads edge cases', () => {
     it('should handle status with extra whitespace', () => {
-      expect(mapHulyStatusToBeads('  Done  ')).toBe('closed');
-      expect(mapHulyStatusToBeads('  In Progress  ')).toBe('open');
+      expect(mapHulyStatusToBeads('  Done  ').status).toBe('closed');
+      expect(mapHulyStatusToBeads('  In Progress  ').status).toBe('in_progress');
     });
 
     it('should handle priority strings with extra text', () => {

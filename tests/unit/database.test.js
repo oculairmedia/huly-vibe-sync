@@ -1024,4 +1024,282 @@ describe('SyncDatabase', () => {
       });
     });
   });
+
+  describe('content hash', () => {
+    describe('computeIssueContentHash', () => {
+      it('should compute consistent hash for same content', () => {
+        const issue1 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
+        const issue2 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
+        
+        const hash1 = SyncDatabase.computeIssueContentHash(issue1);
+        const hash2 = SyncDatabase.computeIssueContentHash(issue2);
+        
+        expect(hash1).toBe(hash2);
+        expect(hash1).toHaveLength(16);
+      });
+
+      it('should compute different hash for different content', () => {
+        const issue1 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
+        const issue2 = { title: 'Test Changed', description: 'Desc', status: 'Todo', priority: 'High' };
+        
+        const hash1 = SyncDatabase.computeIssueContentHash(issue1);
+        const hash2 = SyncDatabase.computeIssueContentHash(issue2);
+        
+        expect(hash1).not.toBe(hash2);
+      });
+
+      it('should handle null/undefined fields', () => {
+        const issue = { title: 'Test' };
+        const hash = SyncDatabase.computeIssueContentHash(issue);
+        
+        expect(hash).toBeTruthy();
+        expect(hash).toHaveLength(16);
+      });
+
+      it('should return null for null issue', () => {
+        expect(SyncDatabase.computeIssueContentHash(null)).toBeNull();
+      });
+
+      it('should detect status changes', () => {
+        const issue1 = { title: 'Test', status: 'Todo' };
+        const issue2 = { title: 'Test', status: 'Done' };
+        
+        expect(SyncDatabase.computeIssueContentHash(issue1))
+          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+      });
+
+      it('should detect priority changes', () => {
+        const issue1 = { title: 'Test', priority: 'Low' };
+        const issue2 = { title: 'Test', priority: 'High' };
+        
+        expect(SyncDatabase.computeIssueContentHash(issue1))
+          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+      });
+
+      it('should detect description changes', () => {
+        const issue1 = { title: 'Test', description: 'Original' };
+        const issue2 = { title: 'Test', description: 'Modified' };
+        
+        expect(SyncDatabase.computeIssueContentHash(issue1))
+          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+      });
+    });
+
+    describe('hasIssueContentChanged', () => {
+      it('should return true when no stored hash', () => {
+        const issue = { title: 'Test' };
+        expect(SyncDatabase.hasIssueContentChanged(issue, null)).toBe(true);
+        expect(SyncDatabase.hasIssueContentChanged(issue, undefined)).toBe(true);
+      });
+
+      it('should return false when content matches', () => {
+        const issue = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
+        const hash = SyncDatabase.computeIssueContentHash(issue);
+        
+        expect(SyncDatabase.hasIssueContentChanged(issue, hash)).toBe(false);
+      });
+
+      it('should return true when content differs', () => {
+        const issue1 = { title: 'Test', status: 'Todo' };
+        const hash = SyncDatabase.computeIssueContentHash(issue1);
+        
+        const issue2 = { title: 'Test', status: 'Done' };
+        expect(SyncDatabase.hasIssueContentChanged(issue2, hash)).toBe(true);
+      });
+    });
+
+    describe('database integration', () => {
+      it('should store content_hash when upserting issue', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Test Issue',
+          description: 'Test description',
+          status: 'Todo',
+          priority: 'High',
+        });
+
+        const issue = db.getIssue('HASH-1');
+        expect(issue.content_hash).toBeTruthy();
+        expect(issue.content_hash).toHaveLength(16);
+      });
+
+      it('should update content_hash when content changes', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Original Title',
+          status: 'Todo',
+        });
+
+        const hash1 = db.getIssue('HASH-1').content_hash;
+
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Changed Title',
+          status: 'Todo',
+        });
+
+        const hash2 = db.getIssue('HASH-1').content_hash;
+        expect(hash1).not.toBe(hash2);
+      });
+
+      it('should keep same content_hash when content unchanged', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Same Title',
+          status: 'Todo',
+        });
+
+        const hash1 = db.getIssue('HASH-1').content_hash;
+
+        // Upsert with same content
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Same Title',
+          status: 'Todo',
+        });
+
+        const hash2 = db.getIssue('HASH-1').content_hash;
+        expect(hash1).toBe(hash2);
+      });
+
+      it('should detect changes via hasIssueChanged method', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Original',
+          status: 'Todo',
+        });
+
+        // Same content - no change
+        expect(db.hasIssueChanged('HASH-1', { title: 'Original', status: 'Todo' })).toBe(false);
+
+        // Different content - changed
+        expect(db.hasIssueChanged('HASH-1', { title: 'Changed', status: 'Todo' })).toBe(true);
+      });
+
+      it('should return true for non-existent issue', () => {
+        expect(db.hasIssueChanged('NONEXISTENT-1', { title: 'Test' })).toBe(true);
+      });
+
+      it('should store huly_content_hash separately', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        
+        const hulyHash = SyncDatabase.computeIssueContentHash({
+          title: 'Huly Title',
+          status: 'In Progress',
+        });
+
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Current Title',
+          status: 'Todo',
+          huly_content_hash: hulyHash,
+        });
+
+        const issue = db.getIssue('HASH-1');
+        expect(issue.content_hash).toBeTruthy();
+        expect(issue.huly_content_hash).toBe(hulyHash);
+        expect(issue.content_hash).not.toBe(issue.huly_content_hash);
+      });
+
+      it('should store beads_content_hash separately', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        
+        const beadsHash = SyncDatabase.computeIssueContentHash({
+          title: 'Beads Title',
+          status: 'open',
+        });
+
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Current Title',
+          status: 'Todo',
+          beads_content_hash: beadsHash,
+        });
+
+        const issue = db.getIssue('HASH-1');
+        expect(issue.beads_content_hash).toBe(beadsHash);
+      });
+    });
+
+    describe('getIssuesWithContentMismatch', () => {
+      it('should find issues where content differs from huly source', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        
+        // Issue 1: content matches huly
+        const hulyHash1 = SyncDatabase.computeIssueContentHash({
+          title: 'Same',
+          status: 'Todo',
+        });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Same',
+          status: 'Todo',
+          huly_content_hash: hulyHash1,
+        });
+
+        // Issue 2: content differs from huly (edited locally)
+        const hulyHash2 = SyncDatabase.computeIssueContentHash({
+          title: 'Original Huly Title',
+          status: 'Todo',
+        });
+        db.upsertIssue({
+          identifier: 'HASH-2',
+          project_identifier: 'HASH',
+          title: 'Locally Edited Title',
+          status: 'Done',
+          huly_content_hash: hulyHash2,
+        });
+
+        const mismatched = db.getIssuesWithContentMismatch('HASH');
+        expect(mismatched).toHaveLength(1);
+        expect(mismatched[0].identifier).toBe('HASH-2');
+      });
+
+      it('should return empty array when no mismatches', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        
+        const hash = SyncDatabase.computeIssueContentHash({
+          title: 'Test',
+          status: 'Todo',
+        });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Test',
+          status: 'Todo',
+          huly_content_hash: hash,
+        });
+
+        const mismatched = db.getIssuesWithContentMismatch('HASH');
+        expect(mismatched).toHaveLength(0);
+      });
+
+      it('should ignore issues without huly_content_hash', () => {
+        db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
+        db.upsertIssue({
+          identifier: 'HASH-1',
+          project_identifier: 'HASH',
+          title: 'Test',
+          status: 'Todo',
+          // No huly_content_hash
+        });
+
+        const mismatched = db.getIssuesWithContentMismatch('HASH');
+        expect(mismatched).toHaveLength(0);
+      });
+    });
+  });
 });

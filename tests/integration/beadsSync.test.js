@@ -348,7 +348,7 @@ describe('Beads Sync Integration Tests', () => {
       const hulyIssue = createMockHulyIssue({
         identifier: 'TEST-1',
         title: 'New Issue',
-        status: 'In Progress',
+        status: 'In Progress', // Maps to in_progress in Beads
         priority: 'High',
         modifiedOn: now,
         project: 'TEST',
@@ -357,7 +357,7 @@ describe('Beads Sync Integration Tests', () => {
       const createdBeadsIssue = createMockBeadsIssue({
         id: 'test-project-new',
         title: 'New Issue',
-        status: 'open',
+        status: 'in_progress', // Updated: In Progress now maps to in_progress
         priority: 1,
         updated_at: new Date(now).toISOString(),
       });
@@ -368,7 +368,7 @@ describe('Beads Sync Integration Tests', () => {
 
       const dbIssue = db.getIssue('TEST-1');
       expect(dbIssue.beads_issue_id).toBe('test-project-new');
-      expect(dbIssue.beads_status).toBe('open');
+      expect(dbIssue.beads_status).toBe('in_progress'); // Updated: In Progress maps to in_progress
       expect(dbIssue.beads_modified_at).toBeDefined();
       expect(dbIssue.huly_modified_at).toBe(now);
     });
@@ -1324,7 +1324,7 @@ describe('Beads Sync Integration Tests', () => {
       const hulyIssue = createMockHulyIssue({
         identifier: 'TEST-32',
         title: 'No Change Test',
-        status: 'In Progress',
+        status: 'In Progress', // Maps to in_progress with no label
         priority: 'Medium',
         project: 'TEST',
         modifiedOn: Date.now(),
@@ -1333,9 +1333,10 @@ describe('Beads Sync Integration Tests', () => {
       const beadsIssue = createMockBeadsIssue({
         id: 'no-change-beads-1',
         title: 'No Change Test',
-        status: 'open', // Maps to In Progress
+        status: 'in_progress', // Updated: In Progress maps to in_progress
         priority: 2, // Maps to Medium
         updated_at: new Date().toISOString(),
+        labels: [], // No huly: labels (In Progress has no label)
       });
 
       // Set up database with matching state
@@ -1345,7 +1346,7 @@ describe('Beads Sync Integration Tests', () => {
         beads_issue_id: 'no-change-beads-1',
         title: 'No Change Test',
         status: 'In Progress',
-        beads_status: 'open',
+        beads_status: 'in_progress', // Updated: In Progress maps to in_progress
         huly_modified_at: Date.now(),
         beads_modified_at: Date.now(),
       });
