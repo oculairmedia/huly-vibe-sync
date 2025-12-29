@@ -100,7 +100,10 @@
       "Bash(git push:*)",
       "Bash(git fetch:*)",
       "Bash(git log:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sed -i 's/fetchHulyIssues\\.mockResolvedValue(\\[\\([^]]*\\)\\])/fetchHulyIssues.mockResolvedValue(mockIssuesResult([\\1]))/g' tests/unit/SyncOrchestrator.test.js)"
+      "Bash(cd /opt/stacks/huly-vibe-sync && sed -i 's/fetchHulyIssues\\.mockResolvedValue(\\[\\([^]]*\\)\\])/fetchHulyIssues.mockResolvedValue(mockIssuesResult([\\1]))/g' tests/unit/SyncOrchestrator.test.js)",
+      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HULLY/issues?limit=5\" | jq '.issues[0:2] | .[] | {identifier, title, component}' 2>/dev/null)",
+      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HULLY/issues?limit=100\" | jq '[.issues[] | select(.component != null)] | .[0:3]' 2>/dev/null)",
+      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HVSYN/issues?limit=100\" | jq '[.issues[] | select(.component != null)] | .[0:3]' 2>/dev/null)"
     ],
     "deny": [
       "filesystem_write_file(*)",

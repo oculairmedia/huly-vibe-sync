@@ -10,6 +10,7 @@ import {
   buildHotspots,
   buildBacklogSummary,
   buildRecentActivity,
+  buildComponentsSummary,
 } from '../../lib/LettaService.js';
 
 describe('Letta Memory Block Builders', () => {
@@ -289,6 +290,103 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.recent_items).toHaveLength(10);
+    });
+  });
+
+  // ============================================================
+  // buildComponentsSummary Tests
+  // ============================================================
+  describe('buildComponentsSummary', () => {
+    it('should build components summary with issue counts', () => {
+      const components = [
+        { label: 'Core', description: 'Core functionality' },
+        { label: 'API', description: 'REST API endpoints' },
+        { label: 'Docs', description: 'Documentation' },
+      ];
+      const hulyIssues = [
+        { identifier: 'TEST-1', component: 'Core', status: 'Done' },
+        { identifier: 'TEST-2', component: 'Core', status: 'Backlog' },
+        { identifier: 'TEST-3', component: 'API', status: 'In Progress' },
+        { identifier: 'TEST-4', component: null, status: 'Backlog' }, // Unassigned
+      ];
+
+      const result = buildComponentsSummary(components, hulyIssues);
+
+      expect(result.total_components).toBe(3);
+      expect(result.active_components).toBe(2); // Core and API have issues
+      expect(result.empty_components).toBe(1); // Docs has no issues
+      expect(result.unassigned_count).toBe(1);
+      
+      // Components should be sorted by issue count
+      expect(result.components[0].label).toBe('Core');
+      expect(result.components[0].issue_count).toBe(2);
+      expect(result.components[0].status_breakdown.Done).toBe(1);
+      expect(result.components[0].status_breakdown.Backlog).toBe(1);
+    });
+
+    it('should handle empty components list', () => {
+      const hulyIssues = [
+        { identifier: 'TEST-1', component: null, status: 'Backlog' },
+      ];
+
+      const result = buildComponentsSummary([], hulyIssues);
+
+      expect(result.total_components).toBe(0);
+      expect(result.components).toHaveLength(0);
+      expect(result.unassigned_count).toBe(1);
+      expect(result.summary).toContain('No components defined');
+    });
+
+    it('should handle null/undefined inputs', () => {
+      const result = buildComponentsSummary(null, null);
+
+      expect(result.total_components).toBe(0);
+      expect(result.unassigned_count).toBe(0);
+    });
+
+    it('should include component descriptions', () => {
+      const components = [
+        { label: 'Beads Integration', description: 'Beads issue tracker sync' },
+      ];
+      const hulyIssues = [];
+
+      const result = buildComponentsSummary(components, hulyIssues);
+
+      expect(result.components[0].description).toBe('Beads issue tracker sync');
+    });
+
+    it('should deduplicate components by label', () => {
+      const components = [
+        { label: 'Core', description: 'First description' },
+        { label: 'Core', description: 'Second description' }, // Duplicate
+      ];
+      const hulyIssues = [];
+
+      const result = buildComponentsSummary(components, hulyIssues);
+
+      // Should only have one Core component (first one wins)
+      const coreComponents = result.components.filter(c => c.label === 'Core');
+      expect(coreComponents).toHaveLength(1);
+    });
+
+    it('should calculate status breakdown per component', () => {
+      const components = [
+        { label: 'API', description: 'API endpoints' },
+      ];
+      const hulyIssues = [
+        { identifier: 'TEST-1', component: 'API', status: 'Backlog' },
+        { identifier: 'TEST-2', component: 'API', status: 'Backlog' },
+        { identifier: 'TEST-3', component: 'API', status: 'Done' },
+        { identifier: 'TEST-4', component: 'API', status: 'In Progress' },
+      ];
+
+      const result = buildComponentsSummary(components, hulyIssues);
+
+      expect(result.components[0].status_breakdown).toEqual({
+        'Backlog': 2,
+        'Done': 1,
+        'In Progress': 1,
+      });
     });
   });
 });

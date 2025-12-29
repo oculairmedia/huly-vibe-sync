@@ -705,4 +705,55 @@ describe('HulyRestClient', () => {
       await expect(client.getProjectActivity('INVALID')).rejects.toThrow('REST API error (404)');
     });
   });
+
+  // ============================================================
+  // List Components Tests
+  // ============================================================
+  describe('listComponents', () => {
+    it('should fetch components for a project', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          components: [
+            { label: 'Core', description: 'Core functionality' },
+            { label: 'API', description: 'REST API endpoints' },
+          ],
+          count: 2,
+        }),
+      });
+
+      const result = await client.listComponents('TEST');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].label).toBe('Core');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/projects/TEST/components',
+        expect.any(Object)
+      );
+    });
+
+    it('should return empty array when no components', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          components: [],
+          count: 0,
+        }),
+      });
+
+      const result = await client.listComponents('TEST');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should handle API errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Project not found',
+      });
+
+      await expect(client.listComponents('INVALID')).rejects.toThrow('REST API error (404)');
+    });
+  });
 });
