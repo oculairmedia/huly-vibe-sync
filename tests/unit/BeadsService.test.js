@@ -719,4 +719,428 @@ describe('BeadsService', () => {
       );
     });
   });
+
+  // ============================================================
+  // Parent-Child Sync Tests (HVSYN-197)
+  // ============================================================
+  describe('addParentChildDependency', () => {
+    it('should add parent-child dependency via bd dep add', async () => {
+      const { addParentChildDependency } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockReturnValue('');
+
+      const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
+
+      expect(result).toBe(true);
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd dep add child-123 parent-456 --type=parent-child'),
+        expect.objectContaining({ cwd: '/test/project' })
+      );
+    });
+
+    it('should return true in dry run mode without executing', async () => {
+      const { addParentChildDependency } = await import('../../lib/BeadsService.js');
+
+      const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456', {
+        sync: { dryRun: true },
+      });
+
+      expect(result).toBe(true);
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('should return true if dependency already exists', async () => {
+      const { addParentChildDependency } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('dependency already exists');
+      });
+
+      const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false on other CLI errors', async () => {
+      const { addParentChildDependency } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('removeParentChildDependency', () => {
+    it('should remove parent-child dependency via bd dep remove', async () => {
+      const { removeParentChildDependency } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockReturnValue('');
+
+      const result = await removeParentChildDependency('/test/project', 'child-123', 'parent-456');
+
+      expect(result).toBe(true);
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd dep remove child-123 parent-456'),
+        expect.objectContaining({ cwd: '/test/project' })
+      );
+    });
+
+    it('should return true in dry run mode without executing', async () => {
+      const { removeParentChildDependency } = await import('../../lib/BeadsService.js');
+
+      const result = await removeParentChildDependency('/test/project', 'child-123', 'parent-456', {
+        sync: { dryRun: true },
+      });
+
+      expect(result).toBe(true);
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('should return false on CLI error', async () => {
+      const { removeParentChildDependency } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await removeParentChildDependency('/test/project', 'child-123', 'parent-456');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getDependencyTree', () => {
+    it('should return parsed dependency tree', async () => {
+      const { getDependencyTree } = await import('../../lib/BeadsService.js');
+      const mockTree = [
+        { id: 'issue-1', depth: 0 },
+        { id: 'issue-2', depth: 1, parent_id: 'issue-1' },
+      ];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getDependencyTree('/test/project', 'issue-1');
+
+      expect(result).toEqual(mockTree);
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd dep tree issue-1 --json'),
+        expect.any(Object)
+      );
+    });
+
+    it('should return null on error', async () => {
+      const { getDependencyTree } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await getDependencyTree('/test/project', 'issue-1');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getParentChildRelationships', () => {
+    it('should extract parent-child relationships from tree', async () => {
+      const { getParentChildRelationships } = await import('../../lib/BeadsService.js');
+      const mockTree = [
+        { id: 'root-issue', depth: 0 },
+        { id: 'parent-issue', depth: 1, parent_id: 'root-issue' },
+      ];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getParentChildRelationships('/test/project', 'root-issue');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        childId: 'root-issue',
+        parentId: 'parent-issue',
+        type: 'parent-child',
+      });
+    });
+
+    it('should return empty array when no relationships exist', async () => {
+      const { getParentChildRelationships } = await import('../../lib/BeadsService.js');
+      const mockTree = [{ id: 'solo-issue', depth: 0 }];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getParentChildRelationships('/test/project', 'solo-issue');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should return empty array on error', async () => {
+      const { getParentChildRelationships } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await getParentChildRelationships('/test/project', 'issue-1');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getBeadsIssuesWithDependencies', () => {
+    it('should return issues with dependency counts', async () => {
+      const { getBeadsIssuesWithDependencies } = await import('../../lib/BeadsService.js');
+      const mockIssues = [
+        { id: 'issue-1', title: 'Parent', dependency_count: 0, dependent_count: 2 },
+        { id: 'issue-2', title: 'Child', dependency_count: 1, dependent_count: 0 },
+      ];
+      mockExecSync.mockReturnValue(JSON.stringify(mockIssues));
+
+      const result = await getBeadsIssuesWithDependencies('/test/project');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].dependency_count).toBe(0);
+      expect(result[1].dependency_count).toBe(1);
+    });
+
+    it('should return empty array on error', async () => {
+      const { getBeadsIssuesWithDependencies } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await getBeadsIssuesWithDependencies('/test/project');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('syncParentChildToBeads', () => {
+    it('should return false when child ID is missing', async () => {
+      const { syncParentChildToBeads } = await import('../../lib/BeadsService.js');
+      const mockDb = { getAllIssues: () => [] };
+
+      const result = await syncParentChildToBeads('/test/project', null, 'parent-456', mockDb);
+
+      expect(result).toBe(false);
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('should return false when parent ID is missing', async () => {
+      const { syncParentChildToBeads } = await import('../../lib/BeadsService.js');
+      const mockDb = { getAllIssues: () => [] };
+
+      const result = await syncParentChildToBeads('/test/project', 'child-123', null, mockDb);
+
+      expect(result).toBe(false);
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('should add dependency and update database on success', async () => {
+      const { syncParentChildToBeads } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockReturnValue('');
+
+      const mockDb = {
+        getAllIssues: () => [
+          { identifier: 'PROJ-1', beads_issue_id: 'child-123', parent_huly_id: 'PROJ-2' },
+        ],
+        updateParentChild: vi.fn(),
+      };
+
+      const result = await syncParentChildToBeads(
+        '/test/project',
+        'child-123',
+        'parent-456',
+        mockDb
+      );
+
+      expect(result).toBe(true);
+      expect(mockDb.updateParentChild).toHaveBeenCalledWith('PROJ-1', 'PROJ-2', 'parent-456');
+    });
+  });
+
+  describe('syncBeadsParentChildToHuly', () => {
+    it('should return empty results when no issues have dependencies', async () => {
+      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockReturnValue(JSON.stringify([]));
+
+      const mockHulyClient = {};
+      const mockDb = { getAllIssues: () => [] };
+
+      const result = await syncBeadsParentChildToHuly(
+        mockHulyClient,
+        '/test/project',
+        'PROJ',
+        mockDb
+      );
+
+      expect(result).toEqual({ synced: 0, skipped: 0, errors: [] });
+    });
+
+    it('should skip relationships where issues are not synced yet', async () => {
+      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
+
+      // First call: list issues with dependencies
+      // Second call: get dependency tree
+      mockExecSync
+        .mockReturnValueOnce(
+          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
+        )
+        .mockReturnValueOnce(
+          JSON.stringify([
+            { id: 'beads-child', depth: 0 },
+            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+          ])
+        );
+
+      const mockHulyClient = {};
+      const mockDb = {
+        getAllIssues: () => [], // No synced issues
+      };
+
+      const result = await syncBeadsParentChildToHuly(
+        mockHulyClient,
+        '/test/project',
+        'PROJ',
+        mockDb
+      );
+
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(result.synced).toBe(0);
+    });
+
+    it('should skip relationships that are already synced', async () => {
+      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
+
+      mockExecSync
+        .mockReturnValueOnce(
+          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
+        )
+        .mockReturnValueOnce(
+          JSON.stringify([
+            { id: 'beads-child', depth: 0 },
+            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+          ])
+        );
+
+      const mockHulyClient = {};
+      const mockDb = {
+        getAllIssues: () => [
+          {
+            identifier: 'PROJ-1',
+            beads_issue_id: 'beads-child',
+            parent_huly_id: 'PROJ-2', // Already has correct parent
+          },
+          { identifier: 'PROJ-2', beads_issue_id: 'beads-parent' },
+        ],
+      };
+
+      const result = await syncBeadsParentChildToHuly(
+        mockHulyClient,
+        '/test/project',
+        'PROJ',
+        mockDb
+      );
+
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(result.synced).toBe(0);
+    });
+
+    it('should sync new parent-child relationships', async () => {
+      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
+
+      mockExecSync
+        .mockReturnValueOnce(
+          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
+        )
+        .mockReturnValueOnce(
+          JSON.stringify([
+            { id: 'beads-child', depth: 0 },
+            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+          ])
+        );
+
+      const mockHulyClient = {};
+      const mockDb = {
+        getAllIssues: () => [
+          {
+            identifier: 'PROJ-1',
+            beads_issue_id: 'beads-child',
+            parent_huly_id: null, // No parent yet
+            sub_issue_count: 0,
+          },
+          { identifier: 'PROJ-2', beads_issue_id: 'beads-parent', sub_issue_count: 0 },
+        ],
+        updateParentChild: vi.fn(),
+        updateSubIssueCount: vi.fn(),
+      };
+
+      const result = await syncBeadsParentChildToHuly(
+        mockHulyClient,
+        '/test/project',
+        'PROJ',
+        mockDb
+      );
+
+      expect(result.synced).toBe(1);
+      expect(mockDb.updateParentChild).toHaveBeenCalledWith('PROJ-1', 'PROJ-2', 'beads-parent');
+      expect(mockDb.updateSubIssueCount).toHaveBeenCalledWith('PROJ-2', 1);
+    });
+
+    it('should handle errors gracefully when fetching issues fails', async () => {
+      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const mockHulyClient = {};
+      const mockDb = { getAllIssues: () => [] };
+
+      // When getBeadsIssuesWithDependencies fails, it returns empty array
+      // So result should have 0 synced, 0 skipped, 0 errors (graceful degradation)
+      const result = await syncBeadsParentChildToHuly(
+        mockHulyClient,
+        '/test/project',
+        'PROJ',
+        mockDb
+      );
+
+      // Function handles CLI errors gracefully by returning empty results
+      expect(result.synced).toBe(0);
+      expect(result.skipped).toBe(0);
+    });
+  });
+
+  describe('getIssueWithDependencies', () => {
+    it('should return issue with dependency info', async () => {
+      const { getIssueWithDependencies } = await import('../../lib/BeadsService.js');
+      const mockIssue = {
+        id: 'issue-123',
+        title: 'Test Issue',
+        dependency_count: 1,
+        dependent_count: 2,
+      };
+      mockExecSync.mockReturnValue(JSON.stringify([mockIssue]));
+
+      const result = await getIssueWithDependencies('/test/project', 'issue-123');
+
+      expect(result).toEqual(mockIssue);
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('bd show issue-123 --json'),
+        expect.any(Object)
+      );
+    });
+
+    it('should return null on error', async () => {
+      const { getIssueWithDependencies } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await getIssueWithDependencies('/test/project', 'issue-123');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when issue array is empty', async () => {
+      const { getIssueWithDependencies } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockReturnValue('[]');
+
+      const result = await getIssueWithDependencies('/test/project', 'nonexistent');
+
+      expect(result).toBeNull();
+    });
+  });
 });
