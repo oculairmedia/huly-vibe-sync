@@ -97,6 +97,12 @@ describe('SyncOrchestrator', () => {
   let createVibeTask;
   let updateVibeTaskStatus;
 
+  // Helper to wrap issues array in the new return format
+  const mockIssuesResult = (issues) => ({
+    issues,
+    syncMeta: { latestModified: new Date().toISOString(), serverTime: new Date().toISOString() }
+  });
+
   beforeEach(async () => {
     // Get mocked functions
     const HulyService = await import('../../lib/HulyService.js');
@@ -172,7 +178,7 @@ describe('SyncOrchestrator', () => {
     it('should fetch Vibe projects after Huly projects', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test Project' }]);
       listVibeProjects.mockResolvedValue([]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       createVibeProject.mockResolvedValue({ id: 'vibe-1', name: 'Test Project' });
       listVibeTasks.mockResolvedValue([]);
 
@@ -186,7 +192,7 @@ describe('SyncOrchestrator', () => {
       const hulyProject = { identifier: 'NEW', name: 'New Project' };
       fetchHulyProjects.mockResolvedValue([hulyProject]);
       listVibeProjects.mockResolvedValue([]); // No existing Vibe projects
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       createVibeProject.mockResolvedValue({ id: 'vibe-new', name: 'New Project' });
       listVibeTasks.mockResolvedValue([]);
 
@@ -199,7 +205,7 @@ describe('SyncOrchestrator', () => {
       const hulyProject = { identifier: 'EXIST', name: 'Existing Project' };
       fetchHulyProjects.mockResolvedValue([hulyProject]);
       listVibeProjects.mockResolvedValue([{ id: 'vibe-1', name: 'Existing Project' }]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
@@ -235,7 +241,7 @@ describe('SyncOrchestrator', () => {
         description: 'Issue description',
         status: 'Backlog',
       };
-      fetchHulyIssues.mockResolvedValue([hulyIssue]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([hulyIssue]));
       listVibeTasks.mockResolvedValue([]); // No existing tasks
       createVibeTask.mockResolvedValue({ id: 'task-1' });
 
@@ -250,7 +256,7 @@ describe('SyncOrchestrator', () => {
         title: 'Existing Issue',
         status: 'Backlog',
       };
-      fetchHulyIssues.mockResolvedValue([hulyIssue]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([hulyIssue]));
       listVibeTasks.mockResolvedValue([
         {
           id: 'task-1',
@@ -271,7 +277,7 @@ describe('SyncOrchestrator', () => {
         title: 'Issue',
         status: 'Done', // Changed status
       };
-      fetchHulyIssues.mockResolvedValue([hulyIssue]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([hulyIssue]));
       listVibeTasks.mockResolvedValue([
         {
           id: 'task-1',
@@ -303,7 +309,7 @@ describe('SyncOrchestrator', () => {
         status: 'Backlog',
         priority: 'High',
       };
-      fetchHulyIssues.mockResolvedValue([hulyIssue]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([hulyIssue]));
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue({ id: 'task-1' });
 
@@ -332,14 +338,14 @@ describe('SyncOrchestrator', () => {
         { id: 'v1', name: 'Project 1' },
         { id: 'v2', name: 'Project 2' },
       ]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig, null, 'PROJ1');
 
       // Should only fetch issues for PROJ1
       expect(fetchHulyIssues).toHaveBeenCalledTimes(1);
-      expect(fetchHulyIssues).toHaveBeenCalledWith(mockHulyClient, 'PROJ1', mockConfig, null);
+      expect(fetchHulyIssues).toHaveBeenCalledWith(mockHulyClient, 'PROJ1', mockConfig, mockDb);
     });
 
     it('should skip sync when requested project not found', async () => {
@@ -362,13 +368,13 @@ describe('SyncOrchestrator', () => {
     it('should not create tasks in dry run mode', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Issue',
           status: 'Backlog',
         },
-      ]);
+      ]));
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue(null); // Dry run returns null
 
@@ -386,7 +392,7 @@ describe('SyncOrchestrator', () => {
     it('should start sync run and complete it', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
@@ -408,7 +414,7 @@ describe('SyncOrchestrator', () => {
         },
       ]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test Project' }]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
@@ -425,10 +431,10 @@ describe('SyncOrchestrator', () => {
     it('should update project activity after sync', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         { identifier: 'TEST-1', title: 'Issue 1', status: 'Backlog' },
         { identifier: 'TEST-2', title: 'Issue 2', status: 'Done' },
-      ]);
+      ]));
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue({ id: 'task-1' });
 
@@ -502,7 +508,7 @@ describe('SyncOrchestrator', () => {
         { id: 'v1', name: 'Project 1' },
         { id: 'v2', name: 'Project 2' },
       ]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
@@ -522,24 +528,22 @@ describe('SyncOrchestrator', () => {
   // Incremental Sync Tests
   // ============================================================
   describe('Incremental Sync', () => {
-    it('should pass last sync time to fetchHulyIssues', async () => {
-      const lastSyncTime = Date.now() - 3600000;
-      mockDb.getLastSync.mockReturnValue(lastSyncTime);
+    it('should pass db to fetchHulyIssues for cursor-based sync', async () => {
       mockConfig.sync.incremental = true;
 
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue([]);
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([]));
       listVibeTasks.mockResolvedValue([]);
 
       await syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig);
 
-      // fetchHulyIssues is called with project last sync (from db.getProject) or global last sync
+      // fetchHulyIssues is now called with db for cursor-based incremental sync
       expect(fetchHulyIssues).toHaveBeenCalledWith(
         mockHulyClient,
         'TEST',
         mockConfig,
-        lastSyncTime // Falls back to global lastSync when project has no specific sync time
+        mockDb // db is passed for cursor-based sync
       );
     });
   });
@@ -556,13 +560,13 @@ describe('SyncOrchestrator', () => {
 
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test Project' }]);
       listVibeProjects.mockResolvedValue([{ id: 'vibe-1', name: 'Test Project' }]);
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Test Issue',
           status: 'Done', // Huly shows Done (from Beads sync)
         },
-      ]);
+      ]));
     });
 
     it('should skip Vibe→Huly update when Beads has more recent change', async () => {
@@ -608,13 +612,13 @@ describe('SyncOrchestrator', () => {
       ]);
 
       // Huly status matches what Beads set (Done), but Vibe has newer change (todo)
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Test Issue',
           status: 'Done',
         },
-      ]);
+      ]));
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -646,13 +650,13 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Test Issue',
           status: 'Backlog', // Huly has different status
         },
-      ]);
+      ]));
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -686,13 +690,13 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Test Issue',
           status: 'Backlog',
         },
-      ]);
+      ]));
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -726,13 +730,13 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue([
+      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
         {
           identifier: 'TEST-1',
           title: 'Test Issue',
           status: 'Backlog',
         },
-      ]);
+      ]));
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',

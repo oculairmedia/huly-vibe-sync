@@ -319,7 +319,20 @@ describe('HulyRestClient', () => {
       expect(callArgs[0]).toContain('limit=50');
     });
 
-    it('should support modifiedAfter option for incremental sync', async () => {
+    it('should support modifiedSince option for incremental sync', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [], count: 0 }),
+      });
+
+      const timestamp = new Date().toISOString();
+      await client.listIssues('TEST', { modifiedSince: timestamp });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toContain('modifiedSince=');
+    });
+
+    it('should support legacy modifiedAfter as alias for modifiedSince', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ issues: [], count: 0 }),
@@ -329,10 +342,10 @@ describe('HulyRestClient', () => {
       await client.listIssues('TEST', { modifiedAfter: timestamp });
 
       const callArgs = mockFetch.mock.calls[0];
-      expect(callArgs[0]).toContain('modifiedAfter=');
+      expect(callArgs[0]).toContain('modifiedSince='); // modifiedAfter maps to modifiedSince
     });
 
-    it('should return empty array if no issues', async () => {
+    it('should return issues array by default (backward compatible)', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ issues: [], count: 0 }),
@@ -340,6 +353,19 @@ describe('HulyRestClient', () => {
 
       const result = await client.listIssues('TEST');
       expect(result).toEqual([]);
+    });
+
+    it('should return { issues, syncMeta } when includeSyncMeta is true', async () => {
+      const syncMeta = { latestModified: '2025-01-01T00:00:00Z', serverTime: '2025-01-01T00:00:00Z' };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [{ identifier: 'TEST-1' }], count: 1, syncMeta }),
+      });
+
+      const result = await client.listIssues('TEST', { includeSyncMeta: true });
+      expect(result.issues).toEqual([{ identifier: 'TEST-1' }]);
+      expect(result.syncMeta).toEqual(syncMeta);
+      expect(result.count).toBe(1);
     });
   });
 

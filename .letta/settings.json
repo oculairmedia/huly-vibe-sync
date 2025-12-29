@@ -99,7 +99,8 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "Bash(git fetch:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(cd /opt/stacks/huly-vibe-sync && sed -i 's/fetchHulyIssues\\.mockResolvedValue(\\[\\([^]]*\\)\\])/fetchHulyIssues.mockResolvedValue(mockIssuesResult([\\1]))/g' tests/unit/SyncOrchestrator.test.js)"
     ],
     "deny": [
       "filesystem_write_file(*)",

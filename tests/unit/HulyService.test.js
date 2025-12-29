@@ -129,68 +129,99 @@ describe('HulyService', () => {
   // fetchHulyIssues Tests
   // ============================================================
   describe('fetchHulyIssues', () => {
-    it('should fetch issues for a project', async () => {
+    it('should fetch issues for a project and return { issues, syncMeta }', async () => {
       const mockIssues = [
         createMockHulyIssue({ identifier: 'TEST-1' }),
         createMockHulyIssue({ identifier: 'TEST-2' }),
       ];
-      mockRestClient.listIssues.mockResolvedValue(mockIssues);
+      const mockSyncMeta = { latestModified: '2025-01-01T00:00:00Z', serverTime: '2025-01-01T00:00:00Z' };
+      mockRestClient.listIssues.mockResolvedValue({ issues: mockIssues, syncMeta: mockSyncMeta, count: 2 });
 
       const result = await fetchHulyIssues(mockRestClient, 'TEST');
 
-      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', { limit: 1000 });
-      expect(result).toEqual(mockIssues);
+      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', { limit: 1000, includeSyncMeta: true });
+      expect(result.issues).toEqual(mockIssues);
+      expect(result.syncMeta).toEqual(mockSyncMeta);
     });
 
-    it('should support incremental sync with modifiedAfter', async () => {
-      const lastSyncTime = Date.now() - 3600000; // 1 hour ago
-      mockRestClient.listIssues.mockResolvedValue([]);
+    it('should support incremental sync with modifiedSince from db cursor', async () => {
+      const mockDb = {
+        getHulySyncCursor: vi.fn().mockReturnValue('2025-01-01T00:00:00Z'),
+        setHulySyncCursor: vi.fn(),
+      };
+      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: '2025-01-02T00:00:00Z' }, count: 0 });
 
       await fetchHulyIssues(
         mockRestClient,
         'TEST',
         { sync: { incremental: true } },
-        lastSyncTime
+        mockDb
       );
 
       expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
         limit: 1000,
-        modifiedAfter: expect.any(String),
+        includeSyncMeta: true,
+        modifiedSince: '2025-01-01T00:00:00Z',
       });
     });
 
-    it('should not add modifiedAfter when incremental is false', async () => {
-      const lastSyncTime = Date.now();
-      mockRestClient.listIssues.mockResolvedValue([]);
+    it('should do full sync when no cursor in db', async () => {
+      const mockDb = {
+        getHulySyncCursor: vi.fn().mockReturnValue(null),
+        setHulySyncCursor: vi.fn(),
+      };
+      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
 
       await fetchHulyIssues(
         mockRestClient,
         'TEST',
-        { sync: { incremental: false } },
-        lastSyncTime
+        { sync: { incremental: true } },
+        mockDb
       );
 
-      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', { limit: 1000 });
+      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
+        limit: 1000,
+        includeSyncMeta: true,
+      });
     });
 
-    it('should return empty array on error', async () => {
+    it('should update sync cursor after successful fetch', async () => {
+      const mockDb = {
+        getHulySyncCursor: vi.fn().mockReturnValue(null),
+        setHulySyncCursor: vi.fn(),
+      };
+      mockRestClient.listIssues.mockResolvedValue({ 
+        issues: [], 
+        syncMeta: { latestModified: '2025-01-02T00:00:00Z', serverTime: '2025-01-02T00:00:00Z' }, 
+        count: 0 
+      });
+
+      await fetchHulyIssues(mockRestClient, 'TEST', {}, mockDb);
+
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('TEST', '2025-01-02T00:00:00Z');
+    });
+
+    it('should return empty issues on error', async () => {
       mockRestClient.listIssues.mockRejectedValue(new Error('API error'));
 
       const result = await fetchHulyIssues(mockRestClient, 'TEST');
 
-      expect(result).toEqual([]);
+      expect(result.issues).toEqual([]);
       expect(consoleSpy.error).toHaveBeenCalled();
     });
 
-    it('should log incremental fetch message', async () => {
-      const lastSyncTime = Date.now() - 3600000;
-      mockRestClient.listIssues.mockResolvedValue([]);
+    it('should log incremental fetch message when cursor exists', async () => {
+      const mockDb = {
+        getHulySyncCursor: vi.fn().mockReturnValue('2025-01-01T00:00:00Z'),
+        setHulySyncCursor: vi.fn(),
+      };
+      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
 
       await fetchHulyIssues(
         mockRestClient,
         'PROJ',
         { sync: { incremental: true } },
-        lastSyncTime
+        mockDb
       );
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
@@ -698,14 +729,14 @@ describe('HulyService', () => {
       const config = { sync: { incremental: true } };
       const service = createHulyService(config);
       
-      mockRestClient.listIssues.mockResolvedValue([]);
+      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
 
-      const lastSyncTime = Date.now();
-      await service.fetchIssues(mockRestClient, 'TEST', lastSyncTime);
+      // Pass null for db - no cursor-based sync
+      await service.fetchIssues(mockRestClient, 'TEST', null);
 
       expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
         limit: 1000,
-        modifiedAfter: expect.any(String),
+        includeSyncMeta: true,
       });
     });
 
