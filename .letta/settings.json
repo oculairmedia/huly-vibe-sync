@@ -96,7 +96,10 @@
       "Bash(bd dep add --help 2>&1)",
       "Bash(tail:*)",
       "Bash(cd /opt/stacks/huly-vibe-sync && bd list --json 2>&1 | sed '1d' | jq '.[0]' 2>/dev/null)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)"
     ],
     "deny": [
       "filesystem_write_file(*)",
