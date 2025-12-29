@@ -584,6 +584,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [existingHulyIssue], // Existing Huly issues
         'TEST',
@@ -619,6 +620,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [existingHulyIssue],
         'TEST',
@@ -654,6 +656,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [existingHulyIssue],
         'TEST',
@@ -692,6 +695,7 @@ describe('Beads Sync Integration Tests', () => {
       // The key assertion is that db.getIssue for TEST-200 should NOT have the beads_issue_id
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [existingHulyIssue],
         'TEST',
@@ -729,6 +733,7 @@ describe('Beads Sync Integration Tests', () => {
       // Short titles should not trigger partial matching
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [existingHulyIssue],
         'TEST',
@@ -997,6 +1002,7 @@ describe('Beads Sync Integration Tests', () => {
       await expect(
         syncBeadsIssueToHuly(
           mockHulyClient,
+          '/test/project',
           beadsIssue,
           [hulyIssue],
           'TEST',
@@ -1038,6 +1044,7 @@ describe('Beads Sync Integration Tests', () => {
       // Should skip because issue is in phase3UpdatedIssues set
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [hulyIssue],
         'TEST',
@@ -1101,6 +1108,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [hulyIssue],
         'TEST',
@@ -1139,6 +1147,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [hulyIssue],
         'TEST',
@@ -1178,6 +1187,7 @@ describe('Beads Sync Integration Tests', () => {
 
       await syncBeadsIssueToHuly(
         mockHulyClient,
+        '/test/project',
         beadsIssue,
         [hulyIssue],
         'TEST',
@@ -1218,6 +1228,7 @@ describe('Beads Sync Integration Tests', () => {
       await expect(
         syncBeadsIssueToHuly(
           mockHulyClient,
+          '/test/project',
           beadsIssue,
           [], // Empty Huly issues - the mapped issue doesn't exist
           'TEST',

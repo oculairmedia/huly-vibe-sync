@@ -1143,4 +1143,56 @@ describe('BeadsService', () => {
       expect(result).toBeNull();
     });
   });
+
+  // ============================================================
+  // Reparenting Detection Tests (HVSYN-198)
+  // ============================================================
+  describe('getBeadsParentId', () => {
+    it('should return parent ID from dependency tree', async () => {
+      const { getBeadsParentId } = await import('../../lib/BeadsService.js');
+      const mockTree = [
+        { id: 'child-issue', depth: 0 },
+        { id: 'parent-issue', depth: 1 },
+      ];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getBeadsParentId('/test/project', 'child-issue');
+
+      expect(result).toBe('parent-issue');
+    });
+
+    it('should return null when no dependencies', async () => {
+      const { getBeadsParentId } = await import('../../lib/BeadsService.js');
+      const mockTree = [{ id: 'solo-issue', depth: 0 }];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getBeadsParentId('/test/project', 'solo-issue');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null on error', async () => {
+      const { getBeadsParentId } = await import('../../lib/BeadsService.js');
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Command failed');
+      });
+
+      const result = await getBeadsParentId('/test/project', 'issue-1');
+
+      expect(result).toBeNull();
+    });
+
+    it('should not return self as parent', async () => {
+      const { getBeadsParentId } = await import('../../lib/BeadsService.js');
+      const mockTree = [
+        { id: 'issue-1', depth: 0 },
+        { id: 'issue-1', depth: 1 }, // Self-reference should be ignored
+      ];
+      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+
+      const result = await getBeadsParentId('/test/project', 'issue-1');
+
+      expect(result).toBeNull();
+    });
+  });
 });
