@@ -560,4 +560,149 @@ describe('HulyRestClient', () => {
       expect(body.arguments.issue_identifier).toBe('TEST-123_ABC');
     });
   });
+
+  // ============================================================
+  // Bulk Delete Tests
+  // ============================================================
+  describe('deleteIssuesBulk', () => {
+    it('should delete multiple issues', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          deleted: [
+            { identifier: 'TEST-1', subIssuesHandled: 0, cascaded: false },
+            { identifier: 'TEST-2', subIssuesHandled: 2, cascaded: false },
+          ],
+          succeeded: 2,
+          failed: 0,
+          errors: [],
+        }),
+      });
+
+      const result = await client.deleteIssuesBulk(['TEST-1', 'TEST-2']);
+
+      expect(result.succeeded).toBe(2);
+      expect(result.deleted).toHaveLength(2);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/bulk',
+        expect.objectContaining({
+          method: 'DELETE',
+          body: JSON.stringify({ identifiers: ['TEST-1', 'TEST-2'], cascade: false }),
+        })
+      );
+    });
+
+    it('should support cascade option', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          deleted: [{ identifier: 'TEST-1', subIssuesHandled: 3, cascaded: true }],
+          succeeded: 1,
+          failed: 0,
+          errors: [],
+        }),
+      });
+
+      await client.deleteIssuesBulk(['TEST-1'], { cascade: true });
+
+      const callArgs = mockFetch.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.cascade).toBe(true);
+    });
+
+    it('should handle partial failures', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          deleted: [{ identifier: 'TEST-1', subIssuesHandled: 0, cascaded: false }],
+          succeeded: 1,
+          failed: 1,
+          errors: [{ identifier: 'INVALID-1', error: 'Issue not found' }],
+        }),
+      });
+
+      const result = await client.deleteIssuesBulk(['TEST-1', 'INVALID-1']);
+
+      expect(result.succeeded).toBe(1);
+      expect(result.failed).toBe(1);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].error).toBe('Issue not found');
+    });
+  });
+
+  // ============================================================
+  // Project Activity Tests
+  // ============================================================
+  describe('getProjectActivity', () => {
+    it('should fetch project activity', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          project: 'TEST',
+          since: '2025-01-15T00:00:00.000Z',
+          activities: [
+            { type: 'issue.created', issue: 'TEST-1', title: 'New issue', status: 'Backlog', timestamp: '2025-01-15T10:00:00Z' },
+            { type: 'issue.updated', issue: 'TEST-2', title: 'Updated issue', status: 'Done', timestamp: '2025-01-15T11:00:00Z' },
+          ],
+          count: 2,
+          summary: { created: 1, updated: 1, total: 2 },
+          byStatus: { Backlog: 1, Done: 1 },
+        }),
+      });
+
+      const result = await client.getProjectActivity('TEST');
+
+      expect(result.count).toBe(2);
+      expect(result.activities).toHaveLength(2);
+      expect(result.summary.total).toBe(2);
+      expect(result.byStatus.Done).toBe(1);
+    });
+
+    it('should pass since parameter', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          project: 'TEST',
+          activities: [],
+          count: 0,
+          summary: { created: 0, updated: 0, total: 0 },
+          byStatus: {},
+        }),
+      });
+
+      const since = '2025-01-15T00:00:00Z';
+      await client.getProjectActivity('TEST', { since });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toContain('since=2025-01-15T00%3A00%3A00Z');
+    });
+
+    it('should pass limit parameter', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          project: 'TEST',
+          activities: [],
+          count: 0,
+          summary: { created: 0, updated: 0, total: 0 },
+          byStatus: {},
+        }),
+      });
+
+      await client.getProjectActivity('TEST', { limit: 50 });
+
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toContain('limit=50');
+    });
+
+    it('should handle API errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Project not found',
+      });
+
+      await expect(client.getProjectActivity('INVALID')).rejects.toThrow('REST API error (404)');
+    });
+  });
 });
