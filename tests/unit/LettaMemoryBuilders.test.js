@@ -1,0 +1,294 @@
+/**
+ * Unit Tests for Letta Memory Block Builder Functions
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  buildProjectMeta,
+  buildBoardConfig,
+  buildBoardMetrics,
+  buildHotspots,
+  buildBacklogSummary,
+  buildRecentActivity,
+} from '../../lib/LettaService.js';
+
+describe('Letta Memory Block Builders', () => {
+  // ============================================================
+  // buildProjectMeta Tests
+  // ============================================================
+  describe('buildProjectMeta', () => {
+    it('should build project metadata', () => {
+      const hulyProject = {
+        id: 'huly-123',
+        identifier: 'TEST',
+        name: 'Test Project',
+        description: 'A test project',
+      };
+      const vibeProject = { id: 'vibe-456' };
+
+      const result = buildProjectMeta(hulyProject, vibeProject, '/path/to/repo', 'https://github.com/test/repo');
+
+      expect(result.name).toBe('Test Project');
+      expect(result.identifier).toBe('TEST');
+      expect(result.description).toBe('A test project');
+      expect(result.huly.id).toBe('huly-123');
+      expect(result.vibe.id).toBe('vibe-456');
+      expect(result.repository.filesystem_path).toBe('/path/to/repo');
+      expect(result.repository.git_url).toBe('https://github.com/test/repo');
+    });
+
+    it('should handle missing optional fields', () => {
+      const hulyProject = { name: 'Minimal Project' };
+      const vibeProject = { id: 'vibe-1' };
+
+      const result = buildProjectMeta(hulyProject, vibeProject, null, null);
+
+      expect(result.name).toBe('Minimal Project');
+      expect(result.identifier).toBe('Minimal Project'); // Falls back to name
+      expect(result.description).toBe('');
+      expect(result.repository.filesystem_path).toBeNull();
+    });
+  });
+
+  // ============================================================
+  // buildBoardConfig Tests
+  // ============================================================
+  describe('buildBoardConfig', () => {
+    it('should return static board configuration', () => {
+      const result = buildBoardConfig();
+
+      expect(result.status_mapping.huly_to_vibe.Backlog).toBe('todo');
+      expect(result.status_mapping.huly_to_vibe.Done).toBe('done');
+      expect(result.status_mapping.vibe_to_huly.done).toBe('Done');
+      expect(result.workflow.sync_direction).toBe('bidirectional');
+      expect(result.definitions_of_done.done).toBeDefined();
+    });
+  });
+
+  // ============================================================
+  // buildBoardMetrics Tests
+  // ============================================================
+  describe('buildBoardMetrics', () => {
+    it('should calculate metrics from tasks', () => {
+      const hulyIssues = [];
+      const vibeTasks = [
+        { status: 'todo' },
+        { status: 'todo' },
+        { status: 'inprogress' },
+        { status: 'done' },
+        { status: 'done' },
+      ];
+
+      const result = buildBoardMetrics(hulyIssues, vibeTasks);
+
+      expect(result.total_tasks).toBe(5);
+      expect(result.by_status.todo).toBe(2);
+      expect(result.by_status.inprogress).toBe(1);
+      expect(result.by_status.done).toBe(2);
+      expect(result.wip_count).toBe(1); // inprogress + inreview
+      expect(result.completion_rate).toBe('40.0%');
+      expect(result.active_tasks).toBe(3); // todo + inprogress + inreview
+    });
+
+    it('should handle empty task list', () => {
+      const result = buildBoardMetrics([], []);
+
+      expect(result.total_tasks).toBe(0);
+      expect(result.completion_rate).toBe('0%');
+    });
+  });
+
+  // ============================================================
+  // buildHotspots Tests
+  // ============================================================
+  describe('buildHotspots', () => {
+    it('should identify blocked items by keywords', () => {
+      const vibeTasks = [
+        { id: '1', title: 'Normal task', status: 'todo' },
+        { id: '2', title: 'Blocked by API', status: 'inprogress' },
+        { id: '3', title: 'Waiting on review', description: '', status: 'inprogress' },
+      ];
+
+      const result = buildHotspots([], vibeTasks);
+
+      expect(result.blocked_items).toHaveLength(2);
+      expect(result.blocked_items[0].title).toBe('Blocked by API');
+      expect(result.summary.blocked_count).toBe(2);
+    });
+
+    it('should identify ageing WIP items', () => {
+      const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+      const vibeTasks = [
+        { id: '1', title: 'Old task', status: 'inprogress', updated_at: tenDaysAgo },
+      ];
+
+      const result = buildHotspots([], vibeTasks);
+
+      expect(result.ageing_wip).toHaveLength(1);
+      expect(result.ageing_wip[0].age_days).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should identify high priority todos', () => {
+      const vibeTasks = [
+        { id: '1', title: 'Urgent fix', status: 'todo', priority: 'urgent' },
+        { id: '2', title: 'Normal task', status: 'todo', priority: 'medium' },
+      ];
+
+      const result = buildHotspots([], vibeTasks);
+
+      expect(result.high_priority_todo).toHaveLength(1);
+      expect(result.high_priority_todo[0].priority).toBe('urgent');
+    });
+  });
+
+  // ============================================================
+  // buildBacklogSummary Tests
+  // ============================================================
+  describe('buildBacklogSummary', () => {
+    it('should summarize backlog by priority', () => {
+      const vibeTasks = [
+        { id: '1', title: 'Urgent', status: 'todo', priority: 'urgent' },
+        { id: '2', title: 'High', status: 'todo', priority: 'high' },
+        { id: '3', title: 'Medium', status: 'todo', priority: 'medium' },
+        { id: '4', title: 'Done', status: 'done', priority: 'high' },
+      ];
+
+      const result = buildBacklogSummary([], vibeTasks);
+
+      expect(result.total_backlog).toBe(3); // Only todo items
+      expect(result.priority_breakdown.urgent).toBe(1);
+      expect(result.priority_breakdown.high).toBe(1);
+      expect(result.priority_breakdown.medium).toBe(1);
+      expect(result.top_items).toHaveLength(3);
+      expect(result.top_items[0].priority).toBe('urgent'); // Sorted by priority
+    });
+
+    it('should limit to top 15 items', () => {
+      const vibeTasks = Array.from({ length: 20 }, (_, i) => ({
+        id: `${i}`,
+        title: `Task ${i}`,
+        status: 'todo',
+      }));
+
+      const result = buildBacklogSummary([], vibeTasks);
+
+      expect(result.top_items).toHaveLength(15);
+      expect(result.total_backlog).toBe(20);
+    });
+  });
+
+  // ============================================================
+  // buildRecentActivity Tests
+  // ============================================================
+  describe('buildRecentActivity', () => {
+    it('should build activity summary from API response', () => {
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities: [
+          { type: 'issue.created', issue: 'TEST-1', title: 'New issue', status: 'Backlog', timestamp: '2025-01-15T10:00:00Z' },
+          { type: 'issue.updated', issue: 'TEST-2', title: 'Updated', status: 'Done', timestamp: '2025-01-15T11:00:00Z' },
+        ],
+        summary: { created: 1, updated: 1, total: 2 },
+        byStatus: { Backlog: 1, Done: 1 },
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.since).toBe('2025-01-15T00:00:00Z');
+      expect(result.summary.total).toBe(2);
+      expect(result.by_status.Done).toBe(1);
+      expect(result.recent_items).toHaveLength(2);
+      expect(result.recent_items[0].issue).toBe('TEST-1');
+    });
+
+    it('should handle null/empty activity data', () => {
+      const result = buildRecentActivity(null);
+
+      expect(result.since).toBeNull();
+      expect(result.summary.total).toBe(0);
+      expect(result.recent_items).toHaveLength(0);
+      expect(result.patterns).toHaveLength(0);
+    });
+
+    it('should detect blocked spike pattern', () => {
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities: [],
+        summary: { created: 0, updated: 5, total: 5 },
+        byStatus: { Blocked: 5 },
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' })
+      );
+    });
+
+    it('should detect high activity pattern', () => {
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities: [],
+        summary: { created: 15, updated: 10, total: 25 },
+        byStatus: {},
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'high_activity', severity: 'info' })
+      );
+    });
+
+    it('should detect completion streak pattern', () => {
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities: [],
+        summary: { created: 0, updated: 8, total: 8 },
+        byStatus: { Done: 8 },
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'completion_streak', severity: 'positive' })
+      );
+    });
+
+    it('should detect no activity pattern', () => {
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities: [],
+        summary: { created: 0, updated: 0, total: 0 },
+        byStatus: {},
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'no_activity', severity: 'info' })
+      );
+    });
+
+    it('should limit recent items to 10', () => {
+      const activities = Array.from({ length: 15 }, (_, i) => ({
+        type: 'issue.updated',
+        issue: `TEST-${i}`,
+        title: `Issue ${i}`,
+        status: 'Done',
+        timestamp: new Date().toISOString(),
+      }));
+
+      const activityData = {
+        since: '2025-01-15T00:00:00Z',
+        activities,
+        summary: { created: 0, updated: 15, total: 15 },
+        byStatus: { Done: 15 },
+      };
+
+      const result = buildRecentActivity(activityData);
+
+      expect(result.recent_items).toHaveLength(10);
+    });
+  });
+});
