@@ -11,6 +11,8 @@ import {
   buildBacklogSummary,
   buildRecentActivity,
   buildComponentsSummary,
+  buildChangeLog,
+  buildScratchpad,
 } from '../../lib/LettaService.js';
 
 describe('Letta Memory Block Builders', () => {
@@ -387,6 +389,132 @@ describe('Letta Memory Block Builders', () => {
         'Done': 1,
         'In Progress': 1,
       });
+    });
+  });
+
+  // ============================================================
+  // buildChangeLog Tests
+  // ============================================================
+  describe('buildChangeLog', () => {
+    it('should mark all issues as new on first sync', () => {
+      const currentIssues = [
+        { identifier: 'TEST-1', title: 'Issue 1', status: 'Backlog' },
+        { identifier: 'TEST-2', title: 'Issue 2', status: 'Done' },
+      ];
+      const mockDb = { getProjectIssues: () => [] };
+
+      const result = buildChangeLog(currentIssues, null, mockDb, 'TEST');
+
+      expect(result.summary.first_sync).toBe(true);
+      expect(result.summary.new_count).toBe(2);
+      expect(result.new_issues).toHaveLength(2);
+    });
+
+    it('should detect new issues', () => {
+      const currentIssues = [
+        { identifier: 'TEST-1', title: 'Existing', status: 'Backlog' },
+        { identifier: 'TEST-2', title: 'New Issue', status: 'Backlog' },
+      ];
+      const mockDb = {
+        getProjectIssues: () => [
+          { identifier: 'TEST-1', title: 'Existing', status: 'Backlog' },
+        ],
+      };
+
+      const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
+
+      expect(result.summary.first_sync).toBe(false);
+      expect(result.new_issues).toHaveLength(1);
+      expect(result.new_issues[0].identifier).toBe('TEST-2');
+    });
+
+    it('should detect status transitions', () => {
+      const currentIssues = [
+        { identifier: 'TEST-1', title: 'Issue 1', status: 'Done' },
+      ];
+      const mockDb = {
+        getProjectIssues: () => [
+          { identifier: 'TEST-1', title: 'Issue 1', status: 'In Progress' },
+        ],
+      };
+
+      const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
+
+      expect(result.status_transitions).toHaveLength(1);
+      expect(result.status_transitions[0].from).toBe('In Progress');
+      expect(result.status_transitions[0].to).toBe('Done');
+    });
+
+    it('should detect closed/removed issues', () => {
+      const currentIssues = [];
+      const mockDb = {
+        getProjectIssues: () => [
+          { identifier: 'TEST-1', title: 'Removed Issue', status: 'Backlog' },
+        ],
+      };
+
+      const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
+
+      expect(result.closed_issues).toHaveLength(1);
+      expect(result.closed_issues[0].identifier).toBe('TEST-1');
+    });
+
+    it('should detect title changes', () => {
+      const currentIssues = [
+        { identifier: 'TEST-1', title: 'Updated Title', status: 'Backlog' },
+      ];
+      const mockDb = {
+        getProjectIssues: () => [
+          { identifier: 'TEST-1', title: 'Old Title', status: 'Backlog' },
+        ],
+      };
+
+      const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
+
+      expect(result.updated_issues).toHaveLength(1);
+      expect(result.updated_issues[0].change).toBe('title');
+    });
+
+    it('should limit results to prevent large blocks', () => {
+      const currentIssues = Array.from({ length: 20 }, (_, i) => ({
+        identifier: `TEST-${i}`,
+        title: `Issue ${i}`,
+        status: 'Backlog',
+      }));
+      const mockDb = { getProjectIssues: () => [] };
+
+      const result = buildChangeLog(currentIssues, null, mockDb, 'TEST');
+
+      expect(result.new_issues.length).toBeLessThanOrEqual(10);
+    });
+  });
+
+  // ============================================================
+  // buildScratchpad Tests
+  // ============================================================
+  describe('buildScratchpad', () => {
+    it('should return empty scratchpad structure', () => {
+      const result = buildScratchpad();
+
+      expect(result.notes).toEqual([]);
+      expect(result.observations).toEqual([]);
+      expect(result.action_items).toEqual([]);
+      expect(result.context).toEqual({});
+    });
+
+    it('should include usage guide', () => {
+      const result = buildScratchpad();
+
+      expect(result.usage_guide).toContain('scratchpad');
+      expect(result.usage_guide).toContain('working memory');
+    });
+
+    it('should have stable structure for content hashing', () => {
+      const result1 = buildScratchpad();
+      const result2 = buildScratchpad();
+
+      // Structure should be identical (no timestamps or random values)
+      expect(JSON.stringify(result1)).toBe(JSON.stringify(result2));
     });
   });
 });
