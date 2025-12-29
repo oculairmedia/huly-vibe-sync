@@ -649,6 +649,47 @@ describe('SyncDatabase', () => {
         expect(project.letta_source_id).toBe('source-123');
       });
     });
+
+    describe('Huly sync cursor operations', () => {
+      it('should return null when no cursor exists', () => {
+        const cursor = db.getHulySyncCursor('TEST');
+        expect(cursor).toBeNull();
+      });
+
+      it('should store and retrieve sync cursor', () => {
+        const timestamp = '2025-01-15T10:30:00.000Z';
+        db.setHulySyncCursor('TEST', timestamp);
+
+        const cursor = db.getHulySyncCursor('TEST');
+        expect(cursor).toBe(timestamp);
+      });
+
+      it('should update existing cursor', () => {
+        db.setHulySyncCursor('TEST', '2025-01-01T00:00:00.000Z');
+        db.setHulySyncCursor('TEST', '2025-01-15T10:30:00.000Z');
+
+        const cursor = db.getHulySyncCursor('TEST');
+        expect(cursor).toBe('2025-01-15T10:30:00.000Z');
+      });
+
+      it('should clear sync cursor', () => {
+        db.setHulySyncCursor('TEST', '2025-01-15T10:30:00.000Z');
+        db.clearHulySyncCursor('TEST');
+
+        const cursor = db.getHulySyncCursor('TEST');
+        expect(cursor).toBeNull();
+      });
+
+      it('should maintain separate cursors per project', () => {
+        db.upsertProject({ identifier: 'PROJ2', name: 'Project 2' });
+        
+        db.setHulySyncCursor('TEST', '2025-01-01T00:00:00.000Z');
+        db.setHulySyncCursor('PROJ2', '2025-02-01T00:00:00.000Z');
+
+        expect(db.getHulySyncCursor('TEST')).toBe('2025-01-01T00:00:00.000Z');
+        expect(db.getHulySyncCursor('PROJ2')).toBe('2025-02-01T00:00:00.000Z');
+      });
+    });
   });
 
   describe('database cleanup', () => {
