@@ -32,11 +32,7 @@ import {
   normalizeStatus,
   areStatusesEquivalent,
 } from './lib/statusMapper.js';
-import {
-  loadConfig,
-  getConfigSummary,
-  isLettaEnabled,
-} from './lib/config.js';
+import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
 import {
   createHulyService,
   fetchHulyProjects,
@@ -59,23 +55,22 @@ import {
   recordSuccessfulSync,
   recordFailedSync,
 } from './lib/HealthService.js';
+import { createApiServer, broadcastSyncEvent, recordIssueMapping } from './lib/ApiServer.js';
+import { createWebhookHandler } from './lib/HulyWebhookHandler.js';
 import {
-  createApiServer,
-  broadcastSyncEvent,
-  recordIssueMapping,
-} from './lib/ApiServer.js';
-import { 
   createLettaService,
   buildProjectMeta,
   buildBoardConfig,
   buildBoardMetrics,
   buildHotspots,
   buildBacklogSummary,
-  buildChangeLog, buildScratchpad,
+  buildChangeLog,
+  buildScratchpad,
 } from './lib/LettaService.js';
 import { createLettaCodeService } from './lib/LettaCodeService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { logger } from './lib/logger.js';
+import { createBeadsWatcher } from './lib/BeadsWatcher.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -111,7 +106,10 @@ if (isLettaEnabled(config)) {
     lettaService = createLettaService();
     logger.info('Letta service initialized successfully');
   } catch (lettaError) {
-    logger.warn({ err: lettaError }, 'Failed to initialize Letta service, PM agent integration disabled');
+    logger.warn(
+      { err: lettaError },
+      'Failed to initialize Letta service, PM agent integration disabled'
+    );
   }
 } else {
   logger.info('Letta PM agent integration disabled (credentials not set)');
@@ -128,7 +126,10 @@ try {
   });
   logger.info('Letta Code service initialized successfully');
 } catch (lettaCodeError) {
-  logger.warn({ err: lettaCodeError }, 'Failed to initialize Letta Code service, filesystem mode disabled');
+  logger.warn(
+    { err: lettaCodeError },
+    'Failed to initialize Letta Code service, filesystem mode disabled'
+  );
 }
 
 // Initialize FileWatcher for realtime file change detection
@@ -141,7 +142,10 @@ if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
     });
     logger.info('FileWatcher initialized - realtime file sync enabled');
   } catch (fileWatchError) {
-    logger.warn({ err: fileWatchError }, 'Failed to initialize FileWatcher, falling back to periodic sync');
+    logger.warn(
+      { err: fileWatchError },
+      'Failed to initialize FileWatcher, falling back to periodic sync'
+    );
   }
 }
 
@@ -179,7 +183,7 @@ class MCPClient {
   async call(method, params = {}) {
     const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
+      Accept: 'application/json, text/event-stream',
     };
 
     // Add session ID to headers if we have one (use lowercase for compatibility)
@@ -203,9 +207,10 @@ class MCPClient {
     }
 
     // Check for session ID in response headers (try multiple header names)
-    const newSessionId = response.headers.get('mcp-session-id') ||
-                        response.headers.get('Mcp-Session-Id') ||
-                        response.headers.get('X-Session-ID');
+    const newSessionId =
+      response.headers.get('mcp-session-id') ||
+      response.headers.get('Mcp-Session-Id') ||
+      response.headers.get('X-Session-ID');
     if (newSessionId && !this.sessionId) {
       this.sessionId = newSessionId;
       logger.debug({ client: this.name, sessionId: newSessionId }, 'MCP session ID received');
@@ -351,10 +356,7 @@ async function main() {
 
   // Initialize both clients
   try {
-    await Promise.all([
-      hulyClient.initialize(),
-      vibeClient.initialize()
-    ]);
+    await Promise.all([hulyClient.initialize(), vibeClient.initialize()]);
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize clients, exiting');
     process.exit(1);
@@ -405,7 +407,10 @@ async function main() {
         });
       }
     } catch (error) {
-      logger.error({ err: error, timeoutMs: 900000 }, 'Sync exceeded 15-minute timeout, will retry in next cycle');
+      logger.error(
+        { err: error, timeoutMs: 900000 },
+        'Sync exceeded 15-minute timeout, will retry in next cycle'
+      );
 
       // Update health stats on error
       recordFailedSync(healthStats, error);
@@ -431,20 +436,87 @@ async function main() {
   };
 
   // Callback for configuration updates via API
-  const handleConfigUpdate = (updates) => {
+  const handleConfigUpdate = updates => {
     logger.info({ updates }, 'Configuration updated via API');
 
     // If sync interval changed, restart the timer
     if (updates.syncInterval !== undefined && syncTimer) {
       clearInterval(syncTimer);
-      logger.info({
-        oldInterval: config.sync.interval / 1000,
-        newInterval: updates.syncInterval / 1000
-      }, 'Restarting sync timer with new interval');
+      logger.info(
+        {
+          oldInterval: config.sync.interval / 1000,
+          newInterval: updates.syncInterval / 1000,
+        },
+        'Restarting sync timer with new interval'
+      );
 
       syncTimer = setInterval(() => runSyncWithTimeout(), updates.syncInterval);
     }
   };
+
+  // Callback for webhook changes from huly-change-watcher
+  const handleWebhookChanges = async changeData => {
+    logger.info(
+      {
+        type: changeData.type,
+        changeCount: changeData.changes.length,
+        projects: Array.from(changeData.byProject.keys()),
+      },
+      'Processing changes from webhook'
+    );
+
+    // For now, trigger a full sync when changes are detected
+    // TODO: Optimize to only sync the specific projects/issues that changed
+    await runSyncWithTimeout();
+
+    return { success: true, processed: changeData.changes.length };
+  };
+
+  // Initialize webhook handler
+  const webhookHandler = createWebhookHandler({
+    db,
+    onChangesReceived: handleWebhookChanges,
+  });
+
+  // Subscribe to change watcher on startup
+  const subscribed = await webhookHandler.subscribe();
+  if (subscribed) {
+    logger.info('✓ Subscribed to Huly change watcher for real-time updates');
+    logger.info('✓ Polling disabled - using webhook-based change detection');
+  } else {
+    logger.warn('✗ Failed to subscribe to change watcher, will rely on polling');
+  }
+
+  // Initialize Beads file watcher for .beads directory changes
+  const handleBeadsChange = async changeData => {
+    logger.info(
+      {
+        project: changeData.projectIdentifier,
+        fileCount: changeData.changedFiles.length,
+      },
+      'Processing Beads file changes'
+    );
+
+    // Trigger sync for the specific project that changed
+    await runSyncWithTimeout(changeData.projectIdentifier);
+
+    return { success: true, project: changeData.projectIdentifier };
+  };
+
+  const beadsWatcher = createBeadsWatcher({
+    db,
+    onBeadsChange: handleBeadsChange,
+    debounceDelay: 2000, // Wait 2 seconds for changes to settle
+  });
+
+  // Start watching all projects with .beads directories
+  const beadsWatchResult = await beadsWatcher.syncWithDatabase();
+  if (beadsWatchResult.watching > 0) {
+    logger.info(
+      { watching: beadsWatchResult.watching, available: beadsWatchResult.available },
+      '✓ Beads file watcher active for real-time Beads→Huly sync'
+    );
+  }
 
   // Start API server with extended endpoints
   createApiServer({
@@ -454,13 +526,16 @@ async function main() {
     onSyncTrigger: handleSyncTrigger,
     onConfigUpdate: handleConfigUpdate,
     lettaCodeService, // Enable filesystem mode for agents
+    webhookHandler, // Enable webhook endpoint
   });
 
   // Run initial sync
   await runSyncWithTimeout();
 
-  // Schedule periodic syncs
-  if (config.sync.interval > 0) {
+  // Schedule periodic syncs only if webhooks are not active
+  if (subscribed) {
+    logger.info('Webhook mode active - periodic polling disabled');
+  } else if (config.sync.interval > 0) {
     logger.info({ intervalSeconds: config.sync.interval / 1000 }, 'Scheduling periodic syncs');
     syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
   } else {
