@@ -71,6 +71,7 @@ import { createLettaCodeService } from './lib/LettaCodeService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { logger } from './lib/logger.js';
 import { createBeadsWatcher } from './lib/BeadsWatcher.js';
+import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -516,6 +517,37 @@ async function main() {
       { watching: beadsWatchResult.watching, available: beadsWatchResult.available },
       '✓ Beads file watcher active for real-time Beads→Huly sync'
     );
+  }
+
+  // Initialize Vibe SSE event watcher for real-time Vibe→Huly sync
+  const handleVibeChange = async changeData => {
+    logger.info(
+      {
+        vibeProject: changeData.vibeProjectId,
+        hulyProject: changeData.hulyProjectIdentifier,
+        taskCount: changeData.changedTaskIds.length,
+      },
+      'Processing Vibe task changes from SSE'
+    );
+
+    // Trigger sync for the specific project that changed
+    if (changeData.hulyProjectIdentifier) {
+      await runSyncWithTimeout(changeData.hulyProjectIdentifier);
+    }
+
+    return { success: true, project: changeData.hulyProjectIdentifier };
+  };
+
+  const vibeEventWatcher = createVibeEventWatcher({
+    db,
+    onTaskChange: handleVibeChange,
+  });
+
+  const vibeConnected = await vibeEventWatcher.start();
+  if (vibeConnected) {
+    logger.info('✓ Vibe SSE watcher active for real-time Vibe→Huly sync');
+  } else {
+    logger.warn('✗ Failed to connect to Vibe SSE stream, Vibe changes may not sync in real-time');
   }
 
   // Start API server with extended endpoints
