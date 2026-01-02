@@ -13,6 +13,8 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Mutex } from 'async-mutex';
+import pDebounce from 'p-debounce';
 import http from 'http';
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createVibeRestClient } from './lib/VibeRestClient.js';
@@ -368,8 +370,28 @@ async function main() {
   // Track sync interval timer (for dynamic config updates)
   let syncTimer = null;
 
-  // Wrapper function to run sync with timeout
-  const runSyncWithTimeout = async (projectId = null) => {
+  // ============================================================
+  // SYNC CONTROL: Mutex + Debounce to prevent sync storms
+  // ============================================================
+  
+  // Per-project mutexes to prevent concurrent syncs for same project
+  const syncMutexes = new Map(); // projectId -> Mutex
+  const globalSyncMutex = new Mutex(); // For full syncs (projectId = null)
+  
+  // Get or create mutex for a project
+  const getSyncMutex = (projectId) => {
+    if (!projectId) return globalSyncMutex;
+    if (!syncMutexes.has(projectId)) {
+      syncMutexes.set(projectId, new Mutex());
+    }
+    return syncMutexes.get(projectId);
+  };
+
+  // Pending sync requests (for coalescing)
+  const pendingSyncs = new Map(); // projectId -> timestamp
+
+  // Core sync function (called by debounced wrapper)
+  const runSyncCore = async (projectId = null) => {
     const syncStartTime = Date.now();
 
     // Broadcast sync started event
@@ -428,6 +450,48 @@ async function main() {
         lettaService.clearCache();
       }
     }
+  };
+
+  // Wrapper with mutex to prevent concurrent syncs for same project
+  const runSyncWithMutex = async (projectId = null) => {
+    const mutex = getSyncMutex(projectId);
+    const key = projectId || 'global';
+    
+    // Check if sync is already running for this project
+    if (mutex.isLocked()) {
+      logger.debug({ projectId: key }, 'Sync already in progress, skipping');
+      return;
+    }
+
+    // Acquire mutex and run sync
+    await mutex.runExclusive(async () => {
+      logger.info({ projectId: key }, 'Acquired sync lock');
+      await runSyncCore(projectId);
+    });
+  };
+
+  // Debounced sync - waits 3 seconds for triggers to settle before syncing
+  // This coalesces rapid webhook/SSE events into a single sync
+  const SYNC_DEBOUNCE_MS = 3000;
+  const debouncedSyncByProject = new Map(); // projectId -> debounced function
+  
+  const getDebouncedSync = (projectId) => {
+    const key = projectId || 'global';
+    if (!debouncedSyncByProject.has(key)) {
+      const debounced = pDebounce(async () => {
+        await runSyncWithMutex(projectId);
+      }, SYNC_DEBOUNCE_MS);
+      debouncedSyncByProject.set(key, debounced);
+    }
+    return debouncedSyncByProject.get(key);
+  };
+
+  // Public sync function - debounced + mutex protected
+  const runSyncWithTimeout = async (projectId = null) => {
+    const key = projectId || 'global';
+    logger.debug({ projectId: key }, 'Sync requested (will debounce)');
+    pendingSyncs.set(key, Date.now());
+    return getDebouncedSync(projectId)();
   };
 
   // Callback for manual sync trigger via API
