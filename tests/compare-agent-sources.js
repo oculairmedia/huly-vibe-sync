@@ -19,11 +19,11 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 function loadAgentStateFromFile() {
   const lettaDir = path.join(__dirname, '..', '.letta');
   const settingsPath = path.join(lettaDir, 'settings.local.json');
-  
+
   if (!fs.existsSync(settingsPath)) {
     return {};
   }
-  
+
   const data = fs.readFileSync(settingsPath, 'utf8');
   const state = JSON.parse(data);
   return state.agents || {};
@@ -32,18 +32,18 @@ function loadAgentStateFromFile() {
 function loadAgentStateFromDB(dbPath) {
   const db = new SyncDatabase(dbPath);
   db.initialize();
-  
+
   const rows = db.db.prepare(`
     SELECT identifier, letta_agent_id 
     FROM projects 
     WHERE letta_agent_id IS NOT NULL
   `).all();
-  
+
   const agents = {};
   for (const row of rows) {
     agents[row.identifier] = row.letta_agent_id;
   }
-  
+
   db.close();
   return agents;
 }
@@ -62,7 +62,7 @@ function main() {
   // Compare
   const allIdentifiers = new Set([
     ...Object.keys(fileAgents),
-    ...Object.keys(dbAgents)
+    ...Object.keys(dbAgents),
   ]);
 
   let matches = 0;

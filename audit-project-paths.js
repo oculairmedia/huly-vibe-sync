@@ -2,7 +2,7 @@
 
 /**
  * Audit Script for Huly Project Filesystem Paths
- * 
+ *
  * Checks if filesystem paths in Huly project descriptions:
  * - Actually exist on disk
  * - Match expected /opt/stacks/{project-name} pattern
@@ -17,16 +17,16 @@ const hulyClient = createHulyRestClient(process.env.HULY_API_URL || process.env.
 
 function extractFilesystemPath(description) {
   if (!description) return null;
-  
+
   // Match patterns like:
   // Path: /opt/stacks/project-name
   // Filesystem: /opt/stacks/project-name
   // Directory: /opt/stacks/project-name
   const patterns = [
     /(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i,
-    /(?:^|\n)([\/][^\n\r]+)/,
+    /(?:^|\n)([/][^\n\r]+)/,
   ];
-  
+
   for (const pattern of patterns) {
     const match = description.match(pattern);
     if (match) {
@@ -35,42 +35,42 @@ function extractFilesystemPath(description) {
       return path.replace(/[,;.]$/, '').trim();
     }
   }
-  
+
   return null;
 }
 
 async function auditProjects() {
   console.log('🔍 Auditing Huly Project Filesystem Paths\n');
-  
+
   try {
     await hulyClient.initialize();
     const projects = await hulyClient.listProjects();
-    
+
     console.log(`Found ${projects.length} Huly projects\n`);
     console.log('='.repeat(80));
     console.log('\n');
-    
+
     const issues = {
       noPath: [],
       pathNotExist: [],
       noLettaFile: [],
       correct: [],
     };
-    
+
     for (const project of projects) {
       const identifier = project.identifier;
       const name = project.name;
       const description = project.description || '';
       const extractedPath = extractFilesystemPath(description);
-      
+
       console.log(`📁 ${identifier} - ${name}`);
-      
+
       if (!extractedPath) {
         console.log(`   ❌ NO PATH: No filesystem path in description`);
         issues.noPath.push({ identifier, name });
       } else {
         console.log(`   📂 Path: ${extractedPath}`);
-        
+
         // Check if path exists
         if (!fs.existsSync(extractedPath)) {
           console.log(`   ❌ PATH NOT FOUND: Directory does not exist`);
@@ -101,7 +101,7 @@ async function auditProjects() {
       }
       console.log();
     }
-    
+
     console.log('\n');
     console.log('='.repeat(80));
     console.log('\n📊 AUDIT SUMMARY\n');
@@ -111,7 +111,7 @@ async function auditProjects() {
     console.log(`❌ Path Does Not Exist: ${issues.pathNotExist.length}`);
     console.log(`⚠️  Missing .letta File: ${issues.noLettaFile.length}`);
     console.log();
-    
+
     // Detailed breakdown
     if (issues.noPath.length > 0) {
       console.log('\n📋 PROJECTS WITH NO PATH IN DESCRIPTION:');
@@ -119,7 +119,7 @@ async function auditProjects() {
         console.log(`   - ${p.identifier}: ${p.name}`);
       });
     }
-    
+
     if (issues.pathNotExist.length > 0) {
       console.log('\n📋 PROJECTS WITH NON-EXISTENT PATHS:');
       issues.pathNotExist.forEach(p => {
@@ -127,7 +127,7 @@ async function auditProjects() {
         console.log(`     Path: ${p.path}`);
       });
     }
-    
+
     if (issues.noLettaFile.length > 0) {
       console.log('\n📋 PROJECTS MISSING .letta/settings.local.json:');
       issues.noLettaFile.forEach(p => {
@@ -135,32 +135,32 @@ async function auditProjects() {
         console.log(`     Path: ${p.path}`);
       });
     }
-    
+
     console.log();
     console.log('='.repeat(80));
     console.log();
-    
+
     // Recommendations
     console.log('💡 RECOMMENDATIONS:\n');
-    
+
     if (issues.noPath.length > 0) {
       console.log(`1. Add filesystem paths to ${issues.noPath.length} project descriptions`);
       console.log(`   Format: "Path: /opt/stacks/project-name" in the description field`);
       console.log();
     }
-    
+
     if (issues.pathNotExist.length > 0) {
       console.log(`2. Fix ${issues.pathNotExist.length} incorrect paths in project descriptions`);
       console.log(`   Either create the directories or update the descriptions`);
       console.log();
     }
-    
+
     if (issues.noLettaFile.length > 0) {
       console.log(`3. Restart sync to create .letta files for ${issues.noLettaFile.length} projects`);
       console.log(`   docker-compose restart`);
       console.log();
     }
-    
+
     // Export JSON for programmatic use
     if (process.argv.includes('--json')) {
       const output = {
@@ -176,7 +176,7 @@ async function auditProjects() {
       console.log('\n📄 JSON OUTPUT:\n');
       console.log(JSON.stringify(output, null, 2));
     }
-    
+
   } catch (error) {
     console.error('❌ Error:', error.message);
     process.exit(1);

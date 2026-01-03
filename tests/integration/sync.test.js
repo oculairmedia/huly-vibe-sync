@@ -1,6 +1,6 @@
 /**
  * Integration Tests for Sync Flows
- * 
+ *
  * Tests end-to-end synchronization between Huly and Vibe Kanban
  */
 
@@ -127,8 +127,8 @@ describe('Sync Integration Tests', () => {
 
       // Only return modified issues
       const mockModifiedIssues = [
-        createMockHulyIssue({ 
-          identifier: 'TEST-2', 
+        createMockHulyIssue({
+          identifier: 'TEST-2',
           title: 'New Issue',
           modifiedOn: new Date().toISOString(),
         }),
@@ -136,8 +136,8 @@ describe('Sync Integration Tests', () => {
 
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ 
-          issues: mockModifiedIssues, 
+        json: async () => ({
+          issues: mockModifiedIssues,
           count: mockModifiedIssues.length,
         }),
       });
@@ -178,7 +178,7 @@ describe('Sync Integration Tests', () => {
       // Both Backlog and Todo should map to 'todo' in Vibe
       expect(mapHulyStatusToVibe('Backlog')).toBe('todo');
       expect(mapHulyStatusToVibe('Todo')).toBe('todo');
-      
+
       // And vice versa, 'todo' maps to 'Backlog' in Huly
       expect(mapVibeStatusToHuly('todo')).toBe('Backlog');
     });
@@ -280,10 +280,10 @@ describe('Sync Integration Tests', () => {
     it('should handle batch project sync efficiently', async () => {
       // Create many projects
       const projects = Array.from({ length: 100 }, (_, i) =>
-        createMockHulyProject({ 
-          identifier: `TEST${i}`, 
+        createMockHulyProject({
+          identifier: `TEST${i}`,
           name: `Project ${i}`,
-        })
+        }),
       );
 
       mockFetch.mockResolvedValue({
@@ -293,12 +293,12 @@ describe('Sync Integration Tests', () => {
 
       const start = Date.now();
       const fetchedProjects = await hulyClient.listProjects();
-      
+
       // Store in database
       for (const project of fetchedProjects) {
         db.upsertProject(project);
       }
-      
+
       const duration = Date.now() - start;
 
       // Should complete in reasonable time (< 1 second for 100 projects)
@@ -312,10 +312,10 @@ describe('Sync Integration Tests', () => {
 
       // Create many issues
       const issues = Array.from({ length: 200 }, (_, i) =>
-        createMockHulyIssue({ 
-          identifier: `TEST-${i}`, 
+        createMockHulyIssue({
+          identifier: `TEST-${i}`,
           title: `Issue ${i}`,
-        })
+        }),
       );
 
       mockFetch.mockResolvedValue({
@@ -325,7 +325,7 @@ describe('Sync Integration Tests', () => {
 
       const start = Date.now();
       const fetchedIssues = await hulyClient.listIssues('TEST');
-      
+
       // Store in database
       for (const issue of fetchedIssues) {
         db.upsertIssue({
@@ -337,7 +337,7 @@ describe('Sync Integration Tests', () => {
           priority: issue.priority,
         });
       }
-      
+
       const duration = Date.now() - start;
 
       // Should complete in reasonable time (< 2 seconds for 200 issues)
@@ -363,7 +363,7 @@ describe('Sync Integration Tests', () => {
 
     it('should handle concurrent updates correctly', () => {
       db.upsertProject({ identifier: 'TEST', name: 'Test Project', description: 'Description' });
-      
+
       // Insert same issue multiple times (simulating concurrent updates)
       db.upsertIssue({
         identifier: 'TEST-1',
@@ -399,7 +399,7 @@ describe('Sync Integration Tests', () => {
 
     it('should track modification timestamps', async () => {
       db.upsertProject({ identifier: 'TEST', name: 'Test Project', description: 'Description' });
-      
+
       const before = Date.now();
       db.upsertIssue({
         identifier: 'TEST-1',
@@ -413,7 +413,7 @@ describe('Sync Integration Tests', () => {
 
       const issue = db.getIssue('TEST-1');
       const updatedAt = new Date(issue.updated_at).getTime();
-      
+
       expect(updatedAt).toBeGreaterThanOrEqual(before);
       expect(updatedAt).toBeLessThanOrEqual(after);
     });

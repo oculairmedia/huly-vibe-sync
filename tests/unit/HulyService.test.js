@@ -1,6 +1,6 @@
 /**
  * Unit Tests for HulyService
- * 
+ *
  * Tests Huly-specific operations including:
  * - Fetching projects and issues
  * - Updating issue status, description, priority, title
@@ -96,7 +96,7 @@ describe('HulyService', () => {
 
       // console.log is called with two args: '[Huly] Sample project:' and the JSON string
       const sampleProjectLogs = consoleSpy.log.mock.calls.filter(
-        call => call[0] === '[Huly] Sample project:'
+        call => call[0] === '[Huly] Sample project:',
       );
       expect(sampleProjectLogs).toHaveLength(1);
     });
@@ -104,14 +104,14 @@ describe('HulyService', () => {
     it('should not log sample project when not in dry run mode', async () => {
       // Clear previous calls from other tests
       consoleSpy.log.mockClear();
-      
+
       const mockProjects = [createMockHulyProject({ identifier: 'TEST' })];
       mockRestClient.listProjects.mockResolvedValue(mockProjects);
 
       await fetchHulyProjects(mockRestClient, { sync: { dryRun: false } });
 
       const sampleProjectLogs = consoleSpy.log.mock.calls.filter(
-        call => call[0] === '[Huly] Sample project:'
+        call => call[0] === '[Huly] Sample project:',
       );
       expect(sampleProjectLogs).toHaveLength(0);
     });
@@ -155,7 +155,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST',
         { sync: { incremental: true } },
-        mockDb
+        mockDb,
       );
 
       expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
@@ -176,7 +176,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST',
         { sync: { incremental: true } },
-        mockDb
+        mockDb,
       );
 
       expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
@@ -190,10 +190,10 @@ describe('HulyService', () => {
         getHulySyncCursor: vi.fn().mockReturnValue(null),
         setHulySyncCursor: vi.fn(),
       };
-      mockRestClient.listIssues.mockResolvedValue({ 
-        issues: [], 
-        syncMeta: { latestModified: '2025-01-02T00:00:00Z', serverTime: '2025-01-02T00:00:00Z' }, 
-        count: 0 
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [],
+        syncMeta: { latestModified: '2025-01-02T00:00:00Z', serverTime: '2025-01-02T00:00:00Z' },
+        count: 0,
       });
 
       await fetchHulyIssues(mockRestClient, 'TEST', {}, mockDb);
@@ -221,11 +221,11 @@ describe('HulyService', () => {
         mockRestClient,
         'PROJ',
         { sync: { incremental: true } },
-        mockDb
+        mockDb,
       );
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[Huly] Incremental fetch for PROJ')
+        expect.stringContaining('[Huly] Incremental fetch for PROJ'),
       );
     });
   });
@@ -264,13 +264,13 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST-1',
         'In Progress',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
       expect(result).toBe(true);
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]')
+        expect.stringContaining('[DRY RUN]'),
       );
     });
 
@@ -304,13 +304,13 @@ describe('HulyService', () => {
       const result = await updateHulyIssueDescription(
         mockRestClient,
         'TEST-1',
-        'New description'
+        'New description',
       );
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'description',
-        'New description'
+        'New description',
       );
       expect(result).toBe(true);
     });
@@ -321,7 +321,7 @@ describe('HulyService', () => {
       const result = await updateHulyIssueDescription(
         mockMcpClient,
         'TEST-1',
-        'New description'
+        'New description',
       );
 
       expect(mockMcpClient.callTool).toHaveBeenCalledWith('huly_issue_ops', {
@@ -340,7 +340,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST-1',
         'New description',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
@@ -353,7 +353,7 @@ describe('HulyService', () => {
       const result = await updateHulyIssueDescription(
         mockRestClient,
         'TEST-1',
-        'New description'
+        'New description',
       );
 
       expect(result).toBe(false);
@@ -406,7 +406,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST',
         issueData,
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockRestClient.createIssue).not.toHaveBeenCalled();
@@ -468,7 +468,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST-1',
         'High',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
@@ -518,7 +518,7 @@ describe('HulyService', () => {
         mockRestClient,
         'TEST-1',
         'New Title',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
@@ -564,12 +564,12 @@ describe('HulyService', () => {
         hulyIssues,
         'TEST',
         {},
-        phase1UpdatedTasks
+        phase1UpdatedTasks,
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('was just updated in Phase 1')
+        expect.stringContaining('was just updated in Phase 1'),
       );
     });
 
@@ -583,7 +583,7 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        {}
+        {},
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
@@ -599,11 +599,11 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        {}
+        {},
       );
 
       expect(consoleSpy.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Huly issue TEST-999 not found')
+        expect.stringContaining('Huly issue TEST-999 not found'),
       );
     });
 
@@ -618,13 +618,13 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        {}
+        {},
       );
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'status',
-        expect.any(String)
+        expect.any(String),
       );
     });
 
@@ -653,13 +653,13 @@ describe('HulyService', () => {
         vibeTask,
         matchingIssues,
         'TEST',
-        {}
+        {},
       );
 
       // Due to case mismatch, status is always updated
       // This documents current behavior - 'Backlog' !== 'backlog'
       const statusUpdateCalls = mockRestClient.updateIssue.mock.calls.filter(
-        call => call[1] === 'status'
+        call => call[1] === 'status',
       );
       expect(statusUpdateCalls).toHaveLength(1);
       expect(statusUpdateCalls[0]).toEqual(['TEST-1', 'status', 'Backlog']);
@@ -670,7 +670,7 @@ describe('HulyService', () => {
         description: 'Updated description\n\n---\nSynced from Huly: TEST-1',
         status: 'backlog', // Match status to avoid status update
       });
-      
+
       // Issue with different description
       const issuesWithDiffDesc = [
         createMockHulyIssue({
@@ -686,13 +686,13 @@ describe('HulyService', () => {
         vibeTask,
         issuesWithDiffDesc,
         'TEST',
-        {}
+        {},
       );
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'description',
-        'Updated description'
+        'Updated description',
       );
     });
   });
@@ -715,7 +715,7 @@ describe('HulyService', () => {
     it('should pass config to fetchProjects', async () => {
       const config = { sync: { dryRun: true } };
       const service = createHulyService(config);
-      
+
       const mockProjects = [createMockHulyProject()];
       mockRestClient.listProjects.mockResolvedValue(mockProjects);
 
@@ -728,7 +728,7 @@ describe('HulyService', () => {
     it('should pass config to fetchIssues', async () => {
       const config = { sync: { incremental: true } };
       const service = createHulyService(config);
-      
+
       mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
 
       // Pass null for db - no cursor-based sync
@@ -757,7 +757,7 @@ describe('HulyService', () => {
       const result = await service.updateIssueDescription(
         mockRestClient,
         'TEST-1',
-        'New description'
+        'New description',
       );
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
@@ -767,7 +767,7 @@ describe('HulyService', () => {
     it('should pass config and phase1UpdatedTasks to syncVibeTaskToHuly', async () => {
       const config = { sync: { dryRun: false } };
       const service = createHulyService(config);
-      
+
       const vibeTask = {
         id: 'task-1',
         title: 'Test',
@@ -782,7 +782,7 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        phase1UpdatedTasks
+        phase1UpdatedTasks,
       );
 
       // Should skip because task was in phase1UpdatedTasks
@@ -815,14 +815,14 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        {}
+        {},
       );
 
       // Should try to update description since null !== 'Description'
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'description',
-        'Description'
+        'Description',
       );
     });
 
@@ -839,11 +839,11 @@ describe('HulyService', () => {
         vibeTask,
         [],
         'TEST',
-        {}
+        {},
       );
 
       expect(consoleSpy.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Huly issue TEST-1 not found')
+        expect.stringContaining('Huly issue TEST-1 not found'),
       );
     });
 
@@ -875,12 +875,12 @@ describe('HulyService', () => {
         vibeTask,
         hulyIssues,
         'TEST',
-        {}
+        {},
       );
 
       // First part before first separator should match
       const descUpdateCalls = mockRestClient.updateIssue.mock.calls.filter(
-        call => call[1] === 'description'
+        call => call[1] === 'description',
       );
       expect(descUpdateCalls).toHaveLength(0);
     });

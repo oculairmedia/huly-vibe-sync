@@ -2,16 +2,16 @@
 
 /**
  * Agent Management CLI
- * 
+ *
  * Allows modification of deployed Letta agents without recreation:
  * - Add/update/delete memory blocks
  * - Attach/detach tools
  * - Update agent configuration
  * - Bulk operations across all agents
- * 
+ *
  * Usage:
  *   node manage-agents.js <command> [options]
- * 
+ *
  * Commands:
  *   list-agents                     - List all Huly agents
  *   show-agent <name|id>           - Show agent details with memory blocks
@@ -38,7 +38,7 @@ const lettaService = new LettaService(
   {
     model: process.env.LETTA_MODEL,
     embedding: process.env.LETTA_EMBEDDING,
-  }
+  },
 );
 
 const db = new SyncDatabase('./logs/sync-state.db');
@@ -49,12 +49,12 @@ db.initialize();
  */
 async function listAgents() {
   console.log('\n📋 LISTING ALL HULY AGENTS\n');
-  
+
   const agents = await lettaService.listAgents();
   const hulyAgents = agents.filter(a => a.name.startsWith('Huly-'));
-  
+
   console.log(`Found ${hulyAgents.length} Huly agents:\n`);
-  
+
   for (const agent of hulyAgents) {
     const project = agent.name.replace('Huly-', '').replace('-PM', '');
     console.log(`  ${agent.name}`);
@@ -71,9 +71,9 @@ async function listAgents() {
  */
 async function showAgent(nameOrId) {
   console.log(`\n🔍 SHOWING AGENT: ${nameOrId}\n`);
-  
+
   let agent;
-  
+
   // Try to find by name or ID
   if (nameOrId.startsWith('agent-')) {
     agent = await lettaService.getAgent(nameOrId);
@@ -81,41 +81,41 @@ async function showAgent(nameOrId) {
     const agents = await lettaService.listAgents();
     const agentName = nameOrId.startsWith('Huly-') ? nameOrId : `Huly-${nameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${nameOrId}`);
       process.exit(1);
     }
   }
-  
+
   console.log(`Name: ${agent.name}`);
   console.log(`ID: ${agent.id}`);
   console.log(`Type: ${agent.agent_type}`);
   console.log(`Model: ${agent.model}`);
   console.log(`Embedding: ${agent.embedding_config?.embedding_model || 'N/A'}`);
   console.log('');
-  
+
   // Get memory blocks
   const blocks = await lettaService.client.agents.blocks.list(agent.id, { limit: 50 });
-  
+
   console.log(`📦 MEMORY BLOCKS (${blocks.length}):\n`);
-  
+
   for (const block of blocks) {
-    const valuePreview = typeof block.value === 'string' 
+    const valuePreview = typeof block.value === 'string'
       ? block.value.substring(0, 100).replace(/\n/g, ' ')
       : JSON.stringify(block.value).substring(0, 100);
-    
+
     console.log(`  ${block.label}`);
     console.log(`    ID: ${block.id}`);
     console.log(`    Size: ${block.value?.length || 0} chars`);
     console.log(`    Preview: ${valuePreview}...`);
     console.log('');
   }
-  
+
   // Get attached tools
   const tools = await lettaService.client.agents.tools.list(agent.id);
   console.log(`🔧 ATTACHED TOOLS (${tools.length}):\n`);
-  
+
   for (const tool of tools) {
     console.log(`  ${tool.name} (${tool.id})`);
   }
@@ -127,7 +127,7 @@ async function showAgent(nameOrId) {
  */
 async function updateBlock(agentNameOrId, blockLabel, interactive = true) {
   console.log(`\n✏️  UPDATING BLOCK: ${blockLabel} for ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -136,25 +136,25 @@ async function updateBlock(agentNameOrId, blockLabel, interactive = true) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   // Get project data from database
   const projectId = agent.name.replace('Huly-', '').replace('-PM', '');
   const project = db.getProject(projectId);
-  
+
   if (!project) {
     console.error(`❌ Project not found in database: ${projectId}`);
     process.exit(1);
   }
-  
+
   // Build the block content based on label
   let blockValue;
-  
+
   switch (blockLabel) {
     case 'project':
       // Need Huly and Vibe project data
@@ -163,43 +163,43 @@ async function updateBlock(agentNameOrId, blockLabel, interactive = true) {
         { name: project.name, identifier: project.identifier, id: project.huly_id },
         { id: project.vibe_id },
         project.filesystem_path,
-        project.git_url
+        project.git_url,
       );
       break;
-      
+
     case 'board_config':
       console.log('Building board configuration...');
       blockValue = buildBoardConfig();
       break;
-      
+
     case 'persona':
       console.log('Building persona...');
       blockValue = lettaService._buildPersonaBlock(project.identifier, project.name);
       break;
-      
+
     default:
       console.error(`❌ Unknown block label: ${blockLabel}`);
       console.log('Supported blocks: project, board_config, persona');
       console.log('For other blocks (board_metrics, hotspots, backlog_summary, change_log), use the main sync');
       process.exit(1);
   }
-  
+
   // Show preview
   const preview = typeof blockValue === 'string'
     ? blockValue.substring(0, 200)
     : JSON.stringify(blockValue, null, 2).substring(0, 200);
-  
+
   console.log(`\nBlock preview:\n${preview}...\n`);
-  
+
   if (interactive) {
     // Confirm before updating
     console.log('Press Ctrl+C to cancel, or wait 3 seconds to continue...');
     await new Promise(resolve => setTimeout(resolve, 3000));
   }
-  
+
   // Update the block
   await lettaService.upsertMemoryBlocks(agent.id, [{ label: blockLabel, value: blockValue }]);
-  
+
   console.log(`✅ Block "${blockLabel}" updated for agent ${agent.name}`);
 }
 
@@ -208,19 +208,19 @@ async function updateBlock(agentNameOrId, blockLabel, interactive = true) {
  */
 async function updateBlockAll(blockLabel) {
   console.log(`\n✏️  UPDATING BLOCK: ${blockLabel} for ALL agents\n`);
-  
+
   const agents = await lettaService.listAgents();
   const hulyAgents = agents.filter(a => a.name.startsWith('Huly-'));
-  
+
   console.log(`Found ${hulyAgents.length} Huly agents`);
   console.log(`\n⚠️  This will update the "${blockLabel}" block for ALL agents`);
   console.log('Press Ctrl+C to cancel, or wait 5 seconds to continue...\n');
   await new Promise(resolve => setTimeout(resolve, 5000));
-  
+
   let updated = 0;
-  let skipped = 0;
+  const skipped = 0;
   let errors = 0;
-  
+
   for (const agent of hulyAgents) {
     try {
       console.log(`\nProcessing ${agent.name}...`);
@@ -231,7 +231,7 @@ async function updateBlockAll(blockLabel) {
       errors++;
     }
   }
-  
+
   console.log('\n' + '='.repeat(80));
   console.log(`\n✅ Updated: ${updated}`);
   console.log(`⏭️  Skipped: ${skipped}`);
@@ -244,7 +244,7 @@ async function updateBlockAll(blockLabel) {
  */
 async function addBlock(agentNameOrId, blockLabel, blockValue) {
   console.log(`\n➕ ADDING BLOCK: ${blockLabel} to ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -253,25 +253,25 @@ async function addBlock(agentNameOrId, blockLabel, blockValue) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   // Check if block already exists
   const blocks = await lettaService.client.agents.blocks.list(agent.id);
   const existing = blocks.find(b => b.label === blockLabel);
-  
+
   if (existing) {
     console.error(`❌ Block "${blockLabel}" already exists. Use update-block to modify it.`);
     process.exit(1);
   }
-  
+
   // Add the block
   await lettaService.upsertMemoryBlocks(agent.id, [{ label: blockLabel, value: blockValue }]);
-  
+
   console.log(`✅ Block "${blockLabel}" added to agent ${agent.name}`);
 }
 
@@ -280,7 +280,7 @@ async function addBlock(agentNameOrId, blockLabel, blockValue) {
  */
 async function deleteBlock(agentNameOrId, blockLabel) {
   console.log(`\n🗑️  DELETING BLOCK: ${blockLabel} from ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -289,30 +289,30 @@ async function deleteBlock(agentNameOrId, blockLabel) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   // Find the block
   const blocks = await lettaService.client.agents.blocks.list(agent.id);
   const block = blocks.find(b => b.label === blockLabel);
-  
+
   if (!block) {
     console.error(`❌ Block "${blockLabel}" not found on agent ${agent.name}`);
     process.exit(1);
   }
-  
+
   console.log(`⚠️  About to delete block "${blockLabel}" (${block.value?.length || 0} chars)`);
   console.log('Press Ctrl+C to cancel, or wait 3 seconds to continue...');
   await new Promise(resolve => setTimeout(resolve, 3000));
-  
+
   // Detach and delete the block
   await lettaService.client.agents.blocks.detach(agent.id, block.id);
   await lettaService.client.blocks.delete(block.id);
-  
+
   console.log(`✅ Block "${blockLabel}" deleted from agent ${agent.name}`);
 }
 
@@ -321,7 +321,7 @@ async function deleteBlock(agentNameOrId, blockLabel) {
  */
 async function listTools(agentNameOrId) {
   console.log(`\n🔧 LISTING TOOLS for ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -330,18 +330,18 @@ async function listTools(agentNameOrId) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   const tools = await lettaService.client.agents.tools.list(agent.id);
-  
+
   console.log(`Agent: ${agent.name}`);
   console.log(`Tools: ${tools.length}\n`);
-  
+
   for (const tool of tools) {
     console.log(`  ${tool.name}`);
     console.log(`    ID: ${tool.id}`);
@@ -355,7 +355,7 @@ async function listTools(agentNameOrId) {
  */
 async function attachTool(agentNameOrId, toolId) {
   console.log(`\n🔗 ATTACHING TOOL ${toolId} to ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -364,25 +364,25 @@ async function attachTool(agentNameOrId, toolId) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   // Check if already attached
   const tools = await lettaService.client.agents.tools.list(agent.id);
   const alreadyAttached = tools.some(t => t.id === toolId);
-  
+
   if (alreadyAttached) {
     console.log(`⏭️  Tool already attached to agent`);
     return;
   }
-  
+
   // Attach the tool
   await lettaService.client.agents.tools.attach(agent.id, toolId);
-  
+
   console.log(`✅ Tool ${toolId} attached to agent ${agent.name}`);
 }
 
@@ -391,7 +391,7 @@ async function attachTool(agentNameOrId, toolId) {
  */
 async function detachTool(agentNameOrId, toolId) {
   console.log(`\n🔓 DETACHING TOOL ${toolId} from ${agentNameOrId}\n`);
-  
+
   // Find agent
   let agent;
   if (agentNameOrId.startsWith('agent-')) {
@@ -400,29 +400,29 @@ async function detachTool(agentNameOrId, toolId) {
     const agents = await lettaService.listAgents();
     const agentName = agentNameOrId.startsWith('Huly-') ? agentNameOrId : `Huly-${agentNameOrId}-PM`;
     agent = agents.find(a => a.name === agentName);
-    
+
     if (!agent) {
       console.error(`❌ Agent not found: ${agentNameOrId}`);
       process.exit(1);
     }
   }
-  
+
   // Check if attached
   const tools = await lettaService.client.agents.tools.list(agent.id);
   const isAttached = tools.some(t => t.id === toolId);
-  
+
   if (!isAttached) {
     console.log(`⏭️  Tool not attached to agent`);
     return;
   }
-  
+
   console.log(`⚠️  About to detach tool ${toolId}`);
   console.log('Press Ctrl+C to cancel, or wait 3 seconds to continue...');
   await new Promise(resolve => setTimeout(resolve, 3000));
-  
+
   // Detach the tool
   await lettaService.client.agents.tools.detach(agent.id, toolId);
-  
+
   console.log(`✅ Tool ${toolId} detached from agent ${agent.name}`);
 }
 
@@ -432,13 +432,13 @@ async function detachTool(agentNameOrId, toolId) {
 async function main() {
   const command = process.argv[2];
   const args = process.argv.slice(3);
-  
+
   try {
     switch (command) {
       case 'list-agents':
         await listAgents();
         break;
-        
+
       case 'show-agent':
         if (args.length < 1) {
           console.error('Usage: manage-agents.js show-agent <name|id>');
@@ -446,7 +446,7 @@ async function main() {
         }
         await showAgent(args[0]);
         break;
-        
+
       case 'update-block':
         if (args.length < 2) {
           console.error('Usage: manage-agents.js update-block <agent> <label>');
@@ -454,7 +454,7 @@ async function main() {
         }
         await updateBlock(args[0], args[1]);
         break;
-        
+
       case 'update-block-all':
         if (args.length < 1) {
           console.error('Usage: manage-agents.js update-block-all <label>');
@@ -462,7 +462,7 @@ async function main() {
         }
         await updateBlockAll(args[0]);
         break;
-        
+
       case 'add-block':
         if (args.length < 3) {
           console.error('Usage: manage-agents.js add-block <agent> <label> <value>');
@@ -470,7 +470,7 @@ async function main() {
         }
         await addBlock(args[0], args[1], args[2]);
         break;
-        
+
       case 'delete-block':
         if (args.length < 2) {
           console.error('Usage: manage-agents.js delete-block <agent> <label>');
@@ -478,7 +478,7 @@ async function main() {
         }
         await deleteBlock(args[0], args[1]);
         break;
-        
+
       case 'update-persona':
         if (args.length < 1) {
           console.error('Usage: manage-agents.js update-persona <agent>');
@@ -486,11 +486,11 @@ async function main() {
         }
         await updateBlock(args[0], 'persona');
         break;
-        
+
       case 'update-persona-all':
         await updateBlockAll('persona');
         break;
-        
+
       case 'list-tools':
         if (args.length < 1) {
           console.error('Usage: manage-agents.js list-tools <agent>');
@@ -498,7 +498,7 @@ async function main() {
         }
         await listTools(args[0]);
         break;
-        
+
       case 'attach-tool':
         if (args.length < 2) {
           console.error('Usage: manage-agents.js attach-tool <agent> <tool-id>');
@@ -506,7 +506,7 @@ async function main() {
         }
         await attachTool(args[0], args[1]);
         break;
-        
+
       case 'detach-tool':
         if (args.length < 2) {
           console.error('Usage: manage-agents.js detach-tool <agent> <tool-id>');
@@ -514,7 +514,7 @@ async function main() {
         }
         await detachTool(args[0], args[1]);
         break;
-        
+
       default:
         console.log(`
 🤖 AGENT MANAGEMENT CLI
@@ -551,7 +551,7 @@ Examples:
 `);
         process.exit(1);
     }
-    
+
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}`);
     if (process.env.DEBUG) {

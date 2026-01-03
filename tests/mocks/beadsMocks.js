@@ -1,6 +1,6 @@
 /**
  * Mock Factories for Beads CLI Responses
- * 
+ *
  * Provides reusable mock data for Beads issue tracker testing.
  * Beads uses a CLI interface (bd command) that returns JSON output.
  */
@@ -13,7 +13,7 @@
 export function createMockBeadsIssue(overrides = {}) {
   const id = overrides.id || 'test-project-abc';
   const number = id.split('-').pop() || 'abc';
-  
+
   return {
     id,
     title: overrides.title || `Test Issue ${number}`,
@@ -38,7 +38,7 @@ export function createMockBeadsIssue(overrides = {}) {
 export function createMockBeadsIssueList(count = 3, defaults = {}) {
   const issues = [];
   const suffixes = ['abc', 'def', 'ghi', 'jkl', 'mno', 'pqr', 'stu', 'vwx', 'yza', 'bcd'];
-  
+
   for (let i = 0; i < count; i++) {
     const suffix = suffixes[i % suffixes.length];
     issues.push(createMockBeadsIssue({
@@ -48,7 +48,7 @@ export function createMockBeadsIssueList(count = 3, defaults = {}) {
       ...defaults,
     }));
   }
-  
+
   return issues;
 }
 
@@ -118,14 +118,14 @@ export function createMockBeadsDbRecord(overrides = {}) {
 
 /**
  * Create mock execSync function for testing BeadsService
- * 
+ *
  * Usage:
  *   const mockExec = createMockExecSync({
  *     'bd list --json --no-daemon': createMockListOutput(),
  *     'bd show issue-123 --json --no-daemon': createMockShowOutput(),
  *   });
  *   vi.spyOn(child_process, 'execSync').mockImplementation(mockExec);
- * 
+ *
  * @param {Object} commandOutputs - Map of command strings to outputs
  * @param {Object} options - Additional options
  * @param {boolean} options.throwOnUnknown - Throw error for unknown commands (default: true)
@@ -133,23 +133,23 @@ export function createMockBeadsDbRecord(overrides = {}) {
  */
 export function createMockExecSync(commandOutputs = {}, options = {}) {
   const { throwOnUnknown = true } = options;
-  
+
   return (command, execOptions = {}) => {
     // Normalize command for matching (remove extra spaces)
     const normalizedCommand = command.replace(/\s+/g, ' ').trim();
-    
+
     // Check for exact match first
     if (commandOutputs[normalizedCommand] !== undefined) {
       return commandOutputs[normalizedCommand];
     }
-    
+
     // Check for partial match (command starts with key)
     for (const [key, value] of Object.entries(commandOutputs)) {
       if (normalizedCommand.startsWith(key) || normalizedCommand.includes(key)) {
         return value;
       }
     }
-    
+
     // Check for pattern match (regex)
     for (const [key, value] of Object.entries(commandOutputs)) {
       if (key.startsWith('/') && key.endsWith('/')) {
@@ -159,13 +159,13 @@ export function createMockExecSync(commandOutputs = {}, options = {}) {
         }
       }
     }
-    
+
     if (throwOnUnknown) {
       const error = new Error(`Command failed: ${command}`);
       error.status = 1;
       throw error;
     }
-    
+
     return '';
   };
 }
@@ -173,16 +173,16 @@ export function createMockExecSync(commandOutputs = {}, options = {}) {
 /**
  * Create a mock function that tracks calls and returns configured responses
  * Useful for testing that BeadsService makes correct CLI calls
- * 
+ *
  * @param {Object} responses - Map of command patterns to responses
  * @returns {Object} Object with mock function and call history
  */
 export function createMockExecTracker(responses = {}) {
   const calls = [];
-  
+
   const mockFn = (command, options = {}) => {
     calls.push({ command, options, timestamp: Date.now() });
-    
+
     // Find matching response
     for (const [pattern, response] of Object.entries(responses)) {
       if (command.includes(pattern)) {
@@ -192,11 +192,11 @@ export function createMockExecTracker(responses = {}) {
         return response;
       }
     }
-    
+
     // Default: return empty string
     return '';
   };
-  
+
   return {
     mock: mockFn,
     calls,
@@ -267,7 +267,7 @@ export const SAMPLE_ISSUES = {
     priority: 2,
     issue_type: 'task',
   }),
-  
+
   closedBug: createMockBeadsIssue({
     id: 'project-closed1',
     title: 'Fixed Bug',
@@ -276,7 +276,7 @@ export const SAMPLE_ISSUES = {
     issue_type: 'bug',
     closed_at: new Date().toISOString(),
   }),
-  
+
   urgentFeature: createMockBeadsIssue({
     id: 'project-urgent1',
     title: 'Urgent Feature',
@@ -284,7 +284,7 @@ export const SAMPLE_ISSUES = {
     priority: 0, // P0 - Urgent
     issue_type: 'feature',
   }),
-  
+
   lowPriorityChore: createMockBeadsIssue({
     id: 'project-chore1',
     title: 'Cleanup Chore',
@@ -292,7 +292,7 @@ export const SAMPLE_ISSUES = {
     priority: 4, // P4 - No priority
     issue_type: 'chore',
   }),
-  
+
   epicWithDescription: createMockBeadsIssue({
     id: 'project-epic1',
     title: 'Big Epic',
@@ -311,7 +311,7 @@ export const SAMPLE_ISSUES = {
 export function createSyncPair(overrides = {}) {
   const identifier = overrides.identifier || 'TEST-1';
   const title = overrides.title || 'Synced Issue';
-  
+
   return {
     hulyIssue: {
       identifier,
@@ -329,7 +329,7 @@ export function createSyncPair(overrides = {}) {
       status: overrides.beadsStatus || 'open',
       priority: overrides.beadsPriority ?? 2,
       issue_type: overrides.beadsType || 'task',
-      updated_at: overrides.beadsModifiedOn 
+      updated_at: overrides.beadsModifiedOn
         ? new Date(overrides.beadsModifiedOn).toISOString()
         : new Date().toISOString(),
     }),

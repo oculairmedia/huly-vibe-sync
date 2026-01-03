@@ -2,7 +2,7 @@
 
 /**
  * Cleanup Huly Agents
- * 
+ *
  * Deletes all Huly PM agents (agents starting with "Huly-") from Letta
  * to allow fresh recreation with correct primary agents.
  */
@@ -34,8 +34,8 @@ function makeRequest(method, path, body = null) {
       method: method,
       headers: {
         'Authorization': `Bearer ${LETTA_PASSWORD}`,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     };
 
     const req = httpModule.request(options, (res) => {
@@ -88,8 +88,8 @@ async function cleanup() {
     console.log(`✓ Found ${allAgents.length} total agents\n`);
 
     // Filter Huly agents (those starting with "Huly-")
-    const hulyAgents = allAgents.filter(agent => 
-      agent.name && agent.name.startsWith('Huly-')
+    const hulyAgents = allAgents.filter(agent =>
+      agent.name && agent.name.startsWith('Huly-'),
     );
 
     console.log(`🎯 Found ${hulyAgents.length} Huly agents to delete\n`);

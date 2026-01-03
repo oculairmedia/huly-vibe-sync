@@ -167,7 +167,7 @@ async function main() {
     console.log(`Identifier: ${identifier}`);
 
     // Check if project exists by identifier or name
-    let existingProject = projectsByIdentifier.get(identifier) || projectsByName.get(repo.name);
+    const existingProject = projectsByIdentifier.get(identifier) || projectsByName.get(repo.name);
 
     if (existingProject) {
       console.log(`[Huly] Project exists: ${existingProject.name} (${existingProject.identifier})`);

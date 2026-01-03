@@ -39,7 +39,7 @@ async function recreateProjectLettaFiles() {
       const { identifier, name, letta_agent_id, filesystem_path } = project;
 
       // Determine project path
-      let projectPath = filesystem_path;
+      const projectPath = filesystem_path;
 
       // If no filesystem path in DB, try to extract from Huly project
       // This requires fetching from Huly API, so we'll skip if not available
@@ -81,7 +81,7 @@ async function recreateProjectLettaFiles() {
         fs.writeFileSync(
           gitignorePath,
           '# Local agent state\nsettings.local.json\n*.log\n',
-          'utf8'
+          'utf8',
         );
       }
 

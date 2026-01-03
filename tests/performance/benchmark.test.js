@@ -1,6 +1,6 @@
 /**
  * Performance Benchmarking Suite
- * 
+ *
  * Tests performance characteristics of key operations
  * Measures execution time for critical operations
  */
@@ -33,7 +33,7 @@ describe('Performance Benchmarks', () => {
 
     it('should insert 100 projects efficiently', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 100; i++) {
         db.upsertProject({
           identifier: `BENCH${i}`,
@@ -41,7 +41,7 @@ describe('Performance Benchmarks', () => {
           description: 'Performance test project',
         });
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(100); // Should complete in < 100ms
     });
@@ -55,7 +55,7 @@ describe('Performance Benchmarks', () => {
       });
 
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         db.upsertIssue({
           identifier: `PERF-${i}`,
@@ -66,7 +66,7 @@ describe('Performance Benchmarks', () => {
           priority: 'Medium',
         });
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(500); // Should complete in < 500ms
     });
@@ -79,11 +79,11 @@ describe('Performance Benchmarks', () => {
           name: `Test Project ${i}`,
         });
       }
-      
+
       const start = Date.now();
       const projects = db.getAllProjects();
       const duration = Date.now() - start;
-      
+
       expect(projects).toHaveLength(50);
       expect(duration).toBeLessThan(10); // Should query in < 10ms
     });
@@ -93,7 +93,7 @@ describe('Performance Benchmarks', () => {
         identifier: 'PERF',
         name: 'Performance Test',
       });
-      
+
       for (let i = 0; i < 100; i++) {
         db.upsertIssue({
           identifier: `PERF-${i}`,
@@ -101,11 +101,11 @@ describe('Performance Benchmarks', () => {
           title: `Issue ${i}`,
         });
       }
-      
+
       const start = Date.now();
       const issues = db.getProjectIssues('PERF');
       const duration = Date.now() - start;
-      
+
       expect(issues).toHaveLength(100);
       expect(duration).toBeLessThan(20); // Should query in < 20ms
     });
@@ -115,23 +115,23 @@ describe('Performance Benchmarks', () => {
         identifier: 'PERF',
         name: 'Performance Test',
       });
-      
+
       db.upsertIssue({
         identifier: 'PERF-1',
         project_identifier: 'PERF',
         title: 'Test Issue',
         status: 'Todo',
       });
-      
+
       const start = Date.now();
-      
+
       db.upsertIssue({
         identifier: 'PERF-1',
         project_identifier: 'PERF',
         title: 'Test Issue',
         status: 'Done',
       });
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(5); // Should update in < 5ms
     });
@@ -143,35 +143,35 @@ describe('Performance Benchmarks', () => {
 
     it('should perform Huly to Vibe mapping efficiently (1000 calls)', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         mapHulyStatusToVibe(testStatuses[i % testStatuses.length]);
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(10); // Should complete in < 10ms
     });
 
     it('should perform Vibe to Huly mapping efficiently (1000 calls)', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         mapVibeStatusToHuly(vibeStatuses[i % vibeStatuses.length]);
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(10); // Should complete in < 10ms
     });
 
     it('should perform roundtrip conversion efficiently (500 cycles)', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 500; i++) {
         const status = testStatuses[i % testStatuses.length];
         const vibe = mapHulyStatusToVibe(status);
         mapVibeStatusToHuly(vibe);
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(10); // Should complete in < 10ms
     });
@@ -184,13 +184,13 @@ describe('Performance Benchmarks', () => {
         Issue TEST-2: Second issue
         Issue TEST-3: Third issue
       `;
-      
+
       const start = Date.now();
-      
+
       for (let i = 0; i < 100; i++) {
         parseIssuesFromText(issueText);
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(50); // Should complete in < 50ms
     });
@@ -201,13 +201,13 @@ describe('Performance Benchmarks', () => {
         Project DEMO: Demo Project
         Project PROD: Production Project
       `;
-      
+
       const start = Date.now();
-      
+
       for (let i = 0; i < 100; i++) {
         parseProjectsFromText(projectText);
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(50); // Should complete in < 50ms
     });
@@ -216,11 +216,11 @@ describe('Performance Benchmarks', () => {
   describe('HTTP Connection Pool Performance', () => {
     it('should get pool stats efficiently (1000 calls)', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         getPoolStats();
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(50); // Should complete in < 50ms
     });
@@ -232,16 +232,16 @@ describe('Performance Benchmarks', () => {
         'http://api.example.com:8080',
         'https://secure.example.com:8443',
       ];
-      
+
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         const url = urls[i % urls.length];
         const isHttps = url.startsWith('https://');
         // Simulate agent selection logic
         const agent = isHttps ? 'httpsAgent' : 'httpAgent';
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(5); // Should complete in < 5ms
     });
@@ -250,44 +250,44 @@ describe('Performance Benchmarks', () => {
   describe('Mock Factory Performance', () => {
     it('should create 1000 mock projects efficiently', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         createMockHulyProject({ identifier: `MOCK${i}` });
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(100); // Should complete in < 100ms
     });
 
     it('should create 1000 mock issues efficiently', () => {
       const start = Date.now();
-      
+
       for (let i = 0; i < 1000; i++) {
         createMockHulyIssue({ identifier: `TEST-${i}` });
       }
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(100); // Should complete in < 100ms
     });
 
     it('should create batch of 100 projects efficiently', () => {
       const start = Date.now();
-      
+
       Array.from({ length: 100 }, (_, i) =>
-        createMockHulyProject({ identifier: `BATCH${i}` })
+        createMockHulyProject({ identifier: `BATCH${i}` }),
       );
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(20); // Should complete in < 20ms
     });
 
     it('should create batch of 100 issues efficiently', () => {
       const start = Date.now();
-      
+
       Array.from({ length: 100 }, (_, i) =>
-        createMockHulyIssue({ identifier: `TEST-${i}` })
+        createMockHulyIssue({ identifier: `TEST-${i}` }),
       );
-      
+
       const duration = Date.now() - start;
       expect(duration).toBeLessThan(20); // Should complete in < 20ms
     });
@@ -366,7 +366,7 @@ describe('Performance Benchmarks', () => {
               identifier: `CONC${i}`,
               name: `Concurrent ${i}`,
             });
-          })
+          }),
         );
       }
 

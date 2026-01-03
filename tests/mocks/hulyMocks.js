@@ -1,6 +1,6 @@
 /**
  * Mock Factories for Huly API Responses
- * 
+ *
  * Provides reusable mock data for Huly REST API testing
  */
 
@@ -12,7 +12,7 @@
 export function createMockHulyProject(overrides = {}) {
   const identifier = overrides.identifier || 'TEST';
   const name = overrides.name || 'Test Project';
-  
+
   return {
     _id: overrides._id || `project-${identifier.toLowerCase()}`,
     identifier,
@@ -38,7 +38,7 @@ export function createMockHulyIssue(overrides = {}) {
   const projectId = overrides.project || 'project-test';
   const number = overrides.number || 1;
   const identifier = overrides.identifier || `TEST-${number}`;
-  
+
   return {
     _id: overrides._id || `issue-${identifier.toLowerCase()}`,
     identifier,
@@ -105,15 +105,15 @@ export function createMockToolResponse(toolName, content, overrides = {}) {
  * @returns {Object} Mock list projects response
  */
 export function createMockListProjectsResponse(projects = []) {
-  const projectList = Array.isArray(projects) 
-    ? projects 
-    : Array.from({ length: projects }, (_, i) => 
-        createMockHulyProject({ 
-          identifier: `PROJ${i + 1}`, 
-          name: `Project ${i + 1}` 
-        })
+  const projectList = Array.isArray(projects)
+    ? projects
+    : Array.from({ length: projects }, (_, i) =>
+        createMockHulyProject({
+          identifier: `PROJ${i + 1}`,
+          name: `Project ${i + 1}`,
+        }),
       );
-  
+
   return {
     projects: projectList,
     total: projectList.length,
@@ -135,9 +135,9 @@ export function createMockListIssuesResponse(issues = [], projectId = 'TEST') {
           identifier: `${projectId}-${i + 1}`,
           number: i + 1,
           project: `project-${projectId.toLowerCase()}`,
-        })
+        }),
       );
-  
+
   return {
     issues: issueList,
     total: issueList.length,
@@ -152,7 +152,7 @@ export function createMockListIssuesResponse(issues = [], projectId = 'TEST') {
  */
 export function createMockCreateIssueResponse(issueData = {}) {
   const issue = createMockHulyIssue(issueData);
-  
+
   return {
     success: true,
     issue,
@@ -206,7 +206,7 @@ export function createMockProjectsWithIssues(projectCount = 3, issuesPerProject 
       name: `Project ${i + 1}`,
     });
   });
-  
+
   const issuesByProject = {};
   projects.forEach((project, i) => {
     const identifier = project.identifier;
@@ -218,10 +218,10 @@ export function createMockProjectsWithIssues(projectCount = 3, issuesPerProject 
         project: project._id,
         status: ['Backlog', 'In Progress', 'In Review', 'Done'][j % 4],
         priority: ['Low', 'Medium', 'High'][j % 3],
-      })
+      }),
     );
   });
-  
+
   return {
     projects,
     issuesByProject,
@@ -247,7 +247,7 @@ export function createHulyApiMocks(baseUrl, options = {}) {
       method: 'POST',
       response: createMockToolResponse(
         'huly_list_projects',
-        createMockListProjectsResponse(options.projects || [])
+        createMockListProjectsResponse(options.projects || []),
       ),
     },
     listIssues: (projectId) => ({
@@ -255,7 +255,7 @@ export function createHulyApiMocks(baseUrl, options = {}) {
       method: 'POST',
       response: createMockToolResponse(
         'huly_list_issues',
-        createMockListIssuesResponse(options.issues || [], projectId)
+        createMockListIssuesResponse(options.issues || [], projectId),
       ),
     }),
     createIssue: (issueData) => ({
@@ -263,7 +263,7 @@ export function createHulyApiMocks(baseUrl, options = {}) {
       method: 'POST',
       response: createMockToolResponse(
         'huly_create_issue',
-        createMockCreateIssueResponse(issueData)
+        createMockCreateIssueResponse(issueData),
       ),
     }),
     updateIssue: (issueId, field, value) => ({
@@ -271,7 +271,7 @@ export function createHulyApiMocks(baseUrl, options = {}) {
       method: 'POST',
       response: createMockToolResponse(
         'huly_update_issue',
-        createMockUpdateIssueResponse(issueId, field, value)
+        createMockUpdateIssueResponse(issueId, field, value),
       ),
     }),
   };

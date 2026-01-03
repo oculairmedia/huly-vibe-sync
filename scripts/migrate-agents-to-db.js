@@ -19,12 +19,12 @@ dotenv.config();
 function loadAgentStateFromFile() {
   const lettaDir = path.join(__dirname, '.letta');
   const settingsPath = path.join(lettaDir, 'settings.local.json');
-  
+
   if (!fs.existsSync(settingsPath)) {
     console.error('No settings.local.json found at:', settingsPath);
     return null;
   }
-  
+
   const data = fs.readFileSync(settingsPath, 'utf8');
   return JSON.parse(data);
 }
@@ -55,7 +55,7 @@ async function main() {
     try {
       // Check if project exists in DB
       const existingProject = db.getProject(projectIdentifier);
-      
+
       if (!existingProject) {
         console.log(`⏭️  ${projectIdentifier}: Project not in DB, skipping`);
         skipped++;

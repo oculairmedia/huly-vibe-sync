@@ -24,11 +24,11 @@ async function main() {
   // Initialize services
   const lettaService = new LettaService(
     process.env.LETTA_API_URL || 'http://192.168.50.90:8283',
-    process.env.LETTA_PASSWORD || 'password'
+    process.env.LETTA_PASSWORD || 'password',
   );
 
   const hulyClient = new HulyRestClient(
-    process.env.HULY_API_URL || 'http://192.168.50.90:3458'
+    process.env.HULY_API_URL || 'http://192.168.50.90:3458',
   );
 
   // Fetch all Huly projects

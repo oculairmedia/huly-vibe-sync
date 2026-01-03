@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Cleanup Script: Delete all sources and folders from Letta
- * 
+ *
  * This clears all uploaded files and folders to allow a fresh start.
  * Agents will be preserved - only file storage is cleaned.
  */
@@ -66,12 +66,12 @@ async function main() {
   console.log('=== Cleanup Complete ===');
   console.log(`Total deleted: ${deletedSources} sources, ${deletedFolders} folders`);
   console.log(`Total errors: ${erroredSources + erroredFolders}`);
-  
+
   if (erroredSources + erroredFolders > 0) {
     console.log('\n⚠️  Some items could not be deleted. Check errors above.');
     process.exit(1);
   }
-  
+
   console.log('\n✓ All file storage cleaned successfully');
 }
 

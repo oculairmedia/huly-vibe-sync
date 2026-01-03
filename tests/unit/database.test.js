@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Database Module
- * 
+ *
  * Tests SQLite database operations for sync state management
  */
 
@@ -44,9 +44,9 @@ describe('SyncDatabase', () => {
 
     it('should create all required tables', () => {
       const tables = db.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table'"
+        "SELECT name FROM sqlite_master WHERE type='table'",
       ).all();
-      
+
       const tableNames = tables.map(t => t.name);
       expect(tableNames).toContain('sync_metadata');
       expect(tableNames).toContain('projects');
@@ -56,9 +56,9 @@ describe('SyncDatabase', () => {
 
     it('should create indexes', () => {
       const indexes = db.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index'"
+        "SELECT name FROM sqlite_master WHERE type='index'",
       ).all();
-      
+
       const indexNames = indexes.map(i => i.name);
       expect(indexNames.length).toBeGreaterThan(0);
       expect(indexNames).toContain('idx_projects_last_sync');
@@ -86,7 +86,7 @@ describe('SyncDatabase', () => {
       it('should return last sync timestamp after setting', () => {
         const timestamp = Date.now();
         db.setLastSync(timestamp);
-        
+
         const lastSync = db.getLastSync();
         expect(lastSync).toBe(timestamp);
       });
@@ -96,7 +96,7 @@ describe('SyncDatabase', () => {
       it('should store sync timestamp', () => {
         const timestamp = 1234567890;
         db.setLastSync(timestamp);
-        
+
         const lastSync = db.getLastSync();
         expect(lastSync).toBe(timestamp);
       });
@@ -104,7 +104,7 @@ describe('SyncDatabase', () => {
       it('should update existing timestamp', () => {
         db.setLastSync(1000);
         db.setLastSync(2000);
-        
+
         const lastSync = db.getLastSync();
         expect(lastSync).toBe(2000);
       });
@@ -290,7 +290,7 @@ describe('SyncDatabase', () => {
         const projects = db.getProjectsToSync(300000, {
           'TEST': newHash, // Description changed
         });
-        
+
         expect(projects).toHaveLength(1);
       });
 
@@ -306,7 +306,7 @@ describe('SyncDatabase', () => {
         const projects = db.getProjectsToSync(300000, {
           'TEST': 'some-hash',
         });
-        
+
         expect(projects).toHaveLength(1);
       });
 
@@ -452,7 +452,7 @@ describe('SyncDatabase', () => {
 
       it('should not return issues from other projects', () => {
         db.upsertProject({ identifier: 'OTHER', name: 'Other' });
-        
+
         db.upsertIssue({
           identifier: 'OTHER-1',
           project_identifier: 'OTHER',
@@ -467,7 +467,7 @@ describe('SyncDatabase', () => {
     describe('getModifiedIssues', () => {
       it('should return issues modified after timestamp', () => {
         const cutoffTime = Date.now();
-        
+
         // Create an old issue and manually set its last_sync_at
         db.upsertIssue({
           identifier: 'TEST-1',
@@ -477,13 +477,13 @@ describe('SyncDatabase', () => {
 
         // Force old timestamp
         db.db.prepare(
-          'UPDATE issues SET last_sync_at = ? WHERE identifier = ?'
+          'UPDATE issues SET last_sync_at = ? WHERE identifier = ?',
         ).run(cutoffTime - 10000, 'TEST-1');
 
         // Wait a moment to ensure different timestamp
         const waitMs = 10;
         const endTime = Date.now() + waitMs;
-        while (Date.now() < endTime) {}
+        while (Date.now() < endTime) { /* busy wait */ }
 
         // Create new issue (will have current last_sync_at)
         db.upsertIssue({
@@ -504,7 +504,7 @@ describe('SyncDatabase', () => {
       it('should create sync record', () => {
         const syncId = db.startSyncRun();
         expect(syncId).toBeGreaterThan(0);
-        
+
         const syncs = db.getRecentSyncs(1);
         expect(syncs).toHaveLength(1);
         expect(syncs[0].id).toBe(syncId);
@@ -514,7 +514,7 @@ describe('SyncDatabase', () => {
     describe('completeSyncRun', () => {
       it('should update sync record with results', () => {
         const syncId = db.startSyncRun();
-        
+
         db.completeSyncRun(syncId, {
           projectsProcessed: 5,
           projectsFailed: 1,
@@ -548,7 +548,7 @@ describe('SyncDatabase', () => {
     beforeEach(() => {
       db.upsertProject({ identifier: 'A', name: 'A', issue_count: 0 });
       db.upsertProject({ identifier: 'B', name: 'B', issue_count: 5 });
-      
+
       db.upsertIssue({
         identifier: 'B-1',
         project_identifier: 'B',
@@ -559,14 +559,14 @@ describe('SyncDatabase', () => {
         project_identifier: 'B',
         title: 'Issue 2',
       });
-      
+
       db.setLastSync(Date.now());
     });
 
     describe('getStats', () => {
       it('should return database statistics', () => {
         const stats = db.getStats();
-        
+
         expect(stats.totalProjects).toBe(2);
         expect(stats.activeProjects).toBe(1); // Only B has issues
         expect(stats.emptyProjects).toBe(1); // A has no issues
@@ -578,7 +578,7 @@ describe('SyncDatabase', () => {
     describe('getProjectSummary', () => {
       it('should return project summary with all projects', () => {
         const summary = db.getProjectSummary();
-        
+
         expect(Array.isArray(summary)).toBe(true);
         expect(summary).toHaveLength(2);
         expect(summary[0].identifier).toBe('B'); // Sorted by issue_count DESC
@@ -682,7 +682,7 @@ describe('SyncDatabase', () => {
 
       it('should maintain separate cursors per project', () => {
         db.upsertProject({ identifier: 'PROJ2', name: 'Project 2' });
-        
+
         db.setHulySyncCursor('TEST', '2025-01-01T00:00:00.000Z');
         db.setHulySyncCursor('PROJ2', '2025-02-01T00:00:00.000Z');
 
@@ -1002,7 +1002,7 @@ describe('SyncDatabase', () => {
 
         const issues = db.getAllIssues();
         expect(issues.length).toBeGreaterThanOrEqual(2);
-        
+
         const beadsIssues = issues.filter(i => i.project_identifier === 'BEADS');
         expect(beadsIssues).toHaveLength(2);
         expect(beadsIssues.find(i => i.beads_issue_id === 'project-1')).toBeTruthy();
@@ -1019,7 +1019,7 @@ describe('SyncDatabase', () => {
 
         const issues = db.getAllIssues();
         const found = issues.find(i => i.beads_issue_id === 'project-target');
-        
+
         expect(found).toBeTruthy();
         expect(found.identifier).toBe('BEADS-1');
       });
@@ -1055,7 +1055,7 @@ describe('SyncDatabase', () => {
           Promise.resolve(db.upsertProject({
             identifier: 'TEST',
             name: `Name ${i}`,
-          }))
+          })),
         );
       }
 
@@ -1071,10 +1071,10 @@ describe('SyncDatabase', () => {
       it('should compute consistent hash for same content', () => {
         const issue1 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
         const issue2 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
-        
+
         const hash1 = SyncDatabase.computeIssueContentHash(issue1);
         const hash2 = SyncDatabase.computeIssueContentHash(issue2);
-        
+
         expect(hash1).toBe(hash2);
         expect(hash1).toHaveLength(16);
       });
@@ -1082,17 +1082,17 @@ describe('SyncDatabase', () => {
       it('should compute different hash for different content', () => {
         const issue1 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
         const issue2 = { title: 'Test Changed', description: 'Desc', status: 'Todo', priority: 'High' };
-        
+
         const hash1 = SyncDatabase.computeIssueContentHash(issue1);
         const hash2 = SyncDatabase.computeIssueContentHash(issue2);
-        
+
         expect(hash1).not.toBe(hash2);
       });
 
       it('should handle null/undefined fields', () => {
         const issue = { title: 'Test' };
         const hash = SyncDatabase.computeIssueContentHash(issue);
-        
+
         expect(hash).toBeTruthy();
         expect(hash).toHaveLength(16);
       });
@@ -1104,7 +1104,7 @@ describe('SyncDatabase', () => {
       it('should detect status changes', () => {
         const issue1 = { title: 'Test', status: 'Todo' };
         const issue2 = { title: 'Test', status: 'Done' };
-        
+
         expect(SyncDatabase.computeIssueContentHash(issue1))
           .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
       });
@@ -1112,7 +1112,7 @@ describe('SyncDatabase', () => {
       it('should detect priority changes', () => {
         const issue1 = { title: 'Test', priority: 'Low' };
         const issue2 = { title: 'Test', priority: 'High' };
-        
+
         expect(SyncDatabase.computeIssueContentHash(issue1))
           .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
       });
@@ -1120,7 +1120,7 @@ describe('SyncDatabase', () => {
       it('should detect description changes', () => {
         const issue1 = { title: 'Test', description: 'Original' };
         const issue2 = { title: 'Test', description: 'Modified' };
-        
+
         expect(SyncDatabase.computeIssueContentHash(issue1))
           .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
       });
@@ -1136,14 +1136,14 @@ describe('SyncDatabase', () => {
       it('should return false when content matches', () => {
         const issue = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
         const hash = SyncDatabase.computeIssueContentHash(issue);
-        
+
         expect(SyncDatabase.hasIssueContentChanged(issue, hash)).toBe(false);
       });
 
       it('should return true when content differs', () => {
         const issue1 = { title: 'Test', status: 'Todo' };
         const hash = SyncDatabase.computeIssueContentHash(issue1);
-        
+
         const issue2 = { title: 'Test', status: 'Done' };
         expect(SyncDatabase.hasIssueContentChanged(issue2, hash)).toBe(true);
       });
@@ -1233,7 +1233,7 @@ describe('SyncDatabase', () => {
 
       it('should store huly_content_hash separately', () => {
         db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
-        
+
         const hulyHash = SyncDatabase.computeIssueContentHash({
           title: 'Huly Title',
           status: 'In Progress',
@@ -1255,7 +1255,7 @@ describe('SyncDatabase', () => {
 
       it('should store beads_content_hash separately', () => {
         db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
-        
+
         const beadsHash = SyncDatabase.computeIssueContentHash({
           title: 'Beads Title',
           status: 'open',
@@ -1277,7 +1277,7 @@ describe('SyncDatabase', () => {
     describe('getIssuesWithContentMismatch', () => {
       it('should find issues where content differs from huly source', () => {
         db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
-        
+
         // Issue 1: content matches huly
         const hulyHash1 = SyncDatabase.computeIssueContentHash({
           title: 'Same',
@@ -1311,7 +1311,7 @@ describe('SyncDatabase', () => {
 
       it('should return empty array when no mismatches', () => {
         db.upsertProject({ identifier: 'HASH', name: 'Hash Test' });
-        
+
         const hash = SyncDatabase.computeIssueContentHash({
           title: 'Test',
           status: 'Todo',

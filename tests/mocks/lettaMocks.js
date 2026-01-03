@@ -1,6 +1,6 @@
 /**
  * Mock Factories for Letta API Responses
- * 
+ *
  * Provides reusable mock data for Letta API testing
  */
 
@@ -95,12 +95,12 @@ export function createMockListAgentsResponse(agents = []) {
   if (Array.isArray(agents)) {
     return agents;
   }
-  
+
   return Array.from({ length: agents }, (_, i) =>
     createMockLettaAgent({
       id: `agent-${i + 1}`,
       name: `Agent-${i + 1}`,
-    })
+    }),
   );
 }
 
@@ -113,12 +113,12 @@ export function createMockListToolsResponse(tools = []) {
   if (Array.isArray(tools)) {
     return tools;
   }
-  
+
   return Array.from({ length: tools }, (_, i) =>
     createMockLettaTool({
       id: `tool-${i + 1}`,
       name: `tool_${i + 1}`,
-    })
+    }),
   );
 }
 
@@ -227,7 +227,7 @@ export function createMockLettaSetup(options = {}) {
     name: options.controlAgentName || 'Huly-PM-Control',
     tools: options.controlTools || ['tool-1', 'tool-2', 'tool-3'],
   });
-  
+
   const pmAgents = Array.from({ length: options.agentCount || 3 }, (_, i) => {
     const identifier = `PROJ${i + 1}`;
     return createMockLettaAgent({
@@ -237,15 +237,15 @@ export function createMockLettaSetup(options = {}) {
       tools: options.inheritTools ? controlAgent.tools : [],
     });
   });
-  
+
   const tools = createMockListToolsResponse(options.toolCount || 5);
   const sources = Array.from({ length: options.sourceCount || 2 }, (_, i) =>
     createMockLettaSource({
       id: `source-${i + 1}`,
       name: `source-${i + 1}`,
-    })
+    }),
   );
-  
+
   return {
     controlAgent,
     pmAgents,

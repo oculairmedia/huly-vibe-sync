@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Bootstrap project_files table with existing uploaded files
- * 
+ *
  * This script:
  * 1. Gets all projects with filesystem_path and letta_folder_id from DB
  * 2. Discovers files that would be uploaded based on current filters
  * 3. Computes content hashes for each file
  * 4. Inserts records into project_files table
- * 
+ *
  * Run: node scripts/bootstrap-file-tracking.js
  */
 
@@ -23,20 +23,20 @@ const SOURCE_EXTENSIONS = [
   '.md', '.txt', '.json', '.yaml', '.yml', '.toml',
   '.py', '.js', '.ts', '.tsx', '.jsx', '.rs', '.go',
   '.sql', '.sh', '.html', '.css', '.scss', '.vue',
-  '.svelte', '.astro', '.graphql', '.prisma'
+  '.svelte', '.astro', '.graphql', '.prisma',
 ];
 
 // Directories to exclude
 const EXCLUDE_DIRS = [
   'node_modules', '.git', 'target', 'dist', 'build', '__pycache__',
   '.next', '.nuxt', 'coverage', '.cache', 'vendor', '.venv', 'venv',
-  '.serena', '.letta'
+  '.serena', '.letta',
 ];
 
 // Files to exclude
 const EXCLUDE_FILES = [
   'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'Cargo.lock',
-  '.DS_Store', 'Thumbs.db'
+  '.DS_Store', 'Thumbs.db',
 ];
 
 function computeFileHash(filePath) {
@@ -50,7 +50,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
 
   function walkDir(dir, depth = 0) {
     if (depth > 10 || files.length >= maxFiles) return;
-    
+
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -60,7 +60,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
 
     for (const entry of entries) {
       if (files.length >= maxFiles) break;
-      
+
       const fullPath = path.join(dir, entry.name);
       const relativePath = path.relative(projectPath, fullPath);
 
@@ -70,11 +70,11 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
         }
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        
-        if (SOURCE_EXTENSIONS.includes(ext) && 
+
+        if (SOURCE_EXTENSIONS.includes(ext) &&
             !EXCLUDE_FILES.includes(entry.name) &&
             !seenPaths.has(relativePath)) {
-          
+
           // Skip large files (> 500KB)
           try {
             const stats = fs.statSync(fullPath);
@@ -83,7 +83,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
               files.push({
                 relativePath,
                 fullPath,
-                size: stats.size
+                size: stats.size,
               });
             }
           } catch (e) {
@@ -104,10 +104,10 @@ async function main() {
   const db = createSyncDatabase(DB_PATH);
 
   // Get projects with filesystem paths and folder IDs
-  const projects = db.getAllProjects().filter(p => 
-    p.filesystem_path && 
+  const projects = db.getAllProjects().filter(p =>
+    p.filesystem_path &&
     fs.existsSync(p.filesystem_path) &&
-    p.letta_folder_id
+    p.letta_folder_id,
   );
 
   console.log(`Found ${projects.length} projects with filesystem paths and Letta folders\n`);
@@ -127,7 +127,7 @@ async function main() {
 
     // Discover files
     const files = discoverProjectFiles(project.filesystem_path);
-    
+
     if (files.length === 0) {
       console.log(`  -> No files found`);
       continue;
@@ -140,16 +140,16 @@ async function main() {
     for (const file of files) {
       try {
         const hash = computeFileHash(file.fullPath);
-        
+
         db.upsertProjectFile({
           project_identifier: project.identifier,
           relative_path: file.relativePath,
           content_hash: hash,
           letta_file_id: null, // We don't have this from Letta
           file_size: file.size,
-          uploaded_at: Date.now()
+          uploaded_at: Date.now(),
         });
-        
+
         inserted++;
       } catch (e) {
         console.error(`  -> Error processing ${file.relativePath}: ${e.message}`);

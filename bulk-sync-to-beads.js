@@ -35,15 +35,15 @@ class SimpleDb {
   constructor() {
     this.issues = new Map();
   }
-  
+
   getIssue(identifier) {
     return this.issues.get(identifier);
   }
-  
+
   upsertIssue(issue) {
     this.issues.set(issue.identifier, issue);
   }
-  
+
   getAllIssues() {
     return Array.from(this.issues.values());
   }
@@ -68,16 +68,16 @@ for (const issue of issues.slice(0, limit)) {
     priority: issue.priority || 'Medium',
     type: 'Task',
   };
-  
+
   try {
     const result = await syncHulyIssueToBeads(
       projectPath,
       hulyIssue,
       beadsIssues,
       db,
-      config
+      config,
     );
-    
+
     if (result) {
       console.log(`✓ ${hulyIssue.identifier}: ${hulyIssue.title.substring(0, 60)}`);
       synced++;
@@ -88,7 +88,7 @@ for (const issue of issues.slice(0, limit)) {
   } catch (error) {
     console.error(`✗ ${hulyIssue.identifier}: ${error.message}`);
   }
-  
+
   // Small delay to avoid overwhelming beads
   await new Promise(resolve => setTimeout(resolve, 200));
 }

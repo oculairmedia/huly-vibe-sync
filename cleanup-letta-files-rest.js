@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Cleanup Script: Delete all folders and their files from Letta (REST API)
- * 
+ *
  * This clears all uploaded files and folders to allow a fresh start.
  * Agents will be preserved - only file storage is cleaned.
  */
@@ -9,8 +9,8 @@
 import 'dotenv/config';
 import { fetchWithPool } from './lib/http.js';
 
-const LETTA_API_URL = process.env.LETTA_BASE_URL.endsWith('/v1') 
-  ? process.env.LETTA_BASE_URL 
+const LETTA_API_URL = process.env.LETTA_BASE_URL.endsWith('/v1')
+  ? process.env.LETTA_BASE_URL
   : `${process.env.LETTA_BASE_URL}/v1`;
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD;
 
@@ -46,7 +46,7 @@ async function main() {
 
   for (const folder of folders) {
     console.log(`\nProcessing folder: ${folder.name} (${folder.id})`);
-    
+
     // Get files in this folder
     const filesResp = await fetchWithPool(`${LETTA_API_URL}/folders/${folder.id}/files?limit=1000`, {
       method: 'GET',
@@ -124,12 +124,12 @@ async function main() {
   console.log('=== Cleanup Complete ===');
   console.log(`Total deleted: ${totalFilesDeleted} files, ${foldersDeleted} folders`);
   console.log(`Total errors: ${totalFileErrors + folderErrors}`);
-  
+
   if (totalFileErrors + folderErrors > 0) {
     console.log('\n⚠️  Some items could not be deleted. Check errors above.');
     process.exit(1);
   }
-  
+
   console.log('\n✓ All file storage cleaned successfully');
 }
 

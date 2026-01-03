@@ -59,7 +59,7 @@ class MCPClient {
 
 function extractFilesystemPath(description) {
   if (!description) return null;
-  const match = description.match(/(?:^|\n)\s*\/opt\/stacks\/[\w\/-]+/);
+  const match = description.match(/(?:^|\n)\s*\/opt\/stacks\/[\w/-]+/);
   return match ? match[0].trim() : null;
 }
 

@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Text Parsers
- * 
+ *
  * Tests parsing of structured text from Huly MCP output
  */
 
@@ -28,7 +28,7 @@ Status: active
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(1);
       expect(projects[0]).toEqual({
         name: 'Test Project',
@@ -53,7 +53,7 @@ Status: active
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(2);
       expect(projects[0].identifier).toBe('FIRST');
       expect(projects[1].identifier).toBe('SECOND');
@@ -67,7 +67,7 @@ Status: active
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(1);
       expect(projects[0].description).toBe('');
       expect(projects[0].issues).toBe(0);
@@ -82,7 +82,7 @@ Issues: 5 open
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(1);
       expect(projects[0].description).toContain('Filesystem:');
       expect(projects[0].description).toContain('/opt/stacks/my-project');
@@ -96,7 +96,7 @@ Issues: 2 open
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(1);
       expect(projects[0].name).toBe('Project with (parentheses) and spaces');
       expect(projects[0].identifier).toBe('SPEC');
@@ -117,7 +117,7 @@ Random text again
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(1);
       expect(projects[0].identifier).toBe('VALID');
     });
@@ -136,7 +136,7 @@ Random text again
 📁 Test (TEST)
 ${input}
         `.trim();
-        
+
         const projects = parseProjectsFromText(text);
         expect(projects[0].issues).toBe(expected);
       }
@@ -153,7 +153,7 @@ Description: This is a test issue
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0]).toEqual({
         identifier: 'TEST-1',
@@ -180,7 +180,7 @@ Description: Second description
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(2);
       expect(issues[0].identifier).toBe('TEST-1');
       expect(issues[1].identifier).toBe('TEST-2');
@@ -193,7 +193,7 @@ Status: todo
       `.trim();
 
       const issues = parseIssuesFromText(text, 'test-project-id');
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0].project).toBe('test-project-id');
     });
@@ -209,7 +209,7 @@ Description: Build UI component
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0].component).toBe('Frontend');
       expect(issues[0].milestone).toBe('v1.0');
@@ -221,7 +221,7 @@ Description: Build UI component
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0].status).toBe('unknown');
       expect(issues[0].priority).toBe('medium');
@@ -245,7 +245,7 @@ Not an issue header
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0].identifier).toBe('TEST-1');
     });
@@ -257,7 +257,7 @@ Status: in progress
       `.trim();
 
       const issues = parseIssuesFromText(text);
-      
+
       expect(issues).toHaveLength(1);
       expect(issues[0].title).toBe('Fix bug: API timeout (critical!)');
     });
@@ -640,14 +640,14 @@ Status: active
       `.trim();
 
       const projects = parseProjectsFromText(text);
-      
+
       expect(projects).toHaveLength(3);
-      
+
       // Verify all projects parsed correctly
       expect(projects[0].identifier).toBe('FRONT');
       expect(projects[1].identifier).toBe('BACK');
       expect(projects[2].identifier).toBe('DOCS');
-      
+
       // Verify filesystem paths extracted
       expect(extractFilesystemPath(projects[0].description)).toBe('/opt/stacks/frontend');
       expect(extractFilesystemPath(projects[1].description)).toBe('/opt/stacks/backend');
@@ -677,9 +677,9 @@ Description: Document all API endpoints
       `.trim();
 
       const issues = parseIssuesFromText(text, 'test-project');
-      
+
       expect(issues).toHaveLength(3);
-      
+
       // Verify all issues parsed correctly
       expect(issues[0]).toMatchObject({
         identifier: 'PROJ-1',
@@ -690,13 +690,13 @@ Description: Document all API endpoints
         milestone: 'v1.0',
         project: 'test-project',
       });
-      
+
       expect(issues[1]).toMatchObject({
         identifier: 'PROJ-2',
         component: 'Frontend',
         milestone: 'v1.0',
       });
-      
+
       expect(issues[2]).toMatchObject({
         identifier: 'PROJ-3',
         status: 'done',

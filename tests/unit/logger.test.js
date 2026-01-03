@@ -25,10 +25,10 @@ describe('logger', () => {
     it('should create a child logger with syncId', () => {
       const syncId = 'test-sync-123';
       const syncLogger = createSyncLogger(syncId);
-      
+
       expect(syncLogger).toBeDefined();
       expect(syncLogger.info).toBeDefined();
-      
+
       // Child logger should have bindings
       const bindings = syncLogger.bindings();
       expect(bindings).toHaveProperty('syncId', syncId);
@@ -37,7 +37,7 @@ describe('logger', () => {
     it('should create different loggers for different syncIds', () => {
       const logger1 = createSyncLogger('sync-1');
       const logger2 = createSyncLogger('sync-2');
-      
+
       expect(logger1.bindings().syncId).toBe('sync-1');
       expect(logger2.bindings().syncId).toBe('sync-2');
     });
@@ -50,7 +50,7 @@ describe('logger', () => {
         module: 'test-module',
       };
       const contextLogger = createContextLogger(context);
-      
+
       expect(contextLogger).toBeDefined();
       const bindings = contextLogger.bindings();
       expect(bindings).toHaveProperty('project', 'test-project');
@@ -64,7 +64,7 @@ describe('logger', () => {
         action: 'sync',
       };
       const contextLogger = createContextLogger(context);
-      
+
       const bindings = contextLogger.bindings();
       expect(bindings.requestId).toBe('req-123');
       expect(bindings.userId).toBe('user-456');
@@ -125,7 +125,7 @@ describe('logger', () => {
     it('should inherit bindings from parent', () => {
       const syncLogger = createSyncLogger('sync-123');
       const projectLogger = syncLogger.child({ project: 'test-project' });
-      
+
       const bindings = projectLogger.bindings();
       expect(bindings.syncId).toBe('sync-123');
       expect(bindings.project).toBe('test-project');

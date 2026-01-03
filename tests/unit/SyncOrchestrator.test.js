@@ -100,7 +100,7 @@ describe('SyncOrchestrator', () => {
   // Helper to wrap issues array in the new return format
   const mockIssuesResult = (issues) => ({
     issues,
-    syncMeta: { latestModified: new Date().toISOString(), serverTime: new Date().toISOString() }
+    syncMeta: { latestModified: new Date().toISOString(), serverTime: new Date().toISOString() },
   });
 
   beforeEach(async () => {
@@ -297,7 +297,7 @@ describe('SyncOrchestrator', () => {
         mockVibeClient,
         'task-1',
         'done',
-        mockConfig
+        mockConfig,
       );
     });
 
@@ -320,7 +320,7 @@ describe('SyncOrchestrator', () => {
           identifier: 'TEST-1',
           project_identifier: 'TEST',
           vibe_task_id: 'task-1',
-        })
+        }),
       );
     });
   });
@@ -401,7 +401,7 @@ describe('SyncOrchestrator', () => {
       expect(mockDb.completeSyncRun).toHaveBeenCalledWith(
         'sync-123',
         expect.any(Number),
-        expect.any(Number)
+        expect.any(Number),
       );
     });
 
@@ -424,7 +424,7 @@ describe('SyncOrchestrator', () => {
           identifier: 'TEST',
           name: 'Test Project',
           status: 'active',
-        })
+        }),
       );
     });
 
@@ -452,7 +452,7 @@ describe('SyncOrchestrator', () => {
       fetchHulyProjects.mockRejectedValue(new Error('Network error'));
 
       await expect(
-        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig)
+        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig),
       ).rejects.toThrow('Network error');
     });
 
@@ -462,7 +462,7 @@ describe('SyncOrchestrator', () => {
       fetchHulyIssues.mockRejectedValue(new Error('API error'));
 
       await expect(
-        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig)
+        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig),
       ).rejects.toThrow('API error');
     });
   });
@@ -519,7 +519,7 @@ describe('SyncOrchestrator', () => {
           expect.objectContaining({ identifier: 'PROJ2' }),
         ]),
         expect.any(Function),
-        2
+        2,
       );
     });
   });
@@ -543,7 +543,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST',
         mockConfig,
-        mockDb // db is passed for cursor-based sync
+        mockDb, // db is passed for cursor-based sync
       );
     });
   });
@@ -635,7 +635,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Backlog', // todo maps to Backlog
-        mockConfig
+        mockConfig,
       );
     });
 
@@ -673,7 +673,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Done',
-        mockConfig
+        mockConfig,
       );
     });
 
@@ -713,7 +713,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Done',
-        mockConfig
+        mockConfig,
       );
     });
 

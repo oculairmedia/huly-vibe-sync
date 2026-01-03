@@ -1,6 +1,6 @@
 /**
  * Unit Tests for VibeRestClient
- * 
+ *
  * Tests REST API client for Vibe Kanban platform
  */
 
@@ -26,7 +26,7 @@ describe('VibeRestClient', () => {
 
   beforeEach(() => {
     client = new VibeRestClient(baseUrl);
-    
+
     // Mock global fetch
     mockFetch = vi.fn();
     global.fetch = mockFetch;
@@ -93,7 +93,7 @@ describe('VibeRestClient', () => {
         'http://localhost:3105/health',
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -142,7 +142,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3105/health',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -183,7 +183,7 @@ describe('VibeRestClient', () => {
         'http://localhost:3105/api/projects',
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -235,7 +235,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/projects/${projectId}`,
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -273,7 +273,7 @@ describe('VibeRestClient', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify(projectData),
-        })
+        }),
       );
     });
 
@@ -307,7 +307,7 @@ describe('VibeRestClient', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify(updates),
-        })
+        }),
       );
     });
 
@@ -339,7 +339,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/projects/${projectId}`,
         expect.objectContaining({
           method: 'DELETE',
-        })
+        }),
       );
     });
   });
@@ -359,7 +359,7 @@ describe('VibeRestClient', () => {
         expect.stringContaining(`/tasks?project_id=${projectId}`),
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -374,7 +374,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('status=done'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -389,7 +389,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('limit=10'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -422,7 +422,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/tasks/${taskId}`,
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -467,7 +467,7 @@ describe('VibeRestClient', () => {
             project_id: projectId,
             ...taskData,
           }),
-        })
+        }),
       );
     });
 
@@ -507,7 +507,7 @@ describe('VibeRestClient', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ [field]: value }),
-        })
+        }),
       );
     });
 
@@ -538,7 +538,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/tasks/${taskId}`,
         expect.objectContaining({
           method: 'DELETE',
-        })
+        }),
       );
     });
   });
@@ -561,7 +561,7 @@ describe('VibeRestClient', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ updates }),
-        })
+        }),
       );
     });
   });
@@ -588,7 +588,7 @@ describe('VibeRestClient', () => {
             executor,
             base_branch: baseBranch,
           }),
-        })
+        }),
       );
     });
 
@@ -620,7 +620,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts?task_id=${taskId}`,
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
   });
@@ -640,7 +640,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts/${attemptId}`,
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
   });
@@ -659,7 +659,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts/${attemptId}/merge`,
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
   });
@@ -684,7 +684,7 @@ describe('VibeRestClient', () => {
             previous_attempt_id: previousAttemptId,
             ...options,
           }),
-        })
+        }),
       );
     });
   });
@@ -704,7 +704,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/processes/${processId}`,
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
   });
@@ -723,7 +723,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/processes/${processId}/stop`,
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
   });
@@ -740,7 +740,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/processes/${processId}/logs/raw`,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -755,7 +755,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/processes/${processId}/logs/normalized`,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -773,7 +773,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining(`task_attempt_id=${taskAttemptId}`),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -788,7 +788,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('show_soft_deleted=true'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -806,7 +806,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/attempts/${attemptId}/branch-status`,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -824,7 +824,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/attempts/${attemptId}/commits`,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -843,7 +843,7 @@ describe('VibeRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         `http://localhost:3105/api/attempts/${attemptId}/compare/${commitSha}`,
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -862,7 +862,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts/${attemptId}/abort-conflicts`,
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
   });
@@ -881,7 +881,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts/${attemptId}/dev-server/start`,
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
   });
@@ -900,7 +900,7 @@ describe('VibeRestClient', () => {
         `http://localhost:3105/api/attempts/${attemptId}/dev-server/stop`,
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
   });
@@ -908,7 +908,7 @@ describe('VibeRestClient', () => {
   describe('getStats', () => {
     it('should return client statistics', () => {
       const stats = client.getStats();
-      
+
       expect(stats).toEqual({
         type: 'rest',
         baseUrl: 'http://localhost:3105/api',
@@ -923,7 +923,7 @@ describe('VibeRestClient', () => {
         timeout: 30000,
       });
       const stats = customClient.getStats();
-      
+
       expect(stats.name).toBe('Custom Client');
       expect(stats.timeout).toBe(30000);
     });
@@ -970,7 +970,7 @@ describe('VibeRestClient', () => {
   describe('performance monitoring', () => {
     it('should log slow API calls', async () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      
+
       // Mock a slow response (>5 seconds)
       mockFetch.mockImplementation(async () => {
         await new Promise(resolve => setTimeout(resolve, 5100));
@@ -983,8 +983,8 @@ describe('VibeRestClient', () => {
       await client.listProjects();
 
       // Check that console.log was called with a message containing "Slow API call"
-      const slowCallLog = consoleSpy.mock.calls.find(call => 
-        call[0]?.includes('Slow API call')
+      const slowCallLog = consoleSpy.mock.calls.find(call =>
+        call[0]?.includes('Slow API call'),
       );
       expect(slowCallLog).toBeTruthy();
       expect(slowCallLog[0]).toContain('/projects');
@@ -998,7 +998,7 @@ describe('VibeRestClient', () => {
     it('should create client using factory function', async () => {
       const { createVibeRestClient } = await import('../../lib/VibeRestClient.js');
       const client = createVibeRestClient(baseUrl);
-      
+
       expect(client).toBeInstanceOf(VibeRestClient);
       expect(client.baseUrl).toBe('http://localhost:3105/api');
     });
@@ -1006,7 +1006,7 @@ describe('VibeRestClient', () => {
     it('should pass options through factory function', async () => {
       const { createVibeRestClient } = await import('../../lib/VibeRestClient.js');
       const client = createVibeRestClient(baseUrl, { name: 'Factory Client' });
-      
+
       expect(client.name).toBe('Factory Client');
     });
   });

@@ -1,6 +1,6 @@
 /**
  * Test Environment Setup
- * 
+ *
  * Configures the testing environment for Vitest tests.
  * - Sets up environment variables
  * - Configures test database
@@ -89,14 +89,14 @@ global.testUtils = {
     global.consoleErrors = [];
     global.consoleWarns = [];
   },
-  
+
   // Get captured console output
   getConsoleLogs: () => ({
     info: global.consoleInfo,
     errors: global.consoleErrors,
     warns: global.consoleWarns,
   }),
-  
+
   // Clean up test database
   cleanTestDb: async () => {
     const dbPath = process.env.DB_PATH;
@@ -104,7 +104,7 @@ global.testUtils = {
       rmSync(dbPath, { force: true });
     }
   },
-  
+
   // Clean up all test data
   cleanAllTestData: () => {
     if (existsSync(TEST_DB_DIR)) {
@@ -113,10 +113,10 @@ global.testUtils = {
       mkdirSync(process.env.STACKS_DIR, { recursive: true });
     }
   },
-  
+
   // Wait helper for async operations
   wait: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
-  
+
   // Create mock Huly project
   createMockHulyProject: (overrides = {}) => ({
     _id: 'test-project-id',
@@ -129,7 +129,7 @@ global.testUtils = {
     members: [],
     ...overrides,
   }),
-  
+
   // Create mock Huly issue
   createMockHulyIssue: (overrides = {}) => ({
     _id: 'test-issue-id',
@@ -147,7 +147,7 @@ global.testUtils = {
     modifiedOn: Date.now(),
     ...overrides,
   }),
-  
+
   // Create mock Vibe task
   createMockVibeTask: (overrides = {}) => ({
     id: 'test-task-id',
@@ -159,7 +159,7 @@ global.testUtils = {
     updated_at: new Date().toISOString(),
     ...overrides,
   }),
-  
+
   // Create mock Letta agent
   createMockLettaAgent: (overrides = {}) => ({
     id: 'test-agent-id',

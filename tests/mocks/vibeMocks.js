@@ -1,6 +1,6 @@
 /**
  * Mock Factories for Vibe Kanban API Responses
- * 
+ *
  * Provides reusable mock data for Vibe Kanban API testing
  */
 
@@ -49,13 +49,13 @@ export function createMockListProjectsResponse(projects = []) {
   if (Array.isArray(projects)) {
     return projects;
   }
-  
+
   return Array.from({ length: projects }, (_, i) =>
     createMockVibeProject({
       id: i + 1,
       name: `Project ${i + 1}`,
       identifier: `PROJ${i + 1}`,
-    })
+    }),
   );
 }
 
@@ -69,14 +69,14 @@ export function createMockListTasksResponse(tasks = [], projectId = 1) {
   if (Array.isArray(tasks)) {
     return tasks;
   }
-  
+
   return Array.from({ length: tasks }, (_, i) =>
     createMockVibeTask({
       id: i + 1,
       project_id: projectId,
       title: `Task ${i + 1}`,
       status: ['todo', 'inprogress', 'inreview', 'done'][i % 4],
-    })
+    }),
   );
 }
 
@@ -147,9 +147,9 @@ export function createMockVibeProjectsWithTasks(projectCount = 3, tasksPerProjec
       id: i + 1,
       name: `Project ${i + 1}`,
       identifier: `PROJ${i + 1}`,
-    })
+    }),
   );
-  
+
   const tasksByProject = {};
   projects.forEach((project) => {
     tasksByProject[project.id] = Array.from({ length: tasksPerProject }, (_, j) =>
@@ -158,10 +158,10 @@ export function createMockVibeProjectsWithTasks(projectCount = 3, tasksPerProjec
         project_id: project.id,
         title: `Task ${j + 1} for ${project.name}`,
         status: ['todo', 'inprogress', 'inreview', 'done'][j % 4],
-      })
+      }),
     );
   });
-  
+
   return {
     projects,
     tasksByProject,

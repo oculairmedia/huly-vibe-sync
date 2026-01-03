@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Utils Module
- * 
+ *
  * Tests general-purpose utility functions
  */
 
@@ -19,36 +19,36 @@ describe('utils', () => {
 
     it('should resolve when promise completes before timeout', async () => {
       const promise = Promise.resolve('success');
-      
+
       const result = await withTimeout(promise, 1000, 'test operation');
-      
+
       expect(result).toBe('success');
     });
 
     it('should reject when timeout occurs before promise', async () => {
       const slowPromise = new Promise(resolve => setTimeout(() => resolve('done'), 5000));
-      
+
       const resultPromise = withTimeout(slowPromise, 100, 'slow operation');
-      
+
       // Advance timers past the timeout
       vi.advanceTimersByTime(150);
-      
+
       await expect(resultPromise).rejects.toThrow('Timeout after 100ms: slow operation');
     });
 
     it('should include operation name in timeout error message', async () => {
       const slowPromise = new Promise(resolve => setTimeout(() => resolve('done'), 5000));
-      
+
       const resultPromise = withTimeout(slowPromise, 50, 'Fetching data from API');
-      
+
       vi.advanceTimersByTime(100);
-      
+
       await expect(resultPromise).rejects.toThrow('Fetching data from API');
     });
 
     it('should handle promise rejection', async () => {
       const failingPromise = Promise.reject(new Error('API error'));
-      
+
       await expect(withTimeout(failingPromise, 1000, 'test')).rejects.toThrow('API error');
     });
 
@@ -56,9 +56,9 @@ describe('utils', () => {
       const asyncFn = async () => {
         return 'async result';
       };
-      
+
       const result = await withTimeout(asyncFn(), 1000, 'async operation');
-      
+
       expect(result).toBe('async result');
     });
   });
@@ -67,12 +67,12 @@ describe('utils', () => {
     it('should process all items', async () => {
       const items = [1, 2, 3, 4, 5];
       const processed = [];
-      
+
       await processBatch(items, 2, async (item) => {
         processed.push(item);
         return item * 2;
       });
-      
+
       expect(processed).toEqual([1, 2, 3, 4, 5]);
     });
 
@@ -80,7 +80,7 @@ describe('utils', () => {
       const items = [1, 2, 3, 4, 5, 6];
       const batchCalls = [];
       let currentBatch = [];
-      
+
       await processBatch(items, 2, async (item) => {
         currentBatch.push(item);
         if (currentBatch.length === 2 || items.indexOf(item) === items.length - 1) {
@@ -89,19 +89,19 @@ describe('utils', () => {
         }
         return item;
       });
-      
+
       // With batch size 2 and 6 items, we should have 3 batches
       expect(batchCalls.length).toBeLessThanOrEqual(3);
     });
 
     it('should return Promise.allSettled results', async () => {
       const items = [1, 2, 3];
-      
+
       const results = await processBatch(items, 2, async (item) => {
         if (item === 2) throw new Error('Item 2 failed');
         return item * 2;
       });
-      
+
       expect(results).toHaveLength(3);
       expect(results[0]).toEqual({ status: 'fulfilled', value: 2 });
       expect(results[1]).toEqual({ status: 'rejected', reason: expect.any(Error) });
@@ -110,43 +110,43 @@ describe('utils', () => {
 
     it('should handle empty array', async () => {
       const results = await processBatch([], 5, async (item) => item);
-      
+
       expect(results).toEqual([]);
     });
 
     it('should handle batch size larger than items', async () => {
       const items = [1, 2];
       const processed = [];
-      
+
       await processBatch(items, 10, async (item) => {
         processed.push(item);
         return item;
       });
-      
+
       expect(processed).toEqual([1, 2]);
     });
 
     it('should handle batch size of 1 (sequential)', async () => {
       const items = [1, 2, 3];
       const order = [];
-      
+
       await processBatch(items, 1, async (item) => {
         order.push(item);
         return item;
       });
-      
+
       expect(order).toEqual([1, 2, 3]);
     });
 
     it('should process async functions concurrently within batch', async () => {
       const items = [100, 50, 25]; // delays in ms
       const startTime = Date.now();
-      
+
       await processBatch(items, 3, async (delay) => {
         await new Promise(resolve => setTimeout(resolve, delay));
         return delay;
       });
-      
+
       const elapsed = Date.now() - startTime;
       // All 3 should run concurrently, so total time ~ max(100, 50, 25) = ~100ms
       // Allow some buffer for test overhead

@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Status Mapper
- * 
+ *
  * Tests bidirectional status mapping between Huly, Vibe Kanban, and Beads
  */
 
@@ -99,7 +99,7 @@ describe('statusMapper', () => {
       expect(mapVibeStatusToHuly('done')).toBe('Done');
     });
 
-    it("should map cancelled to Canceled", () => {
+    it('should map cancelled to Canceled', () => {
       expect(mapVibeStatusToHuly('cancelled')).toBe('Canceled');
     });
 
@@ -166,11 +166,11 @@ describe('statusMapper', () => {
   describe('bidirectional mapping consistency', () => {
     it('should round-trip correctly for standard statuses', () => {
       const hulyStatuses = ['Backlog', 'In Progress', 'In Review', 'Done', 'Cancelled'];
-      
+
       for (const hulyStatus of hulyStatuses) {
         const vibeStatus = mapHulyStatusToVibe(hulyStatus);
         const backToHuly = mapVibeStatusToHuly(vibeStatus);
-        
+
         // The round-trip should produce a normalized version
         // (e.g., "Todo" -> "todo" -> "Backlog", not back to "Todo")
         expect(backToHuly).toBeTruthy();
@@ -489,7 +489,7 @@ describe('beadsStatusMapper', () => {
       // Done -> closed -> Done (preserved)
       const doneResult = mapHulyStatusToBeads('Done');
       expect(mapBeadsStatusToHuly(doneResult.status, doneResult.label ? [doneResult.label] : [])).toBe('Done');
-      
+
       // Cancelled -> closed + huly:Canceled -> Canceled (NOW preserved with labels!)
       const cancelledResult = mapHulyStatusToBeads('Cancelled');
       expect(mapBeadsStatusToHuly(cancelledResult.status, cancelledResult.label ? [cancelledResult.label] : [])).toBe('Canceled');

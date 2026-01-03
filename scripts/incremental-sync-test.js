@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Test incremental file sync for a single project
- * 
+ *
  * Run: node scripts/test-incremental-sync.js VIBEK
  */
 
@@ -21,20 +21,20 @@ const SOURCE_EXTENSIONS = [
   '.md', '.txt', '.json', '.yaml', '.yml', '.toml',
   '.py', '.js', '.ts', '.tsx', '.jsx', '.rs', '.go',
   '.sql', '.sh', '.html', '.css', '.scss', '.vue',
-  '.svelte', '.astro', '.graphql', '.prisma'
+  '.svelte', '.astro', '.graphql', '.prisma',
 ];
 
 // Directories to exclude
 const EXCLUDE_DIRS = [
   'node_modules', '.git', 'target', 'dist', 'build', '__pycache__',
   '.next', '.nuxt', 'coverage', '.cache', 'vendor', '.venv', 'venv',
-  '.serena', '.letta'
+  '.serena', '.letta',
 ];
 
 // Files to exclude
 const EXCLUDE_FILES = [
   'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'Cargo.lock',
-  '.DS_Store', 'Thumbs.db'
+  '.DS_Store', 'Thumbs.db',
 ];
 
 function discoverProjectFiles(projectPath, maxFiles = 500) {
@@ -43,7 +43,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
 
   function walkDir(dir, depth = 0) {
     if (depth > 10 || files.length >= maxFiles) return;
-    
+
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -53,7 +53,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
 
     for (const entry of entries) {
       if (files.length >= maxFiles) break;
-      
+
       const fullPath = path.join(dir, entry.name);
       const relativePath = path.relative(projectPath, fullPath);
 
@@ -63,11 +63,11 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
         }
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        
-        if (SOURCE_EXTENSIONS.includes(ext) && 
+
+        if (SOURCE_EXTENSIONS.includes(ext) &&
             !EXCLUDE_FILES.includes(entry.name) &&
             !seenPaths.has(relativePath)) {
-          
+
           // Skip large files (> 500KB)
           try {
             const stats = fs.statSync(fullPath);
@@ -89,7 +89,7 @@ function discoverProjectFiles(projectPath, maxFiles = 500) {
 
 async function main() {
   const projectId = process.argv[2];
-  
+
   if (!projectId) {
     console.error('Usage: node scripts/test-incremental-sync.js <PROJECT_ID>');
     console.error('Example: node scripts/test-incremental-sync.js VIBEK');
@@ -140,7 +140,7 @@ async function main() {
     project.filesystem_path,
     currentFiles,
     db,
-    projectId
+    projectId,
   );
 
   console.log(`\n=== Results ===`);

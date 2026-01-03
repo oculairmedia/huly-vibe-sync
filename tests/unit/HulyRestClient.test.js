@@ -1,6 +1,6 @@
 /**
  * Unit Tests for HulyRestClient
- * 
+ *
  * Tests REST API client for Huly platform
  */
 
@@ -24,7 +24,7 @@ describe('HulyRestClient', () => {
 
   beforeEach(() => {
     client = new HulyRestClient(baseUrl);
-    
+
     // Mock global fetch
     mockFetch = vi.fn();
     global.fetch = mockFetch;
@@ -91,7 +91,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/health',
         expect.objectContaining({
           method: 'GET',
-        })
+        }),
       );
     });
 
@@ -143,7 +143,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/health',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -182,7 +182,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/tools/test_tool',
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
 
@@ -242,7 +242,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -251,7 +251,7 @@ describe('HulyRestClient', () => {
         createMockHulyProject({ identifier: 'TEST1', name: 'Project 1' }),
         createMockHulyProject({ identifier: 'TEST2', name: 'Project 2' }),
       ];
-      
+
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ projects }),
@@ -286,7 +286,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects/TEST/issues',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -295,7 +295,7 @@ describe('HulyRestClient', () => {
         createMockHulyIssue({ identifier: 'TEST-1' }),
         createMockHulyIssue({ identifier: 'TEST-2' }),
       ];
-      
+
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ issues, count: issues.length }),
@@ -380,7 +380,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('huly_query'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -401,7 +401,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/issues',
         expect.objectContaining({
           method: 'POST',
-        })
+        }),
       );
     });
 
@@ -456,7 +456,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/issues/TEST-1',
         expect.objectContaining({
           method: 'PUT',
-        })
+        }),
       );
     });
 
@@ -529,7 +529,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects//issues',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -588,7 +588,7 @@ describe('HulyRestClient', () => {
         expect.objectContaining({
           method: 'DELETE',
           body: JSON.stringify({ identifiers: ['TEST-1', 'TEST-2'], cascade: false }),
-        })
+        }),
       );
     });
 
@@ -728,7 +728,7 @@ describe('HulyRestClient', () => {
       expect(result[0].label).toBe('Core');
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects/TEST/components',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 

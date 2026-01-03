@@ -13,7 +13,7 @@ import {
   buildComponentsSummary,
   buildChangeLog,
   buildScratchpad,
-} from '../../lib/LettaService.js';
+} from '../../lib/LettaMemoryBuilders.js';
 
 describe('Letta Memory Block Builders', () => {
   // ============================================================
@@ -224,7 +224,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' })
+        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' }),
       );
     });
 
@@ -239,7 +239,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'high_activity', severity: 'info' })
+        expect.objectContaining({ type: 'high_activity', severity: 'info' }),
       );
     });
 
@@ -254,7 +254,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'completion_streak', severity: 'positive' })
+        expect.objectContaining({ type: 'completion_streak', severity: 'positive' }),
       );
     });
 
@@ -269,7 +269,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'no_activity', severity: 'info' })
+        expect.objectContaining({ type: 'no_activity', severity: 'info' }),
       );
     });
 
@@ -318,7 +318,7 @@ describe('Letta Memory Block Builders', () => {
       expect(result.active_components).toBe(2); // Core and API have issues
       expect(result.empty_components).toBe(1); // Docs has no issues
       expect(result.unassigned_count).toBe(1);
-      
+
       // Components should be sorted by issue count
       expect(result.components[0].label).toBe('Core');
       expect(result.components[0].issue_count).toBe(2);

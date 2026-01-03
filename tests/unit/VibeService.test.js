@@ -1,6 +1,6 @@
 /**
  * Unit Tests for VibeService
- * 
+ *
  * Tests Vibe Kanban-specific operations including:
  * - Listing and creating projects
  * - Creating and updating tasks
@@ -111,7 +111,7 @@ describe('VibeService', () => {
           {
             display_name: 'test-project',
             git_repo_path: '/home/user/projects/test-project',
-          }
+          },
         ],
       });
       expect(result).toEqual(createdProject);
@@ -123,7 +123,7 @@ describe('VibeService', () => {
       expect(mockVibeClient.createProject).not.toHaveBeenCalled();
       expect(result).toBeNull();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]')
+        expect.stringContaining('[DRY RUN]'),
       );
     });
 
@@ -148,9 +148,9 @@ describe('VibeService', () => {
           repositories: expect.arrayContaining([
             expect.objectContaining({
               display_name: 'my-awesome-project',
-            })
+            }),
           ]),
-        })
+        }),
       );
     });
   });
@@ -228,13 +228,13 @@ describe('VibeService', () => {
         mockVibeClient,
         'proj-1',
         hulyIssue,
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockVibeClient.createTask).not.toHaveBeenCalled();
       expect(result).toBeNull();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]')
+        expect.stringContaining('[DRY RUN]'),
       );
     });
 
@@ -296,7 +296,7 @@ describe('VibeService', () => {
 
       for (const { hulyStatus, expectedVibeStatus } of testCases) {
         mockVibeClient.createTask.mockClear();
-        
+
         await createVibeTask(mockVibeClient, 'proj-1', {
           identifier: 'TEST-1',
           title: 'Test',
@@ -306,7 +306,7 @@ describe('VibeService', () => {
 
         expect(mockVibeClient.createTask).toHaveBeenCalledWith(
           'proj-1',
-          expect.objectContaining({ status: expectedVibeStatus })
+          expect.objectContaining({ status: expectedVibeStatus }),
         );
       }
     });
@@ -323,7 +323,7 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.updateTask).toHaveBeenCalledWith('task-1', 'status', 'done');
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        '[Vibe] ✓ Updated task task-1 status to: done'
+        '[Vibe] ✓ Updated task task-1 status to: done',
       );
     });
 
@@ -332,12 +332,12 @@ describe('VibeService', () => {
         mockVibeClient,
         'task-1',
         'done',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockVibeClient.updateTask).not.toHaveBeenCalled();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]')
+        expect.stringContaining('[DRY RUN]'),
       );
     });
 
@@ -353,10 +353,10 @@ describe('VibeService', () => {
       mockVibeClient.updateTask.mockResolvedValue({ success: true });
 
       const statuses = ['todo', 'inprogress', 'inreview', 'done', 'cancelled'];
-      
+
       for (const status of statuses) {
         mockVibeClient.updateTask.mockClear();
-        
+
         await updateVibeTaskStatus(mockVibeClient, 'task-1', status);
 
         expect(mockVibeClient.updateTask).toHaveBeenCalledWith('task-1', 'status', status);
@@ -376,7 +376,7 @@ describe('VibeService', () => {
       expect(mockVibeClient.updateTask).toHaveBeenCalledWith(
         'task-1',
         'description',
-        'New description'
+        'New description',
       );
       expect(consoleSpy.log).toHaveBeenCalledWith('[Vibe] ✓ Updated task task-1 description');
     });
@@ -386,12 +386,12 @@ describe('VibeService', () => {
         mockVibeClient,
         'task-1',
         'New description',
-        { sync: { dryRun: true } }
+        { sync: { dryRun: true } },
       );
 
       expect(mockVibeClient.updateTask).not.toHaveBeenCalled();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]')
+        expect.stringContaining('[DRY RUN]'),
       );
     });
 
@@ -420,7 +420,7 @@ describe('VibeService', () => {
       expect(mockVibeClient.updateTask).toHaveBeenCalledWith(
         'task-1',
         'description',
-        multilineDesc
+        multilineDesc,
       );
     });
   });
@@ -458,7 +458,7 @@ describe('VibeService', () => {
       const result = await service.createTask(
         mockVibeClient,
         'proj-1',
-        { identifier: 'TEST-1', title: 'Test', status: 'Backlog' }
+        { identifier: 'TEST-1', title: 'Test', status: 'Backlog' },
       );
 
       expect(mockVibeClient.createTask).not.toHaveBeenCalled();
@@ -521,7 +521,7 @@ describe('VibeService', () => {
         mockVibeClient,
         'proj-1',
         { identifier: 'TEST-1', title: 'Test', status: 'Backlog' },
-        {}
+        {},
       );
 
       expect(result).toEqual({ id: '1' });
@@ -534,7 +534,7 @@ describe('VibeService', () => {
       await createVibeProject(mockVibeClient, { name: longName });
 
       expect(mockVibeClient.createProject).toHaveBeenCalledWith(
-        expect.objectContaining({ name: longName })
+        expect.objectContaining({ name: longName }),
       );
     });
 
@@ -552,7 +552,7 @@ describe('VibeService', () => {
         'proj-1',
         expect.objectContaining({
           title: 'Fix: "bug" in <component> & more',
-        })
+        }),
       );
     });
   });

@@ -40,7 +40,7 @@ No comments yet.`;
 function extractFullDescription(detailText) {
   const lines = detailText.split('\n');
   let inDescription = false;
-  let description = [];
+  const description = [];
 
   // Top-level sections that mark the end of description
   const endSections = ['## Recent Comments', '## Sub-issues', '## Attachments'];
