@@ -78,7 +78,9 @@ for (const [title, group] of byTitle.entries()) {
     }
 
     for (const dup of duplicates) {
-      toClose.push(dup);
+      if (dup.status !== 'closed') {
+        toClose.push(dup);
+      }
       duplicateCount++;
     }
   }
@@ -86,7 +88,8 @@ for (const [title, group] of byTitle.entries()) {
 
 console.log(`\n=== Summary ===`);
 console.log(`Unique titles: ${byTitle.size}`);
-console.log(`Duplicates to close: ${duplicateCount}`);
+console.log(`Total duplicates: ${duplicateCount}`);
+console.log(`Open duplicates to close: ${toClose.length}`);
 
 if (toClose.length === 0) {
   console.log('\nNo duplicates found!');
