@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       # Huly API Configuration
-      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3457/api}
+      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3458}
       - HULY_USE_REST=${HULY_USE_REST:-true}
 
       # Vibe Kanban Configuration
