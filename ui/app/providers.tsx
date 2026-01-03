@@ -18,19 +18,9 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // Stale time: how long before data is considered stale
-            staleTime: 3000, // 3 seconds
-
-            // Refetch interval: poll for updates
-            refetchInterval: parseInt(
-              process.env.NEXT_PUBLIC_POLLING_INTERVAL || '5000'
-            ), // 5 seconds
-
-            // Retry logic
+            staleTime: 30000,
             retry: 2,
             retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-
-            // Refetch on window focus
             refetchOnWindowFocus: true,
           },
           mutations: {

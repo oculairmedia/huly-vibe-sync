@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    image: ghcr.io/oculairmedia/huly-vibe-sync:latest
+    image: huly-vibe-sync:latest
     container_name: huly-vibe-sync
     restart: unless-stopped
     environment:
@@ -14,8 +14,11 @@ services:
       - VIBE_MCP_URL=${VIBE_MCP_URL:-http://192.168.50.90:9717/mcp}
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
+      # Change Watcher (webhook-driven sync)
+      - HULY_CHANGE_WATCHER_URL=http://localhost:3459
+
       # Sync Configuration
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000} # 10 seconds default
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-60000} # 60 seconds fallback (webhook is primary)
       - INCREMENTAL_SYNC=${INCREMENTAL_SYNC:-true}
       - PARALLEL_SYNC=${PARALLEL_SYNC:-true}
       - MAX_WORKERS=${MAX_WORKERS:-5}
@@ -84,33 +87,29 @@ services:
         max-file: '3'
 
   huly-vibe-sync-ui:
-    image: ghcr.io/oculairmedia/huly-vibe-sync-ui:latest
+    image: node:18-alpine
     container_name: huly-vibe-sync-ui
-    pull_policy: never # Temporarily use local image for testing
     restart: unless-stopped
+    working_dir: /app
+    command: ["node", "server.js"]
     environment:
-      # API Configuration
       - API_URL=${API_URL:-http://192.168.50.90:3099}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://192.168.50.90:3099}
-      - NEXT_PUBLIC_POLLING_INTERVAL=${NEXT_PUBLIC_POLLING_INTERVAL:-5000}
-
-      # Node Environment
       - NODE_ENV=production
-
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    volumes:
+      - ./ui/.next/standalone:/app
+      - ./ui/.next/static:/app/.next/static
+      - ./ui/public:/app/public
     ports:
       - '${UI_PORT:-3110}:3000'
-
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1',
-        ]
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-
     logging:
       driver: 'json-file'
       options:
