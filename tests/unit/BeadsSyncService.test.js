@@ -5,10 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  createMockBeadsIssue,
-  createSyncPair,
-} from '../mocks/beadsMocks.js';
+import { createMockBeadsIssue, createSyncPair } from '../mocks/beadsMocks.js';
 
 // Mock child_process before importing
 const mockExecSync = vi.fn();
@@ -94,7 +91,13 @@ describe('BeadsSyncService', () => {
       mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
 
       const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Issue 1', status: 'Todo', priority: 'Medium', project: 'TEST' },
+        {
+          identifier: 'TEST-1',
+          title: 'Issue 1',
+          status: 'Todo',
+          priority: 'Medium',
+          project: 'TEST',
+        },
       ];
 
       const result = await batchSyncHulyToBeads('/test/project', hulyIssues, [], db, {});
@@ -112,7 +115,13 @@ describe('BeadsSyncService', () => {
       });
 
       const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Issue 1', status: 'Todo', priority: 'Medium', project: 'TEST' },
+        {
+          identifier: 'TEST-1',
+          title: 'Issue 1',
+          status: 'Todo',
+          priority: 'Medium',
+          project: 'TEST',
+        },
       ];
 
       const result = await batchSyncHulyToBeads('/test/project', hulyIssues, [], db, {});
@@ -128,11 +137,14 @@ describe('BeadsSyncService', () => {
       getIssue: vi.fn(() => null),
       getAllIssues: vi.fn(() => []),
       upsertIssue: vi.fn(),
+      markDeletedFromHuly: vi.fn(),
+      isDeletedFromHuly: vi.fn(() => false),
     });
 
     const createMockHulyClient = () => ({
       createIssue: vi.fn().mockResolvedValue({ identifier: 'TEST-NEW' }),
       patchIssue: vi.fn().mockResolvedValue(true),
+      getIssue: vi.fn().mockResolvedValue(null),
     });
 
     it('should return result summary for empty input', async () => {
@@ -147,7 +159,7 @@ describe('BeadsSyncService', () => {
         [],
         'TEST',
         db,
-        {},
+        {}
       );
 
       expect(result).toEqual({
@@ -163,9 +175,7 @@ describe('BeadsSyncService', () => {
       const db = createMockDb();
       const hulyClient = createMockHulyClient();
 
-      const beadsIssues = [
-        createMockBeadsIssue({ id: 'beads-1', title: 'Beads Issue 1' }),
-      ];
+      const beadsIssues = [createMockBeadsIssue({ id: 'beads-1', title: 'Beads Issue 1' })];
 
       const result = await batchSyncBeadsToHuly(
         hulyClient,
@@ -174,7 +184,7 @@ describe('BeadsSyncService', () => {
         [],
         'TEST',
         db,
-        {},
+        {}
       );
 
       expect(result.synced).toBe(1);
@@ -198,15 +208,9 @@ describe('BeadsSyncService', () => {
       const db = createMockDb();
       const hulyClient = createMockHulyClient();
 
-      const result = await fullBidirectionalSync(
-        hulyClient,
-        '/test/project',
-        [],
-        [],
-        'TEST',
-        db,
-        { sync: { dryRun: true } },
-      );
+      const result = await fullBidirectionalSync(hulyClient, '/test/project', [], [], 'TEST', db, {
+        sync: { dryRun: true },
+      });
 
       expect(result).toHaveProperty('hulyToBeads');
       expect(result).toHaveProperty('beadsToHuly');
@@ -219,17 +223,47 @@ describe('BeadsSyncService', () => {
       const db = createMockDb();
       const hulyClient = createMockHulyClient();
 
-      const result = await fullBidirectionalSync(
+      const result = await fullBidirectionalSync(hulyClient, '/test/project', [], [], 'TEST', db, {
+        sync: { dryRun: true },
+      });
+
+      expect(result.gitSync).toBe(false);
+    });
+  });
+
+  describe('deletion protection', () => {
+    it('should mark issue as deleted when Huly API returns null', async () => {
+      const { syncBeadsIssueToHuly } = await import('../../lib/BeadsSyncService.js');
+
+      const db = {
+        getIssue: vi.fn(() => null),
+        getAllIssues: vi.fn(() => [
+          { identifier: 'TEST-1', beads_issue_id: 'beads-orphan', deleted_from_huly: 0 },
+        ]),
+        upsertIssue: vi.fn(),
+        markDeletedFromHuly: vi.fn(),
+      };
+
+      const hulyClient = {
+        getIssue: vi.fn().mockResolvedValue(null),
+        createIssue: vi.fn(),
+        patchIssue: vi.fn(),
+      };
+
+      const beadsIssue = createMockBeadsIssue({ id: 'beads-orphan', title: 'Orphaned Issue' });
+
+      await syncBeadsIssueToHuly(
         hulyClient,
         '/test/project',
-        [],
+        beadsIssue,
         [],
         'TEST',
         db,
-        { sync: { dryRun: true } },
+        {},
+        new Set()
       );
 
-      expect(result.gitSync).toBe(false);
+      expect(db.markDeletedFromHuly).toHaveBeenCalledWith('TEST-1');
     });
   });
 });

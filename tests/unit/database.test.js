@@ -43,9 +43,7 @@ describe('SyncDatabase', () => {
     });
 
     it('should create all required tables', () => {
-      const tables = db.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table'",
-      ).all();
+      const tables = db.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 
       const tableNames = tables.map(t => t.name);
       expect(tableNames).toContain('sync_metadata');
@@ -55,9 +53,7 @@ describe('SyncDatabase', () => {
     });
 
     it('should create indexes', () => {
-      const indexes = db.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type='index'",
-      ).all();
+      const indexes = db.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all();
 
       const indexNames = indexes.map(i => i.name);
       expect(indexNames.length).toBeGreaterThan(0);
@@ -288,7 +284,7 @@ describe('SyncDatabase', () => {
         });
 
         const projects = db.getProjectsToSync(300000, {
-          'TEST': newHash, // Description changed
+          TEST: newHash, // Description changed
         });
 
         expect(projects).toHaveLength(1);
@@ -304,7 +300,7 @@ describe('SyncDatabase', () => {
         });
 
         const projects = db.getProjectsToSync(300000, {
-          'TEST': 'some-hash',
+          TEST: 'some-hash',
         });
 
         expect(projects).toHaveLength(1);
@@ -476,14 +472,16 @@ describe('SyncDatabase', () => {
         });
 
         // Force old timestamp
-        db.db.prepare(
-          'UPDATE issues SET last_sync_at = ? WHERE identifier = ?',
-        ).run(cutoffTime - 10000, 'TEST-1');
+        db.db
+          .prepare('UPDATE issues SET last_sync_at = ? WHERE identifier = ?')
+          .run(cutoffTime - 10000, 'TEST-1');
 
         // Wait a moment to ensure different timestamp
         const waitMs = 10;
         const endTime = Date.now() + waitMs;
-        while (Date.now() < endTime) { /* busy wait */ }
+        while (Date.now() < endTime) {
+          /* busy wait */
+        }
 
         // Create new issue (will have current last_sync_at)
         db.upsertIssue({
@@ -1052,10 +1050,12 @@ describe('SyncDatabase', () => {
       const promises = [];
       for (let i = 0; i < 10; i++) {
         promises.push(
-          Promise.resolve(db.upsertProject({
-            identifier: 'TEST',
-            name: `Name ${i}`,
-          })),
+          Promise.resolve(
+            db.upsertProject({
+              identifier: 'TEST',
+              name: `Name ${i}`,
+            })
+          )
         );
       }
 
@@ -1081,7 +1081,12 @@ describe('SyncDatabase', () => {
 
       it('should compute different hash for different content', () => {
         const issue1 = { title: 'Test', description: 'Desc', status: 'Todo', priority: 'High' };
-        const issue2 = { title: 'Test Changed', description: 'Desc', status: 'Todo', priority: 'High' };
+        const issue2 = {
+          title: 'Test Changed',
+          description: 'Desc',
+          status: 'Todo',
+          priority: 'High',
+        };
 
         const hash1 = SyncDatabase.computeIssueContentHash(issue1);
         const hash2 = SyncDatabase.computeIssueContentHash(issue2);
@@ -1105,24 +1110,27 @@ describe('SyncDatabase', () => {
         const issue1 = { title: 'Test', status: 'Todo' };
         const issue2 = { title: 'Test', status: 'Done' };
 
-        expect(SyncDatabase.computeIssueContentHash(issue1))
-          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+        expect(SyncDatabase.computeIssueContentHash(issue1)).not.toBe(
+          SyncDatabase.computeIssueContentHash(issue2)
+        );
       });
 
       it('should detect priority changes', () => {
         const issue1 = { title: 'Test', priority: 'Low' };
         const issue2 = { title: 'Test', priority: 'High' };
 
-        expect(SyncDatabase.computeIssueContentHash(issue1))
-          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+        expect(SyncDatabase.computeIssueContentHash(issue1)).not.toBe(
+          SyncDatabase.computeIssueContentHash(issue2)
+        );
       });
 
       it('should detect description changes', () => {
         const issue1 = { title: 'Test', description: 'Original' };
         const issue2 = { title: 'Test', description: 'Modified' };
 
-        expect(SyncDatabase.computeIssueContentHash(issue1))
-          .not.toBe(SyncDatabase.computeIssueContentHash(issue2));
+        expect(SyncDatabase.computeIssueContentHash(issue1)).not.toBe(
+          SyncDatabase.computeIssueContentHash(issue2)
+        );
       });
     });
 
@@ -1340,6 +1348,99 @@ describe('SyncDatabase', () => {
 
         const mismatched = db.getIssuesWithContentMismatch('HASH');
         expect(mismatched).toHaveLength(0);
+      });
+    });
+  });
+
+  describe('deletion protection', () => {
+    describe('markDeletedFromHuly', () => {
+      it('should mark an issue as deleted from Huly', () => {
+        db.upsertProject({ identifier: 'DEL', name: 'Deletion Test' });
+        db.upsertIssue({
+          identifier: 'DEL-1',
+          project_identifier: 'DEL',
+          title: 'To be deleted',
+          beads_issue_id: 'del-beads-1',
+        });
+
+        db.markDeletedFromHuly('DEL-1');
+
+        const issue = db.getIssue('DEL-1');
+        expect(issue.deleted_from_huly).toBe(1);
+      });
+
+      it('should update the updated_at timestamp', () => {
+        db.upsertProject({ identifier: 'DEL', name: 'Deletion Test' });
+        db.upsertIssue({
+          identifier: 'DEL-1',
+          project_identifier: 'DEL',
+          title: 'To be deleted',
+        });
+
+        const before = db.getIssue('DEL-1').updated_at;
+        db.markDeletedFromHuly('DEL-1');
+        const after = db.getIssue('DEL-1').updated_at;
+
+        expect(after).toBeGreaterThanOrEqual(before);
+      });
+
+      it('should not throw for non-existent issue', () => {
+        expect(() => db.markDeletedFromHuly('NONEXISTENT-999')).not.toThrow();
+      });
+    });
+
+    describe('isDeletedFromHuly', () => {
+      it('should return true for deleted issue', () => {
+        db.upsertProject({ identifier: 'DEL', name: 'Deletion Test' });
+        db.upsertIssue({
+          identifier: 'DEL-1',
+          project_identifier: 'DEL',
+          title: 'Deleted issue',
+        });
+        db.markDeletedFromHuly('DEL-1');
+
+        expect(db.isDeletedFromHuly('DEL-1')).toBe(true);
+      });
+
+      it('should return false for non-deleted issue', () => {
+        db.upsertProject({ identifier: 'DEL', name: 'Deletion Test' });
+        db.upsertIssue({
+          identifier: 'DEL-1',
+          project_identifier: 'DEL',
+          title: 'Active issue',
+        });
+
+        expect(db.isDeletedFromHuly('DEL-1')).toBe(false);
+      });
+
+      it('should return false for non-existent issue', () => {
+        expect(db.isDeletedFromHuly('NONEXISTENT-999')).toBe(false);
+      });
+    });
+
+    describe('deleted issues in getAllIssues', () => {
+      it('should include deleted_from_huly field in results', () => {
+        db.upsertProject({ identifier: 'DEL', name: 'Deletion Test' });
+        db.upsertIssue({
+          identifier: 'DEL-1',
+          project_identifier: 'DEL',
+          title: 'Deleted',
+          beads_issue_id: 'del-1',
+        });
+        db.upsertIssue({
+          identifier: 'DEL-2',
+          project_identifier: 'DEL',
+          title: 'Active',
+          beads_issue_id: 'del-2',
+        });
+        db.markDeletedFromHuly('DEL-1');
+
+        const issues = db.getAllIssues();
+        const del1 = issues.find(i => i.identifier === 'DEL-1');
+        const del2 = issues.find(i => i.identifier === 'DEL-2');
+
+        expect(del1.deleted_from_huly).toBe(1);
+        expect(del2.deleted_from_huly).toBe(0);
       });
     });
   });
