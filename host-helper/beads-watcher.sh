@@ -25,7 +25,7 @@ trigger_sync() {
     unset "PENDING_SYNCS[$project]" 2>/dev/null || true
     
     log "Triggering sync for $project"
-    curl -s -X POST "${SYNC_API}?project=${project}" -o /dev/null &
+    curl -s -X POST "$SYNC_API" -H "Content-Type: application/json" -d "{\"projectId\":\"$project\"}" -o /dev/null &
 }
 
 process_pending() {
@@ -41,9 +41,9 @@ extract_project() {
     
     local db_path="$WATCH_ROOT/$project_dir/.beads/beads.db"
     if [[ -f "$db_path" ]]; then
-        local prefix=$(sqlite3 "$db_path" \
-            "SELECT SUBSTR(id, 1, INSTR(id, '-')-1) FROM issues LIMIT 1" 2>/dev/null || echo "")
-        if [[ -n "$prefix" ]]; then
+        local issue_id=$(sqlite3 "$db_path" "SELECT id FROM issues LIMIT 1" 2>/dev/null || echo "")
+        if [[ -n "$issue_id" ]]; then
+            local prefix="${issue_id%-*}"
             echo "${prefix^^}"
             return
         fi
@@ -75,7 +75,8 @@ main() {
     trap "kill $TIMER_PID 2>/dev/null; exit 0" EXIT INT TERM
     trap 'process_pending' ALRM
     
-    inotifywait -m -q -e modify,create \
+    # moved_to required: beads uses atomic replacement (tmp file → rename)
+    inotifywait -m -q -e modify,create,moved_to \
         --include 'issues\.jsonl$' \
         --format '%w%f' \
         "${watch_dirs[@]}" 2>/dev/null | while read -r filepath; do
