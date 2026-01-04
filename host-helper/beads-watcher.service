@@ -1,0 +1,18 @@
+[Unit]
+Description=Beads File Watcher - triggers sync on .beads changes
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/beads-watcher.sh
+Restart=always
+RestartSec=5
+Environment=BEADS_SYNC_API=http://localhost:3099/api/sync/trigger
+Environment=BEADS_WATCH_ROOT=/opt/stacks
+Environment=BEADS_DEBOUNCE_MS=2000
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
