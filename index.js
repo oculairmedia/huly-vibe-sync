@@ -373,13 +373,13 @@ async function main() {
   // ============================================================
   // SYNC CONTROL: Mutex + Debounce to prevent sync storms
   // ============================================================
-  
+
   // Per-project mutexes to prevent concurrent syncs for same project
   const syncMutexes = new Map(); // projectId -> Mutex
   const globalSyncMutex = new Mutex(); // For full syncs (projectId = null)
-  
+
   // Get or create mutex for a project
-  const getSyncMutex = (projectId) => {
+  const getSyncMutex = projectId => {
     if (!projectId) return globalSyncMutex;
     if (!syncMutexes.has(projectId)) {
       syncMutexes.set(projectId, new Mutex());
@@ -456,7 +456,7 @@ async function main() {
   const runSyncWithMutex = async (projectId = null) => {
     const mutex = getSyncMutex(projectId);
     const key = projectId || 'global';
-    
+
     // Check if sync is already running for this project
     if (mutex.isLocked()) {
       logger.debug({ projectId: key }, 'Sync already in progress, skipping');
@@ -474,8 +474,8 @@ async function main() {
   // This coalesces rapid webhook/SSE events into a single sync
   const SYNC_DEBOUNCE_MS = 3000;
   const debouncedSyncByProject = new Map(); // projectId -> debounced function
-  
-  const getDebouncedSync = (projectId) => {
+
+  const getDebouncedSync = projectId => {
     const key = projectId || 'global';
     if (!debouncedSyncByProject.has(key)) {
       const debounced = pDebounce(async () => {
@@ -521,20 +521,36 @@ async function main() {
 
   // Callback for webhook changes from huly-change-watcher
   const handleWebhookChanges = async changeData => {
+    const projectIds = Array.from(changeData.byProject?.keys() || []);
+
     logger.info(
       {
         type: changeData.type,
         changeCount: changeData.changes.length,
-        projects: Array.from(changeData.byProject.keys()),
+        projects: projectIds,
       },
       'Processing changes from webhook'
     );
 
-    // For now, trigger a full sync when changes are detected
-    // TODO: Optimize to only sync the specific projects/issues that changed
-    await runSyncWithTimeout();
+    if (projectIds.length === 0) {
+      logger.debug('No project-scoped changes, skipping targeted sync');
+      return { success: true, processed: 0 };
+    }
 
-    return { success: true, processed: changeData.changes.length };
+    const results = await Promise.allSettled(
+      projectIds.map(projectId => runSyncWithTimeout(projectId))
+    );
+
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    if (failed > 0) {
+      logger.warn({ succeeded, failed, projects: projectIds }, 'Some project syncs failed');
+    } else {
+      logger.info({ synced: succeeded, projects: projectIds }, 'Targeted sync complete');
+    }
+
+    return { success: failed === 0, processed: changeData.changes.length };
   };
 
   // Initialize webhook handler
