@@ -16,6 +16,7 @@ services:
 
       # Change Watcher (webhook-driven sync)
       - HULY_CHANGE_WATCHER_URL=http://localhost:3459
+      - WEBHOOK_CALLBACK_URL=http://172.17.50.1:3099/webhook
 
       # Sync Configuration
       - SYNC_INTERVAL=${SYNC_INTERVAL:-60000} # 60 seconds fallback (webhook is primary)
@@ -91,7 +92,7 @@ services:
     container_name: huly-vibe-sync-ui
     restart: unless-stopped
     working_dir: /app
-    command: ["node", "server.js"]
+    command: ['node', 'server.js']
     environment:
       - API_URL=${API_URL:-http://192.168.50.90:3099}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://192.168.50.90:3099}
@@ -105,7 +106,11 @@ services:
     ports:
       - '${UI_PORT:-3110}:3000'
     healthcheck:
-      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
