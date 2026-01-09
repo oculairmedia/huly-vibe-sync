@@ -16,6 +16,12 @@ import { fileURLToPath } from 'url';
 import { Mutex } from 'async-mutex';
 import pDebounce from 'p-debounce';
 import http from 'http';
+
+setInterval(() => {
+  try {
+    execSync('true', { stdio: 'ignore', timeout: 100 });
+  } catch (e) {}
+}, 60000);
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createVibeRestClient } from './lib/VibeRestClient.js';
 import { createSyncDatabase, migrateFromJSON } from './lib/database.js';
