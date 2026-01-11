@@ -80,6 +80,27 @@ import { FileWatcher } from './lib/FileWatcher.js';
 import { logger } from './lib/logger.js';
 import { createBeadsWatcher } from './lib/BeadsWatcher.js';
 import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
+import { createRequire } from 'module';
+
+// Temporal workflow triggers for bidirectional sync (CommonJS module)
+const require = createRequire(import.meta.url);
+let triggerSyncFromVibe, triggerSyncFromHuly, triggerSyncFromBeads, triggerBidirectionalSync, isTemporalAvailable;
+try {
+  const temporalTrigger = require('./temporal/dist/trigger.js');
+  triggerSyncFromVibe = temporalTrigger.triggerSyncFromVibe;
+  triggerSyncFromHuly = temporalTrigger.triggerSyncFromHuly;
+  triggerSyncFromBeads = temporalTrigger.triggerSyncFromBeads;
+  triggerBidirectionalSync = temporalTrigger.triggerBidirectionalSync;
+  isTemporalAvailable = temporalTrigger.isTemporalAvailable;
+} catch (err) {
+  console.warn('[Temporal] Failed to load trigger module:', err.message);
+  // Provide no-op functions if Temporal not available
+  isTemporalAvailable = async () => false;
+  triggerSyncFromVibe = async () => { throw new Error('Temporal not available'); };
+  triggerSyncFromHuly = async () => { throw new Error('Temporal not available'); };
+  triggerSyncFromBeads = async () => { throw new Error('Temporal not available'); };
+  triggerBidirectionalSync = async () => { throw new Error('Temporal not available'); };
+}
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -157,6 +178,9 @@ if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
     );
   }
 }
+
+// Temporal workflow orchestration status
+let temporalEnabled = false;
 
 logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
 logger.info({ config: getConfigSummary(config) }, 'Configuration loaded');
@@ -373,6 +397,19 @@ async function main() {
 
   logger.info('All clients initialized successfully');
 
+  // Check Temporal availability for bidirectional sync
+  try {
+    temporalEnabled = await isTemporalAvailable();
+    if (temporalEnabled) {
+      logger.info('✓ Temporal server available - bidirectional sync via workflows enabled');
+    } else {
+      logger.warn('✗ Temporal server not available - using legacy sync');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to check Temporal availability - using legacy sync');
+    temporalEnabled = false;
+  }
+
   // Track sync interval timer (for dynamic config updates)
   let syncTimer = null;
 
@@ -534,6 +571,7 @@ async function main() {
         type: changeData.type,
         changeCount: changeData.changes.length,
         projects: projectIds,
+        temporalEnabled,
       },
       'Processing changes from webhook'
     );
@@ -543,6 +581,56 @@ async function main() {
       return { success: true, processed: 0 };
     }
 
+    // Use Temporal workflow for bidirectional sync
+    if (temporalEnabled) {
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+
+      for (const [projectId, changes] of changeData.byProject || []) {
+        const project = db.getProjectByIdentifier(projectId);
+        if (!project) {
+          logger.warn({ projectId }, 'Project not found in database');
+          continue;
+        }
+
+        const context = {
+          projectIdentifier: projectId,
+          vibeProjectId: project.vibe_project_id,
+          gitRepoPath: project.filesystem_path,
+        };
+
+        // Trigger workflow for each changed Huly issue
+        const results = await Promise.allSettled(
+          changes.map(change => {
+            const identifier = change.data?.identifier;
+            if (!identifier) {
+              logger.debug({ change }, 'Skipping change without identifier');
+              return Promise.resolve();
+            }
+
+            return triggerSyncFromHuly(identifier, context).catch(err => {
+              logger.error({ identifier, err }, 'Failed to trigger Temporal workflow for Huly issue');
+              throw err;
+            });
+          })
+        );
+
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        totalSucceeded += succeeded;
+        totalFailed += failed;
+      }
+
+      logger.info(
+        { succeeded: totalSucceeded, failed: totalFailed, total: changeData.changes.length },
+        'Temporal workflows triggered for Huly changes'
+      );
+
+      return { success: totalFailed === 0, processed: changeData.changes.length, workflows: totalSucceeded };
+    }
+
+    // Fallback: use legacy sync if Temporal not available
+    logger.debug({ projects: projectIds }, 'Falling back to legacy sync for Huly');
     const results = await Promise.allSettled(
       projectIds.map(projectId => runSyncWithTimeout(projectId))
     );
@@ -580,11 +668,66 @@ async function main() {
       {
         project: changeData.projectIdentifier,
         fileCount: changeData.changedFiles.length,
+        temporalEnabled,
       },
       'Processing Beads file changes'
     );
 
-    // Trigger sync for the specific project that changed
+    // Use Temporal workflow for bidirectional sync
+    if (temporalEnabled) {
+      const project = db.getProjectByIdentifier(changeData.projectIdentifier);
+      if (!project) {
+        logger.warn({ project: changeData.projectIdentifier }, 'Project not found in database');
+        return { success: false, project: changeData.projectIdentifier };
+      }
+
+      const context = {
+        projectIdentifier: changeData.projectIdentifier,
+        vibeProjectId: project.vibe_project_id,
+        gitRepoPath: changeData.projectPath || project.filesystem_path,
+      };
+
+      // For Beads changes, we need to detect which issues changed
+      // For now, trigger a general sync workflow for the project
+      // The workflow will read Beads issues and sync them
+      try {
+        // Read changed Beads issues and trigger workflows for each
+        const { BeadsClient } = require('./temporal/dist/lib/BeadsClient.js');
+        const beadsClient = new BeadsClient(context.gitRepoPath);
+        const issues = await beadsClient.listIssues();
+
+        if (issues.length === 0) {
+          logger.debug({ project: changeData.projectIdentifier }, 'No Beads issues found');
+          return { success: true, project: changeData.projectIdentifier, workflows: 0 };
+        }
+
+        // Trigger workflow for each Beads issue (the workflow handles conflict resolution)
+        const results = await Promise.allSettled(
+          issues.slice(0, 10).map(issue => // Limit to 10 at a time
+            triggerSyncFromBeads(issue.id, context).catch(err => {
+              logger.error({ issueId: issue.id, err }, 'Failed to trigger Temporal workflow for Beads issue');
+              throw err;
+            })
+          )
+        );
+
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+
+        logger.info(
+          { succeeded, failed, total: issues.length },
+          'Temporal workflows triggered for Beads changes'
+        );
+
+        return { success: failed === 0, project: changeData.projectIdentifier, workflows: succeeded };
+      } catch (err) {
+        logger.error({ err, project: changeData.projectIdentifier }, 'Failed to process Beads changes with Temporal');
+        // Fall through to legacy sync
+      }
+    }
+
+    // Fallback: use legacy sync if Temporal not available or failed
+    logger.debug({ project: changeData.projectIdentifier }, 'Falling back to legacy sync for Beads');
     await runSyncWithTimeout(changeData.projectIdentifier);
 
     return { success: true, project: changeData.projectIdentifier };
@@ -612,12 +755,43 @@ async function main() {
         vibeProject: changeData.vibeProjectId,
         hulyProject: changeData.hulyProjectIdentifier,
         taskCount: changeData.changedTaskIds.length,
+        temporalEnabled,
       },
       'Processing Vibe task changes from SSE'
     );
 
-    // Trigger sync for the specific project that changed
+    // Use Temporal workflow for bidirectional sync
+    if (temporalEnabled && changeData.changedTaskIds.length > 0) {
+      const context = {
+        projectIdentifier: changeData.hulyProjectIdentifier,
+        vibeProjectId: changeData.vibeProjectId,
+        gitRepoPath: db.getProjectByIdentifier(changeData.hulyProjectIdentifier)?.filesystem_path,
+      };
+
+      // Trigger Temporal workflow for each changed task
+      const results = await Promise.allSettled(
+        changeData.changedTaskIds.map(taskId =>
+          triggerSyncFromVibe(taskId, context).catch(err => {
+            logger.error({ taskId, err }, 'Failed to trigger Temporal workflow for Vibe task');
+            throw err;
+          })
+        )
+      );
+
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      logger.info(
+        { succeeded, failed, total: changeData.changedTaskIds.length },
+        'Temporal workflows triggered for Vibe changes'
+      );
+
+      return { success: failed === 0, project: changeData.hulyProjectIdentifier, workflows: succeeded };
+    }
+
+    // Fallback: use legacy sync if Temporal not available
     if (changeData.hulyProjectIdentifier) {
+      logger.debug({ project: changeData.hulyProjectIdentifier }, 'Falling back to legacy sync');
       await runSyncWithTimeout(changeData.hulyProjectIdentifier);
     }
 
