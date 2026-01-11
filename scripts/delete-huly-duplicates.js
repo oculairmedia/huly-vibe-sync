@@ -63,7 +63,12 @@ async function deleteIssuesBulk(identifiers) {
   if (identifiers.length === 0) return { succeeded: 0, failed: 0 };
 
   try {
-    const result = await client.deleteIssuesBulk(identifiers, { cascade: true });
+    // Use fast mode (skip sub-issue handling) and high concurrency for maximum speed
+    const result = await client.deleteIssuesBulk(identifiers, {
+      cascade: true,
+      fast: true,
+      concurrency: 20,
+    });
     return result;
   } catch (e) {
     console.error(`Bulk delete failed: ${e.message}`);

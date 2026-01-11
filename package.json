@@ -8,6 +8,8 @@
     "start": "node index.js",
     "dev": "DRY_RUN=true SYNC_INTERVAL=0 node index.js",
     "sync-once": "SYNC_INTERVAL=0 node index.js",
+    "temporal:worker": "npx ts-node temporal/worker.ts",
+    "temporal:build": "tsc -p temporal/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -38,6 +40,10 @@
   "license": "MIT",
   "dependencies": {
     "@letta-ai/letta-client": "^0.0.68665",
+    "@temporalio/activity": "^1.11.0",
+    "@temporalio/client": "^1.14.1",
+    "@temporalio/worker": "^1.11.0",
+    "@temporalio/workflow": "^1.11.0",
     "async-mutex": "^0.5.0",
     "better-sqlite3": "^9.2.2",
     "chokidar": "^5.0.0",
@@ -53,6 +59,8 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@temporalio/testing": "^1.14.1",
+    "@types/node": "^20.10.0",
     "@vitest/coverage-v8": "^4.0.6",
     "@vitest/ui": "^4.0.6",
     "eslint": "^9.39.1",
@@ -62,6 +70,7 @@
     "nock": "^14.0.10",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.6"
   }

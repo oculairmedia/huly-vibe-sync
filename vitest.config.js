@@ -40,7 +40,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.js'],
 
     // Include/exclude patterns
-    include: ['tests/**/*.test.js'],
+    include: ['tests/**/*.test.{js,ts}'],
     exclude: ['node_modules', 'dist'],
 
     // Reporter

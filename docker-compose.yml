@@ -51,6 +51,13 @@ services:
       # Node Environment
       - NODE_ENV=production
 
+      # Temporal Orchestration (uses FullOrchestrationWorkflow instead of SyncOrchestrator)
+      - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-localhost:7233}
+      - USE_TEMPORAL_ORCHESTRATION=${USE_TEMPORAL_ORCHESTRATION:-false}
+      - USE_TEMPORAL_BEADS=${USE_TEMPORAL_BEADS:-false}
+      - USE_TEMPORAL_VIBE=${USE_TEMPORAL_VIBE:-false}
+      - USE_TEMPORAL_HULY_WEBHOOK=${USE_TEMPORAL_HULY_WEBHOOK:-false}
+
     volumes:
       # Logs directory
       - ./logs:/app/logs
@@ -60,6 +67,18 @@ services:
       - ./lib:/app/lib:ro
       - ./package.json:/app/package.json:ro
       - ./package-lock.json:/app/package-lock.json:ro
+
+      # Temporal workflows and activities
+      - ./temporal/dist:/app/temporal/dist:ro
+      - ./node_modules/@temporalio:/app/node_modules/@temporalio:ro
+      - ./node_modules/nexus-rpc:/app/node_modules/nexus-rpc:ro
+      - ./node_modules/long:/app/node_modules/long:ro
+      - ./node_modules/protobufjs:/app/node_modules/protobufjs:ro
+      - ./node_modules/@protobufjs:/app/node_modules/@protobufjs:ro
+      - ./node_modules/@grpc:/app/node_modules/@grpc:ro
+      - ./node_modules/@js-sdsl:/app/node_modules/@js-sdsl:ro
+      - ./node_modules/abort-controller:/app/node_modules/abort-controller:ro
+      - ./node_modules/uuid:/app/node_modules/uuid:ro
 
       # Letta agent persistence (read-write for storing agent IDs)
       - ./.letta:/app/.letta
@@ -81,6 +100,37 @@ services:
       retries: 3
       start_period: 10s
 
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  temporal-worker:
+    build:
+      context: .
+      dockerfile: temporal/Dockerfile
+    image: vibesync-temporal-worker:latest
+    container_name: vibesync-temporal-worker
+    restart: unless-stopped
+    user: root
+    environment:
+      - TEMPORAL_ADDRESS=localhost:7233
+      - TEMPORAL_TASK_QUEUE=vibesync-queue
+      - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
+      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3458}
+      - LETTA_API_URL=${LETTA_BASE_URL:-https://letta.oculair.ca}
+      - LETTA_PASSWORD=${LETTA_PASSWORD}
+      - STACKS_DIR=/opt/stacks
+      - NODE_ENV=production
+    volumes:
+      # Access to stacks directory for Beads operations
+      - /opt/stacks:/opt/stacks:rw
+      # Mount local compiled Temporal code
+      - ./temporal/dist:/app/temporal/dist:ro
+    network_mode: host
+    depends_on:
+      - huly-vibe-sync
     logging:
       driver: 'json-file'
       options:

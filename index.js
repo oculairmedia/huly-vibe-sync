@@ -49,6 +49,45 @@ import {
   updateHulyIssueDescription,
 } from './lib/HulyService.js';
 import { syncHulyToVibe } from './lib/SyncOrchestrator.js';
+
+// Temporal orchestration (lazy-loaded)
+let temporalOrchestration = null;
+const USE_TEMPORAL_ORCHESTRATION = process.env.USE_TEMPORAL_ORCHESTRATION === 'true';
+
+async function getTemporalOrchestration() {
+  if (!temporalOrchestration && USE_TEMPORAL_ORCHESTRATION) {
+    try {
+      const {
+        executeFullSync,
+        scheduleFullSync,
+        startScheduledSync,
+        stopScheduledSync,
+        getActiveScheduledSync,
+        restartScheduledSync,
+        isScheduledSyncActive,
+        isTemporalAvailable,
+      } = await import('./temporal/dist/client.js');
+
+      if (await isTemporalAvailable()) {
+        temporalOrchestration = {
+          executeFullSync,
+          scheduleFullSync,
+          startScheduledSync,
+          stopScheduledSync,
+          getActiveScheduledSync,
+          restartScheduledSync,
+          isScheduledSyncActive,
+        };
+        console.log('[Main] Temporal orchestration enabled');
+      } else {
+        console.warn('[Main] Temporal not available, using legacy sync');
+      }
+    } catch (err) {
+      console.warn('[Main] Failed to load Temporal orchestration:', err.message);
+    }
+  }
+  return temporalOrchestration;
+}
 import {
   createVibeService,
   listVibeProjects,
@@ -444,11 +483,41 @@ async function main() {
     });
 
     try {
-      await withTimeout(
-        syncHulyToVibe(hulyClient, vibeClient, db, config, lettaService, projectId),
-        900000, // 15-minute timeout for entire sync
-        'Full sync cycle'
-      );
+      // Check if Temporal orchestration is enabled
+      const temporal = await getTemporalOrchestration();
+
+      if (temporal) {
+        // Use Temporal FullOrchestrationWorkflow for durable sync
+        logger.info({ projectId }, 'Starting Temporal orchestration sync');
+
+        const result = await temporal.executeFullSync({
+          projectIdentifier: projectId || undefined,
+          enableBeads: config.beads?.enabled ?? true,
+          enableLetta: !!lettaService,
+          batchSize: config.sync.maxWorkers || 5,
+        });
+
+        if (!result.success) {
+          throw new Error(`Temporal sync failed: ${result.errors.join(', ')}`);
+        }
+
+        logger.info(
+          {
+            projectId,
+            projectsProcessed: result.projectsProcessed,
+            issuesSynced: result.issuesSynced,
+            durationMs: result.durationMs,
+          },
+          'Temporal orchestration sync completed'
+        );
+      } else {
+        // Fall back to legacy sync
+        await withTimeout(
+          syncHulyToVibe(hulyClient, vibeClient, db, config, lettaService, projectId),
+          900000, // 15-minute timeout for entire sync
+          'Full sync cycle'
+        );
+      }
 
       // Update health stats on success
       const duration = Date.now() - syncStartTime;
@@ -544,21 +613,44 @@ async function main() {
   };
 
   // Callback for configuration updates via API
-  const handleConfigUpdate = updates => {
+  const handleConfigUpdate = async updates => {
     logger.info({ updates }, 'Configuration updated via API');
 
-    // If sync interval changed, restart the timer
-    if (updates.syncInterval !== undefined && syncTimer) {
-      clearInterval(syncTimer);
-      logger.info(
-        {
-          oldInterval: config.sync.interval / 1000,
-          newInterval: updates.syncInterval / 1000,
-        },
-        'Restarting sync timer with new interval'
-      );
+    // If sync interval changed, restart the schedule
+    if (updates.syncInterval !== undefined) {
+      const newIntervalMinutes = Math.max(1, Math.round(updates.syncInterval / 60000));
 
-      syncTimer = setInterval(() => runSyncWithTimeout(), updates.syncInterval);
+      // Try to update Temporal scheduled workflow first
+      const temporal = await getTemporalOrchestration();
+      if (temporal?.restartScheduledSync) {
+        try {
+          const schedule = await temporal.restartScheduledSync({
+            intervalMinutes: newIntervalMinutes,
+            syncOptions: { dryRun: config.sync.dryRun },
+          });
+          if (schedule) {
+            logger.info(
+              { workflowId: schedule.workflowId, intervalMinutes: newIntervalMinutes },
+              'Temporal scheduled sync restarted with new interval'
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Failed to restart Temporal schedule, trying legacy');
+        }
+      }
+
+      // Also update legacy timer if it exists
+      if (syncTimer) {
+        clearInterval(syncTimer);
+        logger.info(
+          {
+            oldInterval: config.sync.interval / 1000,
+            newInterval: updates.syncInterval / 1000,
+          },
+          'Restarting sync timer with new interval (legacy mode)'
+        );
+        syncTimer = setInterval(() => runSyncWithTimeout(), updates.syncInterval);
+      }
     }
   };
 
@@ -765,7 +857,7 @@ async function main() {
       const context = {
         projectIdentifier: changeData.hulyProjectIdentifier,
         vibeProjectId: changeData.vibeProjectId,
-        gitRepoPath: db.getProjectByIdentifier(changeData.hulyProjectIdentifier)?.filesystem_path,
+        gitRepoPath: db.getProject(changeData.hulyProjectIdentifier)?.filesystem_path,
       };
 
       // Trigger Temporal workflow for each changed task
@@ -819,6 +911,7 @@ async function main() {
     onConfigUpdate: handleConfigUpdate,
     lettaCodeService, // Enable filesystem mode for agents
     webhookHandler, // Enable webhook endpoint
+    getTemporalClient: getTemporalOrchestration, // Enable Temporal schedule management
   });
 
   // Run initial sync
@@ -828,8 +921,38 @@ async function main() {
   if (subscribed) {
     logger.info('Webhook mode active - periodic polling disabled');
   } else if (config.sync.interval > 0) {
-    logger.info({ intervalSeconds: config.sync.interval / 1000 }, 'Scheduling periodic syncs');
-    syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
+    const intervalMinutes = Math.max(1, Math.round(config.sync.interval / 60000));
+
+    // Try to use Temporal scheduled workflow if available
+    const temporal = await getTemporalOrchestration();
+    if (temporal?.startScheduledSync) {
+      try {
+        // Check if there's already an active scheduled sync
+        const existing = await temporal.getActiveScheduledSync();
+        if (existing) {
+          logger.info(
+            { workflowId: existing.workflowId, startTime: existing.startTime },
+            'Temporal scheduled sync already active, skipping new schedule'
+          );
+        } else {
+          const schedule = await temporal.startScheduledSync({
+            intervalMinutes,
+            syncOptions: { dryRun: config.sync.dryRun },
+          });
+          logger.info(
+            { workflowId: schedule.workflowId, intervalMinutes },
+            '✓ Temporal scheduled sync started (durable, survives restarts)'
+          );
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Failed to start Temporal scheduled sync, falling back to setInterval');
+        syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
+      }
+    } else {
+      // Fallback to legacy setInterval
+      logger.info({ intervalSeconds: config.sync.interval / 1000 }, 'Scheduling periodic syncs (legacy mode)');
+      syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
+    }
   } else {
     logger.info('One-time sync completed, exiting');
     process.exit(0);

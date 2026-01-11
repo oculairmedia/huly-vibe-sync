@@ -3,6 +3,11 @@
 
 FROM node:20-slim
 
+# Install git (required for Beads operations)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy package files
@@ -14,6 +19,10 @@ RUN npm ci --omit=dev
 # Copy compiled temporal code
 COPY temporal/dist ./temporal/dist
 COPY temporal/package.json ./temporal/
+
+# Copy Beads CLI binary
+COPY temporal/bd /usr/local/bin/bd
+RUN chmod +x /usr/local/bin/bd
 
 # Set environment variables
 ENV NODE_ENV=production
