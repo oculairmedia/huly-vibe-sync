@@ -14,7 +14,57 @@ const activity_1 = require("@temporalio/activity");
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
+const HULY_REST_API_URL = process.env.HULY_REST_API_URL || 'http://192.168.50.90:3458/api';
 const TIMEOUT = 30000;
+/**
+ * Normalize title for comparison (lowercase, trim, remove common prefixes)
+ */
+function normalizeTitle(title) {
+    if (!title)
+        return '';
+    return title
+        .trim()
+        .toLowerCase()
+        .replace(/^\[p[0-4]\]\s*/i, '')
+        .replace(/^\[perf[^\]]*\]\s*/i, '')
+        .replace(/^\[tier\s*\d+\]\s*/i, '')
+        .replace(/^\[action\]\s*/i, '')
+        .replace(/^\[bug\]\s*/i, '')
+        .replace(/^\[fixed\]\s*/i, '')
+        .replace(/^\[epic\]\s*/i, '')
+        .replace(/^\[wip\]\s*/i, '')
+        .trim();
+}
+/**
+ * Check if an issue with the same title already exists in the project
+ * Returns the existing issue identifier if found, null otherwise
+ */
+async function findExistingIssueByTitle(projectIdentifier, title) {
+    try {
+        const response = await fetch(`${HULY_REST_API_URL}/issues/${projectIdentifier}?limit=500&includeDescriptions=false`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(TIMEOUT),
+        });
+        if (!response.ok) {
+            console.warn(`[Huly Activity] Failed to fetch issues for duplicate check: ${response.status}`);
+            return null;
+        }
+        const issues = await response.json();
+        const normalizedTarget = normalizeTitle(title);
+        for (const issue of issues) {
+            if (normalizeTitle(issue.title) === normalizedTarget) {
+                console.log(`[Huly Activity] Found existing issue ${issue.identifier} with matching title`);
+                return issue.identifier;
+            }
+        }
+        return null;
+    }
+    catch (error) {
+        console.warn(`[Huly Activity] Duplicate check failed: ${error instanceof Error ? error.message : error}`);
+        return null;
+    }
+}
 // Status mapping between systems
 const STATUS_HULY_TO_VIBE = {
     'Backlog': 'todo',
@@ -39,6 +89,21 @@ async function syncToHuly(input) {
     console.log(`[Huly Activity] ${operation} issue: ${issue.identifier || issue.title}`);
     try {
         if (operation === 'create') {
+            // DEDUPLICATION: Check if issue with same title already exists
+            if (!issue.projectIdentifier) {
+                console.warn(`[Huly Activity] ⚠️ WARNING: Create operation without projectIdentifier - deduplication check skipped!`);
+                console.warn(`[Huly Activity] ⚠️ Title: "${issue.title}", Source: ${input.source}`);
+            }
+            if (issue.projectIdentifier) {
+                const existingId = await findExistingIssueByTitle(issue.projectIdentifier, issue.title);
+                if (existingId) {
+                    console.warn(`[Huly Activity] ⚠️ DUPLICATE PREVENTED: Issue "${issue.title}" already exists as ${existingId}`);
+                    console.warn(`[Huly Activity] ⚠️ Source: ${input.source}, Project: ${issue.projectIdentifier}`);
+                    console.warn(`[Huly Activity] ⚠️ Returning existing ID instead of creating duplicate`);
+                    // Return the existing issue ID instead of creating a duplicate
+                    return { success: true, systemId: existingId };
+                }
+            }
             const response = await fetch(`${HULY_API_URL}/tools/create_issue`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

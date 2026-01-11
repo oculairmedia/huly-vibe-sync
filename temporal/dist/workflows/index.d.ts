@@ -6,5 +6,7 @@
 export { MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow } from './memory-update';
 export { IssueSyncWorkflow, BatchIssueSyncWorkflow } from './issue-sync';
 export { SyncSingleIssueWorkflow, SyncProjectWorkflow, SyncVibeToHulyWorkflow } from './full-sync';
-export { BidirectionalSyncWorkflow, SyncFromVibeWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, } from './bidirectional-sync';
+export { BidirectionalSyncWorkflow, SyncFromVibeWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, BeadsFileChangeWorkflow, VibeSSEChangeWorkflow, HulyWebhookChangeWorkflow, } from './bidirectional-sync';
+export { FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow } from './orchestration';
+export { ProvisionAgentsWorkflow, ProvisionSingleAgentWorkflow, CleanupFailedProvisionsWorkflow, } from './agent-provisioning';
 //# sourceMappingURL=index.d.ts.map

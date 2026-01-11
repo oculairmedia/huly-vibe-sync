@@ -5,7 +5,7 @@
  * This file re-exports all workflows so the worker can load them.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SyncFromBeadsWorkflow = exports.SyncFromHulyWorkflow = exports.SyncFromVibeWorkflow = exports.BidirectionalSyncWorkflow = exports.SyncVibeToHulyWorkflow = exports.SyncProjectWorkflow = exports.SyncSingleIssueWorkflow = exports.BatchIssueSyncWorkflow = exports.IssueSyncWorkflow = exports.BatchMemoryUpdateWorkflow = exports.MemoryUpdateWorkflow = void 0;
+exports.CleanupFailedProvisionsWorkflow = exports.ProvisionSingleAgentWorkflow = exports.ProvisionAgentsWorkflow = exports.ProjectSyncWorkflow = exports.ScheduledSyncWorkflow = exports.FullOrchestrationWorkflow = exports.HulyWebhookChangeWorkflow = exports.VibeSSEChangeWorkflow = exports.BeadsFileChangeWorkflow = exports.SyncFromBeadsWorkflow = exports.SyncFromHulyWorkflow = exports.SyncFromVibeWorkflow = exports.BidirectionalSyncWorkflow = exports.SyncVibeToHulyWorkflow = exports.SyncProjectWorkflow = exports.SyncSingleIssueWorkflow = exports.BatchIssueSyncWorkflow = exports.IssueSyncWorkflow = exports.BatchMemoryUpdateWorkflow = exports.MemoryUpdateWorkflow = void 0;
 // Memory update workflows
 var memory_update_1 = require("./memory-update");
 Object.defineProperty(exports, "MemoryUpdateWorkflow", { enumerable: true, get: function () { return memory_update_1.MemoryUpdateWorkflow; } });
@@ -25,4 +25,17 @@ Object.defineProperty(exports, "BidirectionalSyncWorkflow", { enumerable: true, 
 Object.defineProperty(exports, "SyncFromVibeWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.SyncFromVibeWorkflow; } });
 Object.defineProperty(exports, "SyncFromHulyWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.SyncFromHulyWorkflow; } });
 Object.defineProperty(exports, "SyncFromBeadsWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.SyncFromBeadsWorkflow; } });
+Object.defineProperty(exports, "BeadsFileChangeWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.BeadsFileChangeWorkflow; } });
+Object.defineProperty(exports, "VibeSSEChangeWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.VibeSSEChangeWorkflow; } });
+Object.defineProperty(exports, "HulyWebhookChangeWorkflow", { enumerable: true, get: function () { return bidirectional_sync_1.HulyWebhookChangeWorkflow; } });
+// Full orchestration workflows (replaces SyncOrchestrator)
+var orchestration_1 = require("./orchestration");
+Object.defineProperty(exports, "FullOrchestrationWorkflow", { enumerable: true, get: function () { return orchestration_1.FullOrchestrationWorkflow; } });
+Object.defineProperty(exports, "ScheduledSyncWorkflow", { enumerable: true, get: function () { return orchestration_1.ScheduledSyncWorkflow; } });
+Object.defineProperty(exports, "ProjectSyncWorkflow", { enumerable: true, get: function () { return orchestration_1.ProjectSyncWorkflow; } });
+// Agent provisioning workflows
+var agent_provisioning_1 = require("./agent-provisioning");
+Object.defineProperty(exports, "ProvisionAgentsWorkflow", { enumerable: true, get: function () { return agent_provisioning_1.ProvisionAgentsWorkflow; } });
+Object.defineProperty(exports, "ProvisionSingleAgentWorkflow", { enumerable: true, get: function () { return agent_provisioning_1.ProvisionSingleAgentWorkflow; } });
+Object.defineProperty(exports, "CleanupFailedProvisionsWorkflow", { enumerable: true, get: function () { return agent_provisioning_1.CleanupFailedProvisionsWorkflow; } });
 //# sourceMappingURL=index.js.map

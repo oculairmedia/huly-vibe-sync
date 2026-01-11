@@ -39,6 +39,31 @@ exports.scheduleSingleIssueSync = scheduleSingleIssueSync;
 exports.executeSingleIssueSync = executeSingleIssueSync;
 exports.scheduleProjectSync = scheduleProjectSync;
 exports.scheduleVibeToHulySync = scheduleVibeToHulySync;
+exports.scheduleFullSync = scheduleFullSync;
+exports.executeFullSync = executeFullSync;
+exports.getFullSyncProgress = getFullSyncProgress;
+exports.cancelFullSync = cancelFullSync;
+exports.startScheduledSync = startScheduledSync;
+exports.listSyncWorkflows = listSyncWorkflows;
+exports.getActiveScheduledSync = getActiveScheduledSync;
+exports.stopScheduledSync = stopScheduledSync;
+exports.restartScheduledSync = restartScheduledSync;
+exports.isScheduledSyncActive = isScheduledSyncActive;
+exports.startAgentProvisioning = startAgentProvisioning;
+exports.executeAgentProvisioning = executeAgentProvisioning;
+exports.getProvisioningProgress = getProvisioningProgress;
+exports.cancelProvisioning = cancelProvisioning;
+exports.provisionSingleAgent = provisionSingleAgent;
+exports.cleanupFailedProvisions = cleanupFailedProvisions;
+exports.scheduleBeadsSync = scheduleBeadsSync;
+exports.executeBeadsSync = executeBeadsSync;
+exports.scheduleBatchBeadsSync = scheduleBatchBeadsSync;
+exports.scheduleBeadsFileChange = scheduleBeadsFileChange;
+exports.executeBeadsFileChange = executeBeadsFileChange;
+exports.scheduleVibeSSEChange = scheduleVibeSSEChange;
+exports.executeVibeSSEChange = executeVibeSSEChange;
+exports.scheduleHulyWebhookChange = scheduleHulyWebhookChange;
+exports.executeHulyWebhookChange = executeHulyWebhookChange;
 const client_1 = require("@temporalio/client");
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
@@ -327,5 +352,403 @@ async function scheduleVibeToHulySync(input) {
         workflowId: handle.workflowId,
         runId: handle.firstExecutionRunId,
     };
+}
+// ============================================================================
+// Full Orchestration Workflows (replaces SyncOrchestrator)
+// ============================================================================
+/**
+ * Schedule a full orchestration sync (fire-and-forget)
+ *
+ * This replaces the legacy SyncOrchestrator.syncHulyToVibe() function.
+ * Runs as a durable Temporal workflow with automatic retry.
+ */
+async function scheduleFullSync(input = {}) {
+    const client = await getClient();
+    const workflowId = input.projectIdentifier
+        ? `full-sync-${input.projectIdentifier}-${Date.now()}`
+        : `full-sync-all-${Date.now()}`;
+    const handle = await client.workflow.start('FullOrchestrationWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Scheduled full sync: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute a full sync and wait for result
+ *
+ * Blocks until the workflow completes.
+ */
+async function executeFullSync(input = {}) {
+    const client = await getClient();
+    const workflowId = input.projectIdentifier
+        ? `full-sync-${input.projectIdentifier}-${Date.now()}`
+        : `full-sync-all-${Date.now()}`;
+    return await client.workflow.execute('FullOrchestrationWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+/**
+ * Get progress of a running full sync workflow
+ */
+async function getFullSyncProgress(workflowId) {
+    try {
+        const client = await getClient();
+        const handle = client.workflow.getHandle(workflowId);
+        return await handle.query('progress');
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Cancel a running full sync workflow
+ */
+async function cancelFullSync(workflowId) {
+    const client = await getClient();
+    const handle = client.workflow.getHandle(workflowId);
+    await handle.signal('cancel');
+}
+/**
+ * Start a scheduled sync workflow
+ *
+ * This replaces setInterval-based scheduling with a durable workflow.
+ * The workflow runs forever (or until maxIterations), executing syncs at intervals.
+ */
+async function startScheduledSync(input) {
+    const client = await getClient();
+    const workflowId = `scheduled-sync-${Date.now()}`;
+    const handle = await client.workflow.start('ScheduledSyncWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Started scheduled sync: ${workflowId} (every ${input.intervalMinutes} minutes)`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * List running sync workflows
+ */
+async function listSyncWorkflows(limit = 20) {
+    const client = await getClient();
+    const workflows = [];
+    for await (const workflow of client.workflow.list({
+        query: `WorkflowType = 'FullOrchestrationWorkflow' OR WorkflowType = 'ScheduledSyncWorkflow'`,
+    })) {
+        workflows.push({
+            workflowId: workflow.workflowId,
+            status: workflow.status.name,
+            startTime: workflow.startTime,
+            type: String(workflow.type) || 'unknown',
+        });
+        if (workflows.length >= limit)
+            break;
+    }
+    return workflows;
+}
+// ============================================================================
+// Schedule Management
+// ============================================================================
+/**
+ * Get active scheduled sync workflow
+ *
+ * Returns the currently running scheduled sync workflow if any.
+ */
+async function getActiveScheduledSync() {
+    const client = await getClient();
+    for await (const workflow of client.workflow.list({
+        query: `WorkflowType = 'ScheduledSyncWorkflow' AND ExecutionStatus = 'Running'`,
+    })) {
+        return {
+            workflowId: workflow.workflowId,
+            status: workflow.status.name,
+            startTime: workflow.startTime,
+        };
+    }
+    return null;
+}
+/**
+ * Stop a running scheduled sync workflow
+ *
+ * Sends a cancel signal to gracefully stop the workflow.
+ */
+async function stopScheduledSync(workflowId) {
+    const client = await getClient();
+    // If no workflowId provided, find the active one
+    let targetWorkflowId = workflowId;
+    if (!targetWorkflowId) {
+        const active = await getActiveScheduledSync();
+        if (!active) {
+            console.log('[Temporal] No active scheduled sync to stop');
+            return false;
+        }
+        targetWorkflowId = active.workflowId;
+    }
+    try {
+        const handle = client.workflow.getHandle(targetWorkflowId);
+        await handle.cancel();
+        console.log(`[Temporal] Stopped scheduled sync: ${targetWorkflowId}`);
+        return true;
+    }
+    catch (error) {
+        console.error(`[Temporal] Failed to stop scheduled sync: ${error}`);
+        return false;
+    }
+}
+/**
+ * Restart scheduled sync with new interval
+ *
+ * Stops the current scheduled sync and starts a new one with updated parameters.
+ */
+async function restartScheduledSync(input) {
+    // Stop existing schedule first
+    await stopScheduledSync();
+    // Start new schedule
+    return startScheduledSync(input);
+}
+/**
+ * Check if a scheduled sync is currently active
+ */
+async function isScheduledSyncActive() {
+    const active = await getActiveScheduledSync();
+    return active !== null;
+}
+/**
+ * Start agent provisioning workflow
+ *
+ * Creates Letta agents for Huly projects with fault tolerance and resume capability.
+ */
+async function startAgentProvisioning(input = {}) {
+    const client = await getClient();
+    const workflowId = `provision-agents-${Date.now()}`;
+    const handle = await client.workflow.start('ProvisionAgentsWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Started agent provisioning: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute agent provisioning and wait for completion
+ */
+async function executeAgentProvisioning(input = {}) {
+    const client = await getClient();
+    const workflowId = `provision-agents-${Date.now()}`;
+    return await client.workflow.execute('ProvisionAgentsWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+/**
+ * Get provisioning progress
+ */
+async function getProvisioningProgress(workflowId) {
+    try {
+        const client = await getClient();
+        const handle = client.workflow.getHandle(workflowId);
+        return await handle.query('progress');
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Cancel a running provisioning workflow
+ */
+async function cancelProvisioning(workflowId) {
+    const client = await getClient();
+    const handle = client.workflow.getHandle(workflowId);
+    await handle.signal('cancel');
+}
+/**
+ * Provision a single agent
+ */
+async function provisionSingleAgent(input) {
+    const client = await getClient();
+    const workflowId = `provision-single-${input.projectIdentifier}-${Date.now()}`;
+    return await client.workflow.execute('ProvisionSingleAgentWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+/**
+ * Cleanup failed provisions
+ */
+async function cleanupFailedProvisions(projectIdentifiers) {
+    const client = await getClient();
+    const workflowId = `cleanup-provisions-${Date.now()}`;
+    return await client.workflow.execute('CleanupFailedProvisionsWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [{ projectIdentifiers }],
+    });
+}
+/**
+ * Schedule a Beads sync workflow (fire-and-forget)
+ *
+ * Triggered when Beads files change. Syncs from Beads to Huly and Vibe.
+ * Returns immediately; workflow runs in background with retry.
+ */
+async function scheduleBeadsSync(input) {
+    const client = await getClient();
+    const workflowId = `sync-beads-${input.context.projectIdentifier}-${input.beadsIssueId}-${Date.now()}`;
+    const handle = await client.workflow.start('SyncFromBeadsWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Scheduled Beads sync: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute a Beads sync and wait for result
+ *
+ * Blocks until the workflow completes (with all retries).
+ */
+async function executeBeadsSync(input) {
+    const client = await getClient();
+    const workflowId = `sync-beads-${input.context.projectIdentifier}-${input.beadsIssueId}-${Date.now()}`;
+    return await client.workflow.execute('SyncFromBeadsWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+/**
+ * Schedule batch Beads sync for multiple changed issues
+ *
+ * When multiple Beads issues change at once (e.g., git pull), this
+ * schedules individual workflows for each changed issue.
+ */
+async function scheduleBatchBeadsSync(inputs) {
+    const results = [];
+    for (const input of inputs) {
+        try {
+            const result = await scheduleBeadsSync(input);
+            results.push(result);
+        }
+        catch (error) {
+            console.error(`[Temporal] Failed to schedule Beads sync for ${input.beadsIssueId}:`, error);
+        }
+    }
+    console.log(`[Temporal] Scheduled ${results.length}/${inputs.length} Beads syncs`);
+    return results;
+}
+/**
+ * Schedule a Beads file change workflow
+ *
+ * This is the main entry point for BeadsWatcher to trigger durable syncs.
+ * When .beads files change, call this to sync all Beads issues.
+ */
+async function scheduleBeadsFileChange(input) {
+    const client = await getClient();
+    const workflowId = `beads-change-${input.projectIdentifier}-${Date.now()}`;
+    const handle = await client.workflow.start('BeadsFileChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Scheduled Beads file change workflow: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute a Beads file change workflow and wait for result
+ */
+async function executeBeadsFileChange(input) {
+    const client = await getClient();
+    const workflowId = `beads-change-${input.projectIdentifier}-${Date.now()}`;
+    return await client.workflow.execute('BeadsFileChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+/**
+ * Schedule a Vibe SSE change workflow
+ *
+ * This is the main entry point for VibeEventWatcher to trigger durable syncs.
+ * When Vibe SSE events indicate task changes, call this to sync to Huly.
+ */
+async function scheduleVibeSSEChange(input) {
+    const client = await getClient();
+    const workflowId = `vibe-sse-${input.vibeProjectId}-${Date.now()}`;
+    const handle = await client.workflow.start('VibeSSEChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Scheduled Vibe SSE change workflow: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute a Vibe SSE change workflow and wait for result
+ */
+async function executeVibeSSEChange(input) {
+    const client = await getClient();
+    const workflowId = `vibe-sse-${input.vibeProjectId}-${Date.now()}`;
+    return await client.workflow.execute('VibeSSEChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+// ============================================================
+// HULY WEBHOOK CHANGE WORKFLOWS
+// ============================================================
+/**
+ * Schedule a Huly webhook change workflow (fire and forget)
+ *
+ * Processes Huly webhook change events and syncs to Vibe/Beads.
+ * Returns immediately after scheduling.
+ */
+async function scheduleHulyWebhookChange(input) {
+    const client = await getClient();
+    const workflowId = `huly-webhook-${input.type}-${Date.now()}`;
+    const handle = await client.workflow.start('HulyWebhookChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+/**
+ * Execute a Huly webhook change workflow and wait for result
+ */
+async function executeHulyWebhookChange(input) {
+    const client = await getClient();
+    const workflowId = `huly-webhook-${input.type}-${Date.now()}`;
+    return await client.workflow.execute('HulyWebhookChangeWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
 }
 //# sourceMappingURL=client.js.map

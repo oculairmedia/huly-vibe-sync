@@ -10,6 +10,8 @@ import * as lettaActivities from './activities/letta';
 import * as issueSyncActivities from './activities/issue-sync';
 import * as syncServiceActivities from './activities/sync-services';
 import * as bidirectionalActivities from './activities/bidirectional';
+import * as orchestrationActivities from './activities/orchestration';
+import * as agentProvisioningActivities from './activities/agent-provisioning';
 
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
@@ -20,6 +22,8 @@ const activities = {
   ...issueSyncActivities,
   ...syncServiceActivities,
   ...bidirectionalActivities,
+  ...orchestrationActivities,
+  ...agentProvisioningActivities,
 };
 
 async function run() {
@@ -40,7 +44,7 @@ async function run() {
   });
 
   console.log(`[Worker] Started on task queue: ${TASK_QUEUE}`);
-  console.log(`[Worker] Registered workflows: MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow, IssueSyncWorkflow, BatchIssueSyncWorkflow, SyncSingleIssueWorkflow, SyncProjectWorkflow, SyncVibeToHulyWorkflow, BidirectionalSyncWorkflow, SyncFromVibeWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow`);
+  console.log(`[Worker] Registered workflows: MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow, IssueSyncWorkflow, BatchIssueSyncWorkflow, SyncSingleIssueWorkflow, SyncProjectWorkflow, SyncVibeToHulyWorkflow, BidirectionalSyncWorkflow, SyncFromVibeWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, BeadsFileChangeWorkflow, VibeSSEChangeWorkflow, HulyWebhookChangeWorkflow, FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow, ProvisionAgentsWorkflow, ProvisionSingleAgentWorkflow, CleanupFailedProvisionsWorkflow`);
   console.log(`[Worker] Registered activities: ${Object.keys(activities).join(', ')}`);
 
   // Run until interrupted

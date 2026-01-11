@@ -19,4 +19,17 @@ export {
   SyncFromVibeWorkflow,
   SyncFromHulyWorkflow,
   SyncFromBeadsWorkflow,
+  BeadsFileChangeWorkflow,
+  VibeSSEChangeWorkflow,
+  HulyWebhookChangeWorkflow,
 } from './bidirectional-sync';
+
+// Full orchestration workflows (replaces SyncOrchestrator)
+export { FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow } from './orchestration';
+
+// Agent provisioning workflows
+export {
+  ProvisionAgentsWorkflow,
+  ProvisionSingleAgentWorkflow,
+  CleanupFailedProvisionsWorkflow,
+} from './agent-provisioning';

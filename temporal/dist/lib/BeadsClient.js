@@ -3,7 +3,7 @@
  * Beads Issue Tracker Client (TypeScript)
  *
  * TypeScript client for Beads git-based issue tracker.
- * Uses the `bd` CLI command for issue operations.
+ * Uses direct JSONL writes for reliability + bd import for DB sync.
  * Used by Temporal activities for durable workflow execution.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -45,6 +45,7 @@ exports.createBeadsClient = createBeadsClient;
 const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const crypto = __importStar(require("crypto"));
 /**
  * Execute a shell command and return output
  */
@@ -112,6 +113,71 @@ class BeadsClient {
         }
     }
     // ============================================================
+    // JSONL DIRECT WRITE (more reliable than CLI)
+    // ============================================================
+    /**
+     * Get the issue prefix from config.yaml
+     */
+    getIssuePrefix() {
+        const configPath = path.join(this.repoPath, '.beads', 'config.yaml');
+        try {
+            const content = fs.readFileSync(configPath, 'utf-8');
+            const match = content.match(/issue_prefix:\s*["']?([^"'\n]+)["']?/);
+            return match ? match[1].trim() : 'bd';
+        }
+        catch {
+            return 'bd';
+        }
+    }
+    /**
+     * Generate a unique Beads issue ID
+     */
+    generateIssueId() {
+        const prefix = this.getIssuePrefix();
+        const random = crypto.randomBytes(3).toString('hex').slice(0, 5);
+        return `${prefix}-${random}`;
+    }
+    /**
+     * Write an issue directly to issues.jsonl (bypasses CLI escaping issues)
+     */
+    writeToJsonl(issue) {
+        const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
+        const now = new Date().toISOString();
+        const jsonlEntry = {
+            id: issue.id,
+            title: issue.title,
+            status: issue.status,
+            priority: issue.priority,
+            issue_type: issue.issue_type,
+            created_at: now,
+            updated_at: now,
+            ...(issue.labels && issue.labels.length > 0 && { labels: issue.labels }),
+            ...(issue.description && {
+                comments: [{
+                        id: Date.now(),
+                        issue_id: issue.id,
+                        author: 'vibesync',
+                        text: issue.description,
+                        created_at: now,
+                    }],
+            }),
+        };
+        // Append to JSONL file
+        fs.appendFileSync(issuesPath, JSON.stringify(jsonlEntry) + '\n');
+    }
+    /**
+     * Trigger bd import asynchronously (don't wait for completion)
+     */
+    triggerImport() {
+        const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
+        // Fire and forget - don't wait for completion
+        (0, child_process_1.exec)(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, (error) => {
+            if (error) {
+                console.warn(`[BeadsClient] Import warning: ${error.message}`);
+            }
+        });
+    }
+    // ============================================================
     // ISSUE OPERATIONS
     // ============================================================
     /**
@@ -119,7 +185,7 @@ class BeadsClient {
      */
     async listIssues() {
         try {
-            const output = this.execBeads('issue list --format json');
+            const output = this.execBeads('list --json');
             return this.parseBeadsOutput(output);
         }
         catch (error) {
@@ -135,7 +201,7 @@ class BeadsClient {
      */
     async getIssue(issueId) {
         try {
-            const output = this.execBeads(`issue show ${issueId} --format json`);
+            const output = this.execBeads(`show ${issueId} --json`);
             return this.parseBeadsOutput(output);
         }
         catch {
@@ -143,36 +209,41 @@ class BeadsClient {
         }
     }
     /**
-     * Create a new issue
+     * Create a new issue using direct JSONL write (avoids CLI escaping issues)
      */
     async createIssue(data) {
-        const args = ['issue', 'create'];
-        // Title is required
-        args.push(`--title "${data.title.replace(/"/g, '\\"')}"`);
-        if (data.status) {
-            args.push(`--status ${data.status}`);
-        }
-        if (data.priority !== undefined) {
-            args.push(`--priority ${data.priority}`);
-        }
-        if (data.type) {
-            args.push(`--type ${data.type}`);
-        }
-        if (data.labels && data.labels.length > 0) {
-            args.push(`--labels ${data.labels.join(',')}`);
-        }
-        if (data.description) {
-            args.push(`--description "${data.description.replace(/"/g, '\\"')}"`);
-        }
-        args.push('--format json');
-        const output = this.execBeads(args.join(' '));
-        return this.parseBeadsOutput(output);
+        const id = this.generateIssueId();
+        const now = new Date().toISOString();
+        // Write directly to JSONL
+        this.writeToJsonl({
+            id,
+            title: data.title,
+            status: data.status || 'open',
+            priority: data.priority ?? 4,
+            issue_type: data.type || 'task',
+            labels: data.labels,
+            description: data.description,
+        });
+        // Trigger async import to sync to DB
+        this.triggerImport();
+        // Return the created issue
+        return {
+            id,
+            title: data.title,
+            status: (data.status || 'open'),
+            priority: data.priority ?? 4,
+            type: (data.type || 'task'),
+            labels: data.labels,
+            description: data.description,
+            created_at: now,
+            updated_at: now,
+        };
     }
     /**
      * Update an issue field
      */
     async updateIssue(issueId, field, value) {
-        const output = this.execBeads(`issue update ${issueId} --${field} "${value}" --format json`);
+        const output = this.execBeads(`update ${issueId} --${field} "${value}" --json`);
         return this.parseBeadsOutput(output);
     }
     /**
@@ -185,13 +256,13 @@ class BeadsClient {
      * Add a label to an issue
      */
     async addLabel(issueId, label) {
-        this.execBeads(`issue label ${issueId} --add ${label}`);
+        this.execBeads(`label ${issueId} --add ${label}`);
     }
     /**
      * Remove a label from an issue
      */
     async removeLabel(issueId, label) {
-        this.execBeads(`issue label ${issueId} --remove ${label}`);
+        this.execBeads(`label ${issueId} --remove ${label}`);
     }
     // ============================================================
     // GIT OPERATIONS

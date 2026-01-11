@@ -2,13 +2,14 @@
  * Beads Issue Tracker Client (TypeScript)
  *
  * TypeScript client for Beads git-based issue tracker.
- * Uses the `bd` CLI command for issue operations.
+ * Uses direct JSONL writes for reliability + bd import for DB sync.
  * Used by Temporal activities for durable workflow execution.
  */
 
-import { execSync, ExecSyncOptions } from 'child_process';
+import { execSync, exec, ExecSyncOptions } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 export interface BeadsIssue {
   id: string;
@@ -108,6 +109,85 @@ export class BeadsClient {
   }
 
   // ============================================================
+  // JSONL DIRECT WRITE (more reliable than CLI)
+  // ============================================================
+
+  /**
+   * Get the issue prefix from config.yaml
+   */
+  private getIssuePrefix(): string {
+    const configPath = path.join(this.repoPath, '.beads', 'config.yaml');
+    try {
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const match = content.match(/issue_prefix:\s*["']?([^"'\n]+)["']?/);
+      return match ? match[1].trim() : 'bd';
+    } catch {
+      return 'bd';
+    }
+  }
+
+  /**
+   * Generate a unique Beads issue ID
+   */
+  private generateIssueId(): string {
+    const prefix = this.getIssuePrefix();
+    const random = crypto.randomBytes(3).toString('hex').slice(0, 5);
+    return `${prefix}-${random}`;
+  }
+
+  /**
+   * Write an issue directly to issues.jsonl (bypasses CLI escaping issues)
+   */
+  private writeToJsonl(issue: {
+    id: string;
+    title: string;
+    status: string;
+    priority: number;
+    issue_type: string;
+    labels?: string[];
+    description?: string;
+  }): void {
+    const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
+    const now = new Date().toISOString();
+
+    const jsonlEntry = {
+      id: issue.id,
+      title: issue.title,
+      status: issue.status,
+      priority: issue.priority,
+      issue_type: issue.issue_type,
+      created_at: now,
+      updated_at: now,
+      ...(issue.labels && issue.labels.length > 0 && { labels: issue.labels }),
+      ...(issue.description && {
+        comments: [{
+          id: Date.now(),
+          issue_id: issue.id,
+          author: 'vibesync',
+          text: issue.description,
+          created_at: now,
+        }],
+      }),
+    };
+
+    // Append to JSONL file
+    fs.appendFileSync(issuesPath, JSON.stringify(jsonlEntry) + '\n');
+  }
+
+  /**
+   * Trigger bd import asynchronously (don't wait for completion)
+   */
+  private triggerImport(): void {
+    const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
+    // Fire and forget - don't wait for completion
+    exec(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, (error) => {
+      if (error) {
+        console.warn(`[BeadsClient] Import warning: ${error.message}`);
+      }
+    });
+  }
+
+  // ============================================================
   // ISSUE OPERATIONS
   // ============================================================
 
@@ -116,7 +196,7 @@ export class BeadsClient {
    */
   async listIssues(): Promise<BeadsIssue[]> {
     try {
-      const output = this.execBeads('issue list --format json');
+      const output = this.execBeads('list --json');
       return this.parseBeadsOutput<BeadsIssue[]>(output);
     } catch (error) {
       // If no issues exist, return empty array
@@ -132,7 +212,7 @@ export class BeadsClient {
    */
   async getIssue(issueId: string): Promise<BeadsIssue | null> {
     try {
-      const output = this.execBeads(`issue show ${issueId} --format json`);
+      const output = this.execBeads(`show ${issueId} --json`);
       return this.parseBeadsOutput<BeadsIssue>(output);
     } catch {
       return null;
@@ -140,41 +220,45 @@ export class BeadsClient {
   }
 
   /**
-   * Create a new issue
+   * Create a new issue using direct JSONL write (avoids CLI escaping issues)
    */
   async createIssue(data: CreateBeadsIssueInput): Promise<BeadsIssue> {
-    const args: string[] = ['issue', 'create'];
+    const id = this.generateIssueId();
+    const now = new Date().toISOString();
 
-    // Title is required
-    args.push(`--title "${data.title.replace(/"/g, '\\"')}"`);
+    // Write directly to JSONL
+    this.writeToJsonl({
+      id,
+      title: data.title,
+      status: data.status || 'open',
+      priority: data.priority ?? 4,
+      issue_type: data.type || 'task',
+      labels: data.labels,
+      description: data.description,
+    });
 
-    if (data.status) {
-      args.push(`--status ${data.status}`);
-    }
-    if (data.priority !== undefined) {
-      args.push(`--priority ${data.priority}`);
-    }
-    if (data.type) {
-      args.push(`--type ${data.type}`);
-    }
-    if (data.labels && data.labels.length > 0) {
-      args.push(`--labels ${data.labels.join(',')}`);
-    }
-    if (data.description) {
-      args.push(`--description "${data.description.replace(/"/g, '\\"')}"`);
-    }
+    // Trigger async import to sync to DB
+    this.triggerImport();
 
-    args.push('--format json');
-
-    const output = this.execBeads(args.join(' '));
-    return this.parseBeadsOutput<BeadsIssue>(output);
+    // Return the created issue
+    return {
+      id,
+      title: data.title,
+      status: (data.status || 'open') as BeadsIssue['status'],
+      priority: data.priority ?? 4,
+      type: (data.type || 'task') as BeadsIssue['type'],
+      labels: data.labels,
+      description: data.description,
+      created_at: now,
+      updated_at: now,
+    };
   }
 
   /**
    * Update an issue field
    */
   async updateIssue(issueId: string, field: string, value: string): Promise<BeadsIssue> {
-    const output = this.execBeads(`issue update ${issueId} --${field} "${value}" --format json`);
+    const output = this.execBeads(`update ${issueId} --${field} "${value}" --json`);
     return this.parseBeadsOutput<BeadsIssue>(output);
   }
 
@@ -189,14 +273,14 @@ export class BeadsClient {
    * Add a label to an issue
    */
   async addLabel(issueId: string, label: string): Promise<void> {
-    this.execBeads(`issue label ${issueId} --add ${label}`);
+    this.execBeads(`label ${issueId} --add ${label}`);
   }
 
   /**
    * Remove a label from an issue
    */
   async removeLabel(issueId: string, label: string): Promise<void> {
-    this.execBeads(`issue label ${issueId} --remove ${label}`);
+    this.execBeads(`label ${issueId} --remove ${label}`);
   }
 
   // ============================================================

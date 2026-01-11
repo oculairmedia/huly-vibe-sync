@@ -2,7 +2,7 @@
  * Beads Issue Tracker Client (TypeScript)
  *
  * TypeScript client for Beads git-based issue tracker.
- * Uses the `bd` CLI command for issue operations.
+ * Uses direct JSONL writes for reliability + bd import for DB sync.
  * Used by Temporal activities for durable workflow execution.
  */
 export interface BeadsIssue {
@@ -51,6 +51,22 @@ export declare class BeadsClient {
      */
     private parseBeadsOutput;
     /**
+     * Get the issue prefix from config.yaml
+     */
+    private getIssuePrefix;
+    /**
+     * Generate a unique Beads issue ID
+     */
+    private generateIssueId;
+    /**
+     * Write an issue directly to issues.jsonl (bypasses CLI escaping issues)
+     */
+    private writeToJsonl;
+    /**
+     * Trigger bd import asynchronously (don't wait for completion)
+     */
+    private triggerImport;
+    /**
      * List all issues
      */
     listIssues(): Promise<BeadsIssue[]>;
@@ -59,7 +75,7 @@ export declare class BeadsClient {
      */
     getIssue(issueId: string): Promise<BeadsIssue | null>;
     /**
-     * Create a new issue
+     * Create a new issue using direct JSONL write (avoids CLI escaping issues)
      */
     createIssue(data: CreateBeadsIssueInput): Promise<BeadsIssue>;
     /**

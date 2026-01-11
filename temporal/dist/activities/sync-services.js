@@ -81,9 +81,16 @@ async function syncTaskToHuly(input) {
  * Sync a Huly issue to Beads
  */
 async function syncIssueToBeads(input) {
-    const { issue, context } = input;
+    const { issue, context, existingBeadsIssues } = input;
     if (!context.gitRepoPath) {
         return { success: true, skipped: true };
+    }
+    // DEDUPLICATION: Check if issue with same title already exists in Beads
+    const normalizedTitle = issue.title.trim().toLowerCase();
+    const existingByTitle = existingBeadsIssues.find(b => b.title.trim().toLowerCase() === normalizedTitle);
+    if (existingByTitle) {
+        console.log(`[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`);
+        return { success: true, skipped: true, id: existingByTitle.id };
     }
     console.log(`[Temporal:Beads] Syncing ${issue.identifier} to Beads`);
     try {
