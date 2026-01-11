@@ -12,6 +12,7 @@ exports.syncIssueToVibe = syncIssueToVibe;
 exports.syncTaskToHuly = syncTaskToHuly;
 exports.syncIssueToBeads = syncIssueToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
+exports.createBeadsIssueInHuly = createBeadsIssueInHuly;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
@@ -139,9 +140,11 @@ async function syncBeadsToHuly(input) {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
         // Map Beads status to Huly status
         // Note: We'd need labels from the Beads issue for accurate mapping
-        const hulyStatus = beadsIssue.status === 'closed' ? 'Done' :
-            beadsIssue.status === 'in_progress' ? 'In Progress' :
-                'Backlog';
+        const hulyStatus = beadsIssue.status === 'closed'
+            ? 'Done'
+            : beadsIssue.status === 'in_progress'
+                ? 'In Progress'
+                : 'Backlog';
         const result = await hulyClient.syncStatusFromVibe(hulyIdentifier, hulyStatus);
         if (!result.success) {
             throw new Error(result.error || 'Failed to update Huly issue');
@@ -153,9 +156,56 @@ async function syncBeadsToHuly(input) {
         return handleSyncError(error, 'Beads→Huly');
     }
 }
-/**
- * Commit Beads changes to git
- */
+async function createBeadsIssueInHuly(input) {
+    const { beadsIssue, context } = input;
+    if (beadsIssue.labels?.some(l => l.startsWith('huly:'))) {
+        console.log(`[Temporal:Beads→Huly] Skipping ${beadsIssue.id} - already has huly label`);
+        return { success: true, skipped: true };
+    }
+    console.log(`[Temporal:Beads→Huly] Creating Huly issue for ${beadsIssue.id}`);
+    try {
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const priorityMap = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
+        const hulyPriority = priorityMap[beadsIssue.priority ?? 2] || 'Medium';
+        const hulyStatus = beadsIssue.status === 'closed'
+            ? 'Done'
+            : beadsIssue.status === 'in_progress'
+                ? 'In Progress'
+                : 'Backlog';
+        const description = [beadsIssue.description || '', '', '---', `Beads Issue: ${beadsIssue.id}`]
+            .join('\n')
+            .trim();
+        const result = (await hulyClient.createIssue(context.projectIdentifier, {
+            title: beadsIssue.title,
+            description,
+            priority: hulyPriority,
+            status: hulyStatus,
+        }));
+        if (!result?.identifier) {
+            throw new Error('Failed to create Huly issue - no identifier returned');
+        }
+        console.log(`[Temporal:Beads→Huly] Created ${result.identifier} from ${beadsIssue.id}`);
+        if (context.gitRepoPath) {
+            try {
+                const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
+                await beadsClient.addLabel(beadsIssue.id, `huly:${result.identifier}`);
+                console.log(`[Temporal:Beads→Huly] Added huly:${result.identifier} label to ${beadsIssue.id}`);
+            }
+            catch (labelError) {
+                console.warn(`[Temporal:Beads→Huly] Failed to update beads label: ${labelError}`);
+            }
+        }
+        return {
+            success: true,
+            created: true,
+            id: result.identifier,
+            hulyIdentifier: result.identifier,
+        };
+    }
+    catch (error) {
+        return handleSyncError(error, 'Beads→Huly Create');
+    }
+}
 async function commitBeadsToGit(input) {
     const { context, message } = input;
     if (!context.gitRepoPath) {

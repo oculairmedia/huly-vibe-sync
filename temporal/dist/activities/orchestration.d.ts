@@ -96,6 +96,8 @@ export declare function fetchBeadsIssues(input: {
     id: string;
     title: string;
     status: string;
+    priority?: number;
+    description?: string;
     labels?: string[];
 }>>;
 /**

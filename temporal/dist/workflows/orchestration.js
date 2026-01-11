@@ -45,7 +45,7 @@ function extractGitRepoPath(description) {
     return null;
 }
 // Sync activities (issue-level sync)
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } = (0, workflow_1.proxyActivities)({
+const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, createBeadsIssueInHuly, commitBeadsToGit, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '60 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -521,41 +521,66 @@ async function ProjectSyncWorkflow(input) {
             });
         }
         if (_phase === 'phase3b') {
-            workflow_1.log.info(`[ProjectSync] Phase 3b: Beads→Huly status sync`);
+            workflow_1.log.info(`[ProjectSync] Phase 3b: Beads→Huly sync`);
             const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath });
             let beadsSynced = 0;
+            let beadsCreated = 0;
             let beadsSkipped = 0;
             for (const beadsIssue of beadsIssues) {
                 const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
-                if (!hulyLabel) {
-                    beadsSkipped++;
-                    continue;
-                }
-                const hulyIdentifier = hulyLabel.replace('huly:', '');
                 if (dryRun) {
                     beadsSkipped++;
                     continue;
                 }
                 try {
-                    const syncResult = await syncBeadsToHuly({
-                        beadsIssue: {
-                            id: beadsIssue.id,
-                            title: beadsIssue.title,
-                            status: beadsIssue.status,
-                            priority: undefined,
-                        },
-                        hulyIdentifier,
-                        context: {
-                            projectIdentifier: hulyProject.identifier,
-                            vibeProjectId: vibeProjectId,
-                            gitRepoPath: gitRepoPath,
-                        },
-                    });
-                    if (syncResult.success) {
-                        beadsSynced++;
+                    if (hulyLabel) {
+                        const hulyIdentifier = hulyLabel.replace('huly:', '');
+                        const syncResult = await syncBeadsToHuly({
+                            beadsIssue: {
+                                id: beadsIssue.id,
+                                title: beadsIssue.title,
+                                status: beadsIssue.status,
+                                priority: beadsIssue.priority,
+                                description: beadsIssue.description,
+                                labels: beadsIssue.labels,
+                            },
+                            hulyIdentifier,
+                            context: {
+                                projectIdentifier: hulyProject.identifier,
+                                vibeProjectId: vibeProjectId,
+                                gitRepoPath: gitRepoPath,
+                            },
+                        });
+                        if (syncResult.success) {
+                            beadsSynced++;
+                        }
+                        else {
+                            beadsSkipped++;
+                        }
                     }
                     else {
-                        beadsSkipped++;
+                        const createResult = await createBeadsIssueInHuly({
+                            beadsIssue: {
+                                id: beadsIssue.id,
+                                title: beadsIssue.title,
+                                status: beadsIssue.status,
+                                priority: beadsIssue.priority,
+                                description: beadsIssue.description,
+                                labels: beadsIssue.labels,
+                            },
+                            context: {
+                                projectIdentifier: hulyProject.identifier,
+                                vibeProjectId: vibeProjectId,
+                                gitRepoPath: gitRepoPath,
+                            },
+                        });
+                        if (createResult.created) {
+                            beadsCreated++;
+                            workflow_1.log.info(`[ProjectSync] Created Huly issue ${createResult.hulyIdentifier} from ${beadsIssue.id}`);
+                        }
+                        else {
+                            beadsSkipped++;
+                        }
                     }
                 }
                 catch (error) {
@@ -566,7 +591,11 @@ async function ProjectSyncWorkflow(input) {
                 }
                 await (0, workflow_1.sleep)('100ms');
             }
-            workflow_1.log.info(`[ProjectSync] Phase 3b complete`, { synced: beadsSynced, skipped: beadsSkipped });
+            workflow_1.log.info(`[ProjectSync] Phase 3b complete`, {
+                synced: beadsSynced,
+                created: beadsCreated,
+                skipped: beadsSkipped,
+            });
             // Move to done
             return await (0, workflow_1.continueAsNew)({
                 ...input,

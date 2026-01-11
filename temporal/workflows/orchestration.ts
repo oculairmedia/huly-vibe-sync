@@ -64,17 +64,23 @@ function extractGitRepoPath(description?: string): string | null {
 }
 
 // Sync activities (issue-level sync)
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } =
-  proxyActivities<typeof syncActivities>({
-    startToCloseTimeout: '60 seconds',
-    retry: {
-      initialInterval: '2 seconds',
-      backoffCoefficient: 2,
-      maximumInterval: '60 seconds',
-      maximumAttempts: 5,
-      nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
-    },
-  });
+const {
+  syncIssueToVibe,
+  syncTaskToHuly,
+  syncIssueToBeads,
+  syncBeadsToHuly,
+  createBeadsIssueInHuly,
+  commitBeadsToGit,
+} = proxyActivities<typeof syncActivities>({
+  startToCloseTimeout: '60 seconds',
+  retry: {
+    initialInterval: '2 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '60 seconds',
+    maximumAttempts: 5,
+    nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
+  },
+});
 
 // ============================================================
 // SIGNALS AND QUERIES
@@ -736,21 +742,16 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     }
 
     if (_phase === 'phase3b') {
-      log.info(`[ProjectSync] Phase 3b: Beads→Huly status sync`);
+      log.info(`[ProjectSync] Phase 3b: Beads→Huly sync`);
 
       const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
 
       let beadsSynced = 0;
+      let beadsCreated = 0;
       let beadsSkipped = 0;
 
       for (const beadsIssue of beadsIssues) {
         const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
-        if (!hulyLabel) {
-          beadsSkipped++;
-          continue;
-        }
-
-        const hulyIdentifier = hulyLabel.replace('huly:', '');
 
         if (dryRun) {
           beadsSkipped++;
@@ -758,25 +759,55 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         }
 
         try {
-          const syncResult = await syncBeadsToHuly({
-            beadsIssue: {
-              id: beadsIssue.id,
-              title: beadsIssue.title,
-              status: beadsIssue.status,
-              priority: undefined,
-            },
-            hulyIdentifier,
-            context: {
-              projectIdentifier: hulyProject.identifier,
-              vibeProjectId: vibeProjectId!,
-              gitRepoPath: gitRepoPath!,
-            },
-          });
+          if (hulyLabel) {
+            const hulyIdentifier = hulyLabel.replace('huly:', '');
+            const syncResult = await syncBeadsToHuly({
+              beadsIssue: {
+                id: beadsIssue.id,
+                title: beadsIssue.title,
+                status: beadsIssue.status,
+                priority: beadsIssue.priority,
+                description: beadsIssue.description,
+                labels: beadsIssue.labels,
+              },
+              hulyIdentifier,
+              context: {
+                projectIdentifier: hulyProject.identifier,
+                vibeProjectId: vibeProjectId!,
+                gitRepoPath: gitRepoPath!,
+              },
+            });
 
-          if (syncResult.success) {
-            beadsSynced++;
+            if (syncResult.success) {
+              beadsSynced++;
+            } else {
+              beadsSkipped++;
+            }
           } else {
-            beadsSkipped++;
+            const createResult = await createBeadsIssueInHuly({
+              beadsIssue: {
+                id: beadsIssue.id,
+                title: beadsIssue.title,
+                status: beadsIssue.status,
+                priority: beadsIssue.priority,
+                description: beadsIssue.description,
+                labels: beadsIssue.labels,
+              },
+              context: {
+                projectIdentifier: hulyProject.identifier,
+                vibeProjectId: vibeProjectId!,
+                gitRepoPath: gitRepoPath!,
+              },
+            });
+
+            if (createResult.created) {
+              beadsCreated++;
+              log.info(
+                `[ProjectSync] Created Huly issue ${createResult.hulyIdentifier} from ${beadsIssue.id}`
+              );
+            } else {
+              beadsSkipped++;
+            }
           }
         } catch (error) {
           log.warn(`[ProjectSync] Phase 3b error for ${beadsIssue.id}`, {
@@ -788,7 +819,11 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         await sleep('100ms');
       }
 
-      log.info(`[ProjectSync] Phase 3b complete`, { synced: beadsSynced, skipped: beadsSkipped });
+      log.info(`[ProjectSync] Phase 3b complete`, {
+        synced: beadsSynced,
+        created: beadsCreated,
+        skipped: beadsSkipped,
+      });
 
       // Move to done
       return await continueAsNew<typeof ProjectSyncWorkflow>({

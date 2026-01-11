@@ -28,6 +28,8 @@ export interface BeadsIssue {
     title: string;
     status: string;
     priority?: number;
+    description?: string;
+    labels?: string[];
 }
 export interface SyncContext {
     projectIdentifier: string;
@@ -75,9 +77,12 @@ export declare function syncBeadsToHuly(input: {
     hulyIdentifier: string;
     context: SyncContext;
 }): Promise<SyncActivityResult>;
-/**
- * Commit Beads changes to git
- */
+export declare function createBeadsIssueInHuly(input: {
+    beadsIssue: BeadsIssue;
+    context: SyncContext;
+}): Promise<SyncActivityResult & {
+    hulyIdentifier?: string;
+}>;
 export declare function commitBeadsToGit(input: {
     context: SyncContext;
     message?: string;

@@ -46,6 +46,8 @@ export interface BeadsIssue {
   title: string;
   status: string;
   priority?: number;
+  description?: string;
+  labels?: string[];
 }
 
 export interface SyncContext {
@@ -112,7 +114,6 @@ export async function syncIssueToVibe(input: {
     }
 
     return { success: true, id: result.task?.id };
-
   } catch (error) {
     return handleSyncError(error, 'Vibe');
   }
@@ -146,7 +147,6 @@ export async function syncTaskToHuly(input: {
 
     console.log(`[Temporal:Huly] Updated ${hulyIdentifier} status to ${hulyStatus}`);
     return { success: true, id: hulyIdentifier, updated: true };
-
   } catch (error) {
     return handleSyncError(error, 'Huly');
   }
@@ -176,7 +176,9 @@ export async function syncIssueToBeads(input: {
     b => b.title.trim().toLowerCase() === normalizedTitle
   );
   if (existingByTitle) {
-    console.log(`[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`);
+    console.log(
+      `[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`
+    );
     return { success: true, skipped: true, id: existingByTitle.id };
   }
 
@@ -221,7 +223,6 @@ export async function syncIssueToBeads(input: {
     }
 
     return { success: true, id: result.issue?.id };
-
   } catch (error) {
     // Beads errors are non-fatal - log but don't fail workflow
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -247,9 +248,12 @@ export async function syncBeadsToHuly(input: {
 
     // Map Beads status to Huly status
     // Note: We'd need labels from the Beads issue for accurate mapping
-    const hulyStatus = beadsIssue.status === 'closed' ? 'Done' :
-                       beadsIssue.status === 'in_progress' ? 'In Progress' :
-                       'Backlog';
+    const hulyStatus =
+      beadsIssue.status === 'closed'
+        ? 'Done'
+        : beadsIssue.status === 'in_progress'
+          ? 'In Progress'
+          : 'Backlog';
 
     const result = await hulyClient.syncStatusFromVibe(hulyIdentifier, hulyStatus);
 
@@ -259,15 +263,77 @@ export async function syncBeadsToHuly(input: {
 
     console.log(`[Temporal:Beads→Huly] Updated ${hulyIdentifier} from Beads`);
     return { success: true, id: hulyIdentifier, updated: true };
-
   } catch (error) {
     return handleSyncError(error, 'Beads→Huly');
   }
 }
 
-/**
- * Commit Beads changes to git
- */
+export async function createBeadsIssueInHuly(input: {
+  beadsIssue: BeadsIssue;
+  context: SyncContext;
+}): Promise<SyncActivityResult & { hulyIdentifier?: string }> {
+  const { beadsIssue, context } = input;
+
+  if (beadsIssue.labels?.some(l => l.startsWith('huly:'))) {
+    console.log(`[Temporal:Beads→Huly] Skipping ${beadsIssue.id} - already has huly label`);
+    return { success: true, skipped: true };
+  }
+
+  console.log(`[Temporal:Beads→Huly] Creating Huly issue for ${beadsIssue.id}`);
+
+  try {
+    const hulyClient = createHulyClient(process.env.HULY_API_URL);
+
+    const priorityMap: Record<number, string> = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
+    const hulyPriority = priorityMap[beadsIssue.priority ?? 2] || 'Medium';
+
+    const hulyStatus =
+      beadsIssue.status === 'closed'
+        ? 'Done'
+        : beadsIssue.status === 'in_progress'
+          ? 'In Progress'
+          : 'Backlog';
+
+    const description = [beadsIssue.description || '', '', '---', `Beads Issue: ${beadsIssue.id}`]
+      .join('\n')
+      .trim();
+
+    const result = (await hulyClient.createIssue(context.projectIdentifier, {
+      title: beadsIssue.title,
+      description,
+      priority: hulyPriority,
+      status: hulyStatus,
+    })) as HulyIssue;
+
+    if (!result?.identifier) {
+      throw new Error('Failed to create Huly issue - no identifier returned');
+    }
+
+    console.log(`[Temporal:Beads→Huly] Created ${result.identifier} from ${beadsIssue.id}`);
+
+    if (context.gitRepoPath) {
+      try {
+        const beadsClient = createBeadsClient(context.gitRepoPath);
+        await beadsClient.addLabel(beadsIssue.id, `huly:${result.identifier}`);
+        console.log(
+          `[Temporal:Beads→Huly] Added huly:${result.identifier} label to ${beadsIssue.id}`
+        );
+      } catch (labelError) {
+        console.warn(`[Temporal:Beads→Huly] Failed to update beads label: ${labelError}`);
+      }
+    }
+
+    return {
+      success: true,
+      created: true,
+      id: result.identifier,
+      hulyIdentifier: result.identifier,
+    };
+  } catch (error) {
+    return handleSyncError(error, 'Beads→Huly Create');
+  }
+}
+
 export async function commitBeadsToGit(input: {
   context: SyncContext;
   message?: string;
@@ -292,9 +358,7 @@ export async function commitBeadsToGit(input: {
       return { success: true, skipped: true };
     }
 
-    const committed = await beadsClient.commitChanges(
-      message || 'Sync from VibeSync'
-    );
+    const committed = await beadsClient.commitChanges(message || 'Sync from VibeSync');
 
     if (committed) {
       console.log(`[Temporal:Git] Committed Beads changes`);
@@ -302,7 +366,6 @@ export async function commitBeadsToGit(input: {
     }
 
     return { success: true, skipped: true };
-
   } catch (error) {
     // Git errors are non-fatal
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -327,14 +390,16 @@ function handleSyncError(error: unknown, system: string): never {
   const lowerMessage = message.toLowerCase();
 
   // Non-retryable: validation, not found, auth errors
-  if (lowerMessage.includes('404') ||
-      lowerMessage.includes('not found') ||
-      lowerMessage.includes('400') ||
-      lowerMessage.includes('422') ||
-      lowerMessage.includes('validation') ||
-      lowerMessage.includes('deserialize') ||
-      lowerMessage.includes('401') ||
-      lowerMessage.includes('403')) {
+  if (
+    lowerMessage.includes('404') ||
+    lowerMessage.includes('not found') ||
+    lowerMessage.includes('400') ||
+    lowerMessage.includes('422') ||
+    lowerMessage.includes('validation') ||
+    lowerMessage.includes('deserialize') ||
+    lowerMessage.includes('401') ||
+    lowerMessage.includes('403')
+  ) {
     throw ApplicationFailure.nonRetryable(
       `${system} error: ${message}`,
       `${system}ValidationError`
@@ -342,21 +407,17 @@ function handleSyncError(error: unknown, system: string): never {
   }
 
   // Retryable: server errors, timeouts, network
-  if (lowerMessage.includes('500') ||
-      lowerMessage.includes('502') ||
-      lowerMessage.includes('503') ||
-      lowerMessage.includes('timeout') ||
-      lowerMessage.includes('econnrefused') ||
-      lowerMessage.includes('network')) {
-    throw ApplicationFailure.retryable(
-      `${system} error: ${message}`,
-      `${system}ServerError`
-    );
+  if (
+    lowerMessage.includes('500') ||
+    lowerMessage.includes('502') ||
+    lowerMessage.includes('503') ||
+    lowerMessage.includes('timeout') ||
+    lowerMessage.includes('econnrefused') ||
+    lowerMessage.includes('network')
+  ) {
+    throw ApplicationFailure.retryable(`${system} error: ${message}`, `${system}ServerError`);
   }
 
   // Default: retryable (safer)
-  throw ApplicationFailure.retryable(
-    `${system} error: ${message}`,
-    `${system}Error`
-  );
+  throw ApplicationFailure.retryable(`${system} error: ${message}`, `${system}Error`);
 }

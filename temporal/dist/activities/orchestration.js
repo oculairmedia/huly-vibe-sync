@@ -68,12 +68,8 @@ async function resolveProjectIdentifier(projectIdOrFolder) {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
         const projects = await hulyClient.listProjects();
         // Normalize input: lowercase, remove path separators
-        const normalizedInput = projectIdOrFolder
-            .toLowerCase()
-            .replace(/\\/g, '/')
-            .split('/')
-            .filter(Boolean)
-            .pop() || projectIdOrFolder.toLowerCase();
+        const normalizedInput = projectIdOrFolder.toLowerCase().replace(/\\/g, '/').split('/').filter(Boolean).pop() ||
+            projectIdOrFolder.toLowerCase();
         // First, try direct identifier match (case-insensitive)
         const directMatch = projects.find((p) => p.identifier.toLowerCase() === normalizedInput);
         if (directMatch) {
@@ -101,9 +97,7 @@ async function resolveProjectIdentifier(projectIdOrFolder) {
         }
         // Try matching by project name (case-insensitive, with common transformations)
         const nameMatch = projects.find((p) => {
-            const normalizedName = p.name
-                .toLowerCase()
-                .replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
+            const normalizedName = p.name.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
             const normalizedSearch = normalizedInput.replace(/[^a-z0-9]/g, '');
             return normalizedName === normalizedSearch;
         });

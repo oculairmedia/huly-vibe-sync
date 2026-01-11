@@ -108,12 +108,9 @@ export async function resolveProjectIdentifier(projectIdOrFolder: string): Promi
     const projects = await hulyClient.listProjects();
 
     // Normalize input: lowercase, remove path separators
-    const normalizedInput = projectIdOrFolder
-      .toLowerCase()
-      .replace(/\\/g, '/')
-      .split('/')
-      .filter(Boolean)
-      .pop() || projectIdOrFolder.toLowerCase();
+    const normalizedInput =
+      projectIdOrFolder.toLowerCase().replace(/\\/g, '/').split('/').filter(Boolean).pop() ||
+      projectIdOrFolder.toLowerCase();
 
     // First, try direct identifier match (case-insensitive)
     const directMatch = projects.find(
@@ -150,9 +147,7 @@ export async function resolveProjectIdentifier(projectIdOrFolder: string): Promi
 
     // Try matching by project name (case-insensitive, with common transformations)
     const nameMatch = projects.find((p: HulyProject) => {
-      const normalizedName = p.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
+      const normalizedName = p.name.toLowerCase().replace(/[^a-z0-9]/g, ''); // Remove non-alphanumeric
       const normalizedSearch = normalizedInput.replace(/[^a-z0-9]/g, '');
       return normalizedName === normalizedSearch;
     });
@@ -300,7 +295,16 @@ export async function initializeBeads(input: {
  */
 export async function fetchBeadsIssues(input: {
   gitRepoPath: string;
-}): Promise<Array<{ id: string; title: string; status: string; labels?: string[] }>> {
+}): Promise<
+  Array<{
+    id: string;
+    title: string;
+    status: string;
+    priority?: number;
+    description?: string;
+    labels?: string[];
+  }>
+> {
   const { gitRepoPath } = input;
 
   console.log(`[Temporal:Orchestration] Fetching Beads issues from ${gitRepoPath}`);

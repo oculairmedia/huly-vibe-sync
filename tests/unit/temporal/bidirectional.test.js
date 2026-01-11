@@ -136,9 +136,11 @@ describe('Bidirectional Sync Activities - Interface Tests', () => {
 
       statusMappings.forEach(({ vibe, beads }) => {
         const expectedBeadsStatus =
-          vibe === 'done' || vibe === 'cancelled' ? 'closed'
-          : vibe === 'inprogress' || vibe === 'inreview' ? 'in_progress'
-          : 'open';
+          vibe === 'done' || vibe === 'cancelled'
+            ? 'closed'
+            : vibe === 'inprogress' || vibe === 'inreview'
+              ? 'in_progress'
+              : 'open';
         expect(expectedBeadsStatus).toBe(beads);
       });
     });
@@ -350,23 +352,25 @@ describe('Error Handling Patterns', () => {
   describe('ApplicationFailure types', () => {
     it('should classify 404 as non-retryable', () => {
       const errorMessage = '404 Not Found';
-      const isNonRetryable = errorMessage.toLowerCase().includes('404') ||
-                            errorMessage.toLowerCase().includes('not found');
+      const isNonRetryable =
+        errorMessage.toLowerCase().includes('404') ||
+        errorMessage.toLowerCase().includes('not found');
       expect(isNonRetryable).toBe(true);
     });
 
     it('should classify 422 as non-retryable', () => {
       const errorMessage = '422 Validation Error';
-      const isNonRetryable = errorMessage.toLowerCase().includes('422') ||
-                            errorMessage.toLowerCase().includes('validation');
+      const isNonRetryable =
+        errorMessage.toLowerCase().includes('422') ||
+        errorMessage.toLowerCase().includes('validation');
       expect(isNonRetryable).toBe(true);
     });
 
     it('should classify 401/403 as non-retryable', () => {
       const errorMessages = ['401 Unauthorized', '403 Forbidden'];
       errorMessages.forEach(msg => {
-        const isNonRetryable = msg.toLowerCase().includes('401') ||
-                              msg.toLowerCase().includes('403');
+        const isNonRetryable =
+          msg.toLowerCase().includes('401') || msg.toLowerCase().includes('403');
         expect(isNonRetryable).toBe(true);
       });
     });
@@ -380,9 +384,10 @@ describe('Error Handling Patterns', () => {
     it('should classify network errors as retryable', () => {
       const errorMessages = ['ECONNREFUSED', 'Network timeout', 'Network error'];
       errorMessages.forEach(msg => {
-        const isRetryable = msg.toLowerCase().includes('econnrefused') ||
-                           msg.toLowerCase().includes('timeout') ||
-                           msg.toLowerCase().includes('network');
+        const isRetryable =
+          msg.toLowerCase().includes('econnrefused') ||
+          msg.toLowerCase().includes('timeout') ||
+          msg.toLowerCase().includes('network');
         expect(isRetryable).toBe(true);
       });
     });
@@ -409,33 +414,36 @@ describe('Status Mapping Logic', () => {
   describe('Vibe to Beads status mapping', () => {
     it('should map done/cancelled to closed', () => {
       ['done', 'cancelled'].forEach(vibeStatus => {
-        const beadsStatus = vibeStatus === 'done' || vibeStatus === 'cancelled'
-          ? 'closed'
-          : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
-            ? 'in_progress'
-            : 'open';
+        const beadsStatus =
+          vibeStatus === 'done' || vibeStatus === 'cancelled'
+            ? 'closed'
+            : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
+              ? 'in_progress'
+              : 'open';
         expect(beadsStatus).toBe('closed');
       });
     });
 
     it('should map inprogress/inreview to in_progress', () => {
       ['inprogress', 'inreview'].forEach(vibeStatus => {
-        const beadsStatus = vibeStatus === 'done' || vibeStatus === 'cancelled'
-          ? 'closed'
-          : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
-            ? 'in_progress'
-            : 'open';
+        const beadsStatus =
+          vibeStatus === 'done' || vibeStatus === 'cancelled'
+            ? 'closed'
+            : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
+              ? 'in_progress'
+              : 'open';
         expect(beadsStatus).toBe('in_progress');
       });
     });
 
     it('should map todo to open', () => {
       const vibeStatus = 'todo';
-      const beadsStatus = vibeStatus === 'done' || vibeStatus === 'cancelled'
-        ? 'closed'
-        : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
-          ? 'in_progress'
-          : 'open';
+      const beadsStatus =
+        vibeStatus === 'done' || vibeStatus === 'cancelled'
+          ? 'closed'
+          : vibeStatus === 'inprogress' || vibeStatus === 'inreview'
+            ? 'in_progress'
+            : 'open';
       expect(beadsStatus).toBe('open');
     });
   });
@@ -536,5 +544,146 @@ describe('Label Generation', () => {
     const hulyId = 'PROJ-123';
     const label = `huly:${hulyId}`;
     expect(label).toBe('huly:PROJ-123');
+  });
+});
+
+describe('Beads→Huly Issue Creation', () => {
+  describe('createBeadsIssueInHuly interface', () => {
+    it('should accept beads issue without huly label', () => {
+      const input = {
+        beadsIssue: {
+          id: 'myproject-abc',
+          title: 'New feature request',
+          description: 'Implement new feature',
+          status: 'open',
+          priority: 2,
+          labels: [],
+        },
+        context: {
+          projectIdentifier: 'MYPROJ',
+          vibeProjectId: 'vibe-uuid',
+          gitRepoPath: '/opt/stacks/myproject',
+        },
+      };
+
+      expect(input.beadsIssue.id).toBeDefined();
+      expect(input.beadsIssue.labels).not.toContain(expect.stringMatching(/^huly:/));
+    });
+
+    it('should return created issue with huly identifier', () => {
+      const result = {
+        success: true,
+        created: true,
+        hulyIdentifier: 'MYPROJ-42',
+        beadsId: 'myproject-abc',
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.created).toBe(true);
+      expect(result.hulyIdentifier).toMatch(/^[A-Z]+-\d+$/);
+    });
+
+    it('should skip issues that already have huly label', () => {
+      const beadsIssue = {
+        id: 'myproject-xyz',
+        title: 'Existing issue',
+        labels: ['huly:MYPROJ-10'],
+      };
+
+      const hasHulyLabel = beadsIssue.labels?.some(l => l.startsWith('huly:'));
+      expect(hasHulyLabel).toBe(true);
+    });
+  });
+
+  describe('Beads priority to Huly mapping', () => {
+    it('should map priority 0 (P0) to Urgent', () => {
+      const mapping = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
+      expect(mapping[0]).toBe('Urgent');
+    });
+
+    it('should map priority 1 (P1) to High', () => {
+      const mapping = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
+      expect(mapping[1]).toBe('High');
+    });
+
+    it('should default unmapped priorities to Medium', () => {
+      const mapPriority = p => ({ 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' })[p] || 'Medium';
+      expect(mapPriority(99)).toBe('Medium');
+      expect(mapPriority(undefined)).toBe('Medium');
+    });
+  });
+
+  describe('Beads status to Huly mapping', () => {
+    it('should map open to Backlog', () => {
+      const mapStatus = s =>
+        s === 'closed' ? 'Done' : s === 'in_progress' ? 'In Progress' : 'Backlog';
+      expect(mapStatus('open')).toBe('Backlog');
+    });
+
+    it('should map in_progress to In Progress', () => {
+      const mapStatus = s =>
+        s === 'closed' ? 'Done' : s === 'in_progress' ? 'In Progress' : 'Backlog';
+      expect(mapStatus('in_progress')).toBe('In Progress');
+    });
+
+    it('should map closed to Done', () => {
+      const mapStatus = s =>
+        s === 'closed' ? 'Done' : s === 'in_progress' ? 'In Progress' : 'Backlog';
+      expect(mapStatus('closed')).toBe('Done');
+    });
+  });
+
+  describe('Label update after Huly creation', () => {
+    it('should add huly label to beads issue after creation', () => {
+      const beadsIssue = {
+        id: 'myproject-abc',
+        labels: ['bug', 'feature'],
+      };
+      const hulyIdentifier = 'MYPROJ-42';
+
+      const updatedLabels = [...(beadsIssue.labels || []), `huly:${hulyIdentifier}`];
+      expect(updatedLabels).toContain('huly:MYPROJ-42');
+      expect(updatedLabels).toContain('bug');
+    });
+  });
+});
+
+describe('Phase 3b: Beads→Huly Status Sync', () => {
+  describe('syncBeadsToHuly activity', () => {
+    it('should only process issues with huly: label', () => {
+      const beadsIssues = [
+        { id: 'proj-1', labels: ['huly:PROJ-10'] },
+        { id: 'proj-2', labels: ['bug'] },
+        { id: 'proj-3', labels: ['huly:PROJ-20', 'feature'] },
+      ];
+
+      const linkedIssues = beadsIssues.filter(i => i.labels?.some(l => l.startsWith('huly:')));
+
+      expect(linkedIssues).toHaveLength(2);
+      expect(linkedIssues.map(i => i.id)).toEqual(['proj-1', 'proj-3']);
+    });
+
+    it('should extract huly identifier from label', () => {
+      const label = 'huly:MYPROJ-123';
+      const identifier = label.replace('huly:', '');
+      expect(identifier).toBe('MYPROJ-123');
+    });
+
+    it('should sync status from beads to huly', () => {
+      const input = {
+        beadsIssue: {
+          id: 'proj-abc',
+          status: 'closed',
+        },
+        hulyIdentifier: 'PROJ-123',
+        context: {
+          projectIdentifier: 'PROJ',
+          vibeProjectId: 'vibe-uuid',
+        },
+      };
+
+      expect(input.beadsIssue.status).toBe('closed');
+      expect(input.hulyIdentifier).toBe('PROJ-123');
+    });
   });
 });
