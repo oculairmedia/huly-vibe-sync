@@ -89,7 +89,7 @@ export interface ProjectSyncInput {
     enableBeads: boolean;
     enableLetta: boolean;
     dryRun: boolean;
-    _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'done';
+    _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
     _phase1Index?: number;
     _phase2Index?: number;
     _phase3Index?: number;

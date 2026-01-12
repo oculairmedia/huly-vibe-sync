@@ -17,10 +17,11 @@ class HulyClient {
     name;
     constructor(baseUrl, options = {}) {
         // Normalize URL: ensure port 3458 and /api suffix
-        this.baseUrl = baseUrl
-            .replace(/\/mcp$/, '')
-            .replace(/\/api$/, '')
-            .replace(/:\d+/, ':3458') + '/api';
+        this.baseUrl =
+            baseUrl
+                .replace(/\/mcp$/, '')
+                .replace(/\/api$/, '')
+                .replace(/:\d+/, ':3458') + '/api';
         this.timeout = options.timeout || 60000;
         this.name = options.name || 'Huly';
     }
@@ -45,7 +46,7 @@ class HulyClient {
                 const errorText = await response.text();
                 throw new Error(`Huly API error (${response.status}): ${errorText}`);
             }
-            return await response.json();
+            return (await response.json());
         }
         catch (error) {
             clearTimeout(timeoutId);
@@ -66,7 +67,7 @@ class HulyClient {
         if (!response.ok) {
             throw new Error(`Huly health check failed: ${response.status}`);
         }
-        return await response.json();
+        return (await response.json());
     }
     // ============================================================
     // PROJECT OPERATIONS
@@ -86,7 +87,9 @@ class HulyClient {
             params.append('limit', options.limit.toString());
         const queryString = params.toString();
         const url = `/projects/${projectIdentifier}/issues${queryString ? '?' + queryString : ''}`;
-        const result = await this.request(url, { method: 'GET' });
+        const result = await this.request(url, {
+            method: 'GET',
+        });
         return result.issues;
     }
     async getIssue(issueIdentifier) {
@@ -122,11 +125,24 @@ class HulyClient {
         });
     }
     async deleteIssue(issueIdentifier, cascade = false) {
-        const url = cascade
-            ? `/issues/${issueIdentifier}?cascade=true`
-            : `/issues/${issueIdentifier}`;
+        const url = cascade ? `/issues/${issueIdentifier}?cascade=true` : `/issues/${issueIdentifier}`;
         await this.request(url, { method: 'DELETE' });
         return true;
+    }
+    /**
+     * Find an existing issue by title (for deduplication)
+     * Returns the first matching issue or null
+     */
+    async findIssueByTitle(projectIdentifier, title) {
+        try {
+            const issues = await this.listIssues(projectIdentifier, { limit: 500 });
+            const normalizedTitle = title.toLowerCase().trim();
+            return issues.find(issue => issue.title.toLowerCase().trim() === normalizedTitle) || null;
+        }
+        catch (error) {
+            console.warn(`[HulyClient] findIssueByTitle failed: ${error}`);
+            return null;
+        }
     }
     // ============================================================
     // SUB-ISSUE OPERATIONS

@@ -153,13 +153,15 @@ class BeadsClient {
             updated_at: now,
             ...(issue.labels && issue.labels.length > 0 && { labels: issue.labels }),
             ...(issue.description && {
-                comments: [{
+                comments: [
+                    {
                         id: Date.now(),
                         issue_id: issue.id,
                         author: 'vibesync',
                         text: issue.description,
                         created_at: now,
-                    }],
+                    },
+                ],
             }),
         };
         // Append to JSONL file
@@ -171,7 +173,7 @@ class BeadsClient {
     triggerImport() {
         const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
         // Fire and forget - don't wait for completion
-        (0, child_process_1.exec)(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, (error) => {
+        (0, child_process_1.exec)(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, error => {
             if (error) {
                 console.warn(`[BeadsClient] Import warning: ${error.message}`);
             }
@@ -252,17 +254,49 @@ class BeadsClient {
     async updateStatus(issueId, status) {
         return this.updateIssue(issueId, 'status', status);
     }
-    /**
-     * Add a label to an issue
-     */
     async addLabel(issueId, label) {
-        this.execBeads(`label ${issueId} --add ${label}`);
+        const apiUrl = process.env.BEADS_API_URL || 'http://localhost:3099/api/beads/label';
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repoPath: this.repoPath,
+                    issueId,
+                    label,
+                    action: 'add',
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+        }
+        catch (apiError) {
+            console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
+            this.execBeads(`label add ${issueId} "${label}"`);
+        }
     }
-    /**
-     * Remove a label from an issue
-     */
     async removeLabel(issueId, label) {
-        this.execBeads(`label ${issueId} --remove ${label}`);
+        const apiUrl = process.env.BEADS_API_URL || 'http://localhost:3099/api/beads/label';
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repoPath: this.repoPath,
+                    issueId,
+                    label,
+                    action: 'remove',
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+        }
+        catch (apiError) {
+            console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
+            this.execBeads(`label remove ${issueId} "${label}"`);
+        }
     }
     // ============================================================
     // GIT OPERATIONS
@@ -345,12 +379,12 @@ class BeadsClient {
     async findByTitle(title) {
         const issues = await this.listIssues();
         const normalizedTitle = title.toLowerCase().trim();
-        return issues.find(issue => {
+        return (issues.find(issue => {
             const issueTitle = issue.title.toLowerCase().trim();
-            return issueTitle === normalizedTitle ||
+            return (issueTitle === normalizedTitle ||
                 issueTitle.includes(normalizedTitle) ||
-                normalizedTitle.includes(issueTitle);
-        }) || null;
+                normalizedTitle.includes(issueTitle));
+        }) || null);
     }
     /**
      * Sync a Huly issue to Beads

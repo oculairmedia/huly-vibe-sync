@@ -160,13 +160,15 @@ export class BeadsClient {
       updated_at: now,
       ...(issue.labels && issue.labels.length > 0 && { labels: issue.labels }),
       ...(issue.description && {
-        comments: [{
-          id: Date.now(),
-          issue_id: issue.id,
-          author: 'vibesync',
-          text: issue.description,
-          created_at: now,
-        }],
+        comments: [
+          {
+            id: Date.now(),
+            issue_id: issue.id,
+            author: 'vibesync',
+            text: issue.description,
+            created_at: now,
+          },
+        ],
       }),
     };
 
@@ -180,7 +182,7 @@ export class BeadsClient {
   private triggerImport(): void {
     const issuesPath = path.join(this.repoPath, '.beads', 'issues.jsonl');
     // Fire and forget - don't wait for completion
-    exec(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, (error) => {
+    exec(`bd import -i "${issuesPath}" --no-daemon`, { cwd: this.repoPath }, error => {
       if (error) {
         console.warn(`[BeadsClient] Import warning: ${error.message}`);
       }
@@ -269,18 +271,48 @@ export class BeadsClient {
     return this.updateIssue(issueId, 'status', status);
   }
 
-  /**
-   * Add a label to an issue
-   */
   async addLabel(issueId: string, label: string): Promise<void> {
-    this.execBeads(`label ${issueId} --add ${label}`);
+    const apiUrl = process.env.BEADS_API_URL || 'http://localhost:3099/api/beads/label';
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoPath: this.repoPath,
+          issueId,
+          label,
+          action: 'add',
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+    } catch (apiError) {
+      console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
+      this.execBeads(`label add ${issueId} "${label}"`);
+    }
   }
 
-  /**
-   * Remove a label from an issue
-   */
   async removeLabel(issueId: string, label: string): Promise<void> {
-    this.execBeads(`label ${issueId} --remove ${label}`);
+    const apiUrl = process.env.BEADS_API_URL || 'http://localhost:3099/api/beads/label';
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoPath: this.repoPath,
+          issueId,
+          label,
+          action: 'remove',
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+    } catch (apiError) {
+      console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
+      this.execBeads(`label remove ${issueId} "${label}"`);
+    }
   }
 
   // ============================================================
@@ -329,9 +361,7 @@ export class BeadsClient {
     ];
 
     // Stage only existing Beads files
-    const existingFiles = beadsFiles.filter(file =>
-      fs.existsSync(path.join(this.repoPath, file))
-    );
+    const existingFiles = beadsFiles.filter(file => fs.existsSync(path.join(this.repoPath, file)));
 
     if (existingFiles.length === 0) {
       return false;
@@ -374,12 +404,16 @@ export class BeadsClient {
     const issues = await this.listIssues();
     const normalizedTitle = title.toLowerCase().trim();
 
-    return issues.find(issue => {
-      const issueTitle = issue.title.toLowerCase().trim();
-      return issueTitle === normalizedTitle ||
-        issueTitle.includes(normalizedTitle) ||
-        normalizedTitle.includes(issueTitle);
-    }) || null;
+    return (
+      issues.find(issue => {
+        const issueTitle = issue.title.toLowerCase().trim();
+        return (
+          issueTitle === normalizedTitle ||
+          issueTitle.includes(normalizedTitle) ||
+          normalizedTitle.includes(issueTitle)
+        );
+      }) || null
+    );
   }
 
   /**

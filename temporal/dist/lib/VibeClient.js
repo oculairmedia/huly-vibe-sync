@@ -17,10 +17,11 @@ class VibeClient {
     name;
     constructor(baseUrl, options = {}) {
         // Normalize URL: ensure port 3105 and /api suffix
-        this.baseUrl = baseUrl
-            .replace(/\/mcp$/, '')
-            .replace(/\/api$/, '')
-            .replace(/:\d+/, ':3105') + '/api';
+        this.baseUrl =
+            baseUrl
+                .replace(/\/mcp$/, '')
+                .replace(/\/api$/, '')
+                .replace(/:\d+/, ':3105') + '/api';
         this.timeout = options.timeout || 60000;
         this.name = options.name || 'Vibe';
     }
@@ -45,7 +46,7 @@ class VibeClient {
                 const errorText = await response.text();
                 throw new Error(`Vibe API error (${response.status}): ${errorText}`);
             }
-            const result = await response.json();
+            const result = (await response.json());
             // Vibe API returns { success, data, message } format
             if (result.success === false) {
                 throw new Error(`Vibe API failed: ${result.message || 'Unknown error'}`);
@@ -173,11 +174,56 @@ class VibeClient {
         });
         return { task, created: true, updated: false, skipped: false };
     }
+    async findTaskByBeadsId(projectId, beadsId) {
+        try {
+            const tasks = await this.listTasks(projectId);
+            const match = tasks.find(task => {
+                if (!task.description)
+                    return false;
+                return task.description.includes(`Beads Issue: ${beadsId}`);
+            });
+            return match || null;
+        }
+        catch {
+            return null;
+        }
+    }
+    async findTaskByTitle(projectId, title) {
+        try {
+            const tasks = await this.listTasks(projectId);
+            const normalizedTitle = title.toLowerCase().trim();
+            return tasks.find(t => t.title.toLowerCase().trim() === normalizedTitle) || null;
+        }
+        catch {
+            return null;
+        }
+    }
+    async syncFromBeads(projectId, beadsIssue, vibeStatus) {
+        const existing = await this.findTaskByBeadsId(projectId, beadsIssue.id);
+        if (existing) {
+            if (existing.status !== vibeStatus) {
+                await this.updateTask(existing.id, 'status', vibeStatus);
+                const updated = await this.getTask(existing.id);
+                return { task: updated, created: false, updated: true, skipped: false };
+            }
+            return { task: existing, created: false, updated: false, skipped: true };
+        }
+        const existingByTitle = await this.findTaskByTitle(projectId, beadsIssue.title);
+        if (existingByTitle) {
+            return { task: existingByTitle, created: false, updated: false, skipped: true };
+        }
+        const description = beadsIssue.description
+            ? `${beadsIssue.description}\n\n---\nBeads Issue: ${beadsIssue.id}`
+            : `Synced from Beads: ${beadsIssue.id}`;
+        const task = await this.createTask(projectId, {
+            title: beadsIssue.title,
+            description,
+            status: vibeStatus,
+        });
+        return { task, created: true, updated: false, skipped: false };
+    }
 }
 exports.VibeClient = VibeClient;
-/**
- * Factory function to create Vibe client
- */
 function createVibeClient(url, options) {
     const baseUrl = url || process.env.VIBE_API_URL || 'http://localhost:3105';
     return new VibeClient(baseUrl, options);

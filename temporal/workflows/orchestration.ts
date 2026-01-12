@@ -70,6 +70,7 @@ const {
   syncIssueToBeads,
   syncBeadsToHuly,
   createBeadsIssueInHuly,
+  createBeadsIssueInVibe,
   commitBeadsToGit,
 } = proxyActivities<typeof syncActivities>({
   startToCloseTimeout: '60 seconds',
@@ -382,7 +383,7 @@ export interface ProjectSyncInput {
   dryRun: boolean;
 
   // Internal continuation state
-  _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'done';
+  _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
   _phase1Index?: number;
   _phase2Index?: number;
   _phase3Index?: number;
@@ -825,7 +826,67 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         skipped: beadsSkipped,
       });
 
-      // Move to done
+      return await continueAsNew<typeof ProjectSyncWorkflow>({
+        ...input,
+        _phase: 'phase3c',
+        _vibeProjectId: vibeProjectId,
+        _gitRepoPath: gitRepoPath,
+        _beadsInitialized: beadsInitialized,
+        _accumulatedResult: result,
+      });
+    }
+
+    if (_phase === 'phase3c') {
+      log.info(`[ProjectSync] Phase 3c: Beads→Vibe sync`);
+
+      const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
+
+      let vibeCreated = 0;
+      let vibeSkipped = 0;
+
+      for (const beadsIssue of beadsIssues) {
+        if (dryRun) {
+          vibeSkipped++;
+          continue;
+        }
+
+        try {
+          const createResult = await createBeadsIssueInVibe({
+            beadsIssue: {
+              id: beadsIssue.id,
+              title: beadsIssue.title,
+              status: beadsIssue.status,
+              priority: beadsIssue.priority,
+              description: beadsIssue.description,
+              labels: beadsIssue.labels,
+            },
+            context: {
+              projectIdentifier: hulyProject.identifier,
+              vibeProjectId: vibeProjectId!,
+              gitRepoPath: gitRepoPath!,
+            },
+          });
+
+          if (createResult.created) {
+            vibeCreated++;
+            log.info(
+              `[ProjectSync] Created Vibe task ${createResult.vibeTaskId} from ${beadsIssue.id}`
+            );
+          } else {
+            vibeSkipped++;
+          }
+        } catch (error) {
+          log.warn(`[ProjectSync] Phase 3c error for ${beadsIssue.id}`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          vibeSkipped++;
+        }
+
+        await sleep('100ms');
+      }
+
+      log.info(`[ProjectSync] Phase 3c complete`, { created: vibeCreated, skipped: vibeSkipped });
+
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'done',

@@ -52,10 +52,11 @@ export class HulyClient {
 
   constructor(baseUrl: string, options: HulyClientOptions = {}) {
     // Normalize URL: ensure port 3458 and /api suffix
-    this.baseUrl = baseUrl
-      .replace(/\/mcp$/, '')
-      .replace(/\/api$/, '')
-      .replace(/:\d+/, ':3458') + '/api';
+    this.baseUrl =
+      baseUrl
+        .replace(/\/mcp$/, '')
+        .replace(/\/api$/, '')
+        .replace(/:\d+/, ':3458') + '/api';
     this.timeout = options.timeout || 60000;
     this.name = options.name || 'Huly';
   }
@@ -63,10 +64,7 @@ export class HulyClient {
   /**
    * Make an HTTP request with timeout and error handling
    */
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -88,7 +86,7 @@ export class HulyClient {
         throw new Error(`Huly API error (${response.status}): ${errorText}`);
       }
 
-      return await response.json() as T;
+      return (await response.json()) as T;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -111,7 +109,7 @@ export class HulyClient {
       throw new Error(`Huly health check failed: ${response.status}`);
     }
 
-    return await response.json() as { status: string; connected: boolean };
+    return (await response.json()) as { status: string; connected: boolean };
   }
 
   // ============================================================
@@ -138,7 +136,9 @@ export class HulyClient {
     const queryString = params.toString();
     const url = `/projects/${projectIdentifier}/issues${queryString ? '?' + queryString : ''}`;
 
-    const result = await this.request<{ issues: HulyIssue[]; count: number }>(url, { method: 'GET' });
+    const result = await this.request<{ issues: HulyIssue[]; count: number }>(url, {
+      method: 'GET',
+    });
     return result.issues;
   }
 
@@ -178,12 +178,26 @@ export class HulyClient {
   }
 
   async deleteIssue(issueIdentifier: string, cascade = false): Promise<boolean> {
-    const url = cascade
-      ? `/issues/${issueIdentifier}?cascade=true`
-      : `/issues/${issueIdentifier}`;
+    const url = cascade ? `/issues/${issueIdentifier}?cascade=true` : `/issues/${issueIdentifier}`;
 
     await this.request<void>(url, { method: 'DELETE' });
     return true;
+  }
+
+  /**
+   * Find an existing issue by title (for deduplication)
+   * Returns the first matching issue or null
+   */
+  async findIssueByTitle(projectIdentifier: string, title: string): Promise<HulyIssue | null> {
+    try {
+      const issues = await this.listIssues(projectIdentifier, { limit: 500 });
+      const normalizedTitle = title.toLowerCase().trim();
+
+      return issues.find(issue => issue.title.toLowerCase().trim() === normalizedTitle) || null;
+    } catch (error) {
+      console.warn(`[HulyClient] findIssueByTitle failed: ${error}`);
+      return null;
+    }
   }
 
   // ============================================================
@@ -208,15 +222,19 @@ export class HulyClient {
   // COMMENT OPERATIONS
   // ============================================================
 
-  async getComments(issueIdentifier: string): Promise<Array<{ id: string; text: string; createdAt: string }>> {
-    const result = await this.request<{ comments: Array<{ id: string; text: string; createdAt: string }> }>(
-      `/issues/${issueIdentifier}/comments`,
-      { method: 'GET' }
-    );
+  async getComments(
+    issueIdentifier: string
+  ): Promise<Array<{ id: string; text: string; createdAt: string }>> {
+    const result = await this.request<{
+      comments: Array<{ id: string; text: string; createdAt: string }>;
+    }>(`/issues/${issueIdentifier}/comments`, { method: 'GET' });
     return result.comments;
   }
 
-  async createComment(issueIdentifier: string, text: string): Promise<{ id: string; text: string }> {
+  async createComment(
+    issueIdentifier: string,
+    text: string
+  ): Promise<{ id: string; text: string }> {
     return this.request<{ id: string; text: string }>(`/issues/${issueIdentifier}/comments`, {
       method: 'POST',
       body: JSON.stringify({ text }),

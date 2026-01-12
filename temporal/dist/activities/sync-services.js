@@ -13,6 +13,7 @@ exports.syncTaskToHuly = syncTaskToHuly;
 exports.syncIssueToBeads = syncIssueToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
 exports.createBeadsIssueInHuly = createBeadsIssueInHuly;
+exports.createBeadsIssueInVibe = createBeadsIssueInVibe;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
@@ -165,6 +166,26 @@ async function createBeadsIssueInHuly(input) {
     console.log(`[Temporal:Beads→Huly] Creating Huly issue for ${beadsIssue.id}`);
     try {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const existingIssue = await hulyClient.findIssueByTitle(context.projectIdentifier, beadsIssue.title);
+        if (existingIssue) {
+            console.log(`[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`);
+            if (context.gitRepoPath) {
+                try {
+                    const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
+                    await beadsClient.addLabel(beadsIssue.id, `huly:${existingIssue.identifier}`);
+                    console.log(`[Temporal:Beads→Huly] Linked ${beadsIssue.id} to existing ${existingIssue.identifier}`);
+                }
+                catch (labelError) {
+                    console.warn(`[Temporal:Beads→Huly] Failed to add label: ${labelError}`);
+                }
+            }
+            return {
+                success: true,
+                skipped: true,
+                id: existingIssue.identifier,
+                hulyIdentifier: existingIssue.identifier,
+            };
+        }
         const priorityMap = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
         const hulyPriority = priorityMap[beadsIssue.priority ?? 2] || 'Medium';
         const hulyStatus = beadsIssue.status === 'closed'
@@ -204,6 +225,50 @@ async function createBeadsIssueInHuly(input) {
     }
     catch (error) {
         return handleSyncError(error, 'Beads→Huly Create');
+    }
+}
+async function createBeadsIssueInVibe(input) {
+    const { beadsIssue, context } = input;
+    if (beadsIssue.labels?.some(l => l.startsWith('vibe:'))) {
+        console.log(`[Temporal:Beads→Vibe] Skipping ${beadsIssue.id} - already has vibe label`);
+        return { success: true, skipped: true };
+    }
+    console.log(`[Temporal:Beads→Vibe] Creating Vibe task for ${beadsIssue.id}`);
+    try {
+        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
+        const vibeStatus = (0, lib_1.mapBeadsStatusToVibe)(beadsIssue.status);
+        const result = await vibeClient.syncFromBeads(context.vibeProjectId, {
+            id: beadsIssue.id,
+            title: beadsIssue.title,
+            description: beadsIssue.description,
+            status: beadsIssue.status,
+        }, vibeStatus);
+        if (result.skipped) {
+            console.log(`[Temporal:Beads→Vibe] Skipped ${beadsIssue.id} - already exists`);
+            return { success: true, skipped: true, id: result.task?.id, vibeTaskId: result.task?.id };
+        }
+        if (result.created && result.task) {
+            console.log(`[Temporal:Beads→Vibe] Created task ${result.task.id} from ${beadsIssue.id}`);
+            if (context.gitRepoPath) {
+                try {
+                    const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
+                    await beadsClient.addLabel(beadsIssue.id, `vibe:${result.task.id}`);
+                    console.log(`[Temporal:Beads→Vibe] Added vibe:${result.task.id} label to ${beadsIssue.id}`);
+                }
+                catch (labelError) {
+                    console.warn(`[Temporal:Beads→Vibe] Failed to add label: ${labelError}`);
+                }
+            }
+            return { success: true, created: true, id: result.task.id, vibeTaskId: result.task.id };
+        }
+        if (result.updated && result.task) {
+            console.log(`[Temporal:Beads→Vibe] Updated task ${result.task.id} from ${beadsIssue.id}`);
+            return { success: true, updated: true, id: result.task.id, vibeTaskId: result.task.id };
+        }
+        return { success: true, skipped: true };
+    }
+    catch (error) {
+        return handleSyncError(error, 'Beads→Vibe Create');
     }
 }
 async function commitBeadsToGit(input) {

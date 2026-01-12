@@ -82,9 +82,19 @@ export declare class VibeClient {
         updated: boolean;
         skipped: boolean;
     }>;
+    findTaskByBeadsId(projectId: string, beadsId: string): Promise<VibeTask | null>;
+    findTaskByTitle(projectId: string, title: string): Promise<VibeTask | null>;
+    syncFromBeads(projectId: string, beadsIssue: {
+        id: string;
+        title: string;
+        description?: string;
+        status: string;
+    }, vibeStatus: string): Promise<{
+        task: VibeTask | null;
+        created: boolean;
+        updated: boolean;
+        skipped: boolean;
+    }>;
 }
-/**
- * Factory function to create Vibe client
- */
 export declare function createVibeClient(url?: string, options?: VibeClientOptions): VibeClient;
 //# sourceMappingURL=VibeClient.d.ts.map

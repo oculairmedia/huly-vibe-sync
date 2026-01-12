@@ -16,6 +16,7 @@ import {
   mapVibeStatusToHuly,
   mapHulyStatusToBeadsSimple,
   mapHulyPriorityToBeads,
+  mapBeadsStatusToVibe,
 } from '../lib';
 
 // ============================================================
@@ -284,6 +285,35 @@ export async function createBeadsIssueInHuly(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
+    const existingIssue = await hulyClient.findIssueByTitle(
+      context.projectIdentifier,
+      beadsIssue.title
+    );
+    if (existingIssue) {
+      console.log(
+        `[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`
+      );
+
+      if (context.gitRepoPath) {
+        try {
+          const beadsClient = createBeadsClient(context.gitRepoPath);
+          await beadsClient.addLabel(beadsIssue.id, `huly:${existingIssue.identifier}`);
+          console.log(
+            `[Temporal:Beads→Huly] Linked ${beadsIssue.id} to existing ${existingIssue.identifier}`
+          );
+        } catch (labelError) {
+          console.warn(`[Temporal:Beads→Huly] Failed to add label: ${labelError}`);
+        }
+      }
+
+      return {
+        success: true,
+        skipped: true,
+        id: existingIssue.identifier,
+        hulyIdentifier: existingIssue.identifier,
+      };
+    }
+
     const priorityMap: Record<number, string> = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
     const hulyPriority = priorityMap[beadsIssue.priority ?? 2] || 'Medium';
 
@@ -331,6 +361,68 @@ export async function createBeadsIssueInHuly(input: {
     };
   } catch (error) {
     return handleSyncError(error, 'Beads→Huly Create');
+  }
+}
+
+export async function createBeadsIssueInVibe(input: {
+  beadsIssue: BeadsIssue;
+  context: SyncContext;
+}): Promise<SyncActivityResult & { vibeTaskId?: string }> {
+  const { beadsIssue, context } = input;
+
+  if (beadsIssue.labels?.some(l => l.startsWith('vibe:'))) {
+    console.log(`[Temporal:Beads→Vibe] Skipping ${beadsIssue.id} - already has vibe label`);
+    return { success: true, skipped: true };
+  }
+
+  console.log(`[Temporal:Beads→Vibe] Creating Vibe task for ${beadsIssue.id}`);
+
+  try {
+    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
+    const vibeStatus = mapBeadsStatusToVibe(beadsIssue.status);
+
+    const result = await vibeClient.syncFromBeads(
+      context.vibeProjectId,
+      {
+        id: beadsIssue.id,
+        title: beadsIssue.title,
+        description: beadsIssue.description,
+        status: beadsIssue.status,
+      },
+      vibeStatus
+    );
+
+    if (result.skipped) {
+      console.log(`[Temporal:Beads→Vibe] Skipped ${beadsIssue.id} - already exists`);
+      return { success: true, skipped: true, id: result.task?.id, vibeTaskId: result.task?.id };
+    }
+
+    if (result.created && result.task) {
+      console.log(`[Temporal:Beads→Vibe] Created task ${result.task.id} from ${beadsIssue.id}`);
+
+      if (context.gitRepoPath) {
+        try {
+          const beadsClient = createBeadsClient(context.gitRepoPath);
+          await beadsClient.addLabel(beadsIssue.id, `vibe:${result.task.id}`);
+          console.log(
+            `[Temporal:Beads→Vibe] Added vibe:${result.task.id} label to ${beadsIssue.id}`
+          );
+        } catch (labelError) {
+          console.warn(`[Temporal:Beads→Vibe] Failed to add label: ${labelError}`);
+        }
+      }
+
+      return { success: true, created: true, id: result.task.id, vibeTaskId: result.task.id };
+    }
+
+    if (result.updated && result.task) {
+      console.log(`[Temporal:Beads→Vibe] Updated task ${result.task.id} from ${beadsIssue.id}`);
+      return { success: true, updated: true, id: result.task.id, vibeTaskId: result.task.id };
+    }
+
+    return { success: true, skipped: true };
+  } catch (error) {
+    return handleSyncError(error, 'Beads→Vibe Create');
   }
 }
 

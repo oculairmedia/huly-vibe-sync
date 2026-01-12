@@ -83,6 +83,12 @@ export declare function createBeadsIssueInHuly(input: {
 }): Promise<SyncActivityResult & {
     hulyIdentifier?: string;
 }>;
+export declare function createBeadsIssueInVibe(input: {
+    beadsIssue: BeadsIssue;
+    context: SyncContext;
+}): Promise<SyncActivityResult & {
+    vibeTaskId?: string;
+}>;
 export declare function commitBeadsToGit(input: {
     context: SyncContext;
     message?: string;

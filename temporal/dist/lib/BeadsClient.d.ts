@@ -86,13 +86,7 @@ export declare class BeadsClient {
      * Update issue status
      */
     updateStatus(issueId: string, status: string): Promise<BeadsIssue>;
-    /**
-     * Add a label to an issue
-     */
     addLabel(issueId: string, label: string): Promise<void>;
-    /**
-     * Remove a label from an issue
-     */
     removeLabel(issueId: string, label: string): Promise<void>;
     /**
      * Check if this is a git repository
