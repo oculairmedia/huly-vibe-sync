@@ -89,6 +89,14 @@ export interface ProjectSyncInput {
     enableBeads: boolean;
     enableLetta: boolean;
     dryRun: boolean;
+    prefetchedIssues?: Array<{
+        identifier: string;
+        title: string;
+        status: string;
+        priority?: string;
+        modifiedOn?: number;
+        parentIssue?: string;
+    }>;
     _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
     _phase1Index?: number;
     _phase2Index?: number;

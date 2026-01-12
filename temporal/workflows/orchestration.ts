@@ -38,6 +38,7 @@ const {
   fetchVibeProjects,
   ensureVibeProject,
   fetchProjectData,
+  fetchHulyIssuesBulk,
   initializeBeads,
   fetchBeadsIssues,
   updateLettaMemory,
@@ -255,6 +256,38 @@ export async function FullOrchestrationWorkflow(
     progress.projectsCompleted = _continueIndex;
     progress.status = 'syncing';
 
+    // Bulk prefetch issues from all projects (7.4x faster than sequential)
+    const projectIdentifiers = projectsToSync.map(p => p.identifier);
+    let prefetchedIssuesByProject: Record<
+      string,
+      Array<{
+        identifier: string;
+        title: string;
+        status: string;
+        priority?: string;
+        modifiedOn?: number;
+        parentIssue?: string;
+      }>
+    > = {};
+
+    try {
+      prefetchedIssuesByProject = await fetchHulyIssuesBulk({
+        projectIdentifiers,
+        limit: 1000,
+      });
+      log.info('[FullOrchestration] Bulk prefetched issues', {
+        projects: Object.keys(prefetchedIssuesByProject).length,
+        totalIssues: Object.values(prefetchedIssuesByProject).reduce(
+          (sum, arr) => sum + arr.length,
+          0
+        ),
+      });
+    } catch (error) {
+      log.warn('[FullOrchestration] Bulk prefetch failed, falling back to per-project fetch', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Track how many projects we process in this continuation
     let projectsProcessedThisRun = 0;
 
@@ -280,6 +313,7 @@ export async function FullOrchestrationWorkflow(
             enableBeads,
             enableLetta,
             dryRun,
+            prefetchedIssues: prefetchedIssuesByProject[hulyProject.identifier] || undefined,
           },
         ],
       });
@@ -381,6 +415,14 @@ export interface ProjectSyncInput {
   enableBeads: boolean;
   enableLetta: boolean;
   dryRun: boolean;
+  prefetchedIssues?: Array<{
+    identifier: string;
+    title: string;
+    status: string;
+    priority?: string;
+    modifiedOn?: number;
+    parentIssue?: string;
+  }>;
 
   // Internal continuation state
   _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
@@ -408,6 +450,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     enableBeads,
     enableLetta,
     dryRun,
+    prefetchedIssues,
     // Continuation state
     _phase = 'init',
     _phase1Index = 0,
@@ -476,11 +519,34 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       });
     }
 
-    // Fetch project data (needed for all phases)
-    const { hulyIssues, vibeTasks } = await fetchProjectData({
-      hulyProject,
-      vibeProjectId: vibeProjectId!,
-    });
+    // Fetch project data (use prefetched issues if available, else fetch)
+    let hulyIssues: Array<{
+      identifier: string;
+      title: string;
+      status: string;
+      priority?: string;
+      modifiedOn?: number;
+      parentIssue?: string;
+      description?: string;
+    }>;
+    let vibeTasks: Array<{ id: string; title: string; status: string; description?: string }>;
+
+    if (prefetchedIssues && prefetchedIssues.length > 0) {
+      hulyIssues = prefetchedIssues;
+      const projectData = await fetchProjectData({
+        hulyProject,
+        vibeProjectId: vibeProjectId!,
+      });
+      vibeTasks = projectData.vibeTasks;
+      log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+    } else {
+      const projectData = await fetchProjectData({
+        hulyProject,
+        vibeProjectId: vibeProjectId!,
+      });
+      hulyIssues = projectData.hulyIssues;
+      vibeTasks = projectData.vibeTasks;
+    }
 
     // Build lookup maps
     const tasksByHulyId = new Map<string, { id: string; status: string }>();

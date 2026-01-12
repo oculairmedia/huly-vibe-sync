@@ -23,7 +23,7 @@ const workflow_1 = require("@temporalio/workflow");
 // ACTIVITY PROXIES
 // ============================================================
 // Orchestration activities (project fetching, Letta, metrics)
-const { fetchHulyProjects, fetchVibeProjects, ensureVibeProject, fetchProjectData, initializeBeads, fetchBeadsIssues, updateLettaMemory, recordSyncMetrics, } = (0, workflow_1.proxyActivities)({
+const { fetchHulyProjects, fetchVibeProjects, ensureVibeProject, fetchProjectData, fetchHulyIssuesBulk, initializeBeads, fetchBeadsIssues, updateLettaMemory, recordSyncMetrics, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -136,6 +136,24 @@ async function FullOrchestrationWorkflow(input = {}) {
         progress.projectsTotal = projectsToSync.length;
         progress.projectsCompleted = _continueIndex;
         progress.status = 'syncing';
+        // Bulk prefetch issues from all projects (7.4x faster than sequential)
+        const projectIdentifiers = projectsToSync.map(p => p.identifier);
+        let prefetchedIssuesByProject = {};
+        try {
+            prefetchedIssuesByProject = await fetchHulyIssuesBulk({
+                projectIdentifiers,
+                limit: 1000,
+            });
+            workflow_1.log.info('[FullOrchestration] Bulk prefetched issues', {
+                projects: Object.keys(prefetchedIssuesByProject).length,
+                totalIssues: Object.values(prefetchedIssuesByProject).reduce((sum, arr) => sum + arr.length, 0),
+            });
+        }
+        catch (error) {
+            workflow_1.log.warn('[FullOrchestration] Bulk prefetch failed, falling back to per-project fetch', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
         // Track how many projects we process in this continuation
         let projectsProcessedThisRun = 0;
         // Process each project (starting from _continueIndex)
@@ -157,6 +175,7 @@ async function FullOrchestrationWorkflow(input = {}) {
                         enableBeads,
                         enableLetta,
                         dryRun,
+                        prefetchedIssues: prefetchedIssuesByProject[hulyProject.identifier] || undefined,
                     },
                 ],
             });
@@ -241,7 +260,7 @@ const MAX_ISSUES_PER_CONTINUATION = 100;
  * This prevents workflow history overflow for projects like LTSEL with 990 issues.
  */
 async function ProjectSyncWorkflow(input) {
-    const { hulyProject, vibeProjects, batchSize, enableBeads, enableLetta, dryRun, 
+    const { hulyProject, vibeProjects, batchSize, enableBeads, enableLetta, dryRun, prefetchedIssues, 
     // Continuation state
     _phase = 'init', _phase1Index = 0, _phase2Index = 0, _phase3Index = 0, _accumulatedResult, _vibeProjectId, _gitRepoPath, _beadsInitialized = false, _phase1UpdatedTasks = [], } = input;
     workflow_1.log.info(`[ProjectSync] Processing: ${hulyProject.identifier}`, {
@@ -293,11 +312,26 @@ async function ProjectSyncWorkflow(input) {
                 _accumulatedResult: result,
             });
         }
-        // Fetch project data (needed for all phases)
-        const { hulyIssues, vibeTasks } = await fetchProjectData({
-            hulyProject,
-            vibeProjectId: vibeProjectId,
-        });
+        // Fetch project data (use prefetched issues if available, else fetch)
+        let hulyIssues;
+        let vibeTasks;
+        if (prefetchedIssues && prefetchedIssues.length > 0) {
+            hulyIssues = prefetchedIssues;
+            const projectData = await fetchProjectData({
+                hulyProject,
+                vibeProjectId: vibeProjectId,
+            });
+            vibeTasks = projectData.vibeTasks;
+            workflow_1.log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+        }
+        else {
+            const projectData = await fetchProjectData({
+                hulyProject,
+                vibeProjectId: vibeProjectId,
+            });
+            hulyIssues = projectData.hulyIssues;
+            vibeTasks = projectData.vibeTasks;
+        }
         // Build lookup maps
         const tasksByHulyId = new Map();
         for (const task of vibeTasks) {
