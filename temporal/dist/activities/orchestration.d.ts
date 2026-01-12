@@ -46,15 +46,7 @@ export declare function fetchHulyProjects(): Promise<HulyProject[]>;
  * Fetch all Vibe projects
  */
 export declare function fetchVibeProjects(): Promise<VibeProject[]>;
-/**
- * Resolve a project identifier that might be a folder name
- *
- * Handles cases where folder names like "lettatoolsselector" are passed
- * instead of Huly project IDs like "LTSEL".
- *
- * @param projectIdOrFolder - Either a Huly project ID or folder name
- * @returns Resolved project identifier or null if not found
- */
+export declare function getVibeProjectId(hulyProjectIdentifier: string): Promise<string | null>;
 export declare function resolveProjectIdentifier(projectIdOrFolder: string): Promise<string | null>;
 /**
  * Create or get a Vibe project for a Huly project
@@ -73,6 +65,15 @@ export declare function fetchProjectData(input: {
     hulyIssues: HulyIssue[];
     vibeTasks: VibeTask[];
 }>;
+/**
+ * Bulk fetch issues from multiple Huly projects in a single API call.
+ * Uses POST /api/issues/bulk-by-projects for ~12s savings per sync cycle.
+ */
+export declare function fetchHulyIssuesBulk(input: {
+    projectIdentifiers: string[];
+    modifiedSince?: string;
+    limit?: number;
+}): Promise<Record<string, HulyIssue[]>>;
 /**
  * Extract git repo path from Huly project description
  */

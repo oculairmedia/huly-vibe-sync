@@ -38,6 +38,70 @@ export interface HulyClientOptions {
     name?: string;
 }
 /**
+ * Options for bulk fetching issues from multiple projects
+ * @see POST /api/issues/bulk-by-projects
+ */
+export interface BulkByProjectsOptions {
+    /** Array of project identifiers (max 100) */
+    projects: string[];
+    /** Only return issues modified after this ISO 8601 timestamp */
+    modifiedSince?: string;
+    /** Only return issues created after this ISO 8601 timestamp */
+    createdSince?: string;
+    /** Max issues per project (default: 1000) */
+    limit?: number;
+    /** Include issue descriptions (default: true, set false for 5x speed) */
+    includeDescriptions?: boolean;
+    /** Specific fields to return (default: all) */
+    fields?: string[];
+}
+/**
+ * Response from bulk-by-projects endpoint
+ */
+export interface BulkByProjectsResponse {
+    projects: Record<string, {
+        issues: HulyIssue[];
+        count: number;
+        syncMeta?: {
+            latestModified: string;
+            fetchedAt: string;
+        };
+        error?: string;
+    }>;
+    totalIssues: number;
+    projectCount: number;
+    syncMeta: {
+        modifiedSince: string | null;
+        createdSince: string | null;
+        latestModified: string;
+        serverTime: string;
+    };
+    notFound?: string[];
+}
+/**
+ * Options for bulk operations on issues
+ */
+export interface BulkUpdateOptions {
+    /** Issue identifiers to update */
+    identifiers: string[];
+    /** Fields to update on all issues */
+    updates: Partial<HulyIssue>;
+}
+export interface BulkDeleteOptions {
+    /** Issue identifiers to delete (max 100 per request) */
+    identifiers: string[];
+    /** Whether to cascade delete sub-issues (default: false) */
+    cascade?: boolean;
+}
+export interface BulkDeleteResult {
+    succeeded: string[];
+    failed: Array<{
+        identifier: string;
+        error: string;
+    }>;
+    total: number;
+}
+/**
  * TypeScript REST client for Huly
  */
 export declare class HulyClient {
@@ -85,9 +149,46 @@ export declare class HulyClient {
         id: string;
         text: string;
     }>;
-    /**
-     * Update issue status from Vibe task
-     */
+    listIssuesBulk(options: BulkByProjectsOptions): Promise<BulkByProjectsResponse>;
+    getIssuesByIds(identifiers: string[]): Promise<{
+        issues: HulyIssue[];
+        notFound: string[];
+    }>;
+    bulkUpdateIssues(options: BulkUpdateOptions): Promise<{
+        succeeded: string[];
+        failed: Array<{
+            identifier: string;
+            error: string;
+        }>;
+    }>;
+    bulkDeleteIssues(options: BulkDeleteOptions): Promise<BulkDeleteResult>;
+    getProjectTree(projectIdentifier: string): Promise<{
+        project: HulyProject;
+        issues: HulyIssue[];
+        tree: Array<{
+            identifier: string;
+            children: string[];
+        }>;
+    }>;
+    getProjectComponents(projectIdentifier: string): Promise<{
+        components: Array<{
+            label: string;
+            description?: string;
+        }>;
+    }>;
+    updateProject(projectIdentifier: string, updates: Partial<HulyProject>): Promise<HulyProject>;
+    listAllIssues(options?: {
+        status?: string;
+        limit?: number;
+        modifiedSince?: string;
+        includeDescriptions?: boolean;
+        fields?: string[];
+    }): Promise<{
+        issues: HulyIssue[];
+        count: number;
+    }>;
+    listIssuesByStatus(status: string, limit?: number): Promise<HulyIssue[]>;
+    setParentIssue(issueIdentifier: string, parentIdentifier: string | null): Promise<HulyIssue>;
     syncStatusFromVibe(issueIdentifier: string, hulyStatus: string): Promise<{
         success: boolean;
         issue?: HulyIssue;

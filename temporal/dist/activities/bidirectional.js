@@ -117,6 +117,10 @@ async function syncVibeToBeads(input) {
  */
 async function syncHulyToVibe(input) {
     const { hulyIssue, existingVibeId, context } = input;
+    if (!context.vibeProjectId) {
+        console.log(`[Sync] Huly → Vibe: Skipping ${hulyIssue.id} - no Vibe project`);
+        return { success: true, skipped: true };
+    }
     console.log(`[Sync] Huly → Vibe: ${hulyIssue.id}`);
     try {
         const client = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);

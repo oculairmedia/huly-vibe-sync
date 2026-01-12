@@ -43,6 +43,75 @@ export interface HulyClientOptions {
 }
 
 /**
+ * Options for bulk fetching issues from multiple projects
+ * @see POST /api/issues/bulk-by-projects
+ */
+export interface BulkByProjectsOptions {
+  /** Array of project identifiers (max 100) */
+  projects: string[];
+  /** Only return issues modified after this ISO 8601 timestamp */
+  modifiedSince?: string;
+  /** Only return issues created after this ISO 8601 timestamp */
+  createdSince?: string;
+  /** Max issues per project (default: 1000) */
+  limit?: number;
+  /** Include issue descriptions (default: true, set false for 5x speed) */
+  includeDescriptions?: boolean;
+  /** Specific fields to return (default: all) */
+  fields?: string[];
+}
+
+/**
+ * Response from bulk-by-projects endpoint
+ */
+export interface BulkByProjectsResponse {
+  projects: Record<
+    string,
+    {
+      issues: HulyIssue[];
+      count: number;
+      syncMeta?: {
+        latestModified: string;
+        fetchedAt: string;
+      };
+      error?: string;
+    }
+  >;
+  totalIssues: number;
+  projectCount: number;
+  syncMeta: {
+    modifiedSince: string | null;
+    createdSince: string | null;
+    latestModified: string;
+    serverTime: string;
+  };
+  notFound?: string[];
+}
+
+/**
+ * Options for bulk operations on issues
+ */
+export interface BulkUpdateOptions {
+  /** Issue identifiers to update */
+  identifiers: string[];
+  /** Fields to update on all issues */
+  updates: Partial<HulyIssue>;
+}
+
+export interface BulkDeleteOptions {
+  /** Issue identifiers to delete (max 100 per request) */
+  identifiers: string[];
+  /** Whether to cascade delete sub-issues (default: false) */
+  cascade?: boolean;
+}
+
+export interface BulkDeleteResult {
+  succeeded: string[];
+  failed: Array<{ identifier: string; error: string }>;
+  total: number;
+}
+
+/**
  * TypeScript REST client for Huly
  */
 export class HulyClient {
@@ -242,12 +311,142 @@ export class HulyClient {
   }
 
   // ============================================================
+  // BULK OPERATIONS (High-performance endpoints)
+  // ============================================================
+
+  async listIssuesBulk(options: BulkByProjectsOptions): Promise<BulkByProjectsResponse> {
+    return this.request<BulkByProjectsResponse>('/issues/bulk-by-projects', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
+  }
+
+  async getIssuesByIds(
+    identifiers: string[]
+  ): Promise<{ issues: HulyIssue[]; notFound: string[] }> {
+    const params = new URLSearchParams();
+    params.append('ids', identifiers.join(','));
+
+    return this.request<{ issues: HulyIssue[]; notFound: string[] }>(
+      `/issues/bulk?${params.toString()}`,
+      { method: 'GET' }
+    );
+  }
+
+  async bulkUpdateIssues(options: BulkUpdateOptions): Promise<{
+    succeeded: string[];
+    failed: Array<{ identifier: string; error: string }>;
+  }> {
+    return this.request<{
+      succeeded: string[];
+      failed: Array<{ identifier: string; error: string }>;
+    }>('/issues/bulk', {
+      method: 'PATCH',
+      body: JSON.stringify(options),
+    });
+  }
+
+  async bulkDeleteIssues(options: BulkDeleteOptions): Promise<BulkDeleteResult> {
+    return this.request<BulkDeleteResult>('/issues/bulk', {
+      method: 'DELETE',
+      body: JSON.stringify(options),
+    });
+  }
+
+  // ============================================================
+  // PROJECT METADATA
+  // ============================================================
+
+  async getProjectTree(projectIdentifier: string): Promise<{
+    project: HulyProject;
+    issues: HulyIssue[];
+    tree: Array<{ identifier: string; children: string[] }>;
+  }> {
+    return this.request<{
+      project: HulyProject;
+      issues: HulyIssue[];
+      tree: Array<{ identifier: string; children: string[] }>;
+    }>(`/projects/${projectIdentifier}/tree`, { method: 'GET' });
+  }
+
+  async getProjectComponents(
+    projectIdentifier: string
+  ): Promise<{ components: Array<{ label: string; description?: string }> }> {
+    return this.request<{ components: Array<{ label: string; description?: string }> }>(
+      `/projects/${projectIdentifier}/components`,
+      { method: 'GET' }
+    );
+  }
+
+  async updateProject(
+    projectIdentifier: string,
+    updates: Partial<HulyProject>
+  ): Promise<HulyProject> {
+    return this.request<HulyProject>(`/projects/${projectIdentifier}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // ============================================================
+  // ISSUE QUERIES
+  // ============================================================
+
+  async listAllIssues(
+    options: {
+      status?: string;
+      limit?: number;
+      modifiedSince?: string;
+      includeDescriptions?: boolean;
+      fields?: string[];
+    } = {}
+  ): Promise<{ issues: HulyIssue[]; count: number }> {
+    const params = new URLSearchParams();
+    if (options.status) params.append('status', options.status);
+    if (options.limit) params.append('limit', options.limit.toString());
+    if (options.modifiedSince) params.append('modifiedSince', options.modifiedSince);
+    if (options.includeDescriptions !== undefined) {
+      params.append('includeDescriptions', String(options.includeDescriptions));
+    }
+    if (options.fields) params.append('fields', options.fields.join(','));
+
+    const queryString = params.toString();
+    return this.request<{ issues: HulyIssue[]; count: number }>(
+      `/issues/all${queryString ? '?' + queryString : ''}`,
+      { method: 'GET' }
+    );
+  }
+
+  async listIssuesByStatus(status: string, limit = 100): Promise<HulyIssue[]> {
+    const params = new URLSearchParams();
+    params.append('status', status);
+    params.append('limit', limit.toString());
+
+    const result = await this.request<{ issues: HulyIssue[]; count: number }>(
+      `/issues?${params.toString()}`,
+      { method: 'GET' }
+    );
+    return result.issues;
+  }
+
+  // ============================================================
+  // PARENT/CHILD OPERATIONS
+  // ============================================================
+
+  async setParentIssue(
+    issueIdentifier: string,
+    parentIdentifier: string | null
+  ): Promise<HulyIssue> {
+    return this.request<HulyIssue>(`/issues/${issueIdentifier}/parent`, {
+      method: 'PATCH',
+      body: JSON.stringify({ parentIdentifier }),
+    });
+  }
+
+  // ============================================================
   // SYNC HELPERS
   // ============================================================
 
-  /**
-   * Update issue status from Vibe task
-   */
   async syncStatusFromVibe(
     issueIdentifier: string,
     hulyStatus: string

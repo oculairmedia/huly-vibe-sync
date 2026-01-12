@@ -8,9 +8,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchHulyProjects = fetchHulyProjects;
 exports.fetchVibeProjects = fetchVibeProjects;
+exports.getVibeProjectId = getVibeProjectId;
 exports.resolveProjectIdentifier = resolveProjectIdentifier;
 exports.ensureVibeProject = ensureVibeProject;
 exports.fetchProjectData = fetchProjectData;
+exports.fetchHulyIssuesBulk = fetchHulyIssuesBulk;
 exports.extractGitRepoPath = extractGitRepoPath;
 exports.initializeBeads = initializeBeads;
 exports.fetchBeadsIssues = fetchBeadsIssues;
@@ -51,15 +53,32 @@ async function fetchVibeProjects() {
         throw handleOrchestratorError(error, 'fetchVibeProjects');
     }
 }
-/**
- * Resolve a project identifier that might be a folder name
- *
- * Handles cases where folder names like "lettatoolsselector" are passed
- * instead of Huly project IDs like "LTSEL".
- *
- * @param projectIdOrFolder - Either a Huly project ID or folder name
- * @returns Resolved project identifier or null if not found
- */
+async function getVibeProjectId(hulyProjectIdentifier) {
+    console.log(`[Temporal:Orchestration] Looking up Vibe project for: ${hulyProjectIdentifier}`);
+    try {
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const hulyProjects = await hulyClient.listProjects();
+        const hulyProject = hulyProjects.find(p => p.identifier === hulyProjectIdentifier);
+        if (!hulyProject) {
+            console.log(`[Temporal:Orchestration] Huly project not found: ${hulyProjectIdentifier}`);
+            return null;
+        }
+        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
+        const vibeProjects = await vibeClient.listProjects();
+        const normalizedName = hulyProject.name.toLowerCase().trim();
+        const match = vibeProjects.find(p => p.name.toLowerCase().trim() === normalizedName);
+        if (match) {
+            console.log(`[Temporal:Orchestration] Found Vibe project: ${match.id} for ${hulyProjectIdentifier}`);
+            return match.id;
+        }
+        console.log(`[Temporal:Orchestration] No Vibe project found for: ${hulyProject.name}`);
+        return null;
+    }
+    catch (error) {
+        console.warn(`[Temporal:Orchestration] Vibe project lookup failed: ${error}`);
+        return null;
+    }
+}
 async function resolveProjectIdentifier(projectIdOrFolder) {
     if (!projectIdOrFolder)
         return null;
@@ -157,6 +176,35 @@ async function fetchProjectData(input) {
     }
     catch (error) {
         throw handleOrchestratorError(error, 'fetchProjectData');
+    }
+}
+/**
+ * Bulk fetch issues from multiple Huly projects in a single API call.
+ * Uses POST /api/issues/bulk-by-projects for ~12s savings per sync cycle.
+ */
+async function fetchHulyIssuesBulk(input) {
+    const { projectIdentifiers, modifiedSince, limit = 1000 } = input;
+    console.log(`[Temporal:Orchestration] Bulk fetching issues from ${projectIdentifiers.length} projects`);
+    try {
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const result = await hulyClient.listIssuesBulk({
+            projects: projectIdentifiers,
+            modifiedSince,
+            limit,
+            includeDescriptions: false, // 5x faster, descriptions fetched individually when needed
+            fields: ['identifier', 'title', 'status', 'priority', 'modifiedOn', 'parentIssue'],
+        });
+        const issuesByProject = {};
+        let totalIssues = 0;
+        for (const [projectId, data] of Object.entries(result.projects)) {
+            issuesByProject[projectId] = data.issues;
+            totalIssues += data.issues.length;
+        }
+        console.log(`[Temporal:Orchestration] Bulk fetched ${totalIssues} issues from ${projectIdentifiers.length} projects`);
+        return issuesByProject;
+    }
+    catch (error) {
+        throw handleOrchestratorError(error, 'fetchHulyIssuesBulk');
     }
 }
 /**

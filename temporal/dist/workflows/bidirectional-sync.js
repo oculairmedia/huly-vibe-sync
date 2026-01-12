@@ -29,7 +29,7 @@ const { syncVibeToHuly, syncVibeToBeads, syncBeadsToHuly, syncBeadsToVibe, syncH
         nonRetryableErrorTypes: ['ValidationError', 'NotFoundError', 'ConflictError'],
     },
 });
-const { fetchBeadsIssues } = (0, workflow_1.proxyActivities)({
+const { fetchBeadsIssues, getVibeProjectId } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -260,13 +260,19 @@ async function SyncFromVibeWorkflow(input) {
         },
     });
 }
-/**
- * SyncFromHulyWorkflow - Triggered when Huly issue changes
- */
 async function SyncFromHulyWorkflow(input) {
     const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
     if (!hulyIssue) {
         throw new Error(`Huly issue not found: ${input.hulyIdentifier}`);
+    }
+    let vibeProjectId = input.context.vibeProjectId;
+    if (!vibeProjectId) {
+        vibeProjectId = (await getVibeProjectId(input.context.projectIdentifier)) || '';
+        if (!vibeProjectId) {
+            workflow_1.log.warn('[SyncFromHuly] No Vibe project found, skipping Vibe sync', {
+                hulyProject: input.context.projectIdentifier,
+            });
+        }
     }
     return BidirectionalSyncWorkflow({
         source: 'huly',
@@ -278,7 +284,10 @@ async function SyncFromHulyWorkflow(input) {
             priority: hulyIssue.priority,
             modifiedAt: hulyIssue.modifiedOn || Date.now(),
         },
-        context: input.context,
+        context: {
+            ...input.context,
+            vibeProjectId,
+        },
         linkedIds: {
             hulyId: hulyIssue.identifier,
             ...input.linkedIds,

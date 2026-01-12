@@ -170,11 +170,84 @@ class HulyClient {
         });
     }
     // ============================================================
+    // BULK OPERATIONS (High-performance endpoints)
+    // ============================================================
+    async listIssuesBulk(options) {
+        return this.request('/issues/bulk-by-projects', {
+            method: 'POST',
+            body: JSON.stringify(options),
+        });
+    }
+    async getIssuesByIds(identifiers) {
+        const params = new URLSearchParams();
+        params.append('ids', identifiers.join(','));
+        return this.request(`/issues/bulk?${params.toString()}`, { method: 'GET' });
+    }
+    async bulkUpdateIssues(options) {
+        return this.request('/issues/bulk', {
+            method: 'PATCH',
+            body: JSON.stringify(options),
+        });
+    }
+    async bulkDeleteIssues(options) {
+        return this.request('/issues/bulk', {
+            method: 'DELETE',
+            body: JSON.stringify(options),
+        });
+    }
+    // ============================================================
+    // PROJECT METADATA
+    // ============================================================
+    async getProjectTree(projectIdentifier) {
+        return this.request(`/projects/${projectIdentifier}/tree`, { method: 'GET' });
+    }
+    async getProjectComponents(projectIdentifier) {
+        return this.request(`/projects/${projectIdentifier}/components`, { method: 'GET' });
+    }
+    async updateProject(projectIdentifier, updates) {
+        return this.request(`/projects/${projectIdentifier}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates),
+        });
+    }
+    // ============================================================
+    // ISSUE QUERIES
+    // ============================================================
+    async listAllIssues(options = {}) {
+        const params = new URLSearchParams();
+        if (options.status)
+            params.append('status', options.status);
+        if (options.limit)
+            params.append('limit', options.limit.toString());
+        if (options.modifiedSince)
+            params.append('modifiedSince', options.modifiedSince);
+        if (options.includeDescriptions !== undefined) {
+            params.append('includeDescriptions', String(options.includeDescriptions));
+        }
+        if (options.fields)
+            params.append('fields', options.fields.join(','));
+        const queryString = params.toString();
+        return this.request(`/issues/all${queryString ? '?' + queryString : ''}`, { method: 'GET' });
+    }
+    async listIssuesByStatus(status, limit = 100) {
+        const params = new URLSearchParams();
+        params.append('status', status);
+        params.append('limit', limit.toString());
+        const result = await this.request(`/issues?${params.toString()}`, { method: 'GET' });
+        return result.issues;
+    }
+    // ============================================================
+    // PARENT/CHILD OPERATIONS
+    // ============================================================
+    async setParentIssue(issueIdentifier, parentIdentifier) {
+        return this.request(`/issues/${issueIdentifier}/parent`, {
+            method: 'PATCH',
+            body: JSON.stringify({ parentIdentifier }),
+        });
+    }
+    // ============================================================
     // SYNC HELPERS
     // ============================================================
-    /**
-     * Update issue status from Vibe task
-     */
     async syncStatusFromVibe(issueIdentifier, hulyStatus) {
         try {
             const issue = await this.updateIssue(issueIdentifier, 'status', hulyStatus);

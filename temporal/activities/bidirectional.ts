@@ -81,10 +81,7 @@ export async function getHulyIssue(input: { identifier: string }): Promise<{
   }
 }
 
-export async function getBeadsIssue(input: {
-  issueId: string;
-  gitRepoPath: string;
-}): Promise<{
+export async function getBeadsIssue(input: { issueId: string; gitRepoPath: string }): Promise<{
   id: string;
   title: string;
   description?: string;
@@ -149,11 +146,12 @@ export async function syncVibeToBeads(input: {
     const client = createBeadsClient(context.gitRepoPath);
 
     // Map Vibe status to Beads status
-    const beadsStatus = vibeTask.status === 'done' || vibeTask.status === 'cancelled'
-      ? 'closed'
-      : vibeTask.status === 'inprogress' || vibeTask.status === 'inreview'
-        ? 'in_progress'
-        : 'open';
+    const beadsStatus =
+      vibeTask.status === 'done' || vibeTask.status === 'cancelled'
+        ? 'closed'
+        : vibeTask.status === 'inprogress' || vibeTask.status === 'inreview'
+          ? 'in_progress'
+          : 'open';
 
     if (existingBeadsId) {
       const updated = await client.updateStatus(existingBeadsId, beadsStatus);
@@ -194,6 +192,11 @@ export async function syncHulyToVibe(input: {
   context: SyncContext;
 }): Promise<SyncResult> {
   const { hulyIssue, existingVibeId, context } = input;
+
+  if (!context.vibeProjectId) {
+    console.log(`[Sync] Huly → Vibe: Skipping ${hulyIssue.id} - no Vibe project`);
+    return { success: true, skipped: true };
+  }
 
   console.log(`[Sync] Huly → Vibe: ${hulyIssue.id}`);
 
@@ -389,36 +392,31 @@ function handleError(error: unknown, direction: string): never {
   const lowerMessage = message.toLowerCase();
 
   // Non-retryable: validation, not found, auth errors
-  if (lowerMessage.includes('404') ||
-      lowerMessage.includes('not found') ||
-      lowerMessage.includes('400') ||
-      lowerMessage.includes('422') ||
-      lowerMessage.includes('validation') ||
-      lowerMessage.includes('deserialize') ||
-      lowerMessage.includes('401') ||
-      lowerMessage.includes('403')) {
-    throw ApplicationFailure.nonRetryable(
-      `${direction} error: ${message}`,
-      'ValidationError'
-    );
+  if (
+    lowerMessage.includes('404') ||
+    lowerMessage.includes('not found') ||
+    lowerMessage.includes('400') ||
+    lowerMessage.includes('422') ||
+    lowerMessage.includes('validation') ||
+    lowerMessage.includes('deserialize') ||
+    lowerMessage.includes('401') ||
+    lowerMessage.includes('403')
+  ) {
+    throw ApplicationFailure.nonRetryable(`${direction} error: ${message}`, 'ValidationError');
   }
 
   // Retryable: server errors, timeouts, network
-  if (lowerMessage.includes('500') ||
-      lowerMessage.includes('502') ||
-      lowerMessage.includes('503') ||
-      lowerMessage.includes('timeout') ||
-      lowerMessage.includes('econnrefused') ||
-      lowerMessage.includes('network')) {
-    throw ApplicationFailure.retryable(
-      `${direction} error: ${message}`,
-      'ServerError'
-    );
+  if (
+    lowerMessage.includes('500') ||
+    lowerMessage.includes('502') ||
+    lowerMessage.includes('503') ||
+    lowerMessage.includes('timeout') ||
+    lowerMessage.includes('econnrefused') ||
+    lowerMessage.includes('network')
+  ) {
+    throw ApplicationFailure.retryable(`${direction} error: ${message}`, 'ServerError');
   }
 
   // Default: retryable
-  throw ApplicationFailure.retryable(
-    `${direction} error: ${message}`,
-    'SyncError'
-  );
+  throw ApplicationFailure.retryable(`${direction} error: ${message}`, 'SyncError');
 }

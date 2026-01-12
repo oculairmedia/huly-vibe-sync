@@ -81,9 +81,6 @@ export declare function SyncFromVibeWorkflow(input: {
         beadsId?: string;
     };
 }): Promise<BidirectionalSyncResult>;
-/**
- * SyncFromHulyWorkflow - Triggered when Huly issue changes
- */
 export declare function SyncFromHulyWorkflow(input: {
     hulyIdentifier: string;
     context: SyncContext;
