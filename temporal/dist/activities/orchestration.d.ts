@@ -75,7 +75,8 @@ export declare function fetchHulyIssuesBulk(input: {
     limit?: number;
 }): Promise<Record<string, HulyIssue[]>>;
 /**
- * Extract git repo path from Huly project description
+ * Extract git repo path from Huly project description.
+ * Supports: Filesystem:, Path:, Directory:, Location: (case-insensitive)
  */
 export declare function extractGitRepoPath(input: {
     description?: string;

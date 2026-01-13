@@ -208,19 +208,26 @@ async function fetchHulyIssuesBulk(input) {
     }
 }
 /**
- * Extract git repo path from Huly project description
+ * Extract git repo path from Huly project description.
+ * Supports: Filesystem:, Path:, Directory:, Location: (case-insensitive)
  */
 function extractGitRepoPath(input) {
     const { description } = input;
     if (!description)
         return null;
-    // Look for "Filesystem: /path/to/repo" in description
-    const match = description.match(/Filesystem:\s*([^\n]+)/i);
-    if (match) {
-        const path = match[1].trim();
-        // Validate path exists (simple check)
-        if (path.startsWith('/')) {
-            return path;
+    const patterns = [
+        /Filesystem:\s*([^\n]+)/i,
+        /Path:\s*([^\n]+)/i,
+        /Directory:\s*([^\n]+)/i,
+        /Location:\s*([^\n]+)/i,
+    ];
+    for (const pattern of patterns) {
+        const match = description.match(pattern);
+        if (match) {
+            const path = match[1].trim().replace(/[,;.]$/, '');
+            if (path.startsWith('/')) {
+                return path;
+            }
         }
     }
     return null;

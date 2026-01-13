@@ -33,14 +33,24 @@ const { fetchHulyProjects, fetchVibeProjects, ensureVibeProject, fetchProjectDat
     },
 });
 // Helper function to extract git repo path (pure function, can run in workflow)
+// Supports: Filesystem:, Path:, Directory:, Location: (case-insensitive)
 function extractGitRepoPath(description) {
     if (!description)
         return null;
-    const match = description.match(/Filesystem:\s*([^\n]+)/i);
-    if (match) {
-        const path = match[1].trim();
-        if (path.startsWith('/'))
-            return path;
+    const patterns = [
+        /Filesystem:\s*([^\n]+)/i,
+        /Path:\s*([^\n]+)/i,
+        /Directory:\s*([^\n]+)/i,
+        /Location:\s*([^\n]+)/i,
+    ];
+    for (const pattern of patterns) {
+        const match = description.match(pattern);
+        if (match) {
+            // Clean up: trim whitespace and trailing punctuation
+            const path = match[1].trim().replace(/[,;.]$/, '');
+            if (path.startsWith('/'))
+                return path;
+        }
     }
     return null;
 }
