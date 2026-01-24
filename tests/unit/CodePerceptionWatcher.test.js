@@ -48,8 +48,11 @@ class MockClock {
 class MockGraphitiClient {
   constructor() {
     this.upserts = [];
+    this.edges = [];
+    this.callOrder = [];
     this.healthy = true;
     this.shouldThrow = false;
+    this.edgeShouldFail = false;
   }
 
   async healthCheck() {
@@ -58,18 +61,27 @@ class MockGraphitiClient {
 
   async upsertEntity(entity) {
     if (this.shouldThrow) throw new Error('Graphiti unavailable');
-    // Project entities are tracked separately, not added to upserts
+    this.callOrder.push({ method: 'upsertEntity', entity: entity.name });
     return { success: true };
   }
 
   async upsertEntitiesBatch(entities, batchSize) {
     if (this.shouldThrow) throw new Error('Graphiti unavailable');
+    this.callOrder.push({ method: 'upsertEntitiesBatch', count: entities.length });
     this.upserts.push(...entities);
     return { success: entities.length, failed: 0, errors: [] };
   }
 
   async createContainmentEdgesBatch(projectIdentifier, filePaths, batchSize) {
-    // Mock edge creation - just return success
+    this.callOrder.push({ method: 'createContainmentEdgesBatch', count: filePaths.length });
+    if (this.edgeShouldFail) {
+      return {
+        success: 0,
+        failed: filePaths.length,
+        errors: filePaths.map(f => ({ file: f, error: 'Edge creation failed' })),
+      };
+    }
+    this.edges.push(...filePaths.map(f => ({ project: projectIdentifier, file: f })));
     return { success: filePaths.length, failed: 0, errors: [] };
   }
 
@@ -436,6 +448,116 @@ describe('CodePerceptionWatcher', () => {
 
       expect(mockClient.upserts.length).toBe(1);
       expect(mockClient.upserts[0].name).toBe('File:src/a.js');
+
+      const pending = watcher.pendingChanges.get('TEST');
+      expect(pending.size).toBe(0);
+    });
+  });
+
+  describe('edge sequencing', () => {
+    it('should create edges only after entities are upserted', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+
+      mockFs.setFile('/projects/test-project/src/a.js', 'const a = 1');
+      mockFs.setFile('/projects/test-project/src/b.js', 'const b = 2');
+      mockFs.setFile('/projects/test-project/src/c.js', 'const c = 3');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.handleChange('TEST', '/projects/test-project/src/a.js', 'change');
+      watcher.handleChange('TEST', '/projects/test-project/src/b.js', 'change');
+      watcher.handleChange('TEST', '/projects/test-project/src/c.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await vi.runAllTimersAsync();
+
+      expect(mockClient.upserts.length).toBe(3);
+      expect(mockClient.edges.length).toBe(3);
+
+      const upsertIndex = mockClient.callOrder.findIndex(c => c.method === 'upsertEntitiesBatch');
+      const edgeIndex = mockClient.callOrder.findIndex(
+        c => c.method === 'createContainmentEdgesBatch'
+      );
+
+      expect(upsertIndex).toBeLessThan(edgeIndex);
+      expect(upsertIndex).toBeGreaterThanOrEqual(0);
+      expect(edgeIndex).toBeGreaterThan(0);
+    });
+
+    it('should create edges for all successfully upserted files', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+
+      mockFs.setFile('/projects/test-project/lib/utils.js', 'export const util = 1');
+      mockFs.setFile('/projects/test-project/lib/helper.js', 'export const help = 2');
+
+      watcher.graphitiClients.set('MYPROJ', mockClient);
+      watcher.watchers.set('MYPROJ', {
+        _projectMeta: { projectIdentifier: 'MYPROJ', projectPath: '/projects/test-project' },
+      });
+
+      watcher.handleChange('MYPROJ', '/projects/test-project/lib/utils.js', 'change');
+      watcher.handleChange('MYPROJ', '/projects/test-project/lib/helper.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await vi.runAllTimersAsync();
+
+      expect(mockClient.edges).toEqual([
+        { project: 'MYPROJ', file: 'lib/utils.js' },
+        { project: 'MYPROJ', file: 'lib/helper.js' },
+      ]);
+    });
+  });
+
+  describe('edge failure handling', () => {
+    it('should track edge failures in stats', async () => {
+      const { watcher, mockFs, mockClient, mockLogger } = createWatcher();
+
+      mockClient.edgeShouldFail = true;
+
+      mockFs.setFile('/projects/test-project/src/main.js', 'const main = 1');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.handleChange('TEST', '/projects/test-project/src/main.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await vi.runAllTimersAsync();
+
+      expect(mockClient.upserts.length).toBe(1);
+      expect(mockClient.edges.length).toBe(0);
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ failed: 1 }),
+        'Some edges failed to create'
+      );
+    });
+
+    it('should continue processing even when edges fail', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+
+      mockClient.edgeShouldFail = true;
+
+      mockFs.setFile('/projects/test-project/src/a.js', 'const a = 1');
+      mockFs.setFile('/projects/test-project/src/b.js', 'const b = 2');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.handleChange('TEST', '/projects/test-project/src/a.js', 'change');
+      watcher.handleChange('TEST', '/projects/test-project/src/b.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await vi.runAllTimersAsync();
+
+      expect(mockClient.upserts.length).toBe(2);
 
       const pending = watcher.pendingChanges.get('TEST');
       expect(pending.size).toBe(0);
