@@ -116,6 +116,7 @@ import {
 } from './lib/LettaService.js';
 import { createLettaCodeService } from './lib/LettaCodeService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
+import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { logger } from './lib/logger.js';
 import { createBeadsWatcher } from './lib/BeadsWatcher.js';
 import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
@@ -123,7 +124,11 @@ import { createRequire } from 'module';
 
 // Temporal workflow triggers for bidirectional sync (CommonJS module)
 const require = createRequire(import.meta.url);
-let triggerSyncFromVibe, triggerSyncFromHuly, triggerSyncFromBeads, triggerBidirectionalSync, isTemporalAvailable;
+let triggerSyncFromVibe,
+  triggerSyncFromHuly,
+  triggerSyncFromBeads,
+  triggerBidirectionalSync,
+  isTemporalAvailable;
 try {
   const temporalTrigger = require('./temporal/dist/trigger.js');
   triggerSyncFromVibe = temporalTrigger.triggerSyncFromVibe;
@@ -135,10 +140,18 @@ try {
   console.warn('[Temporal] Failed to load trigger module:', err.message);
   // Provide no-op functions if Temporal not available
   isTemporalAvailable = async () => false;
-  triggerSyncFromVibe = async () => { throw new Error('Temporal not available'); };
-  triggerSyncFromHuly = async () => { throw new Error('Temporal not available'); };
-  triggerSyncFromBeads = async () => { throw new Error('Temporal not available'); };
-  triggerBidirectionalSync = async () => { throw new Error('Temporal not available'); };
+  triggerSyncFromVibe = async () => {
+    throw new Error('Temporal not available');
+  };
+  triggerSyncFromHuly = async () => {
+    throw new Error('Temporal not available');
+  };
+  triggerSyncFromBeads = async () => {
+    throw new Error('Temporal not available');
+  };
+  triggerBidirectionalSync = async () => {
+    throw new Error('Temporal not available');
+  };
 }
 
 // ES module __dirname equivalent
@@ -215,6 +228,23 @@ if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
       { err: fileWatchError },
       'Failed to initialize FileWatcher, falling back to periodic sync'
     );
+  }
+}
+
+// Initialize CodePerceptionWatcher for realtime Graphiti sync
+let codePerceptionWatcher = null;
+if (config.graphiti?.enabled && config.codePerception?.enabled) {
+  try {
+    codePerceptionWatcher = new CodePerceptionWatcher({
+      config,
+      db,
+      debounceMs: config.codePerception.debounceMs,
+      batchSize: config.codePerception.batchSize,
+      maxFileSizeKb: config.codePerception.maxFileSizeKb,
+    });
+    logger.info('CodePerceptionWatcher initialized - realtime Graphiti sync enabled');
+  } catch (codePerceptionError) {
+    logger.warn({ err: codePerceptionError }, 'Failed to initialize CodePerceptionWatcher');
   }
 }
 
@@ -541,6 +571,13 @@ async function main() {
           logger.warn({ err }, 'Failed to sync file watchers');
         });
       }
+
+      // Sync code perception watchers for Graphiti
+      if (codePerceptionWatcher) {
+        codePerceptionWatcher.syncWatchedProjects().catch(err => {
+          logger.warn({ err }, 'Failed to sync code perception watchers');
+        });
+      }
     } catch (error) {
       logger.error(
         { err: error, timeoutMs: 900000 },
@@ -701,7 +738,10 @@ async function main() {
             }
 
             return triggerSyncFromHuly(identifier, context).catch(err => {
-              logger.error({ identifier, err }, 'Failed to trigger Temporal workflow for Huly issue');
+              logger.error(
+                { identifier, err },
+                'Failed to trigger Temporal workflow for Huly issue'
+              );
               throw err;
             });
           })
@@ -718,7 +758,11 @@ async function main() {
         'Temporal workflows triggered for Huly changes'
       );
 
-      return { success: totalFailed === 0, processed: changeData.changes.length, workflows: totalSucceeded };
+      return {
+        success: totalFailed === 0,
+        processed: changeData.changes.length,
+        workflows: totalSucceeded,
+      };
     }
 
     // Fallback: use legacy sync if Temporal not available
@@ -795,11 +839,17 @@ async function main() {
 
         // Trigger workflow for each Beads issue (the workflow handles conflict resolution)
         const results = await Promise.allSettled(
-          issues.slice(0, 10).map(issue => // Limit to 10 at a time
-            triggerSyncFromBeads(issue.id, context).catch(err => {
-              logger.error({ issueId: issue.id, err }, 'Failed to trigger Temporal workflow for Beads issue');
-              throw err;
-            })
+          issues.slice(0, 10).map(
+            (
+              issue // Limit to 10 at a time
+            ) =>
+              triggerSyncFromBeads(issue.id, context).catch(err => {
+                logger.error(
+                  { issueId: issue.id, err },
+                  'Failed to trigger Temporal workflow for Beads issue'
+                );
+                throw err;
+              })
           )
         );
 
@@ -811,15 +861,25 @@ async function main() {
           'Temporal workflows triggered for Beads changes'
         );
 
-        return { success: failed === 0, project: changeData.projectIdentifier, workflows: succeeded };
+        return {
+          success: failed === 0,
+          project: changeData.projectIdentifier,
+          workflows: succeeded,
+        };
       } catch (err) {
-        logger.error({ err, project: changeData.projectIdentifier }, 'Failed to process Beads changes with Temporal');
+        logger.error(
+          { err, project: changeData.projectIdentifier },
+          'Failed to process Beads changes with Temporal'
+        );
         // Fall through to legacy sync
       }
     }
 
     // Fallback: use legacy sync if Temporal not available or failed
-    logger.debug({ project: changeData.projectIdentifier }, 'Falling back to legacy sync for Beads');
+    logger.debug(
+      { project: changeData.projectIdentifier },
+      'Falling back to legacy sync for Beads'
+    );
     await runSyncWithTimeout(changeData.projectIdentifier);
 
     return { success: true, project: changeData.projectIdentifier };
@@ -878,7 +938,11 @@ async function main() {
         'Temporal workflows triggered for Vibe changes'
       );
 
-      return { success: failed === 0, project: changeData.hulyProjectIdentifier, workflows: succeeded };
+      return {
+        success: failed === 0,
+        project: changeData.hulyProjectIdentifier,
+        workflows: succeeded,
+      };
     }
 
     // Fallback: use legacy sync if Temporal not available
@@ -945,12 +1009,18 @@ async function main() {
           );
         }
       } catch (err) {
-        logger.warn({ err }, 'Failed to start Temporal scheduled sync, falling back to setInterval');
+        logger.warn(
+          { err },
+          'Failed to start Temporal scheduled sync, falling back to setInterval'
+        );
         syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
       }
     } else {
       // Fallback to legacy setInterval
-      logger.info({ intervalSeconds: config.sync.interval / 1000 }, 'Scheduling periodic syncs (legacy mode)');
+      logger.info(
+        { intervalSeconds: config.sync.interval / 1000 },
+        'Scheduling periodic syncs (legacy mode)'
+      );
       syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
     }
   } else {
