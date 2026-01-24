@@ -49,6 +49,16 @@ services:
       - API_DELAY=${API_DELAY:-10}
       - HEALTH_PORT=${HEALTH_PORT:-3099}
 
+      # Graphiti Knowledge Graph Integration
+      - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-false}
+      - GRAPHITI_API_URL=${GRAPHITI_API_URL:-http://localhost:8003}
+      - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-vibesync}
+
+      # Code Perception (Real-time file watching for Graphiti)
+      - CODE_PERCEPTION_ENABLED=${CODE_PERCEPTION_ENABLED:-false}
+      - CODE_PERCEPTION_DEBOUNCE_MS=${CODE_PERCEPTION_DEBOUNCE_MS:-2000}
+      - CODE_PERCEPTION_BATCH_SIZE=${CODE_PERCEPTION_BATCH_SIZE:-50}
+
       # Node Environment
       - NODE_ENV=production
 
