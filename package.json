@@ -60,6 +60,7 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.2.0",
     "@temporalio/testing": "^1.14.1",
     "@types/node": "^20.10.0",
     "@vitest/coverage-v8": "^4.0.6",
@@ -68,6 +69,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-node": "^11.1.0",
     "globals": "^16.5.0",
+    "jest": "^30.2.0",
     "nock": "^14.0.10",
     "prettier": "^3.6.2",
     "supertest": "^7.1.4",
