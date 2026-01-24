@@ -89,6 +89,30 @@ export declare function createBeadsIssueInVibe(input: {
 }): Promise<SyncActivityResult & {
     vibeTaskId?: string;
 }>;
+export interface BatchSyncResult {
+    success: boolean;
+    stats: {
+        total: number;
+        created: number;
+        updated: number;
+        skipped: number;
+    };
+    results: Array<{
+        beadsId: string;
+        vibeTaskId?: string;
+        created: boolean;
+        updated: boolean;
+        skipped: boolean;
+    }>;
+}
+/**
+ * Batch sync beads issues to Vibe - O(1) lookups after single prefetch.
+ * Replaces N individual createBeadsIssueInVibe calls with a single batch operation.
+ */
+export declare function syncBeadsToVibeBatch(input: {
+    beadsIssues: BeadsIssue[];
+    context: SyncContext;
+}): Promise<BatchSyncResult>;
 export declare function commitBeadsToGit(input: {
     context: SyncContext;
     message?: string;

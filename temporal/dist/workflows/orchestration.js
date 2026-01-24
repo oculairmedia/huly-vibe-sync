@@ -55,7 +55,7 @@ function extractGitRepoPath(description) {
     return null;
 }
 // Sync activities (issue-level sync)
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, createBeadsIssueInHuly, createBeadsIssueInVibe, commitBeadsToGit, } = (0, workflow_1.proxyActivities)({
+const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, createBeadsIssueInHuly, createBeadsIssueInVibe, syncBeadsToVibeBatch, commitBeadsToGit, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '60 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -650,46 +650,36 @@ async function ProjectSyncWorkflow(input) {
             });
         }
         if (_phase === 'phase3c') {
-            workflow_1.log.info(`[ProjectSync] Phase 3c: Beads→Vibe sync`);
+            workflow_1.log.info(`[ProjectSync] Phase 3c: Beads→Vibe sync (batch)`);
             const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath });
             let vibeCreated = 0;
             let vibeSkipped = 0;
-            for (const beadsIssue of beadsIssues) {
-                if (dryRun) {
-                    vibeSkipped++;
-                    continue;
-                }
-                try {
-                    const createResult = await createBeadsIssueInVibe({
-                        beadsIssue: {
-                            id: beadsIssue.id,
-                            title: beadsIssue.title,
-                            status: beadsIssue.status,
-                            priority: beadsIssue.priority,
-                            description: beadsIssue.description,
-                            labels: beadsIssue.labels,
-                        },
-                        context: {
-                            projectIdentifier: hulyProject.identifier,
-                            vibeProjectId: vibeProjectId,
-                            gitRepoPath: gitRepoPath,
-                        },
-                    });
-                    if (createResult.created) {
-                        vibeCreated++;
-                        workflow_1.log.info(`[ProjectSync] Created Vibe task ${createResult.vibeTaskId} from ${beadsIssue.id}`);
-                    }
-                    else {
-                        vibeSkipped++;
+            if (dryRun) {
+                vibeSkipped = beadsIssues.length;
+            }
+            else if (beadsIssues.length > 0) {
+                const batchResult = await syncBeadsToVibeBatch({
+                    beadsIssues: beadsIssues.map(issue => ({
+                        id: issue.id,
+                        title: issue.title,
+                        status: issue.status,
+                        priority: issue.priority,
+                        description: issue.description,
+                        labels: issue.labels,
+                    })),
+                    context: {
+                        projectIdentifier: hulyProject.identifier,
+                        vibeProjectId: vibeProjectId,
+                        gitRepoPath: gitRepoPath,
+                    },
+                });
+                vibeCreated = batchResult.stats.created;
+                vibeSkipped = batchResult.stats.skipped + batchResult.stats.updated;
+                for (const r of batchResult.results) {
+                    if (r.created) {
+                        workflow_1.log.info(`[ProjectSync] Created Vibe task ${r.vibeTaskId} from ${r.beadsId}`);
                     }
                 }
-                catch (error) {
-                    workflow_1.log.warn(`[ProjectSync] Phase 3c error for ${beadsIssue.id}`, {
-                        error: error instanceof Error ? error.message : String(error),
-                    });
-                    vibeSkipped++;
-                }
-                await (0, workflow_1.sleep)('100ms');
             }
             workflow_1.log.info(`[ProjectSync] Phase 3c complete`, { created: vibeCreated, skipped: vibeSkipped });
             return await (0, workflow_1.continueAsNew)({

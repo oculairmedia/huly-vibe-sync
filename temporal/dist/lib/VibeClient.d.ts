@@ -95,6 +95,66 @@ export declare class VibeClient {
         updated: boolean;
         skipped: boolean;
     }>;
+    /**
+     * Build lookup indexes from a list of tasks for O(1) access
+     */
+    buildTaskIndexes(tasks: VibeTask[]): {
+        byBeadsId: Map<string, VibeTask>;
+        byTitle: Map<string, VibeTask>;
+    };
+    /**
+     * Prefetch all tasks for a project and return with indexes.
+     * Call once per project, then use syncFromBeadsWithCache for each issue.
+     */
+    prefetchTasksForProject(projectId: string): Promise<{
+        tasks: VibeTask[];
+        byBeadsId: Map<string, VibeTask>;
+        byTitle: Map<string, VibeTask>;
+    }>;
+    /**
+     * Sync a beads issue using pre-fetched task indexes (O(1) lookup).
+     * Use this after calling prefetchTasksForProject().
+     */
+    syncFromBeadsWithCache(projectId: string, beadsIssue: {
+        id: string;
+        title: string;
+        description?: string;
+        status: string;
+    }, vibeStatus: string, cache: {
+        byBeadsId: Map<string, VibeTask>;
+        byTitle: Map<string, VibeTask>;
+    }): Promise<{
+        task: VibeTask | null;
+        created: boolean;
+        updated: boolean;
+        skipped: boolean;
+    }>;
+    /**
+     * Batch sync multiple beads issues efficiently.
+     * Fetches all tasks ONCE, then processes each issue with O(1) lookups.
+     * Reduces API calls from O(2n) to O(1 + creates + updates).
+     */
+    syncFromBeadsBatch(projectId: string, beadsIssues: Array<{
+        id: string;
+        title: string;
+        description?: string;
+        status: string;
+        vibeStatus: string;
+    }>): Promise<{
+        results: Array<{
+            beadsId: string;
+            task: VibeTask | null;
+            created: boolean;
+            updated: boolean;
+            skipped: boolean;
+        }>;
+        stats: {
+            total: number;
+            created: number;
+            updated: number;
+            skipped: number;
+        };
+    }>;
 }
 export declare function createVibeClient(url?: string, options?: VibeClientOptions): VibeClient;
 //# sourceMappingURL=VibeClient.d.ts.map

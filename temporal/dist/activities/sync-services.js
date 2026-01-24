@@ -14,6 +14,7 @@ exports.syncIssueToBeads = syncIssueToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
 exports.createBeadsIssueInHuly = createBeadsIssueInHuly;
 exports.createBeadsIssueInVibe = createBeadsIssueInVibe;
+exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
@@ -269,6 +270,70 @@ async function createBeadsIssueInVibe(input) {
     }
     catch (error) {
         return handleSyncError(error, 'Beads→Vibe Create');
+    }
+}
+/**
+ * Batch sync beads issues to Vibe - O(1) lookups after single prefetch.
+ * Replaces N individual createBeadsIssueInVibe calls with a single batch operation.
+ */
+async function syncBeadsToVibeBatch(input) {
+    const { beadsIssues, context } = input;
+    const issuesToSync = beadsIssues.filter(issue => !issue.labels?.some(l => l.startsWith('vibe:')));
+    if (issuesToSync.length === 0) {
+        console.log(`[Temporal:Beads→Vibe] All ${beadsIssues.length} issues already synced`);
+        return {
+            success: true,
+            stats: { total: beadsIssues.length, created: 0, updated: 0, skipped: beadsIssues.length },
+            results: beadsIssues.map(i => ({
+                beadsId: i.id,
+                created: false,
+                updated: false,
+                skipped: true,
+            })),
+        };
+    }
+    console.log(`[Temporal:Beads→Vibe] Batch syncing ${issuesToSync.length} issues to Vibe`);
+    try {
+        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
+        const batchInput = issuesToSync.map(issue => ({
+            id: issue.id,
+            title: issue.title,
+            description: issue.description,
+            status: issue.status,
+            vibeStatus: (0, lib_1.mapBeadsStatusToVibe)(issue.status),
+        }));
+        const { results: batchResults, stats } = await vibeClient.syncFromBeadsBatch(context.vibeProjectId, batchInput);
+        const results = batchResults.map(r => ({
+            beadsId: r.beadsId,
+            vibeTaskId: r.task?.id,
+            created: r.created,
+            updated: r.updated,
+            skipped: r.skipped,
+        }));
+        if (context.gitRepoPath) {
+            const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
+            for (const r of results) {
+                if (r.created && r.vibeTaskId) {
+                    try {
+                        await beadsClient.addLabel(r.beadsId, `vibe:${r.vibeTaskId}`);
+                    }
+                    catch (labelError) {
+                        console.warn(`[Temporal:Beads→Vibe] Failed to add label to ${r.beadsId}: ${labelError}`);
+                    }
+                }
+            }
+        }
+        console.log(`[Temporal:Beads→Vibe] Batch complete: ${stats.created} created, ${stats.updated} updated, ${stats.skipped} skipped`);
+        return { success: true, stats, results };
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[Temporal:Beads→Vibe] Batch sync failed: ${msg}`);
+        return {
+            success: false,
+            stats: { total: issuesToSync.length, created: 0, updated: 0, skipped: 0 },
+            results: [],
+        };
     }
 }
 async function commitBeadsToGit(input) {
