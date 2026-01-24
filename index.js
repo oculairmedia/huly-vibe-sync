@@ -243,6 +243,11 @@ if (config.graphiti?.enabled && config.codePerception?.enabled) {
       maxFileSizeKb: config.codePerception.maxFileSizeKb,
     });
     logger.info('CodePerceptionWatcher initialized - realtime Graphiti sync enabled');
+
+    // Start watching projects immediately (don't wait for first sync cycle)
+    codePerceptionWatcher.syncWatchedProjects().catch(err => {
+      logger.warn({ err }, 'Initial code perception watcher sync failed');
+    });
   } catch (codePerceptionError) {
     logger.warn({ err: codePerceptionError }, 'Failed to initialize CodePerceptionWatcher');
   }
