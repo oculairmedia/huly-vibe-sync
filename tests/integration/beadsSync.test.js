@@ -2,9 +2,14 @@
  * Integration Tests for Beads Sync Flows
  *
  * Tests synchronization between Huly and Beads issue tracker
+ *
+ * SKIPPED in CI: Requires 'bd' CLI which is not installed in GitHub Actions runners.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const isCI = process.env.CI === 'true';
+const describeOrSkip = isCI ? describe.skip : describe;
 import { SyncDatabase } from '../../lib/database.js';
 import {
   createMockBeadsIssue,
@@ -30,7 +35,7 @@ const {
   closeBeadsIssue,
 } = await import('../../lib/BeadsService.js');
 
-describe('Beads Sync Integration Tests', () => {
+describeOrSkip('Beads Sync Integration Tests', () => {
   let db;
   const testDbPath = ':memory:';
   const testProjectPath = '/test/project';
@@ -84,7 +89,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [], // No existing beads issues
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
@@ -137,7 +142,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [],
         db,
-        MOCK_CONFIG.dryRun,
+        MOCK_CONFIG.dryRun
       );
 
       expect(result).toBeNull();
@@ -164,7 +169,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // No changes needed
@@ -206,13 +211,13 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('close'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -249,7 +254,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--priority=0'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -288,7 +293,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should defer to Beads (return null, don't update)
@@ -330,14 +335,14 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should apply Huly changes (Huly wins conflict)
       expect(result).toBeDefined();
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--title='),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -464,7 +469,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeNull();
@@ -486,7 +491,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeNull();
@@ -509,7 +514,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--priority=0'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -528,7 +533,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--priority=1'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -547,7 +552,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--priority=3'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -589,7 +594,7 @@ describe('Beads Sync Integration Tests', () => {
         [existingHulyIssue], // Existing Huly issues
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Verify the issues were linked in the database
@@ -625,7 +630,7 @@ describe('Beads Sync Integration Tests', () => {
         [existingHulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Verify the issues were linked
@@ -661,7 +666,7 @@ describe('Beads Sync Integration Tests', () => {
         [existingHulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Verify the issues were linked
@@ -700,7 +705,7 @@ describe('Beads Sync Integration Tests', () => {
         [existingHulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       ).catch(() => {
         // Expected to fail since createHulyIssue is not fully mocked
       });
@@ -738,7 +743,7 @@ describe('Beads Sync Integration Tests', () => {
         [existingHulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       ).catch(() => {});
 
       // Verify they were NOT linked (short title protection)
@@ -765,7 +770,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--type=bug'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -784,7 +789,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('--type=feature'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -814,7 +819,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue], // Pass existing beads issues
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should return the existing issue (linked, not created)
@@ -824,7 +829,7 @@ describe('Beads Sync Integration Tests', () => {
       // Should NOT have called bd create
       expect(mockExecSync).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       // Database should have the mapping
@@ -855,7 +860,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
@@ -864,7 +869,7 @@ describe('Beads Sync Integration Tests', () => {
       // Verify linking, not creation
       expect(mockExecSync).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -891,7 +896,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
@@ -925,7 +930,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         existingBeadsIssues,
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
@@ -934,7 +939,7 @@ describe('Beads Sync Integration Tests', () => {
       // SHOULD have called bd create since no match
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -961,7 +966,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should link to existing issue based on description match
@@ -971,7 +976,7 @@ describe('Beads Sync Integration Tests', () => {
       // Should NOT have called bd create
       expect(mockExecSync).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
 
       // Database should have the mapping
@@ -1002,7 +1007,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       expect(result).toBeDefined();
@@ -1010,7 +1015,7 @@ describe('Beads Sync Integration Tests', () => {
 
       expect(mockExecSync).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -1039,13 +1044,13 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [existingBeadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should create new (short titles don't partial match for safety)
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });
@@ -1083,8 +1088,8 @@ describe('Beads Sync Integration Tests', () => {
           [hulyIssue],
           'TEST',
           db,
-          MOCK_CONFIG.default,
-        ),
+          MOCK_CONFIG.default
+        )
       ).resolves.not.toThrow();
     });
 
@@ -1126,7 +1131,7 @@ describe('Beads Sync Integration Tests', () => {
         'TEST',
         db,
         MOCK_CONFIG.default,
-        phase3UpdatedIssues,
+        phase3UpdatedIssues
       );
 
       // No changes should be made to database
@@ -1189,7 +1194,7 @@ describe('Beads Sync Integration Tests', () => {
         [hulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // The function should have attempted to update status
@@ -1228,7 +1233,7 @@ describe('Beads Sync Integration Tests', () => {
         [hulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Check database was updated to link them
@@ -1268,7 +1273,7 @@ describe('Beads Sync Integration Tests', () => {
         [hulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should have linked via normalized title match
@@ -1309,7 +1314,7 @@ describe('Beads Sync Integration Tests', () => {
         [hulyIssue],
         'TEST',
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should have linked via description match
@@ -1350,8 +1355,8 @@ describe('Beads Sync Integration Tests', () => {
           [], // Empty Huly issues - the mapped issue doesn't exist
           'TEST',
           db,
-          MOCK_CONFIG.default,
-        ),
+          MOCK_CONFIG.default
+        )
       ).resolves.not.toThrow();
     });
   });
@@ -1394,7 +1399,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should return null (defer to Beads→Huly sync)
@@ -1441,7 +1446,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should have attempted update (Huly wins)
@@ -1484,7 +1489,7 @@ describe('Beads Sync Integration Tests', () => {
         hulyIssue,
         [beadsIssue],
         db,
-        MOCK_CONFIG.default,
+        MOCK_CONFIG.default
       );
 
       // Should return null (no changes needed)
