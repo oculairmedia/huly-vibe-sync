@@ -377,4 +377,57 @@ describe('CodePerceptionWatcher', () => {
       expect(mockClient.upserts.length).toBe(0);
     });
   });
+
+  describe('Graphiti recovery', () => {
+    it('should re-add changes to queue when Graphiti is unavailable', async () => {
+      const { watcher, mockFs, mockClient, mockLogger } = createWatcher();
+
+      mockFs.setFile('/projects/test-project/src/a.js', 'const a = 1');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      mockClient.healthy = false;
+
+      watcher.handleChange('TEST', '/projects/test-project/src/a.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await Promise.resolve();
+
+      expect(mockClient.upserts.length).toBe(0);
+
+      const pending = watcher.pendingChanges.get('TEST');
+      expect(pending.size).toBe(1);
+      expect(pending.has('/projects/test-project/src/a.js')).toBe(true);
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ project: 'TEST' }),
+        'Graphiti unavailable, deferring sync'
+      );
+    });
+
+    it('should process queued changes when Graphiti becomes available', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+
+      mockFs.setFile('/projects/test-project/src/a.js', 'const a = 1');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.handleChange('TEST', '/projects/test-project/src/a.js', 'change');
+
+      vi.advanceTimersByTime(2001);
+      await vi.runAllTimersAsync();
+
+      expect(mockClient.upserts.length).toBe(1);
+      expect(mockClient.upserts[0].name).toBe('File:src/a.js');
+
+      const pending = watcher.pendingChanges.get('TEST');
+      expect(pending.size).toBe(0);
+    });
+  });
 });
