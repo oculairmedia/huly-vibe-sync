@@ -4,7 +4,8 @@
  * Tests parsing of structured text from Huly MCP output
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
 import {
   parseProjectsFromText,
   parseIssuesFromText,
@@ -363,11 +364,7 @@ Status: in progress
     });
 
     it('should handle various project code formats', () => {
-      const testCases = [
-        'Huly Issue: A-1',
-        'Huly Issue: ABC-999',
-        'Huly Issue: PROJECT-42',
-      ];
+      const testCases = ['Huly Issue: A-1', 'Huly Issue: ABC-999', 'Huly Issue: PROJECT-42'];
 
       for (const description of testCases) {
         const identifier = extractHulyIdentifierFromDescription(description);
@@ -577,7 +574,19 @@ Line 4 after blank line
   });
 
   describe('determineGitRepoPath', () => {
+    let existsSyncSpy;
+
+    beforeEach(() => {
+      existsSyncSpy = vi.spyOn(fs, 'existsSync');
+    });
+
+    afterEach(() => {
+      existsSyncSpy.mockRestore();
+    });
+
     it('should use filesystem path from description if it exists', () => {
+      existsSyncSpy.mockReturnValue(true);
+
       const hulyProject = {
         identifier: 'TEST',
         description: 'Project description\nFilesystem: /opt/stacks/huly-vibe-sync',
@@ -588,6 +597,8 @@ Line 4 after blank line
     });
 
     it('should use placeholder path if filesystem path does not exist', () => {
+      existsSyncSpy.mockReturnValue(false);
+
       const hulyProject = {
         identifier: 'TEST',
         description: 'Project description\nFilesystem: /nonexistent/path',
@@ -598,6 +609,8 @@ Line 4 after blank line
     });
 
     it('should use placeholder path if no filesystem path in description', () => {
+      existsSyncSpy.mockReturnValue(false);
+
       const hulyProject = {
         identifier: 'PROJ',
         description: 'Regular project description without path',

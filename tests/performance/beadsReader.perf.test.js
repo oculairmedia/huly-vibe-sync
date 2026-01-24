@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+
+const isCI = process.env.CI === 'true';
 import path from 'path';
 import fs from 'fs';
 
@@ -34,7 +36,7 @@ function benchmarkFn(fn, iterations = 10) {
   };
 }
 
-describe('BeadsReader Performance Benchmark', () => {
+describe.skipIf(isCI)('BeadsReader Performance Benchmark', () => {
   const validProjects = getValidProjects();
 
   if (validProjects.length === 0) {

@@ -56,10 +56,21 @@ class MockGraphitiClient {
     return this.healthy;
   }
 
+  async upsertEntity(entity) {
+    if (this.shouldThrow) throw new Error('Graphiti unavailable');
+    // Project entities are tracked separately, not added to upserts
+    return { success: true };
+  }
+
   async upsertEntitiesBatch(entities, batchSize) {
     if (this.shouldThrow) throw new Error('Graphiti unavailable');
     this.upserts.push(...entities);
     return { success: entities.length, failed: 0, errors: [] };
+  }
+
+  async createContainmentEdgesBatch(projectIdentifier, filePaths, batchSize) {
+    // Mock edge creation - just return success
+    return { success: filePaths.length, failed: 0, errors: [] };
   }
 
   async pruneDeletedFiles(activeFiles) {

@@ -60,7 +60,7 @@ vi.mock('../../lib/textParsers.js', () => ({
 }));
 
 vi.mock('../../lib/utils.js', () => ({
-  processBatch: vi.fn(async (items, processor) => {
+  processBatch: vi.fn(async (items, _maxWorkers, processor) => {
     for (const item of items) {
       await processor(item);
     }
@@ -98,7 +98,7 @@ describe('SyncOrchestrator', () => {
   let updateVibeTaskStatus;
 
   // Helper to wrap issues array in the new return format
-  const mockIssuesResult = (issues) => ({
+  const mockIssuesResult = issues => ({
     issues,
     syncMeta: { latestModified: new Date().toISOString(), serverTime: new Date().toISOString() },
   });
@@ -297,7 +297,7 @@ describe('SyncOrchestrator', () => {
         mockVibeClient,
         'task-1',
         'done',
-        mockConfig,
+        mockConfig
       );
     });
 
@@ -320,7 +320,7 @@ describe('SyncOrchestrator', () => {
           identifier: 'TEST-1',
           project_identifier: 'TEST',
           vibe_task_id: 'task-1',
-        }),
+        })
       );
     });
   });
@@ -368,13 +368,15 @@ describe('SyncOrchestrator', () => {
     it('should not create tasks in dry run mode', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Issue',
-          status: 'Backlog',
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Issue',
+            status: 'Backlog',
+          },
+        ])
+      );
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue(null); // Dry run returns null
 
@@ -401,7 +403,7 @@ describe('SyncOrchestrator', () => {
       expect(mockDb.completeSyncRun).toHaveBeenCalledWith(
         'sync-123',
         expect.any(Number),
-        expect.any(Number),
+        expect.any(Number)
       );
     });
 
@@ -424,17 +426,19 @@ describe('SyncOrchestrator', () => {
           identifier: 'TEST',
           name: 'Test Project',
           status: 'active',
-        }),
+        })
       );
     });
 
     it('should update project activity after sync', async () => {
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test' }]);
       listVibeProjects.mockResolvedValue([{ id: 'v1', name: 'Test' }]);
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        { identifier: 'TEST-1', title: 'Issue 1', status: 'Backlog' },
-        { identifier: 'TEST-2', title: 'Issue 2', status: 'Done' },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          { identifier: 'TEST-1', title: 'Issue 1', status: 'Backlog' },
+          { identifier: 'TEST-2', title: 'Issue 2', status: 'Done' },
+        ])
+      );
       listVibeTasks.mockResolvedValue([]);
       createVibeTask.mockResolvedValue({ id: 'task-1' });
 
@@ -452,7 +456,7 @@ describe('SyncOrchestrator', () => {
       fetchHulyProjects.mockRejectedValue(new Error('Network error'));
 
       await expect(
-        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig),
+        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig)
       ).rejects.toThrow('Network error');
     });
 
@@ -462,7 +466,7 @@ describe('SyncOrchestrator', () => {
       fetchHulyIssues.mockRejectedValue(new Error('API error'));
 
       await expect(
-        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig),
+        syncHulyToVibe(mockHulyClient, mockVibeClient, mockDb, mockConfig)
       ).rejects.toThrow('API error');
     });
   });
@@ -518,8 +522,8 @@ describe('SyncOrchestrator', () => {
           expect.objectContaining({ identifier: 'PROJ1' }),
           expect.objectContaining({ identifier: 'PROJ2' }),
         ]),
-        expect.any(Function),
         2,
+        expect.any(Function)
       );
     });
   });
@@ -543,7 +547,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST',
         mockConfig,
-        mockDb, // db is passed for cursor-based sync
+        mockDb // db is passed for cursor-based sync
       );
     });
   });
@@ -560,13 +564,15 @@ describe('SyncOrchestrator', () => {
 
       fetchHulyProjects.mockResolvedValue([{ identifier: 'TEST', name: 'Test Project' }]);
       listVibeProjects.mockResolvedValue([{ id: 'vibe-1', name: 'Test Project' }]);
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Test Issue',
-          status: 'Done', // Huly shows Done (from Beads sync)
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Test Issue',
+            status: 'Done', // Huly shows Done (from Beads sync)
+          },
+        ])
+      );
     });
 
     it('should skip Vibe→Huly update when Beads has more recent change', async () => {
@@ -612,13 +618,15 @@ describe('SyncOrchestrator', () => {
       ]);
 
       // Huly status matches what Beads set (Done), but Vibe has newer change (todo)
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Test Issue',
-          status: 'Done',
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Test Issue',
+            status: 'Done',
+          },
+        ])
+      );
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -635,7 +643,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Backlog', // todo maps to Backlog
-        mockConfig,
+        mockConfig
       );
     });
 
@@ -650,13 +658,15 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Test Issue',
-          status: 'Backlog', // Huly has different status
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Test Issue',
+            status: 'Backlog', // Huly has different status
+          },
+        ])
+      );
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -673,7 +683,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Done',
-        mockConfig,
+        mockConfig
       );
     });
 
@@ -690,13 +700,15 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Test Issue',
-          status: 'Backlog',
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Test Issue',
+            status: 'Backlog',
+          },
+        ])
+      );
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',
@@ -713,7 +725,7 @@ describe('SyncOrchestrator', () => {
         mockHulyClient,
         'TEST-1',
         'Done',
-        mockConfig,
+        mockConfig
       );
     });
 
@@ -730,13 +742,15 @@ describe('SyncOrchestrator', () => {
         },
       ]);
 
-      fetchHulyIssues.mockResolvedValue(mockIssuesResult([
-        {
-          identifier: 'TEST-1',
-          title: 'Test Issue',
-          status: 'Backlog',
-        },
-      ]));
+      fetchHulyIssues.mockResolvedValue(
+        mockIssuesResult([
+          {
+            identifier: 'TEST-1',
+            title: 'Test Issue',
+            status: 'Backlog',
+          },
+        ])
+      );
 
       mockDb.getIssue.mockReturnValue({
         identifier: 'TEST-1',

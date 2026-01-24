@@ -91,7 +91,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/health',
         expect.objectContaining({
           method: 'GET',
-        }),
+        })
       );
     });
 
@@ -141,10 +141,7 @@ describe('HulyRestClient', () => {
 
       await client.healthCheck();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3458/health',
-        expect.any(Object),
-      );
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:3458/health', expect.any(Object));
     });
 
     it('should return health status', async () => {
@@ -182,7 +179,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/tools/test_tool',
         expect.objectContaining({
           method: 'POST',
-        }),
+        })
       );
     });
 
@@ -242,7 +239,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects',
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -286,7 +283,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects/TEST/issues',
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -356,7 +353,10 @@ describe('HulyRestClient', () => {
     });
 
     it('should return { issues, syncMeta } when includeSyncMeta is true', async () => {
-      const syncMeta = { latestModified: '2025-01-01T00:00:00Z', serverTime: '2025-01-01T00:00:00Z' };
+      const syncMeta = {
+        latestModified: '2025-01-01T00:00:00Z',
+        serverTime: '2025-01-01T00:00:00Z',
+      };
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => ({ issues: [{ identifier: 'TEST-1' }], count: 1, syncMeta }),
@@ -370,17 +370,19 @@ describe('HulyRestClient', () => {
   });
 
   describe('getIssue', () => {
-    it('should call get issue tool', async () => {
+    it('should call REST API issues endpoint', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_query', { identifier: 'TEST-1' }),
+        json: async () => ({ identifier: 'TEST-1', title: 'Test Issue' }),
       });
 
       await client.getIssue('TEST-1');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('huly_query'),
-        expect.any(Object),
+        'http://localhost:3458/api/issues/TEST-1',
+        expect.objectContaining({
+          method: 'GET',
+        })
       );
     });
   });
@@ -401,7 +403,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/issues',
         expect.objectContaining({
           method: 'POST',
-        }),
+        })
       );
     });
 
@@ -456,7 +458,7 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/issues/TEST-1',
         expect.objectContaining({
           method: 'PUT',
-        }),
+        })
       );
     });
 
@@ -529,7 +531,7 @@ describe('HulyRestClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects//issues',
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -550,14 +552,17 @@ describe('HulyRestClient', () => {
     it('should handle special characters in identifiers', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => createMockToolResponse('huly_query', { issue: createMockHulyIssue() }),
+        json: async () => ({ identifier: 'TEST-123_ABC', title: 'Test Issue' }),
       });
 
       await client.getIssue('TEST-123_ABC');
 
-      const callArgs = mockFetch.mock.calls[0];
-      const body = JSON.parse(callArgs[1].body);
-      expect(body.arguments.issue_identifier).toBe('TEST-123_ABC');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-123_ABC',
+        expect.objectContaining({
+          method: 'GET',
+        })
+      );
     });
   });
 
@@ -587,8 +592,13 @@ describe('HulyRestClient', () => {
         'http://localhost:3458/api/issues/bulk',
         expect.objectContaining({
           method: 'DELETE',
-          body: JSON.stringify({ identifiers: ['TEST-1', 'TEST-2'], cascade: false }),
-        }),
+          body: JSON.stringify({
+            identifiers: ['TEST-1', 'TEST-2'],
+            cascade: false,
+            fast: false,
+            concurrency: 10,
+          }),
+        })
       );
     });
 
@@ -641,8 +651,20 @@ describe('HulyRestClient', () => {
           project: 'TEST',
           since: '2025-01-15T00:00:00.000Z',
           activities: [
-            { type: 'issue.created', issue: 'TEST-1', title: 'New issue', status: 'Backlog', timestamp: '2025-01-15T10:00:00Z' },
-            { type: 'issue.updated', issue: 'TEST-2', title: 'Updated issue', status: 'Done', timestamp: '2025-01-15T11:00:00Z' },
+            {
+              type: 'issue.created',
+              issue: 'TEST-1',
+              title: 'New issue',
+              status: 'Backlog',
+              timestamp: '2025-01-15T10:00:00Z',
+            },
+            {
+              type: 'issue.updated',
+              issue: 'TEST-2',
+              title: 'Updated issue',
+              status: 'Done',
+              timestamp: '2025-01-15T11:00:00Z',
+            },
           ],
           count: 2,
           summary: { created: 1, updated: 1, total: 2 },
@@ -728,7 +750,7 @@ describe('HulyRestClient', () => {
       expect(result[0].label).toBe('Core');
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3458/api/projects/TEST/components',
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
