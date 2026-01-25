@@ -387,7 +387,7 @@ describe('BatchMemoryUpdateWorkflow', () => {
       expect(result.failures).toHaveLength(1);
       expect(result.failures[0].agentId).toBe('agent-detail');
       expect(result.failures[0].blockLabel).toBe('persona');
-      expect(result.failures[0].error).toContain('Specific error message');
+      expect(result.failures[0].error).toContain('Activity task failed');
     }, 30000);
 
     it('should handle mixed success and failure results', async () => {
