@@ -273,7 +273,9 @@ describe('MemoryUpdateWorkflow', () => {
     }, 30000);
 
     it('should count attempts correctly on failure', async () => {
-      mockActivities.updateMemoryBlock.mockRejectedValue(new Error('Failed'));
+      mockActivities.updateMemoryBlock.mockRejectedValue(
+        ApplicationFailure.nonRetryable('Failed', 'LettaValidationError')
+      );
 
       const input: MemoryUpdateInput = {
         agentId: 'agent-count-fail',
@@ -352,7 +354,9 @@ describe('BatchMemoryUpdateWorkflow', () => {
   // ============================================================
   describe('Failure Handling', () => {
     it('should count failures correctly', async () => {
-      mockActivities.updateMemoryBlock.mockRejectedValue(new Error('Update failed'));
+      mockActivities.updateMemoryBlock.mockRejectedValue(
+        ApplicationFailure.nonRetryable('Update failed', 'LettaValidationError')
+      );
 
       const input: BatchMemoryUpdateInput = {
         updates: [
@@ -370,7 +374,9 @@ describe('BatchMemoryUpdateWorkflow', () => {
     }, 30000);
 
     it('should collect failure details', async () => {
-      mockActivities.updateMemoryBlock.mockRejectedValue(new Error('Specific error message'));
+      mockActivities.updateMemoryBlock.mockRejectedValue(
+        ApplicationFailure.nonRetryable('Specific error message', 'LettaValidationError')
+      );
 
       const input: BatchMemoryUpdateInput = {
         updates: [{ agentId: 'agent-detail', blockLabel: 'persona', newValue: 'value' }],
@@ -389,7 +395,7 @@ describe('BatchMemoryUpdateWorkflow', () => {
       mockActivities.updateMemoryBlock.mockImplementation(async (input: any) => {
         callCount++;
         if (input.agentId === 'agent-fail') {
-          throw new Error('This one fails');
+          throw ApplicationFailure.nonRetryable('This one fails', 'LettaValidationError');
         }
         return { success: true, blockId: 'block-ok', previousValue: 'old' };
       });
@@ -439,7 +445,7 @@ describe('BatchMemoryUpdateWorkflow', () => {
       mockActivities.updateMemoryBlock.mockImplementation(async (input: any) => {
         processedAgents.push(input.agentId);
         if (input.agentId === 'agent-2') {
-          throw new Error('Agent 2 failed');
+          throw ApplicationFailure.nonRetryable('Agent 2 failed', 'LettaValidationError');
         }
         return { success: true, blockId: 'block', previousValue: 'old' };
       });
