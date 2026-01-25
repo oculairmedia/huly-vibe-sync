@@ -11,8 +11,8 @@ exports.SyncProjectWorkflow = SyncProjectWorkflow;
 exports.SyncVibeToHulyWorkflow = SyncVibeToHulyWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 // Proxy activities with appropriate retry policies
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit, } = (0, workflow_1.proxyActivities)({
-    startToCloseTimeout: '60 seconds',
+const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
         backoffCoefficient: 2,

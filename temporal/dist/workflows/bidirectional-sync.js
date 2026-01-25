@@ -20,7 +20,7 @@ exports.VibeSSEChangeWorkflow = VibeSSEChangeWorkflow;
 exports.HulyWebhookChangeWorkflow = HulyWebhookChangeWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 const { syncVibeToHuly, syncVibeToBeads, syncBeadsToHuly, syncBeadsToVibe, syncHulyToVibe, syncHulyToBeads, getVibeTask, getHulyIssue, getBeadsIssue, commitBeadsChanges, } = (0, workflow_1.proxyActivities)({
-    startToCloseTimeout: '60 seconds',
+    startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
         backoffCoefficient: 2,

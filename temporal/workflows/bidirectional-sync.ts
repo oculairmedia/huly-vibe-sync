@@ -26,7 +26,7 @@ const {
   getBeadsIssue,
   commitBeadsChanges,
 } = proxyActivities<typeof syncActivities>({
-  startToCloseTimeout: '60 seconds',
+  startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
     backoffCoefficient: 2,

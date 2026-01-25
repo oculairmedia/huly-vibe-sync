@@ -25,6 +25,8 @@ export interface FullSyncInput {
     enableLetta?: boolean;
     /** Dry run - don't make changes */
     dryRun?: boolean;
+    /** Max consecutive failures before skipping a project (default: 3) */
+    circuitBreakerThreshold?: number;
     /** Starting project index (for continuation) */
     _continueIndex?: number;
     /** Accumulated results from previous runs */
@@ -33,6 +35,8 @@ export interface FullSyncInput {
     _accumulatedErrors?: string[];
     /** Original start time (preserved across continuations) */
     _originalStartTime?: number;
+    /** Circuit breaker: map of project -> consecutive failure count */
+    _projectFailures?: Record<string, number>;
 }
 export interface FullSyncResult {
     success: boolean;

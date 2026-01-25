@@ -12,6 +12,7 @@ exports.syncIssueToVibe = syncIssueToVibe;
 exports.syncTaskToHuly = syncTaskToHuly;
 exports.syncIssueToBeads = syncIssueToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
+exports.syncBeadsToHulyBatch = syncBeadsToHulyBatch;
 exports.createBeadsIssueInHuly = createBeadsIssueInHuly;
 exports.createBeadsIssueInVibe = createBeadsIssueInVibe;
 exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
@@ -156,6 +157,65 @@ async function syncBeadsToHuly(input) {
     }
     catch (error) {
         return handleSyncError(error, 'Beads→Huly');
+    }
+}
+async function syncBeadsToHulyBatch(input) {
+    const { beadsIssues } = input;
+    if (beadsIssues.length === 0) {
+        return { success: true, updated: 0, failed: 0, errors: [] };
+    }
+    console.log(`[Temporal:Beads→Huly] Batch syncing ${beadsIssues.length} issues`);
+    try {
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const byStatus = {};
+        for (const issue of beadsIssues) {
+            const hulyStatus = (0, lib_1.mapBeadsStatusToHuly)(issue.status);
+            if (!byStatus[hulyStatus]) {
+                byStatus[hulyStatus] = [];
+            }
+            byStatus[hulyStatus].push(issue.hulyIdentifier);
+        }
+        let totalUpdated = 0;
+        let totalFailed = 0;
+        const allErrors = [];
+        for (const [hulyStatus, identifiers] of Object.entries(byStatus)) {
+            if (identifiers.length === 0)
+                continue;
+            console.log(`[Temporal:Beads→Huly] Bulk updating ${identifiers.length} issues to ${hulyStatus}`);
+            try {
+                const result = await hulyClient.bulkUpdateIssues({
+                    identifiers,
+                    updates: { status: hulyStatus },
+                });
+                totalUpdated += result.succeeded.length;
+                totalFailed += result.failed.length;
+                allErrors.push(...result.failed);
+            }
+            catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                console.error(`[Temporal:Beads→Huly] Bulk update failed: ${errorMsg}`);
+                totalFailed += identifiers.length;
+                for (const id of identifiers) {
+                    allErrors.push({ identifier: id, error: errorMsg });
+                }
+            }
+        }
+        console.log(`[Temporal:Beads→Huly] Batch complete: ${totalUpdated} updated, ${totalFailed} failed`);
+        return {
+            success: totalFailed === 0,
+            updated: totalUpdated,
+            failed: totalFailed,
+            errors: allErrors,
+        };
+    }
+    catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        return {
+            success: false,
+            updated: 0,
+            failed: beadsIssues.length,
+            errors: beadsIssues.map(i => ({ identifier: i.hulyIdentifier, error: errorMsg })),
+        };
     }
 }
 async function createBeadsIssueInHuly(input) {

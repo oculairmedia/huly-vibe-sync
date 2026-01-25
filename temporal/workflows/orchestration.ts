@@ -83,12 +83,13 @@ const {
   syncTaskToHuly,
   syncIssueToBeads,
   syncBeadsToHuly,
+  syncBeadsToHulyBatch,
   createBeadsIssueInHuly,
   createBeadsIssueInVibe,
   syncBeadsToVibeBatch,
   commitBeadsToGit,
 } = proxyActivities<typeof syncActivities>({
-  startToCloseTimeout: '60 seconds',
+  startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
     backoffCoefficient: 2,
@@ -120,6 +121,8 @@ export interface FullSyncInput {
   enableLetta?: boolean;
   /** Dry run - don't make changes */
   dryRun?: boolean;
+  /** Max consecutive failures before skipping a project (default: 3) */
+  circuitBreakerThreshold?: number;
 
   // ======== Internal fields for continueAsNew ========
   /** Starting project index (for continuation) */
@@ -130,6 +133,8 @@ export interface FullSyncInput {
   _accumulatedErrors?: string[];
   /** Original start time (preserved across continuations) */
   _originalStartTime?: number;
+  /** Circuit breaker: map of project -> consecutive failure count */
+  _projectFailures?: Record<string, number>;
 }
 
 export interface FullSyncResult {
@@ -185,15 +190,17 @@ export async function FullOrchestrationWorkflow(
     enableBeads = true,
     enableLetta = true,
     dryRun = false,
-    // Continuation state
+    circuitBreakerThreshold = 3,
     _continueIndex = 0,
     _accumulatedResults = [],
     _accumulatedErrors = [],
     _originalStartTime,
+    _projectFailures = {},
   } = input;
 
   const startTime = _originalStartTime || Date.now();
   let cancelled = false;
+  const projectFailures = { ..._projectFailures };
 
   // Progress tracking
   const progress: SyncProgress = {
@@ -316,7 +323,38 @@ export async function FullOrchestrationWorkflow(
 
       progress.currentProject = hulyProject.identifier;
 
-      // Use child workflow for each project (isolates history, supports continueAsNew)
+      // Circuit breaker: skip projects that have failed too many times
+      const failureCount = projectFailures[hulyProject.identifier] || 0;
+      if (failureCount >= circuitBreakerThreshold) {
+        log.warn(
+          '[FullOrchestration] Circuit breaker: skipping project due to consecutive failures',
+          {
+            project: hulyProject.identifier,
+            failureCount,
+            threshold: circuitBreakerThreshold,
+          }
+        );
+
+        // Record as skipped in results
+        const skippedResult: ProjectSyncResult = {
+          projectIdentifier: hulyProject.identifier,
+          projectName: hulyProject.name,
+          success: false,
+          phase1: { synced: 0, skipped: 0, errors: 0 },
+          phase2: { synced: 0, skipped: 0, errors: 0 },
+          lettaUpdated: false,
+          error: `Circuit breaker: skipped after ${failureCount} consecutive failures`,
+        };
+        result.projectResults.push(skippedResult);
+        result.projectsProcessed++;
+        progress.projectsCompleted++;
+        progress.errors++;
+        result.errors.push(`${hulyProject.identifier}: Circuit breaker triggered`);
+        projectsProcessedThisRun++;
+        continue;
+      }
+
+      // Child workflow isolates history and supports continueAsNew
       const projectResult = await executeChild(ProjectSyncWorkflow, {
         workflowId: `project-sync-${hulyProject.identifier}-${Date.now()}`,
         args: [
@@ -339,9 +377,13 @@ export async function FullOrchestrationWorkflow(
 
       if (!projectResult.success) {
         progress.errors++;
+        projectFailures[hulyProject.identifier] =
+          (projectFailures[hulyProject.identifier] || 0) + 1;
         if (projectResult.error) {
           result.errors.push(`${hulyProject.identifier}: ${projectResult.error}`);
         }
+      } else {
+        projectFailures[hulyProject.identifier] = 0;
       }
 
       projectsProcessedThisRun++;
@@ -365,10 +407,12 @@ export async function FullOrchestrationWorkflow(
           enableBeads,
           enableLetta,
           dryRun,
+          circuitBreakerThreshold,
           _continueIndex: nextIdx,
           _accumulatedResults: result.projectResults,
           _accumulatedErrors: result.errors,
           _originalStartTime: startTime,
+          _projectFailures: projectFailures,
         });
 
         // This line is never reached - continueAsNew throws
@@ -831,40 +875,53 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       let beadsCreated = 0;
       let beadsSkipped = 0;
 
-      for (const beadsIssue of beadsIssues) {
-        const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
+      if (dryRun) {
+        beadsSkipped = beadsIssues.length;
+      } else {
+        const toSync: Array<{ beadsId: string; hulyIdentifier: string; status: string }> = [];
+        const toCreate: typeof beadsIssues = [];
 
-        if (dryRun) {
-          beadsSkipped++;
-          continue;
+        for (const beadsIssue of beadsIssues) {
+          const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
+          if (hulyLabel) {
+            toSync.push({
+              beadsId: beadsIssue.id,
+              hulyIdentifier: hulyLabel.replace('huly:', ''),
+              status: beadsIssue.status,
+            });
+          } else {
+            toCreate.push(beadsIssue);
+          }
         }
 
-        try {
-          if (hulyLabel) {
-            const hulyIdentifier = hulyLabel.replace('huly:', '');
-            const syncResult = await syncBeadsToHuly({
-              beadsIssue: {
-                id: beadsIssue.id,
-                title: beadsIssue.title,
-                status: beadsIssue.status,
-                priority: beadsIssue.priority,
-                description: beadsIssue.description,
-                labels: beadsIssue.labels,
-              },
-              hulyIdentifier,
+        if (toSync.length > 0) {
+          log.info(`[ProjectSync] Phase 3b: Batch syncing ${toSync.length} issues to Huly`);
+          try {
+            const batchResult = await syncBeadsToHulyBatch({
+              beadsIssues: toSync,
               context: {
                 projectIdentifier: hulyProject.identifier,
                 vibeProjectId: vibeProjectId!,
                 gitRepoPath: gitRepoPath!,
               },
             });
-
-            if (syncResult.success) {
-              beadsSynced++;
-            } else {
-              beadsSkipped++;
+            beadsSynced = batchResult.updated;
+            beadsSkipped += batchResult.failed;
+            if (batchResult.errors.length > 0) {
+              log.warn(`[ProjectSync] Phase 3b batch errors`, {
+                errors: batchResult.errors.slice(0, 5),
+              });
             }
-          } else {
+          } catch (error) {
+            log.warn(`[ProjectSync] Phase 3b batch sync failed`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            beadsSkipped += toSync.length;
+          }
+        }
+
+        for (const beadsIssue of toCreate) {
+          try {
             const createResult = await createBeadsIssueInHuly({
               beadsIssue: {
                 id: beadsIssue.id,
@@ -889,15 +946,14 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             } else {
               beadsSkipped++;
             }
+          } catch (error) {
+            log.warn(`[ProjectSync] Phase 3b create error for ${beadsIssue.id}`, {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            beadsSkipped++;
           }
-        } catch (error) {
-          log.warn(`[ProjectSync] Phase 3b error for ${beadsIssue.id}`, {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          beadsSkipped++;
+          await sleep('100ms');
         }
-
-        await sleep('100ms');
       }
 
       log.info(`[ProjectSync] Phase 3b complete`, {

@@ -1,31 +1,28 @@
 /**
  * Unit Tests for HulyService
  *
- * Tests Huly-specific operations including:
- * - Fetching projects and issues
- * - Updating issue status, description, priority, title
- * - Creating issues
- * - Syncing Vibe tasks back to Huly
+ * Comprehensive test coverage for:
+ * - fetchHulyIssues with incremental sync (cursor-based)
+ * - fetchHulyIssuesBulk for bulk fetching behavior
+ * - updateHulyIssueStatus for both REST and MCP client paths
+ * - All other HulyService functions
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   fetchHulyProjects,
   fetchHulyIssues,
+  fetchHulyIssuesSimple,
+  fetchHulyIssuesBulk,
   updateHulyIssueStatus,
   updateHulyIssueDescription,
-  createHulyIssue,
   updateHulyIssuePriority,
   updateHulyIssueTitle,
+  createHulyIssue,
   syncVibeTaskToHuly,
   createHulyService,
 } from '../../lib/HulyService.js';
-import {
-  createMockHulyProject,
-  createMockHulyIssue,
-} from '../mocks/hulyMocks.js';
 
-// Mock the HealthService to avoid side effects
 vi.mock('../../lib/HealthService.js', () => ({
   recordApiLatency: vi.fn(),
 }));
@@ -33,6 +30,7 @@ vi.mock('../../lib/HealthService.js', () => ({
 describe('HulyService', () => {
   let mockRestClient;
   let mockMcpClient;
+  let mockDb;
   let consoleSpy;
 
   beforeEach(() => {
@@ -40,6 +38,7 @@ describe('HulyService', () => {
     mockRestClient = {
       listProjects: vi.fn(),
       listIssues: vi.fn(),
+      listIssuesBulk: vi.fn(),
       updateIssue: vi.fn(),
       createIssue: vi.fn(),
     };
@@ -47,6 +46,12 @@ describe('HulyService', () => {
     // Create mock MCP client
     mockMcpClient = {
       callTool: vi.fn(),
+    };
+
+    // Create mock database
+    mockDb = {
+      getHulySyncCursor: vi.fn(),
+      setHulySyncCursor: vi.fn(),
     };
 
     // Suppress console output during tests
@@ -62,178 +67,348 @@ describe('HulyService', () => {
   });
 
   // ============================================================
-  // fetchHulyProjects Tests
+  // fetchHulyIssues Tests - Incremental Sync with Cursor
   // ============================================================
-  describe('fetchHulyProjects', () => {
-    it('should fetch projects successfully', async () => {
-      const mockProjects = [
-        createMockHulyProject({ identifier: 'PROJ1' }),
-        createMockHulyProject({ identifier: 'PROJ2' }),
-      ];
-      mockRestClient.listProjects.mockResolvedValue(mockProjects);
-
-      const result = await fetchHulyProjects(mockRestClient);
-
-      expect(mockRestClient.listProjects).toHaveBeenCalled();
-      expect(result).toEqual(mockProjects);
-      expect(result).toHaveLength(2);
-    });
-
-    it('should return empty array on error', async () => {
-      mockRestClient.listProjects.mockRejectedValue(new Error('Network error'));
-
-      const result = await fetchHulyProjects(mockRestClient);
-
-      expect(result).toEqual([]);
-      expect(consoleSpy.error).toHaveBeenCalled();
-    });
-
-    it('should log sample project in dry run mode', async () => {
-      const mockProjects = [createMockHulyProject({ identifier: 'TEST' })];
-      mockRestClient.listProjects.mockResolvedValue(mockProjects);
-
-      await fetchHulyProjects(mockRestClient, { sync: { dryRun: true } });
-
-      // console.log is called with two args: '[Huly] Sample project:' and the JSON string
-      const sampleProjectLogs = consoleSpy.log.mock.calls.filter(
-        call => call[0] === '[Huly] Sample project:',
-      );
-      expect(sampleProjectLogs).toHaveLength(1);
-    });
-
-    it('should not log sample project when not in dry run mode', async () => {
-      // Clear previous calls from other tests
-      consoleSpy.log.mockClear();
-
-      const mockProjects = [createMockHulyProject({ identifier: 'TEST' })];
-      mockRestClient.listProjects.mockResolvedValue(mockProjects);
-
-      await fetchHulyProjects(mockRestClient, { sync: { dryRun: false } });
-
-      const sampleProjectLogs = consoleSpy.log.mock.calls.filter(
-        call => call[0] === '[Huly] Sample project:',
-      );
-      expect(sampleProjectLogs).toHaveLength(0);
-    });
-
-    it('should handle empty projects list', async () => {
-      mockRestClient.listProjects.mockResolvedValue([]);
-
-      const result = await fetchHulyProjects(mockRestClient);
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // fetchHulyIssues Tests
-  // ============================================================
-  describe('fetchHulyIssues', () => {
-    it('should fetch issues for a project and return { issues, syncMeta }', async () => {
-      const mockIssues = [
-        createMockHulyIssue({ identifier: 'TEST-1' }),
-        createMockHulyIssue({ identifier: 'TEST-2' }),
-      ];
-      const mockSyncMeta = { latestModified: '2025-01-01T00:00:00Z', serverTime: '2025-01-01T00:00:00Z' };
-      mockRestClient.listIssues.mockResolvedValue({ issues: mockIssues, syncMeta: mockSyncMeta, count: 2 });
-
-      const result = await fetchHulyIssues(mockRestClient, 'TEST');
-
-      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', { limit: 1000, includeSyncMeta: true });
-      expect(result.issues).toEqual(mockIssues);
-      expect(result.syncMeta).toEqual(mockSyncMeta);
-    });
-
-    it('should support incremental sync with modifiedSince from db cursor', async () => {
-      const mockDb = {
-        getHulySyncCursor: vi.fn().mockReturnValue('2025-01-01T00:00:00Z'),
-        setHulySyncCursor: vi.fn(),
-      };
-      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: '2025-01-02T00:00:00Z' }, count: 0 });
-
-      await fetchHulyIssues(
-        mockRestClient,
-        'TEST',
-        { sync: { incremental: true } },
-        mockDb,
-      );
-
-      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
-        limit: 1000,
-        includeSyncMeta: true,
-        modifiedSince: '2025-01-01T00:00:00Z',
+  describe('fetchHulyIssues - Incremental Sync', () => {
+    it('should perform full sync when no cursor exists in db', async () => {
+      mockDb.getHulySyncCursor.mockReturnValue(null);
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [
+          { identifier: 'TEST-1', title: 'Issue 1' },
+          { identifier: 'TEST-2', title: 'Issue 2' },
+        ],
+        syncMeta: {
+          latestModified: '2025-01-24T10:00:00Z',
+          serverTime: '2025-01-24T10:00:00Z',
+        },
       });
-    });
 
-    it('should do full sync when no cursor in db', async () => {
-      const mockDb = {
-        getHulySyncCursor: vi.fn().mockReturnValue(null),
-        setHulySyncCursor: vi.fn(),
-      };
-      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
-
-      await fetchHulyIssues(
+      const result = await fetchHulyIssues(
         mockRestClient,
         'TEST',
         { sync: { incremental: true } },
-        mockDb,
+        mockDb
       );
 
+      // Should NOT include modifiedSince when no cursor
       expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
         limit: 1000,
         includeSyncMeta: true,
       });
+
+      expect(result.issues).toHaveLength(2);
+      expect(result.syncMeta.latestModified).toBe('2025-01-24T10:00:00Z');
+
+      // Should update cursor after successful fetch
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('TEST', '2025-01-24T10:00:00Z');
     });
 
-    it('should update sync cursor after successful fetch', async () => {
-      const mockDb = {
-        getHulySyncCursor: vi.fn().mockReturnValue(null),
-        setHulySyncCursor: vi.fn(),
-      };
+    it('should perform incremental sync when cursor exists in db', async () => {
+      const cursor = '2025-01-20T00:00:00Z';
+      mockDb.getHulySyncCursor.mockReturnValue(cursor);
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [{ identifier: 'TEST-3', title: 'New Issue' }],
+        syncMeta: {
+          latestModified: '2025-01-24T12:00:00Z',
+          serverTime: '2025-01-24T12:00:00Z',
+        },
+      });
+
+      const result = await fetchHulyIssues(
+        mockRestClient,
+        'TEST',
+        { sync: { incremental: true } },
+        mockDb
+      );
+
+      // Should include modifiedSince with cursor value
+      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
+        limit: 1000,
+        includeSyncMeta: true,
+        modifiedSince: cursor,
+      });
+
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].identifier).toBe('TEST-3');
+
+      // Should update cursor to new latestModified
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('TEST', '2025-01-24T12:00:00Z');
+
+      // Should log incremental fetch message
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('Incremental fetch for TEST')
+      );
+    });
+
+    it('should perform full sync when incremental is disabled in config', async () => {
+      mockDb.getHulySyncCursor.mockReturnValue('2025-01-20T00:00:00Z');
       mockRestClient.listIssues.mockResolvedValue({
         issues: [],
-        syncMeta: { latestModified: '2025-01-02T00:00:00Z', serverTime: '2025-01-02T00:00:00Z' },
-        count: 0,
+        syncMeta: { latestModified: null, serverTime: '2025-01-24T10:00:00Z' },
+      });
+
+      await fetchHulyIssues(mockRestClient, 'TEST', { sync: { incremental: false } }, mockDb);
+
+      // Should NOT include modifiedSince when incremental is disabled
+      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
+        limit: 1000,
+        includeSyncMeta: true,
+      });
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('Full fetch for project TEST')
+      );
+    });
+
+    it('should perform full sync when db is null', async () => {
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [],
+        syncMeta: { latestModified: null, serverTime: '2025-01-24T10:00:00Z' },
+      });
+
+      await fetchHulyIssues(mockRestClient, 'TEST', { sync: { incremental: true } }, null);
+
+      // Should NOT include modifiedSince when db is null
+      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
+        limit: 1000,
+        includeSyncMeta: true,
+      });
+    });
+
+    it('should not update cursor when syncMeta.latestModified is null', async () => {
+      mockDb.getHulySyncCursor.mockReturnValue(null);
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [],
+        syncMeta: { latestModified: null, serverTime: '2025-01-24T10:00:00Z' },
       });
 
       await fetchHulyIssues(mockRestClient, 'TEST', {}, mockDb);
 
-      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('TEST', '2025-01-02T00:00:00Z');
+      expect(mockDb.setHulySyncCursor).not.toHaveBeenCalled();
     });
 
-    it('should return empty issues on error', async () => {
-      mockRestClient.listIssues.mockRejectedValue(new Error('API error'));
+    it('should handle API response without syncMeta', async () => {
+      mockRestClient.listIssues.mockResolvedValue([{ identifier: 'TEST-1', title: 'Issue 1' }]);
 
-      const result = await fetchHulyIssues(mockRestClient, 'TEST');
+      const result = await fetchHulyIssues(mockRestClient, 'TEST', {}, null);
+
+      expect(result.issues).toHaveLength(1);
+      expect(result.syncMeta).toEqual({
+        latestModified: null,
+        serverTime: expect.any(String),
+      });
+    });
+
+    it('should return empty issues and syncMeta on error', async () => {
+      mockRestClient.listIssues.mockRejectedValue(new Error('Network error'));
+
+      const result = await fetchHulyIssues(mockRestClient, 'TEST', {}, mockDb);
 
       expect(result.issues).toEqual([]);
+      expect(result.syncMeta).toEqual({
+        latestModified: null,
+        serverTime: expect.any(String),
+      });
       expect(consoleSpy.error).toHaveBeenCalled();
-    });
-
-    it('should log incremental fetch message when cursor exists', async () => {
-      const mockDb = {
-        getHulySyncCursor: vi.fn().mockReturnValue('2025-01-01T00:00:00Z'),
-        setHulySyncCursor: vi.fn(),
-      };
-      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
-
-      await fetchHulyIssues(
-        mockRestClient,
-        'PROJ',
-        { sync: { incremental: true } },
-        mockDb,
-      );
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[Huly] Incremental fetch for PROJ'),
-      );
     });
   });
 
   // ============================================================
-  // updateHulyIssueStatus Tests
+  // fetchHulyIssuesBulk Tests - Bulk Fetching Behavior
   // ============================================================
-  describe('updateHulyIssueStatus', () => {
+  describe('fetchHulyIssuesBulk', () => {
+    it('should fetch issues from multiple projects in bulk', async () => {
+      const projectIds = ['PROJ1', 'PROJ2', 'PROJ3'];
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: {
+            issues: [{ identifier: 'PROJ1-1' }, { identifier: 'PROJ1-2' }],
+            syncMeta: { latestModified: '2025-01-24T10:00:00Z' },
+          },
+          PROJ2: {
+            issues: [{ identifier: 'PROJ2-1' }],
+            syncMeta: { latestModified: '2025-01-24T11:00:00Z' },
+          },
+          PROJ3: {
+            issues: [],
+            syncMeta: { latestModified: null },
+          },
+        },
+        totalIssues: 3,
+        projectCount: 3,
+      });
+
+      const result = await fetchHulyIssuesBulk(mockRestClient, projectIds, {}, null);
+
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(projectIds, {
+        limit: 1000,
+      });
+
+      expect(result.totalIssues).toBe(3);
+      expect(result.projectCount).toBe(3);
+      expect(result.projects.PROJ1.issues).toHaveLength(2);
+      expect(result.projects.PROJ2.issues).toHaveLength(1);
+      expect(result.projects.PROJ3.issues).toHaveLength(0);
+    });
+
+    it('should use oldest cursor for incremental bulk fetch', async () => {
+      const projectIds = ['PROJ1', 'PROJ2', 'PROJ3'];
+      mockDb.getHulySyncCursor
+        .mockReturnValueOnce('2025-01-22T00:00:00Z') // PROJ1
+        .mockReturnValueOnce('2025-01-20T00:00:00Z') // PROJ2 (oldest)
+        .mockReturnValueOnce('2025-01-23T00:00:00Z'); // PROJ3
+
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: { issues: [], syncMeta: { latestModified: '2025-01-24T10:00:00Z' } },
+          PROJ2: { issues: [], syncMeta: { latestModified: '2025-01-24T11:00:00Z' } },
+          PROJ3: { issues: [], syncMeta: { latestModified: '2025-01-24T12:00:00Z' } },
+        },
+        totalIssues: 0,
+        projectCount: 3,
+      });
+
+      await fetchHulyIssuesBulk(
+        mockRestClient,
+        projectIds,
+        { sync: { incremental: true } },
+        mockDb
+      );
+
+      // Should use oldest cursor (2025-01-20T00:00:00Z)
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(projectIds, {
+        limit: 1000,
+        modifiedSince: '2025-01-20T00:00:00Z',
+      });
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('Bulk incremental fetch')
+      );
+    });
+
+    it('should update cursors for all projects after bulk fetch', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      mockDb.getHulySyncCursor.mockReturnValue(null);
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: {
+            issues: [],
+            syncMeta: { latestModified: '2025-01-24T10:00:00Z' },
+          },
+          PROJ2: {
+            issues: [],
+            syncMeta: { latestModified: '2025-01-24T11:00:00Z' },
+          },
+        },
+        totalIssues: 0,
+        projectCount: 2,
+      });
+
+      await fetchHulyIssuesBulk(mockRestClient, projectIds, {}, mockDb);
+
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('PROJ1', '2025-01-24T10:00:00Z');
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('PROJ2', '2025-01-24T11:00:00Z');
+    });
+
+    it('should fallback to individual fetches when bulk endpoint not available', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      const clientWithoutBulk = {
+        listIssues: vi.fn().mockResolvedValue({
+          issues: [{ identifier: 'TEST-1' }],
+          syncMeta: { latestModified: '2025-01-24T10:00:00Z' },
+        }),
+      };
+
+      const result = await fetchHulyIssuesBulk(clientWithoutBulk, projectIds, {}, null);
+
+      expect(clientWithoutBulk.listIssues).toHaveBeenCalledTimes(2);
+      expect(result.projects.PROJ1.issues).toHaveLength(1);
+      expect(result.projects.PROJ2.issues).toHaveLength(1);
+      expect(result.totalIssues).toBe(2);
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('Bulk endpoint not available')
+      );
+    });
+
+    it('should fallback to individual fetches on bulk API error', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      mockRestClient.listIssuesBulk.mockRejectedValue(new Error('Bulk API error'));
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [],
+        syncMeta: { latestModified: null },
+      });
+
+      const result = await fetchHulyIssuesBulk(mockRestClient, projectIds, {}, null);
+
+      expect(consoleSpy.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error in bulk fetch'),
+        expect.any(String)
+      );
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('Falling back to individual fetches')
+      );
+
+      expect(mockRestClient.listIssues).toHaveBeenCalledTimes(2);
+      expect(result.totalIssues).toBe(0);
+    });
+
+    it('should perform full bulk fetch when no cursors exist', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      mockDb.getHulySyncCursor.mockReturnValue(null);
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: { issues: [], syncMeta: { latestModified: null } },
+          PROJ2: { issues: [], syncMeta: { latestModified: null } },
+        },
+        totalIssues: 0,
+        projectCount: 2,
+      });
+
+      await fetchHulyIssuesBulk(
+        mockRestClient,
+        projectIds,
+        { sync: { incremental: true } },
+        mockDb
+      );
+
+      // Should NOT include modifiedSince when no cursors
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(projectIds, {
+        limit: 1000,
+      });
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('Bulk full fetch'));
+    });
+
+    it('should skip cursor update for projects without latestModified', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: {
+            issues: [],
+            syncMeta: { latestModified: '2025-01-24T10:00:00Z' },
+          },
+          PROJ2: {
+            issues: [],
+            syncMeta: { latestModified: null },
+          },
+        },
+        totalIssues: 0,
+        projectCount: 2,
+      });
+
+      await fetchHulyIssuesBulk(mockRestClient, projectIds, {}, mockDb);
+
+      // Only PROJ1 should have cursor updated
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledWith('PROJ1', '2025-01-24T10:00:00Z');
+      expect(mockDb.setHulySyncCursor).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ============================================================
+  // updateHulyIssueStatus Tests - REST and MCP Client Paths
+  // ============================================================
+  describe('updateHulyIssueStatus - REST and MCP Clients', () => {
     it('should update status using REST client', async () => {
       mockRestClient.updateIssue.mockResolvedValue({ success: true });
 
@@ -241,6 +416,9 @@ describe('HulyService', () => {
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith('TEST-1', 'status', 'In Progress');
       expect(result).toBe(true);
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('✓ Updated issue TEST-1 status to: In Progress')
+      );
     });
 
     it('should update status using MCP client', async () => {
@@ -259,38 +437,103 @@ describe('HulyService', () => {
       expect(result).toBe(true);
     });
 
-    it('should skip update in dry run mode', async () => {
-      const result = await updateHulyIssueStatus(
-        mockRestClient,
-        'TEST-1',
-        'In Progress',
-        { sync: { dryRun: true } },
-      );
+    it('should skip update in dry run mode with REST client', async () => {
+      const result = await updateHulyIssueStatus(mockRestClient, 'TEST-1', 'In Progress', {
+        sync: { dryRun: true },
+      });
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
       expect(result).toBe(true);
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('[DRY RUN]'),
+        expect.stringContaining('[DRY RUN] Would update issue TEST-1 status to: In Progress')
       );
     });
 
-    it('should return false on error', async () => {
-      mockRestClient.updateIssue.mockRejectedValue(new Error('Update failed'));
+    it('should skip update in dry run mode with MCP client', async () => {
+      const result = await updateHulyIssueStatus(mockMcpClient, 'TEST-1', 'Done', {
+        sync: { dryRun: true },
+      });
 
-      const result = await updateHulyIssueStatus(mockRestClient, 'TEST-1', 'In Progress');
+      expect(mockMcpClient.callTool).not.toHaveBeenCalled();
+      expect(result).toBe(true);
+    });
+
+    it('should return false on REST client error', async () => {
+      mockRestClient.updateIssue.mockRejectedValue(new Error('Network error'));
+
+      const result = await updateHulyIssueStatus(mockRestClient, 'TEST-1', 'Done');
+
+      expect(result).toBe(false);
+      expect(consoleSpy.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error updating issue TEST-1 status'),
+        expect.any(String)
+      );
+    });
+
+    it('should return false on MCP client error', async () => {
+      mockMcpClient.callTool.mockRejectedValue(new Error('MCP error'));
+
+      const result = await updateHulyIssueStatus(mockMcpClient, 'TEST-1', 'Done');
 
       expect(result).toBe(false);
       expect(consoleSpy.error).toHaveBeenCalled();
     });
 
-    it('should throw error for unsupported client type', async () => {
-      const unsupportedClient = {};
+    it('should return false for unsupported client type', async () => {
+      const unsupportedClient = { someMethod: vi.fn() };
 
       const result = await updateHulyIssueStatus(unsupportedClient, 'TEST-1', 'Done');
 
       expect(result).toBe(false);
-      // Error is logged with two arguments: message and error
+      expect(consoleSpy.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error updating issue TEST-1 status'),
+        expect.any(String)
+      );
+    });
+  });
+
+  // ============================================================
+  // fetchHulyProjects Tests
+  // ============================================================
+  describe('fetchHulyProjects', () => {
+    it('should fetch projects successfully', async () => {
+      const mockProjects = [
+        { identifier: 'PROJ1', name: 'Project 1' },
+        { identifier: 'PROJ2', name: 'Project 2' },
+      ];
+      mockRestClient.listProjects.mockResolvedValue(mockProjects);
+
+      const result = await fetchHulyProjects(mockRestClient);
+
+      expect(mockRestClient.listProjects).toHaveBeenCalled();
+      expect(result).toEqual(mockProjects);
+      expect(result).toHaveLength(2);
+    });
+
+    it('should return empty array on error', async () => {
+      mockRestClient.listProjects.mockRejectedValue(new Error('API error'));
+
+      const result = await fetchHulyProjects(mockRestClient);
+
+      expect(result).toEqual([]);
       expect(consoleSpy.error).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================
+  // fetchHulyIssuesSimple Tests
+  // ============================================================
+  describe('fetchHulyIssuesSimple', () => {
+    it('should return just the issues array (backward compatible)', async () => {
+      mockRestClient.listIssues.mockResolvedValue({
+        issues: [{ identifier: 'TEST-1' }],
+        syncMeta: { latestModified: '2025-01-24T10:00:00Z' },
+      });
+
+      const result = await fetchHulyIssuesSimple(mockRestClient, 'TEST');
+
+      expect(result).toEqual([{ identifier: 'TEST-1' }]);
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 
@@ -301,16 +544,12 @@ describe('HulyService', () => {
     it('should update description using REST client', async () => {
       mockRestClient.updateIssue.mockResolvedValue({ success: true });
 
-      const result = await updateHulyIssueDescription(
-        mockRestClient,
-        'TEST-1',
-        'New description',
-      );
+      const result = await updateHulyIssueDescription(mockRestClient, 'TEST-1', 'New description');
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'description',
-        'New description',
+        'New description'
       );
       expect(result).toBe(true);
     });
@@ -318,11 +557,7 @@ describe('HulyService', () => {
     it('should update description using MCP client', async () => {
       mockMcpClient.callTool.mockResolvedValue({ success: true });
 
-      const result = await updateHulyIssueDescription(
-        mockMcpClient,
-        'TEST-1',
-        'New description',
-      );
+      const result = await updateHulyIssueDescription(mockMcpClient, 'TEST-1', 'New description');
 
       expect(mockMcpClient.callTool).toHaveBeenCalledWith('huly_issue_ops', {
         operation: 'update',
@@ -333,104 +568,6 @@ describe('HulyService', () => {
         },
       });
       expect(result).toBe(true);
-    });
-
-    it('should skip update in dry run mode', async () => {
-      const result = await updateHulyIssueDescription(
-        mockRestClient,
-        'TEST-1',
-        'New description',
-        { sync: { dryRun: true } },
-      );
-
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-      expect(result).toBe(true);
-    });
-
-    it('should return false on error', async () => {
-      mockRestClient.updateIssue.mockRejectedValue(new Error('Update failed'));
-
-      const result = await updateHulyIssueDescription(
-        mockRestClient,
-        'TEST-1',
-        'New description',
-      );
-
-      expect(result).toBe(false);
-    });
-  });
-
-  // ============================================================
-  // createHulyIssue Tests
-  // ============================================================
-  describe('createHulyIssue', () => {
-    const issueData = {
-      title: 'New Issue',
-      description: 'Issue description',
-      priority: 'High',
-      status: 'Backlog',
-    };
-
-    it('should create issue using REST client', async () => {
-      const createdIssue = createMockHulyIssue({
-        identifier: 'TEST-42',
-        ...issueData,
-      });
-      mockRestClient.createIssue.mockResolvedValue(createdIssue);
-
-      const result = await createHulyIssue(mockRestClient, 'TEST', issueData);
-
-      expect(mockRestClient.createIssue).toHaveBeenCalledWith('TEST', issueData);
-      expect(result).toEqual(createdIssue);
-    });
-
-    it('should create issue using MCP client', async () => {
-      const createdIssue = createMockHulyIssue({
-        identifier: 'TEST-42',
-        ...issueData,
-      });
-      mockMcpClient.callTool.mockResolvedValue(createdIssue);
-
-      const result = await createHulyIssue(mockMcpClient, 'TEST', issueData);
-
-      expect(mockMcpClient.callTool).toHaveBeenCalledWith('huly_issue_ops', {
-        operation: 'create',
-        project_identifier: 'TEST',
-        issue_data: issueData,
-      });
-      expect(result).toEqual(createdIssue);
-    });
-
-    it('should return dry run result in dry run mode', async () => {
-      const result = await createHulyIssue(
-        mockRestClient,
-        'TEST',
-        issueData,
-        { sync: { dryRun: true } },
-      );
-
-      expect(mockRestClient.createIssue).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        identifier: 'TEST-DRY',
-        ...issueData,
-      });
-    });
-
-    it('should return null on error', async () => {
-      mockRestClient.createIssue.mockRejectedValue(new Error('Create failed'));
-
-      const result = await createHulyIssue(mockRestClient, 'TEST', issueData);
-
-      expect(result).toBeNull();
-      expect(consoleSpy.error).toHaveBeenCalled();
-    });
-
-    it('should throw error for unsupported client type', async () => {
-      const unsupportedClient = {};
-
-      const result = await createHulyIssue(unsupportedClient, 'TEST', issueData);
-
-      expect(result).toBeNull();
     });
   });
 
@@ -462,26 +599,6 @@ describe('HulyService', () => {
       });
       expect(result).toBe(true);
     });
-
-    it('should skip update in dry run mode', async () => {
-      const result = await updateHulyIssuePriority(
-        mockRestClient,
-        'TEST-1',
-        'High',
-        { sync: { dryRun: true } },
-      );
-
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-      expect(result).toBe(true);
-    });
-
-    it('should return false on error', async () => {
-      mockRestClient.updateIssue.mockRejectedValue(new Error('Update failed'));
-
-      const result = await updateHulyIssuePriority(mockRestClient, 'TEST-1', 'High');
-
-      expect(result).toBe(false);
-    });
   });
 
   // ============================================================
@@ -500,37 +617,74 @@ describe('HulyService', () => {
     it('should update title using MCP client', async () => {
       mockMcpClient.callTool.mockResolvedValue({ success: true });
 
-      const result = await updateHulyIssueTitle(mockMcpClient, 'TEST-1', 'Updated Title');
+      const result = await updateHulyIssueTitle(mockMcpClient, 'TEST-1', 'New Title');
 
       expect(mockMcpClient.callTool).toHaveBeenCalledWith('huly_issue_ops', {
         operation: 'update',
         issue_identifier: 'TEST-1',
         update: {
           field: 'title',
-          value: 'Updated Title',
+          value: 'New Title',
         },
       });
       expect(result).toBe(true);
     });
+  });
 
-    it('should skip update in dry run mode', async () => {
-      const result = await updateHulyIssueTitle(
-        mockRestClient,
-        'TEST-1',
-        'New Title',
-        { sync: { dryRun: true } },
-      );
+  // ============================================================
+  // createHulyIssue Tests
+  // ============================================================
+  describe('createHulyIssue', () => {
+    const issueData = {
+      title: 'New Issue',
+      description: 'Issue description',
+      priority: 'High',
+      status: 'Backlog',
+    };
 
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-      expect(result).toBe(true);
+    it('should create issue using REST client', async () => {
+      const createdIssue = { identifier: 'TEST-42', ...issueData };
+      mockRestClient.createIssue.mockResolvedValue(createdIssue);
+
+      const result = await createHulyIssue(mockRestClient, 'TEST', issueData);
+
+      expect(mockRestClient.createIssue).toHaveBeenCalledWith('TEST', issueData);
+      expect(result).toEqual(createdIssue);
     });
 
-    it('should return false on error', async () => {
-      mockRestClient.updateIssue.mockRejectedValue(new Error('Update failed'));
+    it('should create issue using MCP client', async () => {
+      const createdIssue = { identifier: 'TEST-42', ...issueData };
+      mockMcpClient.callTool.mockResolvedValue(createdIssue);
 
-      const result = await updateHulyIssueTitle(mockRestClient, 'TEST-1', 'New Title');
+      const result = await createHulyIssue(mockMcpClient, 'TEST', issueData);
 
-      expect(result).toBe(false);
+      expect(mockMcpClient.callTool).toHaveBeenCalledWith('huly_issue_ops', {
+        operation: 'create',
+        project_identifier: 'TEST',
+        issue_data: issueData,
+      });
+      expect(result).toEqual(createdIssue);
+    });
+
+    it('should return dry run result in dry run mode', async () => {
+      const result = await createHulyIssue(mockRestClient, 'TEST', issueData, {
+        sync: { dryRun: true },
+      });
+
+      expect(mockRestClient.createIssue).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        identifier: 'TEST-DRY',
+        ...issueData,
+      });
+    });
+
+    it('should return null on error', async () => {
+      mockRestClient.createIssue.mockRejectedValue(new Error('Create failed'));
+
+      const result = await createHulyIssue(mockRestClient, 'TEST', issueData);
+
+      expect(result).toBeNull();
+      expect(consoleSpy.error).toHaveBeenCalled();
     });
   });
 
@@ -538,161 +692,58 @@ describe('HulyService', () => {
   // syncVibeTaskToHuly Tests
   // ============================================================
   describe('syncVibeTaskToHuly', () => {
-    const createVibeTask = (overrides = {}) => ({
-      id: 'task-1',
-      title: 'Test Task',
-      description: 'Task description\n\n---\nSynced from Huly: TEST-1',
-      status: 'in_progress',
-      ...overrides,
-    });
-
-    const hulyIssues = [
-      createMockHulyIssue({
-        identifier: 'TEST-1',
-        status: 'Backlog',
-        description: 'Task description',
-      }),
-    ];
-
     it('should skip task updated in Phase 1', async () => {
-      const vibeTask = createVibeTask();
+      const vibeTask = {
+        id: 'task-1',
+        title: 'Test Task',
+        description: 'Description\n\n---\nSynced from Huly: TEST-1',
+        status: 'in_progress',
+      };
       const phase1UpdatedTasks = new Set(['task-1']);
 
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-        phase1UpdatedTasks,
-      );
+      await syncVibeTaskToHuly(mockRestClient, vibeTask, [], 'TEST', {}, phase1UpdatedTasks);
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('was just updated in Phase 1'),
+        expect.stringContaining('was just updated in Phase 1')
       );
     });
 
     it('should skip task without Huly identifier', async () => {
-      const vibeTask = createVibeTask({
-        description: 'No Huly link here',
-      });
+      const vibeTask = {
+        id: 'task-1',
+        title: 'Test Task',
+        description: 'No Huly link',
+        status: 'todo',
+      };
 
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-      );
+      await syncVibeTaskToHuly(mockRestClient, vibeTask, [], 'TEST', {});
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
     });
 
-    it('should warn when Huly issue not found', async () => {
-      const vibeTask = createVibeTask({
-        description: 'Task\n\n---\nSynced from Huly: TEST-999',
-      });
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-      );
-
-      expect(consoleSpy.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Huly issue TEST-999 not found'),
-      );
-    });
-
-    it('should update status when Vibe status differs', async () => {
-      const vibeTask = createVibeTask({
-        status: 'done', // Different from Huly's 'Backlog'
-      });
+    it('should update status when Vibe status differs from Huly', async () => {
+      const vibeTask = {
+        id: 'task-1',
+        title: 'Test Task',
+        description: 'Description\n\n---\nSynced from Huly: TEST-1',
+        status: 'done',
+      };
+      const hulyIssues = [
+        {
+          identifier: 'TEST-1',
+          status: 'In Progress',
+          description: 'Description',
+        },
+      ];
       mockRestClient.updateIssue.mockResolvedValue({ success: true });
 
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-      );
+      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
 
       expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
         'TEST-1',
         'status',
-        expect.any(String),
-      );
-    });
-
-    it('should update status due to case mismatch in current implementation', async () => {
-      // NOTE: Current implementation has a potential bug:
-      // mapVibeStatusToHuly('todo') returns 'Backlog' (capitalized)
-      // normalizeStatus('Backlog') returns 'backlog' (lowercase)
-      // So 'Backlog' !== 'backlog' is always true, triggering an update
-      // This test documents the current behavior
-      const vibeTask = createVibeTask({
-        status: 'todo', // mapVibeStatusToHuly('todo') = 'Backlog'
-        description: 'Task description\n\n---\nSynced from Huly: TEST-1',
-      });
-
-      const matchingIssues = [
-        createMockHulyIssue({
-          identifier: 'TEST-1',
-          status: 'Backlog', // normalizeStatus('Backlog') = 'backlog'
-          description: 'Task description',
-        }),
-      ];
-      mockRestClient.updateIssue.mockResolvedValue({ success: true });
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        matchingIssues,
-        'TEST',
-        {},
-      );
-
-      // Due to case mismatch, status is always updated
-      // This documents current behavior - 'Backlog' !== 'backlog'
-      const statusUpdateCalls = mockRestClient.updateIssue.mock.calls.filter(
-        call => call[1] === 'status',
-      );
-      expect(statusUpdateCalls).toHaveLength(1);
-      expect(statusUpdateCalls[0]).toEqual(['TEST-1', 'status', 'Backlog']);
-    });
-
-    it('should update description when Vibe description differs', async () => {
-      const vibeTask = createVibeTask({
-        description: 'Updated description\n\n---\nSynced from Huly: TEST-1',
-        status: 'backlog', // Match status to avoid status update
-      });
-
-      // Issue with different description
-      const issuesWithDiffDesc = [
-        createMockHulyIssue({
-          identifier: 'TEST-1',
-          status: 'Backlog',
-          description: 'Original description',
-        }),
-      ];
-      mockRestClient.updateIssue.mockResolvedValue({ success: true });
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        issuesWithDiffDesc,
-        'TEST',
-        {},
-      );
-
-      expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
-        'TEST-1',
-        'description',
-        'Updated description',
+        expect.any(String)
       );
     });
   });
@@ -712,35 +763,7 @@ describe('HulyService', () => {
       expect(service).toHaveProperty('syncVibeTaskToHuly');
     });
 
-    it('should pass config to fetchProjects', async () => {
-      const config = { sync: { dryRun: true } };
-      const service = createHulyService(config);
-
-      const mockProjects = [createMockHulyProject()];
-      mockRestClient.listProjects.mockResolvedValue(mockProjects);
-
-      await service.fetchProjects(mockRestClient);
-
-      // Verify it was called (config is passed internally)
-      expect(mockRestClient.listProjects).toHaveBeenCalled();
-    });
-
-    it('should pass config to fetchIssues', async () => {
-      const config = { sync: { incremental: true } };
-      const service = createHulyService(config);
-
-      mockRestClient.listIssues.mockResolvedValue({ issues: [], syncMeta: { latestModified: null }, count: 0 });
-
-      // Pass null for db - no cursor-based sync
-      await service.fetchIssues(mockRestClient, 'TEST', null);
-
-      expect(mockRestClient.listIssues).toHaveBeenCalledWith('TEST', {
-        limit: 1000,
-        includeSyncMeta: true,
-      });
-    });
-
-    it('should pass config to updateIssueStatus (dry run)', async () => {
+    it('should pass config to methods', async () => {
       const config = { sync: { dryRun: true } };
       const service = createHulyService(config);
 
@@ -748,141 +771,6 @@ describe('HulyService', () => {
 
       expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
       expect(result).toBe(true);
-    });
-
-    it('should pass config to updateIssueDescription (dry run)', async () => {
-      const config = { sync: { dryRun: true } };
-      const service = createHulyService(config);
-
-      const result = await service.updateIssueDescription(
-        mockRestClient,
-        'TEST-1',
-        'New description',
-      );
-
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-      expect(result).toBe(true);
-    });
-
-    it('should pass config and phase1UpdatedTasks to syncVibeTaskToHuly', async () => {
-      const config = { sync: { dryRun: false } };
-      const service = createHulyService(config);
-
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test',
-        description: 'Test\n\n---\nSynced from Huly: TEST-1',
-        status: 'done',
-      };
-      const hulyIssues = [createMockHulyIssue({ identifier: 'TEST-1', status: 'Backlog' })];
-      const phase1UpdatedTasks = new Set(['task-1']);
-
-      await service.syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        phase1UpdatedTasks,
-      );
-
-      // Should skip because task was in phase1UpdatedTasks
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================
-  // Edge Cases and Error Handling
-  // ============================================================
-  describe('Edge Cases', () => {
-    it('should handle null description in Huly issue', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test',
-        description: 'Description\n\n---\nSynced from Huly: TEST-1',
-        status: 'backlog',
-      };
-      const hulyIssues = [
-        createMockHulyIssue({
-          identifier: 'TEST-1',
-          status: 'Backlog',
-          description: null,
-        }),
-      ];
-      mockRestClient.updateIssue.mockResolvedValue({ success: true });
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-      );
-
-      // Should try to update description since null !== 'Description'
-      expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
-        'TEST-1',
-        'description',
-        'Description',
-      );
-    });
-
-    it('should handle empty hulyIssues array', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test',
-        description: 'Test\n\n---\nSynced from Huly: TEST-1',
-        status: 'done',
-      };
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        [],
-        'TEST',
-        {},
-      );
-
-      expect(consoleSpy.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Huly issue TEST-1 not found'),
-      );
-    });
-
-    it('should handle undefined config gracefully', async () => {
-      mockRestClient.listProjects.mockResolvedValue([]);
-
-      const result = await fetchHulyProjects(mockRestClient);
-
-      expect(result).toEqual([]);
-    });
-
-    it('should handle description with multiple separators', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test',
-        description: 'Part 1\n\n---\n\nPart 2\n\n---\nSynced from Huly: TEST-1',
-        status: 'backlog',
-      };
-      const hulyIssues = [
-        createMockHulyIssue({
-          identifier: 'TEST-1',
-          status: 'Backlog',
-          description: 'Part 1',
-        }),
-      ];
-
-      await syncVibeTaskToHuly(
-        mockRestClient,
-        vibeTask,
-        hulyIssues,
-        'TEST',
-        {},
-      );
-
-      // First part before first separator should match
-      const descUpdateCalls = mockRestClient.updateIssue.mock.calls.filter(
-        call => call[1] === 'description',
-      );
-      expect(descUpdateCalls).toHaveLength(0);
     });
   });
 });

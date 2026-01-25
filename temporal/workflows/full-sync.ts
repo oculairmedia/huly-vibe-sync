@@ -9,26 +9,21 @@ import { proxyActivities, log } from '@temporalio/workflow';
 import type * as syncActivities from '../activities/sync-services';
 
 // Proxy activities with appropriate retry policies
-const {
-  syncIssueToVibe,
-  syncTaskToHuly,
-  syncIssueToBeads,
-  syncBeadsToHuly,
-  commitBeadsToGit,
-} = proxyActivities<typeof syncActivities>({
-  startToCloseTimeout: '60 seconds',
-  retry: {
-    initialInterval: '2 seconds',
-    backoffCoefficient: 2,
-    maximumInterval: '60 seconds',
-    maximumAttempts: 5,
-    nonRetryableErrorTypes: [
-      'HulyValidationError',
-      'VibeValidationError',
-      'BeadsValidationError',
-    ],
-  },
-});
+const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } =
+  proxyActivities<typeof syncActivities>({
+    startToCloseTimeout: '120 seconds',
+    retry: {
+      initialInterval: '2 seconds',
+      backoffCoefficient: 2,
+      maximumInterval: '60 seconds',
+      maximumAttempts: 5,
+      nonRetryableErrorTypes: [
+        'HulyValidationError',
+        'VibeValidationError',
+        'BeadsValidationError',
+      ],
+    },
+  });
 
 // Types
 export interface SyncIssueInput {
@@ -111,7 +106,6 @@ export async function SyncSingleIssueWorkflow(input: SyncIssueInput): Promise<Sy
     });
 
     return result;
-
   } catch (error) {
     result.success = false;
     result.error = error instanceof Error ? error.message : String(error);
@@ -248,7 +242,6 @@ export async function SyncVibeToHulyWorkflow(input: {
 
     log.info(`[SyncVibeToHuly] Complete: ${hulyIdentifier}`);
     return { success: true };
-
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     log.error(`[SyncVibeToHuly] Failed: ${hulyIdentifier}`, { error: errorMsg });

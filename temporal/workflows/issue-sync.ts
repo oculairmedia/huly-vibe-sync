@@ -9,8 +9,10 @@ import { proxyActivities, log, sleep } from '@temporalio/workflow';
 import type * as activities from '../activities/issue-sync';
 
 // Proxy activities with retry policies
-const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = proxyActivities<typeof activities>({
-  startToCloseTimeout: '60 seconds',
+const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = proxyActivities<
+  typeof activities
+>({
+  startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '1 second',
     backoffCoefficient: 2,
@@ -43,7 +45,7 @@ export interface IssueSyncInput {
   };
   operation: 'create' | 'update' | 'delete';
   source: 'huly' | 'vibe' | 'beads';
-  agentId?: string;  // Optional Letta agent to update
+  agentId?: string; // Optional Letta agent to update
 }
 
 export interface IssueSyncResult {
@@ -164,7 +166,6 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
     });
 
     return result;
-
   } catch (error) {
     result.success = false;
     result.error = error instanceof Error ? error.message : String(error);

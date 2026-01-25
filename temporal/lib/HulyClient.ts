@@ -126,7 +126,7 @@ export class HulyClient {
         .replace(/\/mcp$/, '')
         .replace(/\/api$/, '')
         .replace(/:\d+/, ':3458') + '/api';
-    this.timeout = options.timeout || 60000;
+    this.timeout = options.timeout || 120000;
     this.name = options.name || 'Huly';
   }
 

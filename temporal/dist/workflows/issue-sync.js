@@ -11,7 +11,7 @@ exports.BatchIssueSyncWorkflow = BatchIssueSyncWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 // Proxy activities with retry policies
 const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = (0, workflow_1.proxyActivities)({
-    startToCloseTimeout: '60 seconds',
+    startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '1 second',
         backoffCoefficient: 2,

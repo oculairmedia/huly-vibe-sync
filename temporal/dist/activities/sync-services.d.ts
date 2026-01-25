@@ -77,6 +77,22 @@ export declare function syncBeadsToHuly(input: {
     hulyIdentifier: string;
     context: SyncContext;
 }): Promise<SyncActivityResult>;
+export declare function syncBeadsToHulyBatch(input: {
+    beadsIssues: Array<{
+        beadsId: string;
+        hulyIdentifier: string;
+        status: string;
+    }>;
+    context: SyncContext;
+}): Promise<{
+    success: boolean;
+    updated: number;
+    failed: number;
+    errors: Array<{
+        identifier: string;
+        error: string;
+    }>;
+}>;
 export declare function createBeadsIssueInHuly(input: {
     beadsIssue: BeadsIssue;
     context: SyncContext;
