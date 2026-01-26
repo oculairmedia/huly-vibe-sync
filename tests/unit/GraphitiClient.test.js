@@ -520,7 +520,7 @@ describe('upsertFunction', () => {
 
     const entityCall = fetchWithPool.mock.calls[1];
     const body = JSON.parse(entityCall[1].body);
-    expect(body.name).toBe('Function:TEST:src/utils.js:calculateSum');
+    expect(body.name).toBe('function:TEST:src/utils.js:calculateSum');
     expect(body.summary).toContain('function calculateSum(a, b)');
     expect(body.summary).toContain('Adds two numbers');
     expect(body.summary).toContain('Lines: 10-15');
@@ -605,7 +605,7 @@ describe('createFileFunctionEdge', () => {
 
     const uuidCalls = fetchWithPool.mock.calls.slice(0, 2);
     expect(uuidCalls[0][0]).toContain('name=File%3Asrc%2Futils.js');
-    expect(uuidCalls[1][0]).toContain('name=Function%3ATEST%3Asrc%2Futils.js%3AcalculateSum');
+    expect(uuidCalls[1][0]).toContain('name=function%3ATEST%3Asrc%2Futils.js%3AcalculateSum');
 
     const edgeCall = fetchWithPool.mock.calls[3];
     const body = JSON.parse(edgeCall[1].body);

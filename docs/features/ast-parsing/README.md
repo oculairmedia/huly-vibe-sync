@@ -155,9 +155,9 @@ new CodePerceptionWatcher({
 
 ### Function Entity
 
-**Name format:** `Function:{projectId}:{filePath}:{functionName}`
+**Name format:** `function:{projectId}:{filePath}:{functionName}`
 
-**Example:** `Function:huly-vibe-sync:lib/ASTParser.js:parseFile`
+**Example:** `function:huly-vibe-sync:lib/ASTParser.js:parseFile`
 
 **Summary contains:**
 
@@ -174,7 +174,7 @@ Lines: 77-135
 **File CONTAINS Function**
 
 - Source: `File:{filePath}`
-- Target: `Function:{projectId}:{filePath}:{functionName}`
+- Target: `function:{projectId}:{filePath}:{functionName}`
 - Edge name: `CONTAINS`
 
 ## Metrics
