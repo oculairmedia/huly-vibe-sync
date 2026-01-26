@@ -1,15 +1,17 @@
-# PRD: CocoIndex AST Integration for Code Perception
+# PRD: Tree-sitter AST Integration for Code Perception
 
-**Version**: 1.1  
+**Version**: 1.2  
 **Date**: 2026-01-26  
 **Author**: Developer Agent  
-**Status**: Draft - Revised per PM Feedback
+**Status**: In Progress - Phase 1
 
 ---
 
 ## Executive Summary
 
-Extend the existing `CodePerceptionWatcher` to extract **function-level code structure** using CocoIndex's Tree-sitter AST parsing, while maintaining the current deterministic direct-API approach for Graphiti integration.
+Extend the existing `CodePerceptionWatcher` to extract **function-level code structure** using **Tree-sitter** AST parsing, while maintaining the current deterministic direct-API approach for Graphiti integration.
+
+**Technology Change**: After research, we're using **Tree-sitter directly** instead of CocoIndex. CocoIndex's `SplitRecursively` only outputs text chunks, not structured function data. Tree-sitter provides direct AST access with ~11ms parse time per file.
 
 **Scope for v1**: Functions only. Classes/Methods/Imports deferred to v1.1.
 
@@ -478,7 +480,11 @@ _These entity types are planned for v1.1, not included in v1 scope._
 ### Installation
 
 ```bash
-pip install cocoindex[embeddings]
+# Tree-sitter (RECOMMENDED - used in implementation)
+pip install tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-typescript
+
+# CocoIndex (NOT USED - only provides text chunking, not function extraction)
+# pip install cocoindex[embeddings]
 ```
 
 ### Parsing Example

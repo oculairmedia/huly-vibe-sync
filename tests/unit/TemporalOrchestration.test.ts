@@ -68,6 +68,9 @@ const createMockActivities = () => ({
     hulyIssues: mockHulyIssues,
     vibeTasks: mockVibeTasks,
   }),
+  fetchHulyIssuesBulk: vi.fn().mockResolvedValue({
+    TEST1: mockHulyIssues,
+  }),
   initializeBeads: vi.fn().mockResolvedValue(true),
   fetchBeadsIssues: vi.fn().mockResolvedValue([]),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
