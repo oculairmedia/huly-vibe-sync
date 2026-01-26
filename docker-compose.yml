@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   huly-vibe-sync:
-    image: ghcr.io/oculairmedia/huly-vibe-sync:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: huly-vibe-sync:local
     container_name: huly-vibe-sync
     restart: unless-stopped
     environment:
