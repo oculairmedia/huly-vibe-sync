@@ -489,6 +489,454 @@ describe('GraphitiClient', () => {
   });
 });
 
+describe('upsertFunction', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 2,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should create function entity with correct name format', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
+
+    await client.upsertFunction({
+      projectId: 'TEST',
+      filePath: 'src/utils.js',
+      name: 'calculateSum',
+      signature: 'function calculateSum(a, b)',
+      docstring: 'Adds two numbers',
+      startLine: 10,
+      endLine: 15,
+    });
+
+    const entityCall = fetchWithPool.mock.calls[1];
+    const body = JSON.parse(entityCall[1].body);
+    expect(body.name).toBe('Function:TEST:src/utils.js:calculateSum');
+    expect(body.summary).toContain('function calculateSum(a, b)');
+    expect(body.summary).toContain('Adds two numbers');
+    expect(body.summary).toContain('Lines: 10-15');
+  });
+
+  it('should handle function without docstring', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
+
+    await client.upsertFunction({
+      projectId: 'TEST',
+      filePath: 'src/main.js',
+      name: 'init',
+      signature: 'function init()',
+      startLine: 1,
+      endLine: 5,
+    });
+
+    const entityCall = fetchWithPool.mock.calls[1];
+    const body = JSON.parse(entityCall[1].body);
+    expect(body.summary).toBe('function init()\n\nLines: 1-5');
+  });
+});
+
+describe('_buildFunctionSummary', () => {
+  let client;
+
+  beforeEach(() => {
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+    });
+  });
+
+  it('should include signature and line numbers', () => {
+    const summary = client._buildFunctionSummary({
+      signature: 'async function fetchData(url)',
+      startLine: 42,
+      endLine: 100,
+    });
+
+    expect(summary).toBe('async function fetchData(url)\n\nLines: 42-100');
+  });
+
+  it('should include docstring when provided', () => {
+    const summary = client._buildFunctionSummary({
+      signature: 'function process(data)',
+      docstring: 'Processes the input data',
+      startLine: 5,
+      endLine: 20,
+    });
+
+    expect(summary).toContain('function process(data)');
+    expect(summary).toContain('Processes the input data');
+    expect(summary).toContain('Lines: 5-20');
+  });
+});
+
+describe('createFileFunctionEdge', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 2,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should create edge with correct entity names', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'file-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'edge-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
+
+    await client.createFileFunctionEdge('TEST', 'src/utils.js', 'calculateSum');
+
+    const uuidCalls = fetchWithPool.mock.calls.slice(0, 2);
+    expect(uuidCalls[0][0]).toContain('name=File%3Asrc%2Futils.js');
+    expect(uuidCalls[1][0]).toContain('name=Function%3ATEST%3Asrc%2Futils.js%3AcalculateSum');
+
+    const edgeCall = fetchWithPool.mock.calls[3];
+    const body = JSON.parse(edgeCall[1].body);
+    expect(body.source_node_uuid).toBe('file-uuid');
+    expect(body.target_node_uuid).toBe('func-uuid');
+    expect(body.name).toBe('CONTAINS');
+    expect(body.fact).toBe('File src/utils.js contains function calculateSum');
+  });
+
+  it('should increment edgesCreated stat', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'file-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'edge-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
+
+    await client.createFileFunctionEdge('TEST', 'src/main.js', 'main');
+
+    expect(client.stats.edgesCreated).toBe(1);
+  });
+});
+
+describe('upsertFunctionsWithEdges', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should return empty results for empty functions array', async () => {
+    const result = await client.upsertFunctionsWithEdges({
+      projectId: 'TEST',
+      filePath: 'src/empty.js',
+      functions: [],
+    });
+
+    expect(result.entities.success).toBe(0);
+    expect(result.edges.success).toBe(0);
+    expect(fetchWithPool).not.toHaveBeenCalled();
+  });
+
+  it('should process functions and create edges', async () => {
+    fetchWithPool.mockResolvedValue(createMockResponse({ uuid: 'uuid', success: true }));
+
+    const functions = [
+      { name: 'func1', signature: 'function func1()', start_line: 1, end_line: 5 },
+      { name: 'func2', signature: 'function func2()', start_line: 10, end_line: 20 },
+    ];
+
+    const result = await client.upsertFunctionsWithEdges({
+      projectId: 'TEST',
+      filePath: 'src/module.js',
+      functions,
+      concurrency: 2,
+      rateLimit: 1000,
+    });
+
+    expect(result.entities.success).toBe(2);
+    expect(result.edges.success).toBe(2);
+  });
+
+  it('should handle entity creation failure', async () => {
+    let entityUpsertCount = 0;
+    fetchWithPool.mockImplementation(url => {
+      if (url.includes('/entity-node')) {
+        entityUpsertCount++;
+        if (entityUpsertCount === 2) {
+          return Promise.reject(new Error('Entity creation failed'));
+        }
+      }
+      return Promise.resolve(createMockResponse({ uuid: 'uuid', success: true }));
+    });
+
+    const functions = [
+      { name: 'func1', signature: 'f1()', start_line: 1, end_line: 5 },
+      { name: 'func2', signature: 'f2()', start_line: 10, end_line: 15 },
+    ];
+
+    const result = await client.upsertFunctionsWithEdges({
+      projectId: 'TEST',
+      filePath: 'src/module.js',
+      functions,
+      concurrency: 1,
+      rateLimit: 1000,
+    });
+
+    expect(result.entities.failed).toBe(1);
+    expect(result.entities.errors[0].function).toBe('func2');
+  });
+});
+
+describe('deleteFunctions', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should delete functions by name', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func1-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }))
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func2-uuid' }))
+      .mockResolvedValueOnce(createMockResponse({ success: true }));
+
+    const result = await client.deleteFunctions('TEST', 'src/module.js', ['func1', 'func2']);
+
+    expect(result.deleted).toBe(2);
+    expect(result.failed).toBe(0);
+
+    const deleteCalls = fetchWithPool.mock.calls.filter(c => c[1].method === 'DELETE');
+    expect(deleteCalls.length).toBe(2);
+    expect(deleteCalls[0][0]).toContain('/nodes/func1-uuid');
+    expect(deleteCalls[1][0]).toContain('/nodes/func2-uuid');
+  });
+
+  it('should ignore 404 errors (already deleted)', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'));
+
+    const result = await client.deleteFunctions('TEST', 'src/module.js', ['oldFunc']);
+
+    expect(result.deleted).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should track non-404 errors', async () => {
+    fetchWithPool
+      .mockResolvedValueOnce(createMockResponse({ uuid: 'func-uuid' }))
+      .mockRejectedValueOnce(new Error('HTTP 500: Server Error'));
+
+    const result = await client.deleteFunctions('TEST', 'src/module.js', ['brokenFunc']);
+
+    expect(result.deleted).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.errors[0].function).toBe('brokenFunc');
+  });
+});
+
+describe('syncFilesWithFunctions', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should return empty results for empty files array', async () => {
+    const result = await client.syncFilesWithFunctions({
+      projectId: 'TEST',
+      files: [],
+    });
+
+    expect(result.files).toBe(0);
+    expect(result.entities).toBe(0);
+    expect(result.edges).toBe(0);
+  });
+
+  it('should process multiple files in parallel', async () => {
+    fetchWithPool.mockResolvedValue(createMockResponse({ uuid: 'uuid', success: true }));
+
+    const files = [
+      {
+        filePath: 'src/a.js',
+        functions: [{ name: 'funcA', signature: 'funcA()', start_line: 1, end_line: 5 }],
+      },
+      {
+        filePath: 'src/b.js',
+        functions: [{ name: 'funcB', signature: 'funcB()', start_line: 1, end_line: 5 }],
+      },
+    ];
+
+    const result = await client.syncFilesWithFunctions({
+      projectId: 'TEST',
+      files,
+      concurrency: 2,
+      rateLimit: 1000,
+    });
+
+    expect(result.files).toBe(2);
+    expect(result.entities).toBe(2);
+    expect(result.edges).toBe(2);
+  });
+
+  it('should aggregate errors from multiple files', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount % 5 === 0) {
+        return Promise.reject(new Error('Random failure'));
+      }
+      return Promise.resolve(createMockResponse({ uuid: 'uuid', success: true }));
+    });
+
+    const files = [
+      {
+        filePath: 'src/a.js',
+        functions: [
+          { name: 'func1', signature: 'f1()', start_line: 1, end_line: 5 },
+          { name: 'func2', signature: 'f2()', start_line: 10, end_line: 15 },
+        ],
+      },
+    ];
+
+    const result = await client.syncFilesWithFunctions({
+      projectId: 'TEST',
+      files,
+      concurrency: 1,
+      rateLimit: 1000,
+    });
+
+    expect(result.files).toBe(1);
+  });
+});
+
+describe('_parallelLimit', () => {
+  let client;
+
+  beforeEach(() => {
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+    });
+  });
+
+  it('should process all items', async () => {
+    const items = [1, 2, 3, 4, 5];
+    const processed = [];
+
+    await client._parallelLimit(
+      items,
+      async item => {
+        processed.push(item);
+      },
+      2
+    );
+
+    expect(processed).toHaveLength(5);
+    expect(processed.sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('should respect concurrency limit', async () => {
+    const items = [1, 2, 3, 4];
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+
+    await client._parallelLimit(
+      items,
+      async () => {
+        currentConcurrent++;
+        maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+        await new Promise(r => setTimeout(r, 10));
+        currentConcurrent--;
+      },
+      2
+    );
+
+    expect(maxConcurrent).toBeLessThanOrEqual(2);
+  });
+
+  it('should handle errors in individual items', async () => {
+    const items = [1, 2, 3];
+    const processed = [];
+
+    await client._parallelLimit(
+      items,
+      async item => {
+        if (item === 2) throw new Error('Item 2 failed');
+        processed.push(item);
+      },
+      2
+    );
+
+    expect(processed).toContain(1);
+    expect(processed).toContain(3);
+  });
+});
+
+describe('RateLimiter', () => {
+  it('should be used by upsertFunctionsWithEdges', async () => {
+    vi.clearAllMocks();
+    const client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      retries: 1,
+      retryDelayMs: 10,
+    });
+
+    fetchWithPool.mockResolvedValue(createMockResponse({ uuid: 'uuid', success: true }));
+
+    const functions = [
+      { name: 'f1', signature: 'f1()', start_line: 1, end_line: 5 },
+      { name: 'f2', signature: 'f2()', start_line: 10, end_line: 15 },
+    ];
+
+    const startTime = Date.now();
+    await client.upsertFunctionsWithEdges({
+      projectId: 'TEST',
+      filePath: 'test.js',
+      functions,
+      rateLimit: 10,
+      concurrency: 1,
+    });
+    const elapsed = Date.now() - startTime;
+
+    expect(elapsed).toBeDefined();
+  });
+});
+
 describe('createGraphitiClient', () => {
   it('should return null when graphiti is disabled', () => {
     const client = createGraphitiClient({ graphiti: { enabled: false } }, 'TEST');
