@@ -1,9 +1,9 @@
 # PRD: Tree-sitter AST Integration for Code Perception
 
-**Version**: 1.2  
+**Version**: 1.3  
 **Date**: 2026-01-26  
 **Author**: Developer Agent  
-**Status**: In Progress - Phase 1
+**Status**: Complete - Phases 1-3 Done, Phase 4 In Progress
 
 ---
 
@@ -571,3 +571,5 @@ for node in tree.root_node.children:
 | ------- | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0     | 2026-01-26 | Developer Agent | Initial draft                                                                                                                                                 |
 | 1.1     | 2026-01-26 | Developer Agent | Revised per PM feedback: Functions-only scope, added entity explosion mitigations, parallel bulk sync, local AST cache, deletion cascade, staged rollout plan |
+| 1.2     | 2026-01-26 | Developer Agent | Phase 1 complete: ASTParser, ASTCache, 36 tests passing                                                                                                       |
+| 1.3     | 2026-01-26 | Developer Agent | Phases 1-3 complete: Full integration with CodePerceptionWatcher, 117 tests passing, benchmarks show 52ms/file avg, 100% success rate                         |
