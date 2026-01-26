@@ -89,6 +89,28 @@ class MockGraphitiClient {
     return { pruned: 0 };
   }
 
+  async syncFilesWithFunctions(options) {
+    this.callOrder.push({ method: 'syncFilesWithFunctions', files: options.files.length });
+    const functionCount = options.files.reduce((sum, f) => sum + f.functions.length, 0);
+    this.syncedFunctions = (this.syncedFunctions || 0) + functionCount;
+    return {
+      files: options.files.length,
+      entities: functionCount,
+      edges: functionCount,
+      errors: [],
+    };
+  }
+
+  async deleteFunctions(projectId, filePath, functionNames) {
+    this.callOrder.push({
+      method: 'deleteFunctions',
+      file: filePath,
+      functions: functionNames.length,
+    });
+    this.deletedFunctions = (this.deletedFunctions || []).concat(functionNames);
+    return { deleted: functionNames.length, failed: 0, errors: [] };
+  }
+
   getStats() {
     return { entitiesCreated: this.upserts.length };
   }
@@ -561,6 +583,52 @@ describe('CodePerceptionWatcher', () => {
 
       const pending = watcher.pendingChanges.get('TEST');
       expect(pending.size).toBe(0);
+    });
+  });
+
+  describe('AST configuration', () => {
+    it('should enable AST parsing by default', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.astEnabled).toBe(true);
+    });
+
+    it('should respect astEnabled option', () => {
+      const { watcher } = createWatcher({ astEnabled: false });
+      expect(watcher.astEnabled).toBe(false);
+    });
+
+    it('should respect config.codePerception.astEnabled', () => {
+      const { watcher } = createWatcher({
+        config: {
+          graphiti: { enabled: true },
+          codePerception: { astEnabled: false },
+        },
+      });
+      expect(watcher.astEnabled).toBe(false);
+    });
+
+    it('should initialize stats with AST metrics', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.stats.functionsSynced).toBe(0);
+      expect(watcher.stats.astParseSuccess).toBe(0);
+      expect(watcher.stats.astParseFailure).toBe(0);
+    });
+  });
+
+  describe('AST stats', () => {
+    it('should calculate astSuccessRate in getStats', () => {
+      const { watcher } = createWatcher();
+      watcher.stats.astParseSuccess = 8;
+      watcher.stats.astParseFailure = 2;
+
+      const stats = watcher.getStats();
+      expect(stats.astSuccessRate).toBe(80);
+    });
+
+    it('should return 100% success rate when no AST parsing attempted', () => {
+      const { watcher } = createWatcher();
+      const stats = watcher.getStats();
+      expect(stats.astSuccessRate).toBe(100);
     });
   });
 });
