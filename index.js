@@ -978,9 +978,10 @@ async function main() {
     db,
     onSyncTrigger: handleSyncTrigger,
     onConfigUpdate: handleConfigUpdate,
-    lettaCodeService, // Enable filesystem mode for agents
-    webhookHandler, // Enable webhook endpoint
-    getTemporalClient: getTemporalOrchestration, // Enable Temporal schedule management
+    lettaCodeService,
+    webhookHandler,
+    getTemporalClient: getTemporalOrchestration,
+    codePerceptionWatcher,
   });
 
   // Run initial sync

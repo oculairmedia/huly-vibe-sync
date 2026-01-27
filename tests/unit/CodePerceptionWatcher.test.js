@@ -631,4 +631,66 @@ describe('CodePerceptionWatcher', () => {
       expect(stats.astSuccessRate).toBe(100);
     });
   });
+
+  describe('astInitialSync', () => {
+    it('should return empty result when no Graphiti client', async () => {
+      const { watcher } = createWatcher({ graphitiEnabled: false });
+
+      const result = await watcher.astInitialSync('TEST', '/some/path');
+
+      expect(result.filesProcessed).toBe(0);
+      expect(result.functionsSynced).toBe(0);
+    });
+
+    it('should return empty result when AST is disabled', async () => {
+      const { watcher } = createWatcher({ astEnabled: false });
+
+      const result = await watcher.astInitialSync('TEST', '/some/path');
+
+      expect(result.filesProcessed).toBe(0);
+      expect(result.functionsSynced).toBe(0);
+    });
+
+    it('should return empty result when no files found in project', async () => {
+      const { watcher } = createWatcher();
+
+      const result = await watcher.astInitialSync('TEST', '/empty/project');
+
+      expect(result.filesProcessed).toBe(0);
+      expect(result.functionsSynced).toBe(0);
+    });
+
+    it('should use default concurrency and rateLimit when not specified', async () => {
+      const { watcher } = createWatcher();
+
+      const result = await watcher.astInitialSync('TEST', '/test/project');
+
+      expect(result).toHaveProperty('filesProcessed');
+      expect(result).toHaveProperty('functionsSynced');
+      expect(result).toHaveProperty('errors');
+    });
+
+    it('should accept custom concurrency and rateLimit options', async () => {
+      const { watcher } = createWatcher();
+
+      const result = await watcher.astInitialSync('TEST', '/test/project', {
+        concurrency: 20,
+        rateLimit: 200,
+      });
+
+      expect(result).toHaveProperty('filesProcessed');
+      expect(result).toHaveProperty('functionsSynced');
+    });
+
+    it('should update stats after sync', async () => {
+      const { watcher } = createWatcher();
+      const initialStats = watcher.getStats();
+      const initialFunctionsSynced = initialStats.functionsSynced || 0;
+
+      await watcher.astInitialSync('TEST', '/test/project');
+
+      const newStats = watcher.getStats();
+      expect(newStats.functionsSynced).toBeGreaterThanOrEqual(initialFunctionsSynced);
+    });
+  });
 });
