@@ -69,7 +69,12 @@ class MockGraphitiClient {
     if (this.shouldThrow) throw new Error('Graphiti unavailable');
     this.callOrder.push({ method: 'upsertEntitiesBatch', count: entities.length });
     this.upserts.push(...entities);
-    return { success: entities.length, failed: 0, errors: [] };
+    return {
+      success: entities.length,
+      failed: 0,
+      errors: [],
+      successfulEntities: entities.map(e => e.name),
+    };
   }
 
   async createContainmentEdgesBatch(projectIdentifier, filePaths, batchSize) {
