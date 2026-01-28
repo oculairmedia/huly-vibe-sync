@@ -49,6 +49,7 @@ import {
   updateHulyIssueDescription,
 } from './lib/HulyService.js';
 import { syncHulyToVibe } from './lib/SyncOrchestrator.js';
+import { createAstMemorySync } from './lib/AstMemorySync.js';
 
 // Temporal orchestration (lazy-loaded)
 let temporalOrchestration = null;
@@ -231,8 +232,9 @@ if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
   }
 }
 
-// Initialize CodePerceptionWatcher for realtime Graphiti sync
 let codePerceptionWatcher = null;
+let astMemorySync = null;
+
 if (config.graphiti?.enabled && config.codePerception?.enabled) {
   try {
     codePerceptionWatcher = new CodePerceptionWatcher({
@@ -244,13 +246,21 @@ if (config.graphiti?.enabled && config.codePerception?.enabled) {
     });
     logger.info('CodePerceptionWatcher initialized - realtime Graphiti sync enabled');
 
-    // Start watching projects immediately (don't wait for first sync cycle)
     codePerceptionWatcher.syncWatchedProjects().catch(err => {
       logger.warn({ err }, 'Initial code perception watcher sync failed');
     });
   } catch (codePerceptionError) {
     logger.warn({ err: codePerceptionError }, 'Failed to initialize CodePerceptionWatcher');
   }
+}
+
+if (codePerceptionWatcher && lettaService) {
+  astMemorySync = createAstMemorySync({
+    codePerceptionWatcher,
+    lettaService,
+    db,
+  });
+  logger.info('AstMemorySync initialized - PM agents will receive codebase summaries');
 }
 
 // Temporal workflow orchestration status
@@ -577,10 +587,15 @@ async function main() {
         });
       }
 
-      // Sync code perception watchers for Graphiti
       if (codePerceptionWatcher) {
         codePerceptionWatcher.syncWatchedProjects().catch(err => {
           logger.warn({ err }, 'Failed to sync code perception watchers');
+        });
+      }
+
+      if (astMemorySync) {
+        astMemorySync.syncAllProjects().catch(err => {
+          logger.warn({ err }, 'Failed to sync AST summaries to PM agents');
         });
       }
     } catch (error) {
