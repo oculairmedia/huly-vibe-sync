@@ -260,6 +260,9 @@ if (codePerceptionWatcher && lettaService) {
     lettaService,
     db,
   });
+  codePerceptionWatcher.onFileChange = (projectId, filePath, changeType) => {
+    astMemorySync.recordFileChange(projectId, filePath, changeType);
+  };
   logger.info('AstMemorySync initialized - PM agents will receive codebase summaries');
 }
 
