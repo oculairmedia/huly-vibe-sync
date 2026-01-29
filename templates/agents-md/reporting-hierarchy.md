@@ -5,8 +5,10 @@
 ### Reporting Hierarchy
 
 ```
-User (Primary Stakeholder)
-    ↓ communicates with
+Emmanuel (Stakeholder)
+    ↓
+Meridian (Director of Engineering)
+    ↓
 PM Agent (Technical Product Owner - mega-experienced)
     ↓ communicates with
 You (Developer Agent - experienced)

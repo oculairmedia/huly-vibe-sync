@@ -17,7 +17,6 @@
 <!-- VIBESYNC:project-info:END -->
 
 <!-- VIBESYNC:reporting-hierarchy:START -->
-
 ## PM Agent Communication
 
 **Project PM Agent:** `Huly - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
@@ -25,8 +24,10 @@
 ### Reporting Hierarchy
 
 ```
-User (Primary Stakeholder)
-    ↓ communicates with
+Emmanuel (Stakeholder)
+    ↓
+Meridian (Director of Engineering)
+    ↓
 PM Agent (Technical Product Owner - mega-experienced)
     ↓ communicates with
 You (Developer Agent - experienced)
@@ -63,7 +64,6 @@ You (Developer Agent - experienced)
 **Files Changed**: [List if applicable]
 **Next Steps**: [If any]
 ```
-
 <!-- VIBESYNC:reporting-hierarchy:END -->
 
 <!-- VIBESYNC:beads-instructions:START -->
