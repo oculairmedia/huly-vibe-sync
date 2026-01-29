@@ -317,7 +317,7 @@ describe('GraphitiClient', () => {
 
   describe('healthCheck', () => {
     it('should return true when API is healthy', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({ ok: true });
+      fetchWithPool.mockResolvedValueOnce({ ok: true });
 
       const result = await client.healthCheck();
 
@@ -325,7 +325,7 @@ describe('GraphitiClient', () => {
     });
 
     it('should return false when API is unhealthy', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({ ok: false });
+      fetchWithPool.mockResolvedValueOnce({ ok: false });
 
       const result = await client.healthCheck();
 
@@ -333,7 +333,7 @@ describe('GraphitiClient', () => {
     });
 
     it('should return false on network error', async () => {
-      global.fetch = vi.fn().mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      fetchWithPool.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const result = await client.healthCheck();
 
