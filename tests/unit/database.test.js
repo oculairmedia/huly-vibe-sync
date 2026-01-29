@@ -1444,4 +1444,804 @@ describe('SyncDatabase', () => {
       });
     });
   });
+
+  describe('parent-child operations', () => {
+    beforeEach(() => {
+      db.upsertProject({ identifier: 'PC', name: 'Parent-Child Test' });
+
+      // Parent issue with sub_issue_count
+      db.upsertIssue({
+        identifier: 'PC-1',
+        project_identifier: 'PC',
+        title: 'Parent Issue',
+        sub_issue_count: 2,
+        parent_huly_id: null,
+      });
+
+      // Child issues
+      db.upsertIssue({
+        identifier: 'PC-2',
+        project_identifier: 'PC',
+        title: 'Child Issue 1',
+        parent_huly_id: 'PC-1',
+        parent_beads_id: 'beads-parent-1',
+      });
+
+      db.upsertIssue({
+        identifier: 'PC-3',
+        project_identifier: 'PC',
+        title: 'Child Issue 2',
+        parent_huly_id: 'PC-1',
+        parent_beads_id: 'beads-parent-1',
+      });
+
+      // Standalone issue (no parent, no children)
+      db.upsertIssue({
+        identifier: 'PC-4',
+        project_identifier: 'PC',
+        title: 'Standalone Issue',
+      });
+    });
+
+    describe('getChildIssuesByHulyParent', () => {
+      it('should return child issues by huly parent id', () => {
+        const children = db.getChildIssuesByHulyParent('PC-1');
+        expect(children).toHaveLength(2);
+        expect(children[0].identifier).toBe('PC-2');
+        expect(children[1].identifier).toBe('PC-3');
+      });
+
+      it('should return empty array for non-parent issue', () => {
+        const children = db.getChildIssuesByHulyParent('PC-4');
+        expect(children).toEqual([]);
+      });
+
+      it('should return empty array for non-existent parent', () => {
+        const children = db.getChildIssuesByHulyParent('NONEXISTENT');
+        expect(children).toEqual([]);
+      });
+    });
+
+    describe('getChildIssuesByBeadsParent', () => {
+      it('should return child issues by beads parent id', () => {
+        const children = db.getChildIssuesByBeadsParent('beads-parent-1');
+        expect(children).toHaveLength(2);
+      });
+
+      it('should return empty array for non-existent beads parent', () => {
+        const children = db.getChildIssuesByBeadsParent('nonexistent-beads');
+        expect(children).toEqual([]);
+      });
+    });
+
+    describe('getParentIssues', () => {
+      it('should return issues with sub_issue_count > 0', () => {
+        const parents = db.getParentIssues('PC');
+        expect(parents).toHaveLength(1);
+        expect(parents[0].identifier).toBe('PC-1');
+        expect(parents[0].sub_issue_count).toBe(2);
+      });
+
+      it('should return empty array when no parent issues exist', () => {
+        db.upsertProject({ identifier: 'NOCHILD', name: 'No Children' });
+        db.upsertIssue({
+          identifier: 'NOCHILD-1',
+          project_identifier: 'NOCHILD',
+          title: 'Leaf Issue',
+        });
+
+        const parents = db.getParentIssues('NOCHILD');
+        expect(parents).toEqual([]);
+      });
+    });
+
+    describe('getChildIssues', () => {
+      it('should return issues that have a parent_huly_id', () => {
+        const children = db.getChildIssues('PC');
+        expect(children).toHaveLength(2);
+        expect(children.every(c => c.parent_huly_id === 'PC-1')).toBe(true);
+      });
+
+      it('should return empty array when no child issues exist', () => {
+        db.upsertProject({ identifier: 'NOPAR', name: 'No Parent' });
+        db.upsertIssue({
+          identifier: 'NOPAR-1',
+          project_identifier: 'NOPAR',
+          title: 'Root Issue',
+        });
+
+        const children = db.getChildIssues('NOPAR');
+        expect(children).toEqual([]);
+      });
+    });
+
+    describe('updateParentChild', () => {
+      it('should update parent-child relationship', () => {
+        db.updateParentChild('PC-4', 'PC-1', 'beads-parent-1');
+
+        const issue = db.getIssue('PC-4');
+        expect(issue.parent_huly_id).toBe('PC-1');
+        expect(issue.parent_beads_id).toBe('beads-parent-1');
+      });
+
+      it('should clear parent relationship when set to null', () => {
+        db.updateParentChild('PC-2', null, null);
+
+        const issue = db.getIssue('PC-2');
+        expect(issue.parent_huly_id).toBeNull();
+        expect(issue.parent_beads_id).toBeNull();
+      });
+
+      it('should update only huly parent when beads not provided', () => {
+        db.updateParentChild('PC-4', 'PC-1');
+
+        const issue = db.getIssue('PC-4');
+        expect(issue.parent_huly_id).toBe('PC-1');
+        expect(issue.parent_beads_id).toBeNull();
+      });
+    });
+
+    describe('updateSubIssueCount', () => {
+      it('should update sub-issue count', () => {
+        db.updateSubIssueCount('PC-1', 5);
+
+        const issue = db.getIssue('PC-1');
+        expect(issue.sub_issue_count).toBe(5);
+      });
+
+      it('should set count to zero', () => {
+        db.updateSubIssueCount('PC-1', 0);
+
+        const issue = db.getIssue('PC-1');
+        expect(issue.sub_issue_count).toBe(0);
+      });
+    });
+  });
+
+  describe('file tracking operations', () => {
+    beforeEach(() => {
+      db.upsertProject({
+        identifier: 'FILES',
+        name: 'File Test Project',
+        filesystem_path: '/opt/projects/files',
+      });
+    });
+
+    describe('upsertProjectFile', () => {
+      it('should insert a new file record', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'src/index.js',
+          content_hash: 'abc123',
+          letta_file_id: 'letta-file-1',
+          file_size: 1024,
+        });
+
+        const file = db.getProjectFile('FILES', 'src/index.js');
+        expect(file).toBeTruthy();
+        expect(file.content_hash).toBe('abc123');
+        expect(file.letta_file_id).toBe('letta-file-1');
+        expect(file.file_size).toBe(1024);
+      });
+
+      it('should update existing file on conflict', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'src/index.js',
+          content_hash: 'old-hash',
+          file_size: 500,
+        });
+
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'src/index.js',
+          content_hash: 'new-hash',
+          file_size: 1000,
+        });
+
+        const file = db.getProjectFile('FILES', 'src/index.js');
+        expect(file.content_hash).toBe('new-hash');
+        expect(file.file_size).toBe(1000);
+      });
+    });
+
+    describe('getProjectFiles', () => {
+      it('should return all files for a project', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'src/a.js',
+          content_hash: 'hash-a',
+        });
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'src/b.js',
+          content_hash: 'hash-b',
+        });
+
+        const files = db.getProjectFiles('FILES');
+        expect(files).toHaveLength(2);
+      });
+
+      it('should return empty array when no files tracked', () => {
+        const files = db.getProjectFiles('FILES');
+        expect(files).toEqual([]);
+      });
+    });
+
+    describe('getProjectFile', () => {
+      it('should return specific file by path', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'README.md',
+          content_hash: 'readme-hash',
+        });
+
+        const file = db.getProjectFile('FILES', 'README.md');
+        expect(file.relative_path).toBe('README.md');
+      });
+
+      it('should return undefined for non-existent file', () => {
+        const file = db.getProjectFile('FILES', 'nonexistent.txt');
+        expect(file).toBeUndefined();
+      });
+    });
+
+    describe('deleteProjectFile', () => {
+      it('should delete a specific file record', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'to-delete.js',
+          content_hash: 'hash',
+        });
+
+        db.deleteProjectFile('FILES', 'to-delete.js');
+
+        const file = db.getProjectFile('FILES', 'to-delete.js');
+        expect(file).toBeUndefined();
+      });
+
+      it('should not throw for non-existent file', () => {
+        expect(() => db.deleteProjectFile('FILES', 'nonexistent.js')).not.toThrow();
+      });
+    });
+
+    describe('deleteAllProjectFiles', () => {
+      it('should delete all files for a project', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'a.js',
+          content_hash: 'h1',
+        });
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'b.js',
+          content_hash: 'h2',
+        });
+
+        db.deleteAllProjectFiles('FILES');
+
+        const files = db.getProjectFiles('FILES');
+        expect(files).toEqual([]);
+      });
+
+      it('should not affect other projects', () => {
+        db.upsertProject({ identifier: 'OTHER', name: 'Other' });
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'a.js',
+          content_hash: 'h1',
+        });
+        db.upsertProjectFile({
+          project_identifier: 'OTHER',
+          relative_path: 'b.js',
+          content_hash: 'h2',
+        });
+
+        db.deleteAllProjectFiles('FILES');
+
+        expect(db.getProjectFiles('FILES')).toEqual([]);
+        expect(db.getProjectFiles('OTHER')).toHaveLength(1);
+      });
+    });
+
+    describe('getOrphanedFiles', () => {
+      it('should return files not in current file list', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'kept.js',
+          content_hash: 'h1',
+        });
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'orphaned.js',
+          content_hash: 'h2',
+        });
+
+        const orphaned = db.getOrphanedFiles('FILES', ['kept.js']);
+        expect(orphaned).toHaveLength(1);
+        expect(orphaned[0].relative_path).toBe('orphaned.js');
+      });
+
+      it('should return empty array when all files are current', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'a.js',
+          content_hash: 'h1',
+        });
+
+        const orphaned = db.getOrphanedFiles('FILES', ['a.js']);
+        expect(orphaned).toEqual([]);
+      });
+
+      it('should return all files when current list is empty', () => {
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'a.js',
+          content_hash: 'h1',
+        });
+        db.upsertProjectFile({
+          project_identifier: 'FILES',
+          relative_path: 'b.js',
+          content_hash: 'h2',
+        });
+
+        const orphaned = db.getOrphanedFiles('FILES', []);
+        expect(orphaned).toHaveLength(2);
+      });
+    });
+
+    describe('getProjectsWithLettaFolders', () => {
+      it('should return projects with both filesystem_path and letta_folder_id', () => {
+        db.setProjectLettaFolderId('FILES', 'folder-abc');
+
+        const projects = db.getProjectsWithLettaFolders();
+        expect(projects).toHaveLength(1);
+        expect(projects[0].identifier).toBe('FILES');
+        expect(projects[0].filesystem_path).toBe('/opt/projects/files');
+        expect(projects[0].letta_folder_id).toBe('folder-abc');
+      });
+
+      it('should not return projects without filesystem_path', () => {
+        db.upsertProject({ identifier: 'NOFS', name: 'No Filesystem' });
+        db.setProjectLettaFolderId('NOFS', 'folder-xyz');
+
+        const projects = db.getProjectsWithLettaFolders();
+        // FILES has filesystem_path but no folder yet, NOFS has folder but no path
+        expect(projects.every(p => p.filesystem_path != null)).toBe(true);
+      });
+
+      it('should not return projects without letta_folder_id', () => {
+        // FILES has filesystem_path but no letta_folder_id
+        const projects = db.getProjectsWithLettaFolders();
+        expect(projects).toEqual([]);
+      });
+
+      it('should not return inactive projects', () => {
+        db.setProjectLettaFolderId('FILES', 'folder-abc');
+        db.db.prepare("UPDATE projects SET status = 'archived' WHERE identifier = ?").run('FILES');
+
+        const projects = db.getProjectsWithLettaFolders();
+        expect(projects).toEqual([]);
+      });
+    });
+  });
+
+  describe('BookStack operations', () => {
+    beforeEach(() => {
+      db.upsertProject({ identifier: 'BS', name: 'BookStack Test' });
+    });
+
+    describe('getBookStackLastExport', () => {
+      it('should return null when no export has occurred', () => {
+        const result = db.getBookStackLastExport('BS');
+        expect(result).toBeNull();
+      });
+
+      it('should return timestamp after setting', () => {
+        const ts = Date.now();
+        db.setBookStackLastExport('BS', ts);
+
+        const result = db.getBookStackLastExport('BS');
+        expect(result).toBe(ts);
+      });
+    });
+
+    describe('setBookStackLastExport', () => {
+      it('should update the export timestamp', () => {
+        db.setBookStackLastExport('BS', 1000);
+        db.setBookStackLastExport('BS', 2000);
+
+        const result = db.getBookStackLastExport('BS');
+        expect(result).toBe(2000);
+      });
+    });
+
+    describe('upsertBookStackPage', () => {
+      it('should insert a new page', () => {
+        db.upsertBookStackPage({
+          bookstack_page_id: 100,
+          bookstack_book_id: 10,
+          bookstack_chapter_id: 5,
+          project_identifier: 'BS',
+          slug: 'test-page',
+          title: 'Test Page',
+          local_path: '/docs/test-page.md',
+          content_hash: 'page-hash',
+          bookstack_modified_at: '2025-01-01T00:00:00Z',
+          sync_direction: 'export',
+        });
+
+        const pages = db.getBookStackPages('BS');
+        expect(pages).toHaveLength(1);
+        expect(pages[0].title).toBe('Test Page');
+        expect(pages[0].slug).toBe('test-page');
+        expect(pages[0].bookstack_page_id).toBe(100);
+      });
+
+      it('should update existing page on conflict', () => {
+        db.upsertBookStackPage({
+          bookstack_page_id: 100,
+          bookstack_book_id: 10,
+          slug: 'test-page',
+          title: 'Original Title',
+          project_identifier: 'BS',
+        });
+
+        db.upsertBookStackPage({
+          bookstack_page_id: 100,
+          bookstack_book_id: 10,
+          slug: 'test-page',
+          title: 'Updated Title',
+          project_identifier: 'BS',
+        });
+
+        const pages = db.getBookStackPages('BS');
+        expect(pages).toHaveLength(1);
+        expect(pages[0].title).toBe('Updated Title');
+      });
+
+      it('should handle optional fields as null', () => {
+        db.upsertBookStackPage({
+          bookstack_page_id: 200,
+          bookstack_book_id: 20,
+          slug: 'minimal-page',
+          title: 'Minimal Page',
+        });
+
+        const page = db.getBookStackPageByPath(null);
+        // page with no local_path won't be found by path query
+        expect(page).toBeUndefined();
+      });
+    });
+
+    describe('getBookStackPages', () => {
+      it('should return pages for a project', () => {
+        db.upsertBookStackPage({
+          bookstack_page_id: 1,
+          bookstack_book_id: 1,
+          slug: 'page-1',
+          title: 'Page 1',
+          project_identifier: 'BS',
+        });
+        db.upsertBookStackPage({
+          bookstack_page_id: 2,
+          bookstack_book_id: 1,
+          slug: 'page-2',
+          title: 'Page 2',
+          project_identifier: 'BS',
+        });
+
+        const pages = db.getBookStackPages('BS');
+        expect(pages).toHaveLength(2);
+      });
+
+      it('should return empty array for project with no pages', () => {
+        const pages = db.getBookStackPages('BS');
+        expect(pages).toEqual([]);
+      });
+    });
+
+    describe('getBookStackPageByPath', () => {
+      it('should find page by local path', () => {
+        db.upsertBookStackPage({
+          bookstack_page_id: 1,
+          bookstack_book_id: 1,
+          slug: 'my-page',
+          title: 'My Page',
+          local_path: '/docs/bookstack/my-page.md',
+          project_identifier: 'BS',
+        });
+
+        const page = db.getBookStackPageByPath('/docs/bookstack/my-page.md');
+        expect(page).toBeTruthy();
+        expect(page.title).toBe('My Page');
+      });
+
+      it('should return undefined for non-existent path', () => {
+        const page = db.getBookStackPageByPath('/nonexistent/path.md');
+        expect(page).toBeUndefined();
+      });
+    });
+  });
+
+  describe('project lookup operations', () => {
+    beforeEach(() => {
+      db.upsertProject({
+        identifier: 'LOOK',
+        name: 'Lookup Test',
+        filesystem_path: '/opt/stacks/lookup-project',
+        vibe_id: 999,
+      });
+      db.upsertProject({
+        identifier: 'NOFS2',
+        name: 'No Filesystem 2',
+      });
+    });
+
+    describe('getProjectsWithFilesystemPath', () => {
+      it('should return projects with filesystem_path set', () => {
+        const projects = db.getProjectsWithFilesystemPath();
+        expect(projects.length).toBeGreaterThanOrEqual(1);
+        expect(projects.some(p => p.identifier === 'LOOK')).toBe(true);
+      });
+
+      it('should not return projects without filesystem_path', () => {
+        const projects = db.getProjectsWithFilesystemPath();
+        expect(projects.every(p => p.filesystem_path != null)).toBe(true);
+      });
+    });
+
+    describe('getProjectFilesystemPath', () => {
+      it('should return filesystem path for project', () => {
+        const fsPath = db.getProjectFilesystemPath('LOOK');
+        expect(fsPath).toBe('/opt/stacks/lookup-project');
+      });
+
+      it('should return null for project without path', () => {
+        const fsPath = db.getProjectFilesystemPath('NOFS2');
+        expect(fsPath).toBeNull();
+      });
+
+      it('should return null for non-existent project', () => {
+        const fsPath = db.getProjectFilesystemPath('NONEXISTENT');
+        expect(fsPath).toBeNull();
+      });
+    });
+
+    describe('getProjectByVibeId', () => {
+      it('should find project by vibe_id', () => {
+        const project = db.getProjectByVibeId(999);
+        expect(project).toBeTruthy();
+        expect(project.identifier).toBe('LOOK');
+      });
+
+      it('should return undefined for non-existent vibe_id', () => {
+        const project = db.getProjectByVibeId(12345);
+        expect(project).toBeUndefined();
+      });
+    });
+
+    describe('getProjectByFolderName', () => {
+      it('should find project by exact filesystem path', () => {
+        const id = db.getProjectByFolderName('/opt/stacks/lookup-project');
+        expect(id).toBe('LOOK');
+      });
+
+      it('should find project by folder name only', () => {
+        const id = db.getProjectByFolderName('lookup-project');
+        expect(id).toBe('LOOK');
+      });
+
+      it('should be case-insensitive for path matching', () => {
+        const id = db.getProjectByFolderName('/OPT/STACKS/LOOKUP-PROJECT');
+        expect(id).toBe('LOOK');
+      });
+
+      it('should return null for empty input', () => {
+        expect(db.getProjectByFolderName(null)).toBeNull();
+        expect(db.getProjectByFolderName('')).toBeNull();
+      });
+
+      it('should return null for non-matching folder', () => {
+        const id = db.getProjectByFolderName('nonexistent-folder');
+        expect(id).toBeNull();
+      });
+
+      it('should handle Windows-style paths', () => {
+        db.upsertProject({
+          identifier: 'WIN',
+          name: 'Windows Project',
+          filesystem_path: '/opt/stacks/win-project',
+        });
+
+        const id = db.getProjectByFolderName('C:\\projects\\win-project');
+        expect(id).toBe('WIN');
+      });
+    });
+
+    describe('resolveProjectIdentifier', () => {
+      it('should resolve direct project identifier', () => {
+        const id = db.resolveProjectIdentifier('LOOK');
+        expect(id).toBe('LOOK');
+      });
+
+      it('should resolve folder name to project identifier', () => {
+        const id = db.resolveProjectIdentifier('lookup-project');
+        expect(id).toBe('LOOK');
+      });
+
+      it('should return null for null input', () => {
+        expect(db.resolveProjectIdentifier(null)).toBeNull();
+      });
+
+      it('should return null for unresolvable input', () => {
+        const id = db.resolveProjectIdentifier('totally-unknown');
+        expect(id).toBeNull();
+      });
+    });
+  });
+
+  describe('migration operations', () => {
+    describe('importFromJSON', () => {
+      it('should import lastSync from JSON state', () => {
+        db.importFromJSON({ lastSync: 1234567890 });
+
+        expect(db.getLastSync()).toBe(1234567890);
+      });
+
+      it('should import projectActivity from JSON state', () => {
+        db.importFromJSON({
+          projectActivity: {
+            PROJ1: { issueCount: 10, lastChecked: 1000000 },
+            PROJ2: { issueCount: 5, lastChecked: 2000000 },
+          },
+        });
+
+        const p1 = db.getProject('PROJ1');
+        const p2 = db.getProject('PROJ2');
+        expect(p1).toBeTruthy();
+        expect(p1.issue_count).toBe(10);
+        expect(p2.issue_count).toBe(5);
+      });
+
+      it('should import projectTimestamps from JSON state', () => {
+        // Create projects first so UPDATE works
+        db.upsertProject({ identifier: 'TS1', name: 'TS1' });
+
+        db.importFromJSON({
+          projectTimestamps: {
+            TS1: 9999999,
+          },
+        });
+
+        const project = db.getProject('TS1');
+        expect(project.last_sync_at).toBe(9999999);
+      });
+
+      it('should handle empty JSON state', () => {
+        expect(() => db.importFromJSON({})).not.toThrow();
+      });
+
+      it('should import all sections together', () => {
+        db.importFromJSON({
+          lastSync: 5000,
+          projectActivity: {
+            ALL: { issueCount: 3 },
+          },
+        });
+
+        expect(db.getLastSync()).toBe(5000);
+        expect(db.getProject('ALL')).toBeTruthy();
+      });
+    });
+
+    describe('migrateFromJSON (exported function)', () => {
+      it('should return false if JSON file does not exist', async () => {
+        const { migrateFromJSON } = await import('../../lib/database.js');
+        const result = migrateFromJSON(db, '/nonexistent/file.json');
+        expect(result).toBe(false);
+      });
+
+      it('should return false if database already has data', async () => {
+        const { migrateFromJSON } = await import('../../lib/database.js');
+        db.setLastSync(Date.now());
+
+        // Create a temp JSON file
+        const tmpFile = path.join(path.dirname(testDbPath), 'migrate-test.json');
+        fs.writeFileSync(tmpFile, JSON.stringify({ lastSync: 1000 }));
+
+        try {
+          const result = migrateFromJSON(db, tmpFile);
+          expect(result).toBe(false);
+        } finally {
+          if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        }
+      });
+
+      it('should import data and backup old file', async () => {
+        const { migrateFromJSON } = await import('../../lib/database.js');
+
+        const tmpFile = path.join(path.dirname(testDbPath), 'migrate-import.json');
+        fs.writeFileSync(
+          tmpFile,
+          JSON.stringify({
+            lastSync: 7777,
+            projectActivity: { MIG: { issueCount: 2 } },
+          })
+        );
+
+        try {
+          const result = migrateFromJSON(db, tmpFile);
+          expect(result).toBe(true);
+          expect(fs.existsSync(tmpFile)).toBe(false); // Original file renamed
+          expect(db.getLastSync()).toBe(7777);
+          expect(db.getProject('MIG')).toBeTruthy();
+        } finally {
+          // Clean up backup files
+          const dir = path.dirname(testDbPath);
+          const backupFiles = fs
+            .readdirSync(dir)
+            .filter(f => f.startsWith('migrate-import.json.backup'));
+          backupFiles.forEach(f => fs.unlinkSync(path.join(dir, f)));
+        }
+      });
+
+      it('should handle malformed JSON gracefully', async () => {
+        const { migrateFromJSON } = await import('../../lib/database.js');
+
+        const tmpFile = path.join(path.dirname(testDbPath), 'bad-json.json');
+        fs.writeFileSync(tmpFile, 'NOT VALID JSON {{{');
+
+        try {
+          const result = migrateFromJSON(db, tmpFile);
+          expect(result).toBe(false);
+        } finally {
+          if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+        }
+      });
+    });
+  });
+
+  describe('Letta sync timestamp', () => {
+    beforeEach(() => {
+      db.upsertProject({ identifier: 'LSYNC', name: 'Letta Sync Test' });
+    });
+
+    describe('setProjectLettaSyncAt', () => {
+      it('should store letta sync timestamp', () => {
+        const ts = Date.now();
+        db.setProjectLettaSyncAt('LSYNC', ts);
+
+        const info = db.getProjectLettaInfo('LSYNC');
+        expect(info.letta_last_sync_at).toBe(ts);
+      });
+
+      it('should update existing timestamp', () => {
+        db.setProjectLettaSyncAt('LSYNC', 1000);
+        db.setProjectLettaSyncAt('LSYNC', 2000);
+
+        const info = db.getProjectLettaInfo('LSYNC');
+        expect(info.letta_last_sync_at).toBe(2000);
+      });
+    });
+  });
+
+  describe('getAllIssues', () => {
+    it('should return all issues across projects', () => {
+      db.upsertProject({ identifier: 'A', name: 'A' });
+      db.upsertProject({ identifier: 'B', name: 'B' });
+      db.upsertIssue({ identifier: 'A-1', project_identifier: 'A', title: 'A1' });
+      db.upsertIssue({ identifier: 'B-1', project_identifier: 'B', title: 'B1' });
+
+      const all = db.getAllIssues();
+      expect(all).toHaveLength(2);
+      expect(all[0].identifier).toBe('A-1'); // Ordered by identifier
+      expect(all[1].identifier).toBe('B-1');
+    });
+
+    it('should return empty array when no issues exist', () => {
+      const all = db.getAllIssues();
+      expect(all).toEqual([]);
+    });
+  });
 });
