@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import http from 'http';
 import {
   initializeHealthStats,
   recordSuccessfulSync,
@@ -14,6 +15,7 @@ import {
   getHealthMetrics,
   updateSystemMetrics,
   getMetricsRegistry,
+  createHealthServer,
 } from '../../lib/HealthService.js';
 
 describe('HealthService', () => {
@@ -356,6 +358,256 @@ describe('HealthService', () => {
       const metricsOutput = await registry.metrics();
 
       expect(metricsOutput).toContain('memory_usage_bytes');
+    });
+  });
+
+  describe('createHealthServer', () => {
+    let server;
+    let port;
+
+    beforeEach(async () => {
+      process.env.HEALTH_PORT = '0';
+      const stats = initializeHealthStats();
+      const config = {
+        sync: {
+          interval: 10000,
+          apiDelay: 10,
+          parallel: true,
+          maxWorkers: 5,
+          dryRun: false,
+        },
+        letta: {
+          enabled: true,
+        },
+      };
+      server = createHealthServer(stats, config);
+
+      await new Promise(resolve => {
+        server.on('listening', resolve);
+      });
+
+      const addr = server.address();
+      port = typeof addr === 'object' ? addr.port : 0;
+    });
+
+    afterEach(async () => {
+      if (server) {
+        await new Promise(resolve => {
+          server.close(resolve);
+        });
+      }
+      delete process.env.HEALTH_PORT;
+    });
+
+    function makeRequest(path) {
+      return new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path,
+            method: 'GET',
+          },
+          res => {
+            let data = '';
+            res.on('data', chunk => {
+              data += chunk;
+            });
+            res.on('end', () => {
+              resolve({
+                status: res.statusCode,
+                headers: res.headers,
+                body: data,
+              });
+            });
+          }
+        );
+        req.on('error', reject);
+        req.end();
+      });
+    }
+
+    it('should create and start HTTP server', async () => {
+      expect(server).toBeDefined();
+      expect(port).toBeGreaterThan(0);
+    });
+
+    it('should respond to /health endpoint with JSON', async () => {
+      const response = await makeRequest('/health');
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toBe('application/json');
+
+      const health = JSON.parse(response.body);
+      expect(health.status).toBe('healthy');
+      expect(health.service).toBe('huly-vibe-sync');
+      expect(health.version).toBe('1.0.0');
+      expect(health.uptime).toBeDefined();
+      expect(health.sync).toBeDefined();
+      expect(health.config).toBeDefined();
+      expect(health.memory).toBeDefined();
+    });
+
+    it('should respond to /metrics endpoint with Prometheus format', async () => {
+      const response = await makeRequest('/metrics');
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/plain');
+      expect(response.body).toContain('# HELP');
+      expect(response.body).toContain('# TYPE');
+    });
+
+    it('should respond to / endpoint with plain text', async () => {
+      const response = await makeRequest('/');
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toBe('text/plain');
+      expect(response.body).toContain('Huly-Vibe Sync Service');
+      expect(response.body).toContain('Health check: /health');
+      expect(response.body).toContain('Metrics: /metrics');
+    });
+
+    it('should respond with 404 for unknown routes', async () => {
+      const response = await makeRequest('/unknown');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toBe('Not Found');
+    });
+
+    it('should respond with 404 for /api endpoint', async () => {
+      const response = await makeRequest('/api');
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should respond with 404 for /status endpoint', async () => {
+      const response = await makeRequest('/status');
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should handle multiple requests to /health', async () => {
+      const response1 = await makeRequest('/health');
+      const response2 = await makeRequest('/health');
+
+      expect(response1.status).toBe(200);
+      expect(response2.status).toBe(200);
+
+      const health1 = JSON.parse(response1.body);
+      const health2 = JSON.parse(response2.body);
+
+      expect(health1.status).toBe('healthy');
+      expect(health2.status).toBe('healthy');
+    });
+
+    it('should handle multiple requests to /metrics', async () => {
+      const response1 = await makeRequest('/metrics');
+      const response2 = await makeRequest('/metrics');
+
+      expect(response1.status).toBe(200);
+      expect(response2.status).toBe(200);
+      expect(response1.body).toContain('# HELP');
+      expect(response2.body).toContain('# HELP');
+    });
+
+    it('should include health stats in /health response', async () => {
+      const stats = initializeHealthStats();
+      recordSuccessfulSync(stats, 1500);
+      recordFailedSync(stats, new Error('Test error'));
+
+      const config = {
+        sync: {
+          interval: 10000,
+          apiDelay: 10,
+          parallel: true,
+          maxWorkers: 5,
+          dryRun: false,
+        },
+        letta: {
+          enabled: true,
+        },
+      };
+
+      await new Promise(resolve => {
+        server.close(resolve);
+      });
+
+      process.env.HEALTH_PORT = '0';
+      server = createHealthServer(stats, config);
+      await new Promise(resolve => {
+        server.on('listening', resolve);
+      });
+      const addr = server.address();
+      port = typeof addr === 'object' ? addr.port : 0;
+
+      const response = await makeRequest('/health');
+      const health = JSON.parse(response.body);
+
+      expect(health.sync.totalSyncs).toBe(1);
+      expect(health.sync.errorCount).toBe(1);
+    });
+
+    it('should use custom HEALTH_PORT from environment', async () => {
+      await new Promise(resolve => {
+        server.close(resolve);
+      });
+
+      process.env.HEALTH_PORT = '0';
+      const stats = initializeHealthStats();
+      const config = {
+        sync: { interval: 10000, apiDelay: 10, parallel: true, maxWorkers: 5, dryRun: false },
+        letta: { enabled: true },
+      };
+      server = createHealthServer(stats, config);
+
+      await new Promise(resolve => {
+        server.on('listening', resolve);
+      });
+
+      const addr = server.address();
+      const newPort = typeof addr === 'object' ? addr.port : 0;
+      expect(newPort).toBeGreaterThan(0);
+
+      port = newPort;
+      const response = await makeRequest('/');
+      expect(response.status).toBe(200);
+    });
+
+    it('should return valid JSON from /health endpoint', async () => {
+      const response = await makeRequest('/health');
+
+      expect(() => {
+        JSON.parse(response.body);
+      }).not.toThrow();
+    });
+
+    it('should include config in /health response', async () => {
+      const response = await makeRequest('/health');
+      const health = JSON.parse(response.body);
+
+      expect(health.config).toBeDefined();
+      expect(health.config.syncInterval).toBe('10s');
+      expect(health.config.dryRun).toBe(false);
+      expect(health.config.lettaEnabled).toBe(true);
+    });
+
+    it('should include memory info in /health response', async () => {
+      const response = await makeRequest('/health');
+      const health = JSON.parse(response.body);
+
+      expect(health.memory).toBeDefined();
+      expect(health.memory.rss).toMatch(/\d+MB/);
+      expect(health.memory.heapUsed).toMatch(/\d+MB/);
+      expect(health.memory.heapTotal).toMatch(/\d+MB/);
+    });
+
+    it('should include connection pool info in /health response', async () => {
+      const response = await makeRequest('/health');
+      const health = JSON.parse(response.body);
+
+      expect(health.connectionPool).toBeDefined();
+      expect(health.connectionPool.http).toBeDefined();
+      expect(health.connectionPool.https).toBeDefined();
     });
   });
 });
