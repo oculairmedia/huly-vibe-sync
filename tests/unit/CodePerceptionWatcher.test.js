@@ -698,4 +698,52 @@ describe('CodePerceptionWatcher', () => {
       expect(newStats.functionsSynced).toBeGreaterThanOrEqual(initialFunctionsSynced);
     });
   });
+
+  describe('vendor exclusion patterns', () => {
+    it('should ignore vendor directory via shouldIgnoreDir', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnoreDir('vendor')).toBe(true);
+    });
+
+    it('should ignore node_modules directory via shouldIgnoreDir', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnoreDir('node_modules')).toBe(true);
+    });
+
+    it('should ignore hidden directories (starting with dot) via shouldIgnoreDir', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnoreDir('.hidden')).toBe(true);
+    });
+
+    it('should not ignore regular source directories via shouldIgnoreDir', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnoreDir('src')).toBe(false);
+    });
+
+    it('should include vendor pattern in ignorePatterns array', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.ignorePatterns).toContain('**/vendor/**');
+    });
+
+    it('should include static/vendor pattern in ignorePatterns array', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.ignorePatterns).toContain('**/static/vendor/**');
+    });
+
+    it('should include bundle.js pattern in ignorePatterns array', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.ignorePatterns).toContain('**/*.bundle.js');
+    });
+
+    it('should merge config-provided excludePatterns into ignorePatterns', () => {
+      const { watcher } = createWatcher({
+        config: {
+          graphiti: { enabled: true, baseUrl: 'http://localhost:8003' },
+          codePerception: { excludePatterns: ['**/custom/**', '**/temp/**'] },
+        },
+      });
+      expect(watcher.ignorePatterns).toContain('**/custom/**');
+      expect(watcher.ignorePatterns).toContain('**/temp/**');
+    });
+  });
 });
