@@ -120,6 +120,7 @@ import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { logger } from './lib/logger.js';
 import { createBeadsWatcher } from './lib/BeadsWatcher.js';
+import { createBookStackWatcher } from './lib/BookStackWatcher.js';
 import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
 import { createRequire } from 'module';
 
@@ -955,6 +956,46 @@ async function main() {
       { watching: beadsWatchResult.watching, available: beadsWatchResult.available },
       '✓ Beads file watcher active for real-time Beads→Huly sync'
     );
+  }
+
+  // Initialize BookStack file watcher for real-time local→BookStack import
+  let bookstackWatcher = null;
+  if (bookstackService && config.bookstack?.enabled) {
+    const handleBookStackChange = async changeData => {
+      logger.info(
+        {
+          project: changeData.projectIdentifier,
+          fileCount: changeData.changedFiles.length,
+        },
+        'Processing BookStack doc file changes'
+      );
+
+      for (const filePath of changeData.changedFiles) {
+        try {
+          await bookstackService.importSingleFile(changeData.projectIdentifier, filePath);
+        } catch (err) {
+          logger.error(
+            { err, file: filePath, project: changeData.projectIdentifier },
+            'Failed to import BookStack file'
+          );
+        }
+      }
+    };
+
+    bookstackWatcher = createBookStackWatcher({
+      db,
+      bookstackService,
+      onBookStackChange: handleBookStackChange,
+      debounceDelay: 2000,
+    });
+
+    const bookstackWatchResult = await bookstackWatcher.syncWithDatabase();
+    if (bookstackWatchResult.watching > 0) {
+      logger.info(
+        { watching: bookstackWatchResult.watching, available: bookstackWatchResult.available },
+        '✓ BookStack file watcher active for real-time local→BookStack import'
+      );
+    }
   }
 
   // Initialize Vibe SSE event watcher for real-time Vibe→Huly sync

@@ -203,4 +203,378 @@ describe('BookStackService', () => {
       expect(stats.exporter).toBeDefined();
     });
   });
+
+  describe('syncImport', () => {
+    it('skips when no mapping exists', async () => {
+      const result = await service.syncImport('UNKNOWN', '/opt/stacks/unknown');
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('no_mapping');
+    });
+
+    it('skips when API not connected', async () => {
+      service.apiConnected = false;
+      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('api_not_connected');
+    });
+
+    it('skips when docs directory does not exist', async () => {
+      service.apiConnected = true;
+      fs.existsSync.mockReturnValue(false);
+      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('no_docs_dir');
+    });
+
+    it('processes changes and returns results', async () => {
+      service.apiConnected = true;
+      fs.existsSync.mockReturnValue(true);
+      fs.readdirSync.mockReturnValue([
+        { name: 'page.md', isFile: () => true, isDirectory: () => false },
+      ]);
+      fs.readFileSync.mockReturnValue('# Test Page\n\nContent');
+
+      db.getBookStackPages.mockReturnValue([
+        {
+          local_path: 'huly-vibe-sync-docs/page.md',
+          content_hash: 'oldhash',
+          bookstack_page_id: 123,
+        },
+      ]);
+
+      service.apiClient = {
+        updatePage: vi.fn().mockResolvedValue({ id: 123, slug: 'test-page' }),
+      };
+
+      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      expect(result.success).toBe(true);
+      expect(result.imported).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(service.apiClient.updatePage).toHaveBeenCalledWith(123, {
+        markdown: '# Test Page\n\nContent',
+      });
+    });
+  });
+
+  describe('detectLocalChanges', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(true);
+    });
+
+    it('finds updated files with hash mismatch', () => {
+      fs.readdirSync.mockReturnValue([
+        { name: 'page.md', isFile: () => true, isDirectory: () => false },
+      ]);
+      fs.readFileSync.mockReturnValue('# Updated Content');
+
+      db.getBookStackPages.mockReturnValue([
+        {
+          local_path: 'huly-vibe-sync-docs/page.md',
+          content_hash: 'oldhash',
+          bookstack_page_id: 123,
+        },
+      ]);
+
+      const changes = service.detectLocalChanges(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+      );
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('update');
+      expect(changes[0].localPath).toBe('huly-vibe-sync-docs/page.md');
+      expect(changes[0].contentHash).not.toBe('oldhash');
+    });
+
+    it('finds new files with # Title heading', () => {
+      fs.readdirSync.mockReturnValue([
+        { name: 'new-page.md', isFile: () => true, isDirectory: () => false },
+      ]);
+      fs.readFileSync.mockReturnValue('# New Page Title\n\nContent here');
+
+      db.getBookStackPages.mockReturnValue([]);
+
+      const changes = service.detectLocalChanges(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+      );
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('create');
+      expect(changes[0].title).toBe('New Page Title');
+      expect(changes[0].localPath).toBe('huly-vibe-sync-docs/new-page.md');
+    });
+
+    it('skips new files without # Title heading', () => {
+      fs.readdirSync.mockReturnValue([
+        { name: 'no-title.md', isFile: () => true, isDirectory: () => false },
+      ]);
+      fs.readFileSync.mockReturnValue('Just some content without a title');
+
+      db.getBookStackPages.mockReturnValue([]);
+
+      const changes = service.detectLocalChanges(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+      );
+
+      expect(changes).toHaveLength(0);
+    });
+
+    it('echo loop guard skips files within 60s of export', () => {
+      fs.readdirSync.mockReturnValue([
+        { name: 'recent.md', isFile: () => true, isDirectory: () => false },
+      ]);
+      fs.readFileSync.mockReturnValue('# Recent Export\n\nModified content');
+
+      const now = Date.now();
+      db.getBookStackPages.mockReturnValue([
+        {
+          local_path: 'huly-vibe-sync-docs/recent.md',
+          content_hash: 'oldhash',
+          last_export_at: now - 30000,
+          sync_direction: 'export',
+        },
+      ]);
+
+      const changes = service.detectLocalChanges(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+      );
+
+      expect(changes).toHaveLength(0);
+    });
+  });
+
+  describe('importPage', () => {
+    beforeEach(() => {
+      service.apiConnected = true;
+      service.apiClient = {
+        updatePage: vi.fn(),
+        createPage: vi.fn(),
+        createChapter: vi.fn(),
+        listBooks: vi.fn(),
+        getBookContents: vi.fn(),
+      };
+    });
+
+    it('updates existing page via API', async () => {
+      const change = {
+        type: 'update',
+        localPath: 'bookstack/huly-vibe-sync-docs/page.md',
+        content: '# Updated Page',
+        contentHash: 'newhash',
+        tracked: {
+          bookstack_page_id: 123,
+          content_hash: 'oldhash',
+        },
+      };
+
+      service.apiClient.updatePage.mockResolvedValue({ id: 123, slug: 'page' });
+
+      const result = await service.importPage('HVSYN', change);
+
+      expect(result.success).toBe(true);
+      expect(result.type).toBe('update');
+      expect(result.pageId).toBe(123);
+      expect(service.apiClient.updatePage).toHaveBeenCalledWith(123, {
+        markdown: '# Updated Page',
+      });
+      expect(db.upsertBookStackPage).toHaveBeenCalled();
+    });
+
+    it('creates new page in book root', async () => {
+      const change = {
+        type: 'create',
+        localPath: 'bookstack/huly-vibe-sync-docs/new-page.md',
+        content: '# New Page',
+        contentHash: 'hash123',
+        title: 'New Page',
+      };
+
+      service.apiClient.listBooks.mockResolvedValue([
+        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+      ]);
+      service.apiClient.getBookContents.mockResolvedValue({ chapters: [] });
+      service.apiClient.createPage.mockResolvedValue({
+        id: 456,
+        slug: 'new-page',
+        name: 'New Page',
+        updated_at: '2026-01-29T00:00:00Z',
+      });
+
+      const result = await service.importPage('HVSYN', change);
+
+      expect(result.success).toBe(true);
+      expect(result.type).toBe('create');
+      expect(result.pageId).toBe(456);
+      expect(service.apiClient.createPage).toHaveBeenCalledWith({
+        name: 'New Page',
+        markdown: '# New Page',
+        book_id: 1,
+      });
+    });
+
+    it('creates new page in existing chapter', async () => {
+      const change = {
+        type: 'create',
+        localPath: 'bookstack/huly-vibe-sync-docs/my-chapter/page.md',
+        content: '# Chapter Page',
+        contentHash: 'hash456',
+        title: 'Chapter Page',
+      };
+
+      service.apiClient.listBooks.mockResolvedValue([
+        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+      ]);
+      service.apiClient.getBookContents.mockResolvedValue({
+        chapters: [{ id: 10, slug: 'my-chapter', name: 'My Chapter' }],
+      });
+      service.apiClient.createPage.mockResolvedValue({
+        id: 789,
+        slug: 'chapter-page',
+        name: 'Chapter Page',
+        updated_at: '2026-01-29T00:00:00Z',
+      });
+
+      const result = await service.importPage('HVSYN', change);
+
+      expect(result.success).toBe(true);
+      expect(service.apiClient.createPage).toHaveBeenCalledWith({
+        name: 'Chapter Page',
+        markdown: '# Chapter Page',
+        chapter_id: 10,
+      });
+    });
+
+    it('auto-creates chapter when not found', async () => {
+      const change = {
+        type: 'create',
+        localPath: 'bookstack/huly-vibe-sync-docs/new-chapter/page.md',
+        content: '# Page in New Chapter',
+        contentHash: 'hash789',
+        title: 'Page in New Chapter',
+      };
+
+      service.apiClient.listBooks.mockResolvedValue([
+        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+      ]);
+      service.apiClient.getBookContents.mockResolvedValue({ chapters: [] });
+      service.apiClient.createChapter.mockResolvedValue({
+        id: 20,
+        name: 'New Chapter',
+      });
+      service.apiClient.createPage.mockResolvedValue({
+        id: 999,
+        slug: 'page-in-new-chapter',
+        name: 'Page in New Chapter',
+        updated_at: '2026-01-29T00:00:00Z',
+      });
+
+      const result = await service.importPage('HVSYN', change);
+
+      expect(result.success).toBe(true);
+      expect(service.apiClient.createChapter).toHaveBeenCalledWith({
+        book_id: 1,
+        name: 'New Chapter',
+      });
+      expect(service.apiClient.createPage).toHaveBeenCalledWith({
+        name: 'Page in New Chapter',
+        markdown: '# Page in New Chapter',
+        chapter_id: 20,
+      });
+    });
+  });
+
+  describe('importSingleFile', () => {
+    beforeEach(() => {
+      service.apiConnected = true;
+      service.apiClient = {
+        updatePage: vi.fn(),
+      };
+    });
+
+    it('skips non-md files', async () => {
+      fs.existsSync.mockReturnValue(true);
+      const result = await service.importSingleFile(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/file.txt'
+      );
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('invalid_file');
+    });
+
+    it('echo loop guard skips recent exports', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue('# Test Page\n\nContent');
+
+      const now = Date.now();
+      db.getBookStackPageByPath.mockReturnValue({
+        local_path: 'bookstack/huly-vibe-sync-docs/page.md',
+        content_hash: 'oldhash',
+        last_export_at: now - 30000,
+        sync_direction: 'export',
+      });
+
+      const result = await service.importSingleFile(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/page.md'
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('echo_loop_guard');
+      expect(result.timeSinceExport).toBeLessThan(60000);
+    });
+
+    it('skips when no change detected', async () => {
+      fs.existsSync.mockReturnValue(true);
+      const content = '# Test Page\n\nContent';
+      fs.readFileSync.mockReturnValue(content);
+
+      const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+      db.getBookStackPageByPath.mockReturnValue({
+        local_path: 'bookstack/huly-vibe-sync-docs/page.md',
+        content_hash: contentHash,
+      });
+
+      const result = await service.importSingleFile(
+        'HVSYN',
+        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/page.md'
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(result.reason).toBe('no_change');
+    });
+  });
+
+  describe('_walkMarkdownFiles', () => {
+    it('returns only .md files recursively', () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readdirSync
+        .mockReturnValueOnce([
+          { name: 'page1.md', isFile: () => true, isDirectory: () => false },
+          { name: 'chapter1', isFile: () => false, isDirectory: () => true },
+          { name: 'readme.txt', isFile: () => true, isDirectory: () => false },
+          { name: '.hidden', isFile: () => false, isDirectory: () => true },
+        ])
+        .mockReturnValueOnce([
+          { name: 'page2.md', isFile: () => true, isDirectory: () => false },
+          { name: 'image.png', isFile: () => true, isDirectory: () => false },
+        ]);
+
+      const results = service._walkMarkdownFiles('/test/dir');
+
+      expect(results).toHaveLength(2);
+      expect(results[0]).toContain('page1.md');
+      expect(results[1]).toContain('page2.md');
+      expect(results.some(r => r.includes('readme.txt'))).toBe(false);
+      expect(results.some(r => r.includes('.hidden'))).toBe(false);
+    });
+
+    it('returns empty array when directory does not exist', () => {
+      fs.existsSync.mockReturnValue(false);
+      const results = service._walkMarkdownFiles('/nonexistent');
+      expect(results).toHaveLength(0);
+    });
+  });
 });
