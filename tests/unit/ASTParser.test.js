@@ -285,4 +285,203 @@ export function exportedFunc(): number {
       expect(results).toHaveLength(0);
     });
   });
+
+  describe('parseFile - Python imports', () => {
+    it('extracts imports from Python file', async () => {
+      const testFile = path.join(tempDir, 'imports.py');
+      await fs.writeFile(
+        testFile,
+        `
+import json
+import os.path
+from typing import Optional, List
+from os.path import join as path_join
+`
+      );
+
+      const result = await parseFile(testFile);
+
+      expect(result.error).toBeNull();
+      expect(result.imports).toHaveLength(4);
+
+      const jsonImport = result.imports.find(i => i.module === 'json');
+      expect(jsonImport).toBeDefined();
+      expect(jsonImport.is_from).toBe(false);
+
+      const typingImport = result.imports.find(i => i.module === 'typing');
+      expect(typingImport).toBeDefined();
+      expect(typingImport.is_from).toBe(true);
+      expect(typingImport.names).toContain('Optional');
+      expect(typingImport.names).toContain('List');
+
+      const osPathImport = result.imports.find(i => i.module === 'os.path' && i.is_from);
+      expect(osPathImport).toBeDefined();
+      expect(osPathImport.is_from).toBe(true);
+    });
+  });
+
+  describe('parseFile - JS imports', () => {
+    it('extracts imports from JavaScript file', async () => {
+      const testFile = path.join(tempDir, 'imports.js');
+      await fs.writeFile(
+        testFile,
+        `
+import express from 'express';
+import { readFile, writeFile } from 'fs/promises';
+import * as path from 'path';
+`
+      );
+
+      const result = await parseFile(testFile);
+
+      expect(result.error).toBeNull();
+      expect(result.imports).toHaveLength(3);
+
+      const expressImport = result.imports.find(i => i.source === 'express');
+      expect(expressImport).toBeDefined();
+      expect(expressImport.default).toBe('express');
+
+      const fsImport = result.imports.find(i => i.source === 'fs/promises');
+      expect(fsImport).toBeDefined();
+      expect(fsImport.specifiers).toContain('readFile');
+      expect(fsImport.specifiers).toContain('writeFile');
+
+      const pathImport = result.imports.find(i => i.source === 'path');
+      expect(pathImport).toBeDefined();
+      expect(pathImport.default).toContain('path');
+    });
+  });
+
+  describe('parseFile - Python classes', () => {
+    it('extracts class definitions from Python file', async () => {
+      const testFile = path.join(tempDir, 'classes.py');
+      await fs.writeFile(
+        testFile,
+        `
+class Animal:
+    def __init__(self, name):
+        self.name = name
+
+    def speak(self):
+        pass
+
+    def _internal(self):
+        pass
+
+class Dog(Animal):
+    def speak(self):
+        return "Woof"
+`
+      );
+
+      const result = await parseFile(testFile);
+
+      expect(result.error).toBeNull();
+      expect(result.classes).toHaveLength(2);
+
+      const animal = result.classes.find(c => c.name === 'Animal');
+      expect(animal).toBeDefined();
+      expect(animal.superclass).toBeNull();
+      expect(animal.methods).toBeDefined();
+      expect(animal.methods.map(m => m.name)).toContain('__init__');
+      expect(animal.methods.map(m => m.name)).toContain('speak');
+      expect(animal.methods.map(m => m.name)).toContain('_internal');
+
+      const internalMethod = animal.methods.find(m => m.name === '_internal');
+      expect(internalMethod.is_private).toBe(true);
+
+      const dog = result.classes.find(c => c.name === 'Dog');
+      expect(dog).toBeDefined();
+      expect(dog.superclass).toBe('Animal');
+    });
+  });
+
+  describe('parseFile - JS classes', () => {
+    it('extracts class definitions from JavaScript file', async () => {
+      const testFile = path.join(tempDir, 'classes.js');
+      await fs.writeFile(
+        testFile,
+        `
+class Service {
+    constructor(config) {
+        this.config = config;
+    }
+
+    async fetchData(url) {
+        return fetch(url);
+    }
+
+    static create() {
+        return new Service({});
+    }
+
+    _internal() {}
+}
+
+class ApiService extends Service {
+    async fetchApi() {
+        return super.fetchData('/api');
+    }
+}
+`
+      );
+
+      const result = await parseFile(testFile);
+
+      expect(result.error).toBeNull();
+      expect(result.classes).toHaveLength(2);
+
+      const service = result.classes.find(c => c.name === 'Service');
+      expect(service).toBeDefined();
+      expect(service.methods).toBeDefined();
+      expect(service.methods.map(m => m.name)).toContain('constructor');
+      expect(service.methods.map(m => m.name)).toContain('fetchData');
+      expect(service.methods.map(m => m.name)).toContain('create');
+      expect(service.methods.map(m => m.name)).toContain('_internal');
+
+      const fetchData = service.methods.find(m => m.name === 'fetchData');
+      expect(fetchData.is_async).toBe(true);
+
+      const create = service.methods.find(m => m.name === 'create');
+      expect(create.is_static).toBe(true);
+
+      const internal = service.methods.find(m => m.name === '_internal');
+      expect(internal.is_private).toBe(true);
+
+      const apiService = result.classes.find(c => c.name === 'ApiService');
+      expect(apiService).toBeDefined();
+      expect(apiService.superclass).toBe('Service');
+    });
+  });
+
+  describe('parseFile - JS exports', () => {
+    it('extracts exports from JavaScript file', async () => {
+      const testFile = path.join(tempDir, 'exports.js');
+      await fs.writeFile(
+        testFile,
+        `
+export function greet() {}
+export class Greeter {}
+export default function main() {}
+export const CONFIG = {};
+`
+      );
+
+      const result = await parseFile(testFile);
+
+      expect(result.error).toBeNull();
+      expect(result.exports.length).toBeGreaterThanOrEqual(3);
+
+      const greetExport = result.exports.find(e => e.name === 'greet');
+      expect(greetExport).toBeDefined();
+      expect(greetExport.type).toBe('function');
+
+      const greeterExport = result.exports.find(e => e.name === 'Greeter');
+      expect(greeterExport).toBeDefined();
+      expect(greeterExport.type).toBe('class');
+
+      const defaultExport = result.exports.find(e => e.is_default);
+      expect(defaultExport).toBeDefined();
+    });
+  });
 });
