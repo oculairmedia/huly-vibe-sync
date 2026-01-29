@@ -421,6 +421,90 @@ describe('BookStackApiClient - Write Methods', () => {
     });
   });
 
+  describe('listPagesByBook', () => {
+    it('sends GET request to /api/pages with book_id filter', async () => {
+      const bookId = 5;
+      const responseData = {
+        data: [
+          { id: 101, name: 'Page 1', book_id: 5 },
+          { id: 102, name: 'Page 2', book_id: 5 },
+        ],
+      };
+      const mockResponse = createMockResponse(responseData);
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      await client.listPagesByBook(bookId);
+
+      const callUrl = fetchWithPool.mock.calls[0][0];
+      expect(callUrl).toContain('https://docs.test.com/api/pages');
+      expect(callUrl).toContain('filter%5Bbook_id%5D=5');
+    });
+
+    it('includes updated_at filter when updatedAfter is provided', async () => {
+      const bookId = 5;
+      const updatedAfter = '2026-01-29T10:00:00Z';
+      const responseData = { data: [{ id: 101, name: 'Page 1' }] };
+      const mockResponse = createMockResponse(responseData);
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      await client.listPagesByBook(bookId, { updatedAfter });
+
+      const callUrl = fetchWithPool.mock.calls[0][0];
+      expect(callUrl).toContain('filter%5Bupdated_at%3Agte%5D=2026-01-29T10%3A00%3A00Z');
+    });
+
+    it('returns array of pages from response.data', async () => {
+      const responseData = {
+        data: [
+          { id: 101, name: 'Page 1', book_id: 5 },
+          { id: 102, name: 'Page 2', book_id: 5 },
+          { id: 103, name: 'Page 3', book_id: 5 },
+        ],
+      };
+      const mockResponse = createMockResponse(responseData);
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      const result = await client.listPagesByBook(5);
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe(101);
+      expect(result[1].name).toBe('Page 2');
+    });
+
+    it('uses default count of 500 when not specified', async () => {
+      const responseData = { data: [] };
+      const mockResponse = createMockResponse(responseData);
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      await client.listPagesByBook(5);
+
+      const callUrl = fetchWithPool.mock.calls[0][0];
+      expect(callUrl).toContain('count=500');
+    });
+
+    it('uses custom count when specified', async () => {
+      const responseData = { data: [] };
+      const mockResponse = createMockResponse(responseData);
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      await client.listPagesByBook(5, { count: 100 });
+
+      const callUrl = fetchWithPool.mock.calls[0][0];
+      expect(callUrl).toContain('count=100');
+    });
+
+    it('returns empty array when response.data is undefined', async () => {
+      const mockResponse = createMockResponse({});
+      fetchWithPool.mockResolvedValue(mockResponse);
+
+      const result = await client.listPagesByBook(5);
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(0);
+    });
+  });
+
   describe('request method - shared behavior', () => {
     it('includes authorization header with token credentials', async () => {
       const mockResponse = createMockResponse({ id: 1 });

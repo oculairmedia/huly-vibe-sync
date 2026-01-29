@@ -577,4 +577,583 @@ describe('BookStackService', () => {
       expect(results).toHaveLength(0);
     });
   });
+
+  describe('syncBidirectional', () => {
+    const projectId = 'HVSYN';
+    const projectPath = '/opt/stacks/huly-vibe-sync';
+    const bookSlug = 'huly-vibe-sync-docs';
+    const docsDir = path.join(projectPath, 'docs/bookstack', bookSlug);
+
+    const hashOf = content => crypto.createHash('sha256').update(content).digest('hex');
+    const oldContent = 'old content';
+    const oldHash = hashOf(oldContent);
+    const newRemoteContent = 'new remote content';
+    const newRemoteHash = hashOf(newRemoteContent);
+    const newLocalContent = 'new local content';
+    const newLocalHash = hashOf(newLocalContent);
+
+    function makeTrackedPage(overrides = {}) {
+      return {
+        bookstack_page_id: 100,
+        bookstack_book_id: 1,
+        bookstack_chapter_id: null,
+        project_identifier: projectId,
+        slug: 'test-page',
+        title: 'Test Page',
+        local_path: `${bookSlug}/test-page.md`,
+        content_hash: oldHash,
+        bookstack_content_hash: oldHash,
+        bookstack_modified_at: '2026-01-28T00:00:00Z',
+        bookstack_revision_count: 5,
+        local_modified_at: Date.now() - 100000,
+        last_export_at: Date.now() - 100000,
+        sync_direction: 'export',
+        sync_status: 'synced',
+        ...overrides,
+      };
+    }
+
+    function setupApiClient(overrides = {}) {
+      service.apiConnected = true;
+      service.apiClient = {
+        listBooks: vi
+          .fn()
+          .mockResolvedValue([{ id: 1, slug: bookSlug, name: 'Huly Vibe Sync Docs' }]),
+        getBookContents: vi.fn().mockResolvedValue({
+          chapters: [],
+          pages: [{ id: 100, slug: 'test-page', name: 'Test Page' }],
+        }),
+        getPage: vi.fn().mockResolvedValue({
+          id: 100,
+          slug: 'test-page',
+          name: 'Test Page',
+          markdown: oldContent,
+          updated_at: '2026-01-28T00:00:00Z',
+          revision_count: 5,
+        }),
+        updatePage: vi.fn().mockResolvedValue({ id: 100, slug: 'test-page' }),
+        createPage: vi.fn().mockResolvedValue({
+          id: 200,
+          slug: 'new-page',
+          name: 'New Page',
+          updated_at: '2026-01-29T00:00:00Z',
+          revision_count: 1,
+        }),
+        createChapter: vi.fn().mockResolvedValue({ id: 20, name: 'New Chapter' }),
+        listPagesByBook: vi.fn().mockResolvedValue([]),
+        ...overrides,
+      };
+    }
+
+    describe('setup and guard tests', () => {
+      it('skips when no mapping', async () => {
+        const result = await service.syncBidirectional('UNKNOWN', projectPath);
+        expect(result.skipped).toBe(true);
+        expect(result.reason).toBe('no_mapping');
+      });
+
+      it('skips when API not connected', async () => {
+        service.apiConnected = false;
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.skipped).toBe(true);
+        expect(result.reason).toBe('api_not_connected');
+      });
+
+      it('skips when book not found in API', async () => {
+        setupApiClient({ listBooks: vi.fn().mockResolvedValue([]) });
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.skipped).toBe(true);
+        expect(result.reason).toBe('book_not_found');
+      });
+    });
+
+    describe('decision matrix', () => {
+      it('no-op when neither local nor remote changed', async () => {
+        setupApiClient();
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(oldContent);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.unchanged).toBe(1);
+        expect(result.exported).toBe(0);
+        expect(result.imported).toBe(0);
+        expect(result.conflicts).toBe(0);
+      });
+
+      it('exports (overwrites local) when only remote changed', async () => {
+        setupApiClient({
+          getPage: vi.fn().mockResolvedValue({
+            id: 100,
+            slug: 'test-page',
+            name: 'Test Page',
+            markdown: newRemoteContent,
+            updated_at: '2026-01-29T00:00:00Z',
+            revision_count: 6,
+          }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(oldContent);
+        fs.writeFileSync.mockReturnValue(undefined);
+        fs.mkdirSync.mockReturnValue(undefined);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.exported).toBe(1);
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          expect.stringContaining('test-page.md'),
+          newRemoteContent,
+          'utf-8'
+        );
+        expect(db.upsertBookStackPage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content_hash: newRemoteHash,
+            bookstack_content_hash: newRemoteHash,
+            sync_direction: 'export',
+          })
+        );
+      });
+
+      it('imports (pushes to BookStack) when only local changed', async () => {
+        setupApiClient();
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(newLocalContent);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.imported).toBe(1);
+        expect(service.apiClient.updatePage).toHaveBeenCalledWith(100, {
+          markdown: newLocalContent,
+        });
+        expect(db.upsertBookStackPage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content_hash: newLocalHash,
+            bookstack_content_hash: newLocalHash,
+            sync_direction: 'import',
+          })
+        );
+      });
+
+      it('resolves conflict with BookStack wins when both changed', async () => {
+        const { logger } = await import('../../lib/logger.js');
+        setupApiClient({
+          getPage: vi.fn().mockResolvedValue({
+            id: 100,
+            slug: 'test-page',
+            name: 'Test Page',
+            markdown: newRemoteContent,
+            updated_at: '2026-01-29T00:00:00Z',
+            revision_count: 6,
+          }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(newLocalContent);
+        fs.writeFileSync.mockReturnValue(undefined);
+        fs.mkdirSync.mockReturnValue(undefined);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.conflicts).toBe(1);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ pageId: 100 }),
+          expect.stringContaining('Conflict detected')
+        );
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          expect.stringContaining('test-page.md'),
+          newRemoteContent,
+          'utf-8'
+        );
+        expect(db.upsertBookStackPage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content_hash: newRemoteHash,
+            sync_direction: 'export',
+          })
+        );
+      });
+
+      it('re-exports from BookStack when local deleted and remote changed', async () => {
+        setupApiClient({
+          getPage: vi.fn().mockResolvedValue({
+            id: 100,
+            slug: 'test-page',
+            name: 'Test Page',
+            markdown: newRemoteContent,
+            updated_at: '2026-01-29T00:00:00Z',
+            revision_count: 6,
+          }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(false);
+        fs.writeFileSync.mockReturnValue(undefined);
+        fs.mkdirSync.mockReturnValue(undefined);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.exported).toBe(1);
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          expect.any(String),
+          newRemoteContent,
+          'utf-8'
+        );
+      });
+
+      it('warns and counts unchanged when local deleted and remote unchanged', async () => {
+        const { logger } = await import('../../lib/logger.js');
+        setupApiClient();
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(false);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.unchanged).toBe(1);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ pageId: 100 }),
+          expect.stringContaining('not deleting from BookStack')
+        );
+      });
+    });
+
+    describe('remote deletion', () => {
+      it('removes local file and marks deleted_remote when page gone from BookStack', async () => {
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({ chapters: [], pages: [] }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockImplementation(p => {
+          if (typeof p === 'string' && p.includes('test-page.md')) return true;
+          if (typeof p === 'string' && p.includes(bookSlug)) return false;
+          return false;
+        });
+        fs.unlinkSync.mockReturnValue(undefined);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.remoteDeleted).toBe(1);
+        expect(fs.unlinkSync).toHaveBeenCalled();
+        expect(db.upsertBookStackPage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sync_status: 'deleted_remote',
+          })
+        );
+      });
+
+      it('handles case where local file already gone for deleted remote page', async () => {
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({ chapters: [], pages: [] }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(false);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.remoteDeleted).toBe(1);
+        expect(fs.unlinkSync).not.toHaveBeenCalled();
+        expect(db.upsertBookStackPage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sync_status: 'deleted_remote',
+          })
+        );
+      });
+    });
+
+    describe('new local files', () => {
+      it('detects untracked local .md files and imports them to BookStack', async () => {
+        setupApiClient();
+        db.getBookStackPages.mockReturnValue([]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readdirSync.mockReturnValue([
+          { name: 'new-page.md', isFile: () => true, isDirectory: () => false },
+        ]);
+        fs.readFileSync.mockReturnValue('# New Page\n\nFresh content');
+
+        service.importPage = vi.fn().mockResolvedValue({ success: true });
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.newLocal).toBe(1);
+        expect(service.importPage).toHaveBeenCalledWith(
+          projectId,
+          expect.objectContaining({
+            type: 'create',
+            title: 'New Page',
+          })
+        );
+      });
+
+      it('skips untracked local files without # Title heading', async () => {
+        const { logger } = await import('../../lib/logger.js');
+        setupApiClient();
+        db.getBookStackPages.mockReturnValue([]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readdirSync.mockReturnValue([
+          { name: 'no-title.md', isFile: () => true, isDirectory: () => false },
+        ]);
+        fs.readFileSync.mockReturnValue('Just some content without a heading');
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.newLocal).toBe(0);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.objectContaining({ file: expect.any(String) }),
+          expect.stringContaining('no # Title heading')
+        );
+      });
+    });
+
+    describe('integration scenarios', () => {
+      it('processes mixed scenario with multiple page states', async () => {
+        const unchangedTracked = makeTrackedPage({ bookstack_page_id: 100, slug: 'unchanged' });
+        const remoteChangedTracked = makeTrackedPage({
+          bookstack_page_id: 101,
+          slug: 'remote-changed',
+          local_path: `${bookSlug}/remote-changed.md`,
+        });
+        const localChangedTracked = makeTrackedPage({
+          bookstack_page_id: 102,
+          slug: 'local-changed',
+          local_path: `${bookSlug}/local-changed.md`,
+        });
+        const bothChangedTracked = makeTrackedPage({
+          bookstack_page_id: 103,
+          slug: 'both-changed',
+          local_path: `${bookSlug}/both-changed.md`,
+        });
+        const deletedRemoteTracked = makeTrackedPage({
+          bookstack_page_id: 104,
+          slug: 'deleted-remote',
+          local_path: `${bookSlug}/deleted-remote.md`,
+        });
+
+        const remotePages = [
+          { id: 100, slug: 'unchanged', name: 'Unchanged' },
+          { id: 101, slug: 'remote-changed', name: 'Remote Changed' },
+          { id: 102, slug: 'local-changed', name: 'Local Changed' },
+          { id: 103, slug: 'both-changed', name: 'Both Changed' },
+        ];
+
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({ chapters: [], pages: remotePages }),
+          getPage: vi.fn().mockImplementation(async id => {
+            const base = { updated_at: '2026-01-29T00:00:00Z', revision_count: 6 };
+            if (id === 100)
+              return { id, slug: 'unchanged', name: 'Unchanged', markdown: oldContent, ...base };
+            if (id === 101)
+              return {
+                id,
+                slug: 'remote-changed',
+                name: 'Remote Changed',
+                markdown: newRemoteContent,
+                ...base,
+              };
+            if (id === 102)
+              return {
+                id,
+                slug: 'local-changed',
+                name: 'Local Changed',
+                markdown: oldContent,
+                ...base,
+              };
+            if (id === 103)
+              return {
+                id,
+                slug: 'both-changed',
+                name: 'Both Changed',
+                markdown: newRemoteContent,
+                ...base,
+              };
+            return { id, slug: 'unknown', name: 'Unknown', markdown: '', ...base };
+          }),
+        });
+
+        db.getBookStackPages.mockReturnValue([
+          unchangedTracked,
+          remoteChangedTracked,
+          localChangedTracked,
+          bothChangedTracked,
+          deletedRemoteTracked,
+        ]);
+
+        fs.existsSync.mockImplementation(p => {
+          if (typeof p === 'string' && p.endsWith('.md')) return true;
+          return false;
+        });
+        fs.readFileSync.mockImplementation(p => {
+          if (typeof p === 'string' && p.includes('local-changed')) return newLocalContent;
+          if (typeof p === 'string' && p.includes('both-changed')) return newLocalContent;
+          return oldContent;
+        });
+        fs.writeFileSync.mockReturnValue(undefined);
+        fs.mkdirSync.mockReturnValue(undefined);
+        fs.unlinkSync.mockReturnValue(undefined);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.unchanged).toBe(1);
+        expect(result.exported).toBe(1);
+        expect(result.imported).toBe(1);
+        expect(result.conflicts).toBe(1);
+        expect(result.remoteDeleted).toBe(1);
+      });
+
+      it('returns correct result counts structure', async () => {
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({ chapters: [], pages: [] }),
+        });
+        db.getBookStackPages.mockReturnValue([]);
+        fs.existsSync.mockReturnValue(false);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result).toHaveProperty('exported');
+        expect(result).toHaveProperty('imported');
+        expect(result).toHaveProperty('conflicts');
+        expect(result).toHaveProperty('remoteDeleted');
+        expect(result).toHaveProperty('newLocal');
+        expect(result).toHaveProperty('unchanged');
+        expect(result).toHaveProperty('errors');
+        expect(result).toHaveProperty('success');
+      });
+
+      it('updates stats counters for conflicts', async () => {
+        setupApiClient({
+          getPage: vi.fn().mockResolvedValue({
+            id: 100,
+            slug: 'test-page',
+            name: 'Test Page',
+            markdown: newRemoteContent,
+            updated_at: '2026-01-29T00:00:00Z',
+            revision_count: 6,
+          }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(newLocalContent);
+        fs.writeFileSync.mockReturnValue(undefined);
+        fs.mkdirSync.mockReturnValue(undefined);
+
+        await service.syncBidirectional(projectId, projectPath);
+        expect(service.stats.conflictsDetected).toBe(1);
+        expect(service.stats.conflictsResolved).toBe(1);
+        expect(service.stats.bidirectionalSyncs).toBe(1);
+      });
+
+      it('updates stats counters for remote deletions', async () => {
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({ chapters: [], pages: [] }),
+        });
+        const tracked = makeTrackedPage();
+        db.getBookStackPages.mockReturnValue([tracked]);
+        fs.existsSync.mockReturnValue(false);
+
+        await service.syncBidirectional(projectId, projectPath);
+        expect(service.stats.remoteDeleted).toBe(1);
+        expect(service.stats.bidirectionalSyncs).toBe(1);
+      });
+
+      it('handles API errors gracefully and continues processing', async () => {
+        const okTracked = makeTrackedPage({ bookstack_page_id: 100 });
+        const errTracked = makeTrackedPage({
+          bookstack_page_id: 101,
+          slug: 'error-page',
+          local_path: `${bookSlug}/error-page.md`,
+        });
+
+        setupApiClient({
+          getBookContents: vi.fn().mockResolvedValue({
+            chapters: [],
+            pages: [
+              { id: 101, slug: 'error-page', name: 'Error Page' },
+              { id: 100, slug: 'test-page', name: 'Test Page' },
+            ],
+          }),
+          getPage: vi.fn().mockImplementation(async id => {
+            if (id === 101) throw new Error('API timeout');
+            return {
+              id: 100,
+              slug: 'test-page',
+              name: 'Test Page',
+              markdown: oldContent,
+              updated_at: '2026-01-28T00:00:00Z',
+              revision_count: 5,
+            };
+          }),
+        });
+
+        db.getBookStackPages.mockReturnValue([okTracked, errTracked]);
+        fs.existsSync.mockReturnValue(true);
+        fs.readFileSync.mockReturnValue(oldContent);
+
+        const result = await service.syncBidirectional(projectId, projectPath);
+        expect(result.errors).toBe(1);
+        expect(result.unchanged).toBe(1);
+      });
+    });
+  });
+
+  describe('_flattenBookPages', () => {
+    it('flattens chapters with pages and standalone pages', () => {
+      const contents = {
+        chapters: [
+          {
+            id: 1,
+            slug: 'chapter-one',
+            pages: [
+              { id: 10, slug: 'ch1-page1' },
+              { id: 11, slug: 'ch1-page2' },
+            ],
+          },
+          {
+            id: 2,
+            slug: 'chapter-two',
+            pages: [{ id: 20, slug: 'ch2-page1' }],
+          },
+        ],
+        pages: [
+          { id: 30, slug: 'standalone1' },
+          { id: 31, slug: 'standalone2' },
+        ],
+      };
+
+      const result = service._flattenBookPages(contents);
+      expect(result).toHaveLength(5);
+      expect(result.map(p => p.id)).toEqual([10, 11, 20, 30, 31]);
+    });
+
+    it('handles empty chapters and no standalone pages', () => {
+      const contents = {
+        chapters: [
+          { id: 1, slug: 'empty-chapter', pages: [] },
+          { id: 2, slug: 'no-pages' },
+        ],
+        pages: [],
+      };
+
+      const result = service._flattenBookPages(contents);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('getHealthInfo bidirectional fields', () => {
+    it('includes bidirectional sync fields', () => {
+      service.stats.conflictsDetected = 3;
+      service.stats.conflictsResolved = 3;
+      service.stats.remoteDeleted = 2;
+      service.stats.bidirectionalSyncs = 5;
+
+      const health = service.getHealthInfo();
+      expect(health.conflictsDetected).toBe(3);
+      expect(health.conflictsResolved).toBe(3);
+      expect(health.remoteDeleted).toBe(2);
+      expect(health.bidirectionalSyncs).toBe(5);
+    });
+
+    it('defaults bidirectional fields to zero', () => {
+      const health = service.getHealthInfo();
+      expect(health.conflictsDetected).toBe(0);
+      expect(health.conflictsResolved).toBe(0);
+      expect(health.remoteDeleted).toBe(0);
+      expect(health.bidirectionalSyncs).toBe(0);
+    });
+  });
 });
