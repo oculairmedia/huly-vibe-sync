@@ -215,6 +215,32 @@ try {
   );
 }
 
+// Initialize BookStack service (if enabled)
+let bookstackService = null;
+if (config.bookstack?.enabled) {
+  try {
+    const { createBookStackService } = await import('./lib/BookStackService.js');
+    bookstackService = createBookStackService(config.bookstack, db);
+    await bookstackService.initialize();
+    logger.info('BookStack sync service initialized');
+  } catch (bookstackError) {
+    logger.warn(
+      { err: bookstackError },
+      'Failed to initialize BookStack service, documentation sync disabled'
+    );
+  }
+} else {
+  logger.info('BookStack sync disabled (USE_BOOKSTACK_SYNC not set)');
+}
+
+healthStats.bookstack = bookstackService
+  ? {
+      enabled: true,
+      url: config.bookstack.url,
+      mappings: config.bookstack.projectBookMappings.length,
+    }
+  : { enabled: false };
+
 // Initialize FileWatcher for realtime file change detection
 let fileWatcher = null;
 if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
@@ -561,7 +587,15 @@ async function main() {
       } else {
         // Fall back to legacy sync
         await withTimeout(
-          syncHulyToVibe(hulyClient, vibeClient, db, config, lettaService, projectId),
+          syncHulyToVibe(
+            hulyClient,
+            vibeClient,
+            db,
+            config,
+            lettaService,
+            projectId,
+            bookstackService
+          ),
           900000, // 15-minute timeout for entire sync
           'Full sync cycle'
         );
