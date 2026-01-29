@@ -53,9 +53,11 @@ describe.skipIf(isCI)('BeadsReader Performance Benchmark', () => {
       dbCount = readIssuesFromDB(projectPath).length;
     });
 
-    it('should read same number of issues from both sources', () => {
-      expect(dbCount).toBeGreaterThanOrEqual(jsonlCount);
-      console.log(`  JSONL: ${jsonlCount} issues, DB: ${dbCount} issues`);
+    it('should read issues from both sources with DB filtering deleted', () => {
+      // DB filters WHERE deleted_at IS NULL (active only), JSONL includes all issues
+      expect(dbCount).toBeGreaterThan(0);
+      expect(dbCount).toBeLessThanOrEqual(jsonlCount);
+      console.log(`  JSONL: ${jsonlCount} issues (all), DB: ${dbCount} issues (active only)`);
     });
 
     it('should benchmark JSONL read performance', () => {
