@@ -978,3 +978,296 @@ describe('createGraphitiClient', () => {
     expect(client.groupId).toBe('vibesync_TEST');
   });
 });
+
+// ============================================================================
+// HVSYN-895: Edge Creation and Fallback Behavior Tests
+// ============================================================================
+
+describe('createContainmentEdge - extended edge creation scenarios', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should rethrow HTTP 409 Conflict without fallback', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 409: Conflict'));
+    });
+
+    await expect(client.createContainmentEdge('TEST', 'src/dup.js')).rejects.toThrow(
+      'HTTP 409: Conflict'
+    );
+
+    const queueCalls = fetchWithPool.mock.calls.filter(c =>
+      c[0]?.toString().includes('/api/queue/messages')
+    );
+    expect(queueCalls).toHaveLength(0);
+  });
+
+  it('should rethrow HTTP 422 Unprocessable Entity without fallback', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 422: Unprocessable Entity'));
+    });
+
+    await expect(client.createContainmentEdge('TEST', 'src/bad.js')).rejects.toThrow(
+      'HTTP 422: Unprocessable Entity'
+    );
+  });
+
+  it('should propagate error when getEntityUuid fails for source', async () => {
+    fetchWithPool.mockImplementation(() => Promise.reject(new Error('HTTP 404: Not Found')));
+
+    await expect(client.createContainmentEdge('MISSING', 'src/file.js')).rejects.toThrow(
+      'HTTP 404: Not Found'
+    );
+  });
+
+  it('should propagate error when getEntityUuid fails for target', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(createMockResponse({ uuid: 'project-uuid' }));
+      return Promise.reject(new Error('HTTP 404: Not Found'));
+    });
+
+    await expect(client.createContainmentEdge('TEST', 'nonexistent.js')).rejects.toThrow(
+      'HTTP 404: Not Found'
+    );
+  });
+
+  it('should propagate error when getEdgeUuid fails', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 2) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    await expect(client.createContainmentEdge('TEST', 'src/main.js')).rejects.toThrow('HTTP 500');
+  });
+
+  it('should handle fallback failure after HTTP 500 direct edge creation', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    await expect(client.createContainmentEdge('TEST', 'src/broken.js')).rejects.toThrow('HTTP 500');
+  });
+
+  it('should create edge idempotently when called twice with same args', async () => {
+    fetchWithPool.mockImplementation(() =>
+      Promise.resolve(createMockResponse({ uuid: 'stable-uuid', success: true }))
+    );
+
+    await client.createContainmentEdge('TEST', 'src/main.js');
+    await client.createContainmentEdge('TEST', 'src/main.js');
+
+    expect(client.stats.edgesCreated).toBe(2);
+  });
+});
+
+describe('createFileFunctionEdge - failure paths', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should throw on HTTP 500 without fallback (no message queue)', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    await expect(client.createFileFunctionEdge('TEST', 'src/utils.js', 'myFunc')).rejects.toThrow(
+      'HTTP 500'
+    );
+
+    const queueCalls = fetchWithPool.mock.calls.filter(c =>
+      c[0]?.toString().includes('/api/queue/messages')
+    );
+    expect(queueCalls).toHaveLength(0);
+  });
+
+  it('should throw on HTTP 409 Conflict', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 409: Conflict'));
+    });
+
+    await expect(client.createFileFunctionEdge('TEST', 'src/utils.js', 'dupFunc')).rejects.toThrow(
+      'HTTP 409: Conflict'
+    );
+  });
+
+  it('should propagate getEntityUuid failure for file lookup', async () => {
+    fetchWithPool.mockImplementation(() => {
+      return Promise.reject(new Error('HTTP 404: Not Found'));
+    });
+
+    await expect(client.createFileFunctionEdge('TEST', 'missing/file.js', 'func')).rejects.toThrow(
+      'HTTP 404'
+    );
+  });
+
+  it('should propagate getEntityUuid failure for function lookup', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.resolve(createMockResponse({ uuid: 'file-uuid' }));
+      return Promise.reject(new Error('HTTP 404: Not Found'));
+    });
+
+    await expect(
+      client.createFileFunctionEdge('TEST', 'src/utils.js', 'missingFunc')
+    ).rejects.toThrow('HTTP 404');
+  });
+
+  it('should propagate getEdgeUuid failure', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 2) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    await expect(client.createFileFunctionEdge('TEST', 'src/utils.js', 'func')).rejects.toThrow(
+      'HTTP 500'
+    );
+  });
+
+  it('should not increment edgesCreated stat on failure', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    await expect(client.createFileFunctionEdge('TEST', 'src/utils.js', 'failFunc')).rejects.toThrow(
+      'HTTP 500'
+    );
+
+    expect(client.stats.edgesCreated).toBeUndefined();
+  });
+});
+
+describe('_createEdgeViaMessageQueue - failure paths', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should throw when message queue endpoint fails', async () => {
+    fetchWithPool.mockImplementation(() =>
+      Promise.reject(new Error('HTTP 503: Service Unavailable'))
+    );
+
+    await expect(client._createEdgeViaMessageQueue('TEST', 'src/file.js')).rejects.toThrow(
+      'HTTP 503'
+    );
+  });
+
+  it('should throw on network error to message queue', async () => {
+    fetchWithPool.mockImplementation(() => Promise.reject({ code: 'ECONNREFUSED' }));
+
+    await expect(client._createEdgeViaMessageQueue('TEST', 'src/file.js')).rejects.toBeDefined();
+  });
+
+  it('should increment edgesFallback stat only on success', async () => {
+    fetchWithPool.mockResolvedValueOnce(createMockResponse({ queued: true }));
+
+    await client._createEdgeViaMessageQueue('TEST', 'src/ok.js');
+
+    expect(client.stats.edgesFallback).toBe(1);
+  });
+
+  it('should not increment edgesFallback on failure', async () => {
+    fetchWithPool.mockImplementation(() =>
+      Promise.reject(new Error('HTTP 500: Internal Server Error'))
+    );
+
+    await expect(client._createEdgeViaMessageQueue('TEST', 'src/fail.js')).rejects.toThrow(
+      'HTTP 500'
+    );
+
+    expect(client.stats.edgesFallback).toBeUndefined();
+  });
+});
+
+describe('createContainmentEdgesBatch - edge fallback scenarios', () => {
+  let client;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new GraphitiClient({
+      baseUrl: 'http://localhost:8003',
+      groupId: 'test_group',
+      timeout: 5000,
+      retries: 1,
+      retryDelayMs: 10,
+    });
+  });
+
+  it('should count failures when both direct and fallback fail for a single file', async () => {
+    let callCount = 0;
+    fetchWithPool.mockImplementation(() => {
+      callCount++;
+      if (callCount <= 3) {
+        return Promise.resolve(createMockResponse({ uuid: `uuid-${callCount}` }));
+      }
+      return Promise.reject(new Error('HTTP 500: Internal Server Error'));
+    });
+
+    const result = await client.createContainmentEdgesBatch('TEST', ['fail.js'], 50);
+
+    expect(result.failed).toBe(1);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].file).toBe('fail.js');
+  });
+
+  it('should handle empty file array', async () => {
+    const result = await client.createContainmentEdgesBatch('TEST', [], 50);
+
+    expect(result.success).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.errors).toHaveLength(0);
+    expect(fetchWithPool).not.toHaveBeenCalled();
+  });
+});
