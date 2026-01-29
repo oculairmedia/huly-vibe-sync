@@ -1,4 +1,22 @@
+<!-- VIBESYNC:project-info:START -->
+
 # Agent Instructions
+
+## Huly Integration
+
+- **Project Code**: `HVSYN`
+- **Project Name**: Huly-Vibe Sync Service
+- **Letta Agent ID**: `agent-b417b8da-84d2-40dd-97ad-3a35454934f7`
+
+## Workflow Instructions
+
+1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `HVSYN`
+2. **Issue references**: All issues for this project use the format `HVSYN-XXX` (e.g., `HVSYN-123`)
+3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent`
+4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
+<!-- VIBESYNC:project-info:END -->
+
+<!-- VIBESYNC:reporting-hierarchy:START -->
 
 ## PM Agent Communication
 
@@ -46,11 +64,15 @@ You (Developer Agent - experienced)
 **Next Steps**: [If any]
 ```
 
----
+<!-- VIBESYNC:reporting-hierarchy:END -->
+
+<!-- VIBESYNC:beads-instructions:START -->
+
+## Beads Issue Tracking
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
-## Quick Reference
+### Quick Reference
 
 ```bash
 bd ready              # Find available work
@@ -60,17 +82,17 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
-## Beads Sync Flow (Hybrid System)
+### Beads Sync Flow (Hybrid System)
 
 Beads uses a **hybrid sync** approach for reliability:
 
-### Automatic Sync (Real-time)
+#### Automatic Sync (Real-time)
 
 - `bd create`, `bd update`, `bd close` write to SQLite DB
 - File watcher detects DB changes automatically
 - Syncs to Huly within ~30-60 seconds
 
-### Git Persistence (`bd sync`)
+#### Git Persistence (`bd sync`)
 
 - `bd sync` exports to JSONL and commits to git
 - Required for cross-machine persistence
@@ -83,6 +105,10 @@ bd create "New task"   # Auto-syncs to Huly
 bd close some-issue    # Auto-syncs to Huly
 bd sync                # Git backup (recommended before session end)
 ```
+
+<!-- VIBESYNC:beads-instructions:END -->
+
+<!-- VIBESYNC:session-completion:START -->
 
 ## Landing the Plane (Session Completion)
 
@@ -110,3 +136,22 @@ bd sync                # Git backup (recommended before session end)
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+<!-- VIBESYNC:session-completion:END -->
+
+<!-- VIBESYNC:codebase-context:START -->
+
+## Codebase Context
+
+**Project**: Huly-Vibe Sync Service (`HVSYN`)
+**Path**: `/opt/stacks/huly-vibe-sync`
+
+This project's PM agent has a `codebase_ast` memory block with live structural data including:
+
+- File counts and function counts per directory
+- Key modules and their roles
+- Quality signals (doc gaps, untested modules, complexity hotspots)
+- Recent file changes
+
+Ask the PM agent for architectural guidance before making significant changes.
+
+<!-- VIBESYNC:codebase-context:END -->
