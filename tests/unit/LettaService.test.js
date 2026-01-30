@@ -91,8 +91,9 @@ vi.mock('../../lib/LettaMemoryBuilders.js', () => ({
   })),
 }));
 
-vi.mock('fs', () => ({
-  default: {
+vi.mock('fs', () => {
+  // Share instances so default import and dynamic import use same mocks
+  const mockFs = {
     existsSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
@@ -100,19 +101,25 @@ vi.mock('fs', () => ({
     statSync: vi.fn(),
     readdirSync: vi.fn(),
     createReadStream: vi.fn(),
+  };
+  return { default: mockFs, ...mockFs };
+});
+
+vi.mock('child_process', () => ({
+  execSync: vi.fn(),
+}));
+
+vi.mock('../../lib/AgentsMdGenerator.js', () => ({
+  agentsMdGenerator: {
+    generate: vi.fn(() => ({ changes: [{ section: 'project-info', action: 'updated' }] })),
   },
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  statSync: vi.fn(),
-  readdirSync: vi.fn(),
-  createReadStream: vi.fn(),
 }));
 
 import { LettaClient } from '@letta-ai/letta-client';
 import { fetchWithPool } from '../../lib/http.js';
 import { buildScratchpad } from '../../lib/LettaMemoryBuilders.js';
+import { agentsMdGenerator } from '../../lib/AgentsMdGenerator.js';
+import { execSync } from 'child_process';
 import fs from 'fs';
 
 describe('LettaService', () => {
@@ -1084,6 +1091,1099 @@ describe('LettaService', () => {
       await expect(
         service.upsertMemoryBlocks('agent-123', [{ label: 'test', value: 'test' }])
       ).rejects.toThrow('API Error');
+    });
+  });
+
+  // ============================================================
+  // _ensureMcpTool Tests
+  // ============================================================
+  describe('_ensureMcpTool', () => {
+    it('should return existing tool', async () => {
+      mockClient.tools.mcp.list.mockResolvedValue([{ id: 'tool-1', name: 'test-tool' }]);
+
+      const result = await service._ensureMcpTool('test-tool', 'http://example.com');
+
+      expect(result.id).toBe('tool-1');
+      expect(mockClient.tools.mcp.create).not.toHaveBeenCalled();
+    });
+
+    it('should create new tool if not found', async () => {
+      mockClient.tools.mcp.list.mockResolvedValue([]);
+      mockClient.tools.mcp.create.mockResolvedValue({ id: 'new-tool', name: 'test-tool' });
+
+      const result = await service._ensureMcpTool('test-tool', 'http://example.com');
+
+      expect(result.id).toBe('new-tool');
+      expect(mockClient.tools.mcp.create).toHaveBeenCalledWith({
+        name: 'test-tool',
+        transport: 'http',
+        url: 'http://example.com',
+      });
+    });
+
+    it('should throw on error', async () => {
+      mockClient.tools.mcp.list.mockRejectedValue(new Error('MCP error'));
+
+      await expect(service._ensureMcpTool('test', 'http://x.com')).rejects.toThrow('MCP error');
+    });
+  });
+
+  // ============================================================
+  // ensureSearchFolderPassagesTool Tests
+  // ============================================================
+  describe('ensureSearchFolderPassagesTool', () => {
+    it('should return existing tool ID', async () => {
+      fetchWithPool.mockResolvedValue({
+        ok: true,
+        json: async () => [{ id: 'sfp-tool-1' }],
+      });
+
+      const result = await service.ensureSearchFolderPassagesTool();
+
+      expect(result).toBe('sfp-tool-1');
+    });
+
+    it('should create tool if not found', async () => {
+      fetchWithPool
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [],
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'sfp-new-tool' }),
+        });
+
+      fs.readFileSync.mockReturnValue('def search_folder_passages(): pass');
+
+      const result = await service.ensureSearchFolderPassagesTool();
+
+      expect(result).toBe('sfp-new-tool');
+    });
+
+    it('should throw when tool source file not found', async () => {
+      fetchWithPool.mockResolvedValueOnce({
+        ok: true,
+        json: async () => [],
+      });
+      fs.readFileSync.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
+
+      await expect(service.ensureSearchFolderPassagesTool()).rejects.toThrow(
+        'Tool source file not found'
+      );
+    });
+
+    it('should throw on create API failure', async () => {
+      fetchWithPool
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => [],
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => 'Server Error',
+        });
+
+      fs.readFileSync.mockReturnValue('source code');
+
+      await expect(service.ensureSearchFolderPassagesTool()).rejects.toThrow(
+        'Failed to create tool'
+      );
+    });
+
+    it('should handle search API failure gracefully', async () => {
+      fetchWithPool.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+      fetchWithPool.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'created-tool' }),
+      });
+      fs.readFileSync.mockReturnValue('source');
+
+      const result = await service.ensureSearchFolderPassagesTool();
+
+      expect(result).toBe('created-tool');
+    });
+  });
+
+  // ============================================================
+  // attachSearchFolderPassagesTool Tests
+  // ============================================================
+  describe('attachSearchFolderPassagesTool', () => {
+    it('should attach tool successfully', async () => {
+      fetchWithPool.mockResolvedValue({
+        ok: true,
+        json: async () => [{ id: 'sfp-tool-1' }],
+      });
+      mockClient.agents.tools.attach.mockResolvedValue({});
+
+      const result = await service.attachSearchFolderPassagesTool('agent-123');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true if already attached', async () => {
+      fetchWithPool.mockResolvedValue({
+        ok: true,
+        json: async () => [{ id: 'sfp-tool-1' }],
+      });
+      mockClient.agents.tools.attach.mockRejectedValue(new Error('already attached'));
+
+      const result = await service.attachSearchFolderPassagesTool('agent-123');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false on other errors', async () => {
+      fetchWithPool.mockResolvedValue({
+        ok: true,
+        json: async () => [{ id: 'sfp-tool-1' }],
+      });
+      mockClient.agents.tools.attach.mockRejectedValue(new Error('network failure'));
+
+      const result = await service.attachSearchFolderPassagesTool('agent-123');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  // ============================================================
+  // setAgentIdEnvVar Tests
+  // ============================================================
+  describe('setAgentIdEnvVar', () => {
+    it('should set env var successfully', async () => {
+      fetchWithPool.mockResolvedValue({ ok: true });
+
+      const result = await service.setAgentIdEnvVar('agent-123');
+
+      expect(result).toBe(true);
+      expect(fetchWithPool).toHaveBeenCalledWith(
+        expect.stringContaining('/agents/agent-123'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining('LETTA_AGENT_ID'),
+        })
+      );
+    });
+
+    it('should return false on API error', async () => {
+      fetchWithPool.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Error',
+      });
+
+      const result = await service.setAgentIdEnvVar('agent-123');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  // ============================================================
+  // _updatePersonaBlock Tests
+  // ============================================================
+  describe('_updatePersonaBlock', () => {
+    it('should update existing persona block', async () => {
+      mockClient.agents.retrieve.mockResolvedValue({
+        id: 'agent-123',
+        memory: { blocks: [{ id: 'block-1', label: 'persona', value: 'old' }] },
+      });
+      mockClient.blocks.modify.mockResolvedValue({});
+
+      await service._updatePersonaBlock('agent-123', 'new persona');
+
+      expect(mockClient.blocks.modify).toHaveBeenCalledWith('block-1', { value: 'new persona' });
+    });
+
+    it('should create and attach persona if not exists', async () => {
+      mockClient.agents.retrieve.mockResolvedValue({
+        id: 'agent-123',
+        memory: { blocks: [] },
+      });
+      mockClient.blocks.create.mockResolvedValue({ id: 'new-block' });
+      mockClient.agents.blocks.attach.mockResolvedValue({});
+
+      await service._updatePersonaBlock('agent-123', 'new persona');
+
+      expect(mockClient.blocks.create).toHaveBeenCalledWith({
+        label: 'persona',
+        value: 'new persona',
+        limit: 20000,
+      });
+      expect(mockClient.agents.blocks.attach).toHaveBeenCalledWith('agent-123', 'new-block');
+    });
+
+    it('should handle errors gracefully without throwing', async () => {
+      mockClient.agents.retrieve.mockRejectedValue(new Error('fail'));
+
+      await service._updatePersonaBlock('agent-123', 'persona');
+
+      expect(consoleSpy.error).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================
+  // _attachMeridianHumanBlock Tests
+  // ============================================================
+  describe('_attachMeridianHumanBlock', () => {
+    it('should attach human block', async () => {
+      mockClient.agents.blocks.attach.mockResolvedValue({});
+
+      await service._attachMeridianHumanBlock('agent-123');
+
+      expect(mockClient.agents.blocks.attach).toHaveBeenCalledWith(
+        'agent-123',
+        'block-3da80889-c509-4c68-b502-a3f54c28c137'
+      );
+    });
+
+    it('should handle errors gracefully without throwing', async () => {
+      mockClient.agents.blocks.attach.mockRejectedValue(new Error('fail'));
+
+      await service._attachMeridianHumanBlock('agent-123');
+
+      expect(consoleSpy.warn).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================
+  // attachMcpTools (legacy) Tests
+  // ============================================================
+  describe('attachMcpTools', () => {
+    it('should redirect to attachPmTools', async () => {
+      service._controlAgentCache = {
+        agentId: 'control-123',
+        toolIds: ['tool-1'],
+        persona: 'persona',
+      };
+      mockClient.agents.tools.attach.mockResolvedValue({});
+
+      const result = await service.attachMcpTools('agent-123', 'http://huly', 'http://vibe');
+
+      expect(result.total).toBe(1);
+    });
+  });
+
+  // ============================================================
+  // getControlAgentConfig Tests (additional branches)
+  // ============================================================
+  describe('getControlAgentConfig', () => {
+    it('should find control agent by name when no agentId provided', async () => {
+      mockClient.agents.list.mockResolvedValue([
+        {
+          id: 'found-control',
+          name: service.controlAgentName,
+          memory: { blocks: [{ label: 'persona', value: 'p' }] },
+        },
+      ]);
+      mockClient.agents.tools.list.mockResolvedValue([{ id: 't1' }]);
+
+      const result = await service.getControlAgentConfig();
+
+      expect(result.agentId).toBe('found-control');
+      expect(result.toolIds).toEqual(['t1']);
+      expect(result.persona).toBe('p');
+    });
+
+    it('should throw when control agent not found by name', async () => {
+      mockClient.agents.list.mockResolvedValue([]);
+
+      await expect(service.getControlAgentConfig()).rejects.toThrow('Control agent not found');
+    });
+
+    it('should return null persona when no persona block exists', async () => {
+      mockClient.agents.retrieve.mockResolvedValue({
+        id: 'ctrl-1',
+        name: 'Huly-PM-Control',
+        memory: { blocks: [] },
+      });
+      mockClient.agents.tools.list.mockResolvedValue([]);
+
+      const result = await service.getControlAgentConfig('ctrl-1');
+
+      expect(result.persona).toBeNull();
+    });
+  });
+
+  // ============================================================
+  // saveAgentIdToProjectFolder Tests
+  // ============================================================
+  describe('saveAgentIdToProjectFolder', () => {
+    it('should create .letta dir and save settings', () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.writeFileSync.mockImplementation(() => {});
+      fs.mkdirSync.mockImplementation(() => {});
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123');
+
+      expect(fs.mkdirSync).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('settings.local.json'),
+        expect.stringContaining('agent-123'),
+        expect.any(Object)
+      );
+    });
+
+    it('should skip mkdir if .letta dir exists', () => {
+      fs.existsSync.mockImplementation(p => {
+        if (typeof p === 'string' && p.endsWith('.letta')) return true;
+        if (typeof p === 'string' && p.endsWith('.gitignore')) return true;
+        return false;
+      });
+      fs.writeFileSync.mockImplementation(() => {});
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123');
+
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
+    });
+
+    it('should create .gitignore if not exists', () => {
+      fs.existsSync.mockImplementation(p => {
+        if (typeof p === 'string' && p.endsWith('.letta')) return true;
+        if (typeof p === 'string' && p.endsWith('.gitignore')) return false;
+        return false;
+      });
+      fs.writeFileSync.mockImplementation(() => {});
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123');
+
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should call updateAgentsMdWithProjectInfo when projectInfo provided', () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.writeFileSync.mockImplementation(() => {});
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123', {
+        identifier: 'TST',
+        name: 'Test Project',
+      });
+
+      expect(agentsMdGenerator.generate).toHaveBeenCalled();
+    });
+
+    it('should handle EACCES error gracefully', () => {
+      const error = new Error('Permission denied');
+      error.code = 'EACCES';
+      fs.existsSync.mockReturnValue(false);
+      fs.mkdirSync.mockImplementation(() => {
+        throw error;
+      });
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123');
+
+      expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
+    });
+
+    it('should handle non-EACCES errors', () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.mkdirSync.mockImplementation(() => {
+        throw new Error('Unknown error');
+      });
+
+      service.saveAgentIdToProjectFolder('/opt/project', 'agent-123');
+
+      expect(consoleSpy.error).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================
+  // updateAgentsMdWithProjectInfo Tests
+  // ============================================================
+  describe('updateAgentsMdWithProjectInfo', () => {
+    it('should call agentsMdGenerator.generate with correct params', () => {
+      service.updateAgentsMdWithProjectInfo('/opt/project', 'agent-123', {
+        identifier: 'TST',
+        name: 'Test',
+      });
+
+      expect(agentsMdGenerator.generate).toHaveBeenCalledWith(
+        expect.stringContaining('AGENTS.md'),
+        expect.objectContaining({
+          identifier: 'TST',
+          name: 'Test',
+          agentId: 'agent-123',
+          agentName: 'Huly - Test',
+          projectPath: '/opt/project',
+        }),
+        expect.objectContaining({
+          sections: expect.arrayContaining(['project-info', 'reporting-hierarchy']),
+        })
+      );
+    });
+
+    it('should handle errors gracefully', () => {
+      agentsMdGenerator.generate.mockImplementation(() => {
+        throw new Error('generate failed');
+      });
+
+      service.updateAgentsMdWithProjectInfo('/opt/project', 'agent-123', {
+        identifier: 'TST',
+        name: 'Test',
+      });
+
+      expect(consoleSpy.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not update AGENTS.md')
+      );
+    });
+  });
+
+  // ============================================================
+  // computeFileHash Tests
+  // ============================================================
+  describe('computeFileHash', () => {
+    it('should compute MD5 hash of file content', () => {
+      fs.readFileSync.mockReturnValue(Buffer.from('hello world'));
+
+      const hash = service.computeFileHash('/some/file.txt');
+
+      expect(typeof hash).toBe('string');
+      expect(hash).toHaveLength(32);
+    });
+  });
+
+  // ============================================================
+  // deleteFile Tests
+  // ============================================================
+  describe('deleteFile', () => {
+    it('should call fetchWithPool with DELETE', async () => {
+      fetchWithPool.mockResolvedValue({ ok: true });
+
+      await service.deleteFile('folder-1', 'file-1');
+
+      expect(fetchWithPool).toHaveBeenCalledWith(
+        expect.stringContaining('/sources/folder-1/file-1'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+  });
+
+  // ============================================================
+  // _buildPersonaBlock Tests
+  // ============================================================
+  describe('_buildPersonaBlock', () => {
+    it('should include project identifier and name', () => {
+      const persona = service._buildPersonaBlock('MYPROJ', 'My Project');
+
+      expect(persona).toContain('MYPROJ');
+      expect(persona).toContain('My Project');
+      expect(persona).toContain('Meridian');
+      expect(persona).toContain('Emmanuel');
+    });
+  });
+
+  // ============================================================
+  // discoverProjectFiles Tests
+  // ============================================================
+  describe('discoverProjectFiles', () => {
+    it('should return empty array if project path does not exist', async () => {
+      fs.existsSync.mockReturnValue(false);
+
+      const result = await service.discoverProjectFiles('/nonexistent');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should discover priority files in docsOnly mode', async () => {
+      fs.existsSync.mockImplementation(p => {
+        if (p === '/test/project') return true;
+        if (typeof p === 'string' && p.endsWith('README.md')) return true;
+        if (typeof p === 'string' && p.endsWith('AGENTS.md')) return true;
+        if (typeof p === 'string' && p.endsWith('package.json')) return true;
+        return false;
+      });
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: true });
+
+      expect(result).toContain('README.md');
+      expect(result).toContain('AGENTS.md');
+      expect(result).toContain('package.json');
+    });
+
+    it('should scan documentation directories for .md files', async () => {
+      fs.existsSync.mockImplementation(p => {
+        if (p === '/test/project') return true;
+        if (typeof p === 'string' && p.endsWith('/docs')) return true;
+        return false;
+      });
+      fs.statSync.mockReturnValue({ isDirectory: () => true });
+      fs.readdirSync.mockReturnValue([
+        { name: 'guide.md', isDirectory: () => false, isFile: () => true },
+        { name: 'api.md', isDirectory: () => false, isFile: () => true },
+        { name: 'image.png', isDirectory: () => false, isFile: () => true },
+      ]);
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: true });
+
+      expect(result).toContain('docs/guide.md');
+      expect(result).toContain('docs/api.md');
+      expect(result).not.toContain('docs/image.png');
+    });
+
+    it('should scan nested documentation directories', async () => {
+      fs.existsSync.mockImplementation(p => {
+        if (p === '/test/project') return true;
+        if (typeof p === 'string' && p.endsWith('/docs')) return true;
+        return false;
+      });
+      fs.statSync.mockReturnValue({ isDirectory: () => true });
+      fs.readdirSync.mockImplementation(p => {
+        if (typeof p === 'string' && p.endsWith('/docs')) {
+          return [{ name: 'sub', isDirectory: () => true, isFile: () => false }];
+        }
+        return [{ name: 'nested.md', isDirectory: () => false, isFile: () => true }];
+      });
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: true });
+
+      expect(result).toContain('docs/sub/nested.md');
+    });
+
+    it('should include source files when docsOnly is false', async () => {
+      fs.existsSync.mockImplementation(p => {
+        if (p === '/test/project') return true;
+        return false;
+      });
+      execSync.mockReturnValue('src/index.js\nsrc/app.ts\nnode_modules/pkg/index.js\n');
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: false });
+
+      expect(result).toContain('src/index.js');
+      expect(result).toContain('src/app.ts');
+      expect(result).not.toContain('node_modules/pkg/index.js');
+    });
+
+    it('should handle git ls-files failure in non-docsOnly mode', async () => {
+      fs.existsSync.mockImplementation(p => p === '/test/project');
+      execSync.mockImplementation(() => {
+        throw new Error('not a git repo');
+      });
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: false });
+
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('should deduplicate files', async () => {
+      fs.existsSync.mockImplementation(p => {
+        if (p === '/test/project') return true;
+        if (typeof p === 'string' && p.endsWith('README.md')) return true;
+        return false;
+      });
+      execSync.mockReturnValue('README.md\nsrc/index.js\n');
+
+      const result = await service.discoverProjectFiles('/test/project', { docsOnly: false });
+
+      const readmeCount = result.filter(f => f === 'README.md').length;
+      expect(readmeCount).toBe(1);
+    });
+
+    it('should handle top-level error', async () => {
+      fs.existsSync.mockImplementation(() => {
+        throw new Error('filesystem error');
+      });
+
+      const result = await service.discoverProjectFiles('/test/project');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ============================================================
+  // discoverProjectFilesLegacy Tests
+  // ============================================================
+  describe('discoverProjectFilesLegacy', () => {
+    it('should return empty array if project path does not exist', async () => {
+      fs.existsSync.mockReturnValue(false);
+
+      const result = await service.discoverProjectFilesLegacy('/nonexistent');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should discover files using git ls-files', async () => {
+      fs.existsSync.mockReturnValue(true);
+      execSync.mockReturnValue('README.md\nsrc/index.js\npackage.json\nimage.png\n');
+
+      const result = await service.discoverProjectFilesLegacy('/test/project');
+
+      expect(result).toContain('README.md');
+      expect(result).toContain('src/index.js');
+      expect(result).toContain('package.json');
+      expect(result).not.toContain('image.png');
+    });
+
+    it('should fallback to filesystem scan when git fails', async () => {
+      fs.existsSync.mockReturnValue(true);
+      execSync.mockImplementation(() => {
+        throw new Error('not a git repo');
+      });
+      fs.readdirSync.mockReturnValue([
+        { name: 'readme.md', isDirectory: () => false },
+        { name: 'src', isDirectory: () => true },
+        { name: 'node_modules', isDirectory: () => true },
+      ]);
+
+      const result = await service.discoverProjectFilesLegacy('/test/project');
+
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('should handle top-level error', async () => {
+      fs.existsSync.mockImplementation(() => {
+        throw new Error('error');
+      });
+
+      const result = await service.discoverProjectFilesLegacy('/test/project');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ============================================================
+  // uploadProjectFiles Tests
+  // ============================================================
+  describe('uploadProjectFiles', () => {
+    it('should upload files to folder', async () => {
+      fs.statSync.mockReturnValue({ size: 1000 });
+      fs.readFileSync.mockReturnValue(Buffer.from('file content'));
+      mockClient.folders.files.upload.mockResolvedValue({ id: 'file-1' });
+
+      const result = await service.uploadProjectFiles(
+        'folder-1',
+        '/test/project',
+        ['README.md', 'src/index.js'],
+        50
+      );
+
+      expect(result).toHaveLength(2);
+      expect(mockClient.folders.files.upload).toHaveBeenCalledTimes(2);
+    });
+
+    it('should skip files larger than 1MB', async () => {
+      fs.statSync.mockImplementation(p => {
+        if (typeof p === 'string' && p.includes('big')) return { size: 2 * 1024 * 1024 };
+        return { size: 100 };
+      });
+      fs.readFileSync.mockReturnValue(Buffer.from('small'));
+      mockClient.folders.files.upload.mockResolvedValue({ id: 'file-1' });
+
+      const result = await service.uploadProjectFiles(
+        'folder-1',
+        '/test/project',
+        ['big.bin', 'small.md'],
+        50
+      );
+
+      expect(result).toHaveLength(1);
+    });
+
+    it('should respect maxFiles limit', async () => {
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('content'));
+      mockClient.folders.files.upload.mockResolvedValue({ id: 'f' });
+
+      const files = Array.from({ length: 10 }, (_, i) => `file${i}.md`);
+      const result = await service.uploadProjectFiles('folder-1', '/test', files, 3);
+
+      expect(result).toHaveLength(3);
+    });
+
+    it('should handle upload errors per file gracefully', async () => {
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('content'));
+      mockClient.folders.files.upload
+        .mockRejectedValueOnce(new Error('upload failed'))
+        .mockResolvedValueOnce({ id: 'file-2' });
+
+      const result = await service.uploadProjectFiles(
+        'folder-1',
+        '/test/project',
+        ['fail.md', 'ok.md'],
+        50
+      );
+
+      expect(result).toHaveLength(1);
+    });
+
+    it('should map file extensions to MIME types', async () => {
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('content'));
+      mockClient.folders.files.upload.mockResolvedValue({ id: 'f' });
+
+      await service.uploadProjectFiles('folder-1', '/test', ['style.css'], 50);
+
+      expect(mockClient.folders.files.upload).toHaveBeenCalled();
+    });
+
+    it('should handle all files failing gracefully', async () => {
+      fs.statSync.mockImplementation(() => {
+        throw new Error('stat error');
+      });
+
+      const result = await service.uploadProjectFiles('folder-1', '/test', ['file.md'], 50);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ============================================================
+  // uploadReadme Tests
+  // ============================================================
+  describe('uploadReadme', () => {
+    it('should return null when sourceId is null', async () => {
+      const result = await service.uploadReadme(null, '/test/README.md', 'TST');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when file does not exist', async () => {
+      fs.existsSync.mockReturnValue(false);
+
+      const result = await service.uploadReadme('source-1', '/nonexistent/README.md', 'TST');
+
+      expect(result).toBeNull();
+    });
+
+    it('should upload README successfully', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.createReadStream.mockReturnValue({ pipe: vi.fn() });
+      mockClient.sources.files.upload.mockResolvedValue({ id: 'readme-file-1' });
+
+      const result = await service.uploadReadme('source-1', '/test/README.md', 'TST');
+
+      expect(result.id).toBe('readme-file-1');
+      expect(mockClient.sources.files.upload).toHaveBeenCalledWith(
+        expect.anything(),
+        'source-1',
+        expect.objectContaining({
+          name: 'TST-README.md',
+          duplicateHandling: 'replace',
+        })
+      );
+    });
+
+    it('should throw on upload error', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.createReadStream.mockReturnValue({});
+      mockClient.sources.files.upload.mockRejectedValue(new Error('upload failed'));
+
+      await expect(service.uploadReadme('source-1', '/test/README.md', 'TST')).rejects.toThrow(
+        'upload failed'
+      );
+    });
+  });
+
+  // ============================================================
+  // syncProjectFilesIncremental Tests
+  // ============================================================
+  describe('syncProjectFilesIncremental', () => {
+    let mockDb;
+
+    beforeEach(() => {
+      mockDb = {
+        getProjectFiles: vi.fn().mockReturnValue([]),
+        getOrphanedFiles: vi.fn().mockReturnValue([]),
+        deleteProjectFile: vi.fn(),
+        upsertProjectFile: vi.fn(),
+      };
+    });
+
+    it('should skip unchanged files', async () => {
+      const hash = service.computeFileHash.__proto__ ? undefined : undefined;
+      fs.existsSync.mockReturnValue(true);
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('content'));
+
+      mockDb.getProjectFiles.mockReturnValue([
+        {
+          relative_path: 'file.md',
+          content_hash: service.computeFileHash('/dummy'),
+          letta_file_id: 'f1',
+        },
+      ]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['file.md'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.skipped).toBe(1);
+      expect(stats.uploaded).toBe(0);
+    });
+
+    it('should delete orphaned files', async () => {
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([
+        { relative_path: 'old.md', letta_file_id: 'old-f1' },
+      ]);
+      fetchWithPool.mockResolvedValue({ ok: true });
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        [],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.deleted).toBe(1);
+      expect(fetchWithPool).toHaveBeenCalledWith(
+        expect.stringContaining('/sources/folder-1/old-f1'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+      expect(mockDb.deleteProjectFile).toHaveBeenCalledWith('TST', 'old.md');
+    });
+
+    it('should delete orphaned files without letta_file_id', async () => {
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([
+        { relative_path: 'orphan.md', letta_file_id: null },
+      ]);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        [],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.deleted).toBe(0);
+      expect(mockDb.deleteProjectFile).toHaveBeenCalledWith('TST', 'orphan.md');
+    });
+
+    it('should upload new files', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('new content'));
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'uploaded-file-1' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['new.md'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.uploaded).toBe(1);
+      expect(mockDb.upsertProjectFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project_identifier: 'TST',
+          relative_path: 'new.md',
+          letta_file_id: 'uploaded-file-1',
+        })
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it('should replace existing tracked files that changed', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('changed content'));
+      mockDb.getProjectFiles.mockReturnValue([
+        { relative_path: 'changed.md', content_hash: 'old-hash', letta_file_id: 'old-f1' },
+      ]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+      fetchWithPool.mockResolvedValue({ ok: true });
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'new-f1' }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['changed.md'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.uploaded).toBe(1);
+      expect(fetchWithPool).toHaveBeenCalledWith(
+        expect.stringContaining('/sources/folder-1/old-f1'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it('should skip nonexistent files', async () => {
+      fs.existsSync.mockReturnValue(false);
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['missing.md'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.uploaded).toBe(0);
+    });
+
+    it('should skip large files', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.statSync.mockReturnValue({ size: 600000 });
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['huge.bin'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.uploaded).toBe(0);
+    });
+
+    it('should handle per-file upload errors', async () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.statSync.mockReturnValue({ size: 100 });
+      fs.readFileSync.mockReturnValue(Buffer.from('content'));
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([]);
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Error',
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        ['fail.md'],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.errors).toBe(1);
+
+      vi.unstubAllGlobals();
+    });
+
+    it('should handle orphan deletion errors gracefully', async () => {
+      mockDb.getProjectFiles.mockReturnValue([]);
+      mockDb.getOrphanedFiles.mockReturnValue([
+        { relative_path: 'orphan.md', letta_file_id: 'orphan-f1' },
+      ]);
+      fetchWithPool.mockRejectedValue(new Error('delete failed'));
+
+      const stats = await service.syncProjectFilesIncremental(
+        'folder-1',
+        '/test',
+        [],
+        mockDb,
+        'TST'
+      );
+
+      expect(stats.deleted).toBe(0);
+      expect(mockDb.deleteProjectFile).toHaveBeenCalled();
+    });
+
+    it('should throw on top-level error', async () => {
+      mockDb.getProjectFiles.mockImplementation(() => {
+        throw new Error('db error');
+      });
+
+      await expect(
+        service.syncProjectFilesIncremental('folder-1', '/test', [], mockDb, 'TST')
+      ).rejects.toThrow('db error');
+    });
+  });
+
+  // ============================================================
+  // _loadAgentState Tests (additional branches)
+  // ============================================================
+  describe('_loadAgentState', () => {
+    it('should load state from file when exists', () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(
+        JSON.stringify({ version: '1.0.0', agents: { TEST: 'agent-1' } })
+      );
+
+      const state = service._loadAgentState();
+
+      expect(state.agents.TEST).toBe('agent-1');
+    });
+
+    it('should return default state on parse error', () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue('invalid json');
+
+      const state = service._loadAgentState();
+
+      expect(state.version).toBe('1.0.0');
+      expect(state.agents).toEqual({});
+    });
+
+    it('should return default state when file does not exist', () => {
+      fs.existsSync.mockReturnValue(false);
+
+      const state = service._loadAgentState();
+
+      expect(state.version).toBe('1.0.0');
+    });
+  });
+
+  // ============================================================
+  // _saveAgentState Tests (error branch)
+  // ============================================================
+  describe('_saveAgentState', () => {
+    it('should handle write errors gracefully', () => {
+      fs.existsSync.mockReturnValue(true);
+      fs.writeFileSync.mockImplementation(() => {
+        throw new Error('write failed');
+      });
+
+      service._saveAgentState();
+
+      expect(consoleSpy.error).toHaveBeenCalledWith(
+        expect.stringContaining('Error saving agent state'),
+        'write failed'
+      );
+    });
+  });
+
+  // ============================================================
+  // ensureControlAgent - creation error branch
+  // ============================================================
+  describe('ensureControlAgent - error branches', () => {
+    it('should throw when control agent creation fails', async () => {
+      mockClient.agents.list.mockResolvedValue([]);
+      fetchWithPool.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Server Error',
+      });
+
+      await expect(service.ensureControlAgent()).rejects.toThrow('Failed to create control agent');
     });
   });
 });
