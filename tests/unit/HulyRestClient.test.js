@@ -778,4 +778,636 @@ describe('HulyRestClient', () => {
       await expect(client.listComponents('INVALID')).rejects.toThrow('REST API error (404)');
     });
   });
+
+  // ============================================================
+  // callTool - additional branch coverage
+  // ============================================================
+  describe('callTool - additional branches', () => {
+    it('should throw when result.success is false', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: false, error: 'tool failed' }),
+      });
+
+      await expect(client.callTool('bad_tool')).rejects.toThrow('Tool execution failed');
+    });
+
+    it('should return toolResult directly when not in content array format', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { result: { raw: 'data', count: 5 } },
+        }),
+      });
+
+      const result = await client.callTool('raw_tool');
+      expect(result).toEqual({ raw: 'data', count: 5 });
+    });
+
+    it('should return toolResult when content is not an array', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: { result: { content: 'not-an-array' } },
+        }),
+      });
+
+      const result = await client.callTool('string_content_tool');
+      expect(result).toEqual({ content: 'not-an-array' });
+    });
+  });
+
+  // ============================================================
+  // getIssue - additional branch coverage
+  // ============================================================
+  describe('getIssue - additional branches', () => {
+    it('should return null on 404', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Not found',
+      });
+
+      const result = await client.getIssue('NONEXIST-999');
+      expect(result).toBeNull();
+    });
+
+    it('should throw on non-404 errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Server error',
+      });
+
+      await expect(client.getIssue('TEST-1')).rejects.toThrow('REST API error (500)');
+    });
+
+    it('should return issue data on success', async () => {
+      const issue = { identifier: 'TEST-1', title: 'Test' };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => issue,
+      });
+
+      const result = await client.getIssue('TEST-1');
+      expect(result).toEqual(issue);
+    });
+  });
+
+  // ============================================================
+  // listIssuesBulk
+  // ============================================================
+  describe('listIssuesBulk', () => {
+    it('should POST to bulk-by-projects endpoint', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ totalIssues: 5, projectCount: 2, projects: {} }),
+      });
+
+      await client.listIssuesBulk(['PROJ1', 'PROJ2']);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/bulk-by-projects',
+        expect.objectContaining({ method: 'POST' })
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.projects).toEqual(['PROJ1', 'PROJ2']);
+    });
+
+    it('should include modifiedSince and limit options', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ totalIssues: 0, projectCount: 1, projects: {} }),
+      });
+
+      await client.listIssuesBulk(['PROJ1'], { modifiedSince: '2025-01-01T00:00:00Z', limit: 50 });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.modifiedSince).toBe('2025-01-01T00:00:00Z');
+      expect(body.limit).toBe(50);
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal error',
+      });
+
+      await expect(client.listIssuesBulk(['PROJ1'])).rejects.toThrow('REST API error (500)');
+    });
+  });
+
+  // ============================================================
+  // searchIssues
+  // ============================================================
+  describe('searchIssues', () => {
+    it('should call issues endpoint with query params', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [{ identifier: 'TEST-1' }] }),
+      });
+
+      const result = await client.searchIssues(
+        { query: 'bug', status: 'Open', priority: 'High', assignee: 'user1' },
+        50
+      );
+
+      expect(result).toHaveLength(1);
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain('query=bug');
+      expect(url).toContain('status=Open');
+      expect(url).toContain('priority=High');
+      expect(url).toContain('assignee=user1');
+      expect(url).toContain('limit=50');
+    });
+
+    it('should return empty array when no issues field', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.searchIssues();
+      expect(result).toEqual([]);
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Bad request',
+      });
+
+      await expect(client.searchIssues({ query: 'x' })).rejects.toThrow('REST API error (400)');
+    });
+  });
+
+  // ============================================================
+  // getSubIssues
+  // ============================================================
+  describe('getSubIssues', () => {
+    it('should fetch sub-issues for a parent', async () => {
+      const mockResult = {
+        parentIssue: 'TEST-1',
+        subIssues: [{ identifier: 'TEST-2' }, { identifier: 'TEST-3' }],
+        count: 2,
+      };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockResult,
+      });
+
+      const result = await client.getSubIssues('TEST-1');
+
+      expect(result.count).toBe(2);
+      expect(result.subIssues).toHaveLength(2);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1/subissues',
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Not found',
+      });
+
+      await expect(client.getSubIssues('BAD-1')).rejects.toThrow('REST API error (404)');
+    });
+  });
+
+  // ============================================================
+  // createSubIssue
+  // ============================================================
+  describe('createSubIssue', () => {
+    it('should POST sub-issue data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ identifier: 'TEST-5', parentIssue: 'TEST-1' }),
+      });
+
+      const result = await client.createSubIssue('TEST-1', { title: 'Sub task', priority: 'Low' });
+
+      expect(result.identifier).toBe('TEST-5');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1/subissues',
+        expect.objectContaining({ method: 'POST' })
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.title).toBe('Sub task');
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Server error',
+      });
+
+      await expect(client.createSubIssue('TEST-1', { title: 'x' })).rejects.toThrow(
+        'REST API error (500)'
+      );
+    });
+  });
+
+  // ============================================================
+  // getIssueTree
+  // ============================================================
+  describe('getIssueTree', () => {
+    it('should fetch issue tree for a project', async () => {
+      const mockTree = { project: 'TEST', tree: [{ identifier: 'TEST-1', children: [] }] };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockTree,
+      });
+
+      const result = await client.getIssueTree('TEST');
+
+      expect(result.tree).toHaveLength(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/projects/TEST/tree',
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Project not found',
+      });
+
+      await expect(client.getIssueTree('BAD')).rejects.toThrow('REST API error (404)');
+    });
+  });
+
+  // ============================================================
+  // getComments
+  // ============================================================
+  describe('getComments', () => {
+    it('should fetch comments for an issue', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ comments: [{ id: 'c1', text: 'Hello' }] }),
+      });
+
+      const result = await client.getComments('TEST-1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].text).toBe('Hello');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1/comments',
+        expect.objectContaining({ method: 'GET' })
+      );
+    });
+
+    it('should return empty array when no comments', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.getComments('TEST-1');
+      expect(result).toEqual([]);
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Error',
+      });
+
+      await expect(client.getComments('TEST-1')).rejects.toThrow('REST API error (500)');
+    });
+  });
+
+  // ============================================================
+  // createComment
+  // ============================================================
+  describe('createComment', () => {
+    it('should POST comment text', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'c1', text: 'My comment', issueIdentifier: 'TEST-1' }),
+      });
+
+      const result = await client.createComment('TEST-1', 'My comment');
+
+      expect(result.text).toBe('My comment');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1/comments',
+        expect.objectContaining({ method: 'POST' })
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.text).toBe('My comment');
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Bad request',
+      });
+
+      await expect(client.createComment('TEST-1', '')).rejects.toThrow('REST API error (400)');
+    });
+  });
+
+  // ============================================================
+  // deleteIssue
+  // ============================================================
+  describe('deleteIssue', () => {
+    it('should DELETE an issue and return true', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.deleteIssue('TEST-1');
+
+      expect(result).toBe(true);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('should append cascade=true query param', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      await client.deleteIssue('TEST-1', { cascade: true });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1?cascade=true',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => 'Not found',
+      });
+
+      await expect(client.deleteIssue('BAD-1')).rejects.toThrow('REST API error (404)');
+    });
+  });
+
+  // ============================================================
+  // patchIssue
+  // ============================================================
+  describe('patchIssue', () => {
+    it('should PATCH issue with updates', async () => {
+      const updated = { identifier: 'TEST-1', title: 'New Title', status: 'Done' };
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => updated,
+      });
+
+      const result = await client.patchIssue('TEST-1', { title: 'New Title', status: 'Done' });
+
+      expect(result.title).toBe('New Title');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-1',
+        expect.objectContaining({ method: 'PATCH' })
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.title).toBe('New Title');
+      expect(body.status).toBe('Done');
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 422,
+        text: async () => 'Validation error',
+      });
+
+      await expect(client.patchIssue('TEST-1', { status: 'Invalid' })).rejects.toThrow(
+        'REST API error (422)'
+      );
+    });
+  });
+
+  // ============================================================
+  // searchIssuesGlobal
+  // ============================================================
+  describe('searchIssuesGlobal', () => {
+    it('should search globally with filters', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [{ identifier: 'A-1' }], count: 1 }),
+      });
+
+      const result = await client.searchIssuesGlobal({
+        query: 'urgent',
+        status: 'Open',
+        priority: 'High',
+        assignee: 'user1',
+      });
+
+      expect(result).toHaveLength(1);
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain('query=urgent');
+      expect(url).toContain('status=Open');
+      expect(url).toContain('priority=High');
+      expect(url).toContain('assignee=user1');
+    });
+
+    it('should return empty array when no issues', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ count: 0 }),
+      });
+
+      const result = await client.searchIssuesGlobal({});
+      expect(result).toEqual([]);
+    });
+
+    it('should call without query params when no filters', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [], count: 0 }),
+      });
+
+      await client.searchIssuesGlobal();
+
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toBe('http://localhost:3458/api/issues');
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Error',
+      });
+
+      await expect(client.searchIssuesGlobal({ query: 'x' })).rejects.toThrow(
+        'REST API error (500)'
+      );
+    });
+  });
+
+  // ============================================================
+  // getIssuesBulk
+  // ============================================================
+  describe('getIssuesBulk', () => {
+    it('should GET bulk issues by IDs', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ issues: [{ identifier: 'T-1' }, { identifier: 'T-2' }] }),
+      });
+
+      const result = await client.getIssuesBulk(['T-1', 'T-2']);
+
+      expect(result).toHaveLength(2);
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain('ids=T-1,T-2');
+    });
+
+    it('should return empty array when no issues returned', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      });
+
+      const result = await client.getIssuesBulk(['NONE-1']);
+      expect(result).toEqual([]);
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Bad request',
+      });
+
+      await expect(client.getIssuesBulk(['T-1'])).rejects.toThrow('REST API error (400)');
+    });
+  });
+
+  // ============================================================
+  // moveIssue
+  // ============================================================
+  describe('moveIssue', () => {
+    it('should PATCH issue parent', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ moved: 'TEST-2', parentIssue: 'TEST-1', isTopLevel: false }),
+      });
+
+      const result = await client.moveIssue('TEST-2', 'TEST-1');
+
+      expect(result.parentIssue).toBe('TEST-1');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3458/api/issues/TEST-2/parent',
+        expect.objectContaining({ method: 'PATCH' })
+      );
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.parentIdentifier).toBe('TEST-1');
+    });
+
+    it('should support null parent (move to top-level)', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ moved: 'TEST-2', parentIssue: null, isTopLevel: true }),
+      });
+
+      const result = await client.moveIssue('TEST-2', null);
+
+      expect(result.isTopLevel).toBe(true);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.parentIdentifier).toBeNull();
+    });
+
+    it('should throw on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'Circular reference',
+      });
+
+      await expect(client.moveIssue('TEST-1', 'TEST-1')).rejects.toThrow('REST API error (400)');
+    });
+  });
+
+  // ============================================================
+  // updateIssueDueDate
+  // ============================================================
+  describe('updateIssueDueDate', () => {
+    it('should delegate to patchIssue with ISO string', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ identifier: 'TEST-1', dueDate: '2025-06-01T00:00:00.000Z' }),
+      });
+
+      await client.updateIssueDueDate('TEST-1', '2025-06-01T00:00:00.000Z');
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.dueDate).toBe('2025-06-01T00:00:00.000Z');
+    });
+
+    it('should convert Date object to ISO string', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ identifier: 'TEST-1', dueDate: '2025-06-01T00:00:00.000Z' }),
+      });
+
+      const date = new Date('2025-06-01T00:00:00.000Z');
+      await client.updateIssueDueDate('TEST-1', date);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.dueDate).toBe('2025-06-01T00:00:00.000Z');
+    });
+
+    it('should handle null to clear due date', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ identifier: 'TEST-1', dueDate: null }),
+      });
+
+      await client.updateIssueDueDate('TEST-1', null);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.dueDate).toBeNull();
+    });
+  });
+
+  // ============================================================
+  // getStats
+  // ============================================================
+  describe('getStats', () => {
+    it('should return client statistics', () => {
+      const stats = client.getStats();
+
+      expect(stats.type).toBe('rest');
+      expect(stats.baseUrl).toBe('http://localhost:3458/api');
+      expect(stats.timeout).toBe(60000);
+    });
+  });
+
+  // ============================================================
+  // createHulyRestClient factory
+  // ============================================================
+  describe('createHulyRestClient', () => {
+    it('should create a HulyRestClient instance', async () => {
+      const { createHulyRestClient } = await import('../../lib/HulyRestClient.js');
+      const c = createHulyRestClient('http://localhost:3457/mcp', { name: 'Factory Test' });
+
+      expect(c).toBeInstanceOf(HulyRestClient);
+      expect(c.name).toBe('Factory Test');
+      expect(c.baseUrl).toBe('http://localhost:3458/api');
+    });
+  });
 });
