@@ -13,6 +13,7 @@ import {
   buildComponentsSummary,
   buildChangeLog,
   buildScratchpad,
+  buildExpression,
 } from '../../lib/LettaMemoryBuilders.js';
 
 describe('Letta Memory Block Builders', () => {
@@ -29,7 +30,12 @@ describe('Letta Memory Block Builders', () => {
       };
       const vibeProject = { id: 'vibe-456' };
 
-      const result = buildProjectMeta(hulyProject, vibeProject, '/path/to/repo', 'https://github.com/test/repo');
+      const result = buildProjectMeta(
+        hulyProject,
+        vibeProject,
+        '/path/to/repo',
+        'https://github.com/test/repo'
+      );
 
       expect(result.name).toBe('Test Project');
       expect(result.identifier).toBe('TEST');
@@ -188,8 +194,20 @@ describe('Letta Memory Block Builders', () => {
       const activityData = {
         since: '2025-01-15T00:00:00Z',
         activities: [
-          { type: 'issue.created', issue: 'TEST-1', title: 'New issue', status: 'Backlog', timestamp: '2025-01-15T10:00:00Z' },
-          { type: 'issue.updated', issue: 'TEST-2', title: 'Updated', status: 'Done', timestamp: '2025-01-15T11:00:00Z' },
+          {
+            type: 'issue.created',
+            issue: 'TEST-1',
+            title: 'New issue',
+            status: 'Backlog',
+            timestamp: '2025-01-15T10:00:00Z',
+          },
+          {
+            type: 'issue.updated',
+            issue: 'TEST-2',
+            title: 'Updated',
+            status: 'Done',
+            timestamp: '2025-01-15T11:00:00Z',
+          },
         ],
         summary: { created: 1, updated: 1, total: 2 },
         byStatus: { Backlog: 1, Done: 1 },
@@ -224,7 +242,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' }),
+        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' })
       );
     });
 
@@ -239,7 +257,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'high_activity', severity: 'info' }),
+        expect.objectContaining({ type: 'high_activity', severity: 'info' })
       );
     });
 
@@ -254,7 +272,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'completion_streak', severity: 'positive' }),
+        expect.objectContaining({ type: 'completion_streak', severity: 'positive' })
       );
     });
 
@@ -269,7 +287,7 @@ describe('Letta Memory Block Builders', () => {
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'no_activity', severity: 'info' }),
+        expect.objectContaining({ type: 'no_activity', severity: 'info' })
       );
     });
 
@@ -327,9 +345,7 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should handle empty components list', () => {
-      const hulyIssues = [
-        { identifier: 'TEST-1', component: null, status: 'Backlog' },
-      ];
+      const hulyIssues = [{ identifier: 'TEST-1', component: null, status: 'Backlog' }];
 
       const result = buildComponentsSummary([], hulyIssues);
 
@@ -347,9 +363,7 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should include component descriptions', () => {
-      const components = [
-        { label: 'Beads Integration', description: 'Beads issue tracker sync' },
-      ];
+      const components = [{ label: 'Beads Integration', description: 'Beads issue tracker sync' }];
       const hulyIssues = [];
 
       const result = buildComponentsSummary(components, hulyIssues);
@@ -372,9 +386,7 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should calculate status breakdown per component', () => {
-      const components = [
-        { label: 'API', description: 'API endpoints' },
-      ];
+      const components = [{ label: 'API', description: 'API endpoints' }];
       const hulyIssues = [
         { identifier: 'TEST-1', component: 'API', status: 'Backlog' },
         { identifier: 'TEST-2', component: 'API', status: 'Backlog' },
@@ -385,8 +397,8 @@ describe('Letta Memory Block Builders', () => {
       const result = buildComponentsSummary(components, hulyIssues);
 
       expect(result.components[0].status_breakdown).toEqual({
-        'Backlog': 2,
-        'Done': 1,
+        Backlog: 2,
+        Done: 1,
         'In Progress': 1,
       });
     });
@@ -416,9 +428,7 @@ describe('Letta Memory Block Builders', () => {
         { identifier: 'TEST-2', title: 'New Issue', status: 'Backlog' },
       ];
       const mockDb = {
-        getProjectIssues: () => [
-          { identifier: 'TEST-1', title: 'Existing', status: 'Backlog' },
-        ],
+        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Existing', status: 'Backlog' }],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
@@ -429,13 +439,9 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should detect status transitions', () => {
-      const currentIssues = [
-        { identifier: 'TEST-1', title: 'Issue 1', status: 'Done' },
-      ];
+      const currentIssues = [{ identifier: 'TEST-1', title: 'Issue 1', status: 'Done' }];
       const mockDb = {
-        getProjectIssues: () => [
-          { identifier: 'TEST-1', title: 'Issue 1', status: 'In Progress' },
-        ],
+        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Issue 1', status: 'In Progress' }],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
@@ -460,13 +466,9 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should detect title changes', () => {
-      const currentIssues = [
-        { identifier: 'TEST-1', title: 'Updated Title', status: 'Backlog' },
-      ];
+      const currentIssues = [{ identifier: 'TEST-1', title: 'Updated Title', status: 'Backlog' }];
       const mockDb = {
-        getProjectIssues: () => [
-          { identifier: 'TEST-1', title: 'Old Title', status: 'Backlog' },
-        ],
+        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Old Title', status: 'Backlog' }],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
@@ -515,6 +517,60 @@ describe('Letta Memory Block Builders', () => {
 
       // Structure should be identical (no timestamps or random values)
       expect(JSON.stringify(result1)).toBe(JSON.stringify(result2));
+    });
+  });
+
+  describe('buildExpression', () => {
+    it('should return a string for pm role', () => {
+      const result = buildExpression('pm');
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(100);
+    });
+
+    it('should default to pm role', () => {
+      const result = buildExpression();
+      expect(result).toBe(buildExpression('pm'));
+    });
+
+    it('should include anti-slop base rules for all roles', () => {
+      for (const role of ['pm', 'companion', 'developer']) {
+        const result = buildExpression(role);
+        expect(result).toContain('Communication Anti-Patterns');
+        expect(result).toContain('Great question!');
+        expect(result).toContain('certainly!');
+        expect(result).toContain('happy to help');
+      }
+    });
+
+    it('should include PM voice for pm role', () => {
+      const result = buildExpression('pm');
+      expect(result).toContain('PM Voice');
+      expect(result).toContain('Terse and action-oriented');
+      expect(result).not.toContain('Companion Voice');
+      expect(result).not.toContain('Developer Voice');
+    });
+
+    it('should include Companion voice for companion role', () => {
+      const result = buildExpression('companion');
+      expect(result).toContain('Companion Voice');
+      expect(result).not.toContain('PM Voice');
+    });
+
+    it('should include Developer voice for developer role', () => {
+      const result = buildExpression('developer');
+      expect(result).toContain('Developer Voice');
+      expect(result).not.toContain('PM Voice');
+    });
+
+    it('should fall back to pm for unknown role', () => {
+      const result = buildExpression('unknown');
+      expect(result).toContain('PM Voice');
+    });
+
+    it('should be stable for content hashing', () => {
+      const result1 = buildExpression('pm');
+      const result2 = buildExpression('pm');
+      expect(result1).toBe(result2);
     });
   });
 });

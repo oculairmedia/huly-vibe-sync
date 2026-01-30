@@ -109,6 +109,7 @@ vi.mock('../../lib/LettaService.js', () => ({
   buildBacklogSummary: vi.fn(() => ({})),
   buildRecentActivity: vi.fn(() => ({})),
   buildComponentsSummary: vi.fn(() => ({})),
+  buildExpression: vi.fn(() => 'mock-expression-block'),
 }));
 
 vi.mock('fs', () => ({ default: { existsSync: vi.fn(() => false) } }));
