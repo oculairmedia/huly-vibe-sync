@@ -89,13 +89,23 @@ export interface BulkByProjectsResponse {
 }
 
 /**
- * Options for bulk operations on issues
+ * A single issue update entry for bulk operations.
+ * Each entry specifies an issue identifier and the changes to apply.
+ */
+export interface BulkUpdateEntry {
+  /** Issue identifier (e.g., "HVSYN-925") */
+  identifier: string;
+  /** Fields to update on this issue */
+  changes: Partial<HulyIssue>;
+}
+
+/**
+ * Options for bulk update operations on issues.
+ * The Huly API expects: { updates: [{ identifier, changes }, ...] }
  */
 export interface BulkUpdateOptions {
-  /** Issue identifiers to update */
-  identifiers: string[];
-  /** Fields to update on all issues */
-  updates: Partial<HulyIssue>;
+  /** Array of per-issue update entries */
+  updates: BulkUpdateEntry[];
 }
 
 export interface BulkDeleteOptions {
@@ -337,13 +347,25 @@ export class HulyClient {
     succeeded: string[];
     failed: Array<{ identifier: string; error: string }>;
   }> {
-    return this.request<{
-      succeeded: string[];
-      failed: Array<{ identifier: string; error: string }>;
+    const response = await this.request<{
+      results: Array<{ identifier: string; updated: boolean; error?: string }>;
+      succeeded: number;
+      failed: number;
     }>('/issues/bulk', {
       method: 'PATCH',
       body: JSON.stringify(options),
     });
+
+    const succeeded: string[] = [];
+    const failed: Array<{ identifier: string; error: string }> = [];
+    for (const r of response.results) {
+      if (r.updated) {
+        succeeded.push(r.identifier);
+      } else {
+        failed.push({ identifier: r.identifier, error: r.error || 'unknown error' });
+      }
+    }
+    return { succeeded, failed };
   }
 
   async bulkDeleteIssues(options: BulkDeleteOptions): Promise<BulkDeleteResult> {

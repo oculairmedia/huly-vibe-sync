@@ -184,10 +184,21 @@ class HulyClient {
         return this.request(`/issues/bulk?${params.toString()}`, { method: 'GET' });
     }
     async bulkUpdateIssues(options) {
-        return this.request('/issues/bulk', {
+        const response = await this.request('/issues/bulk', {
             method: 'PATCH',
             body: JSON.stringify(options),
         });
+        const succeeded = [];
+        const failed = [];
+        for (const r of response.results) {
+            if (r.updated) {
+                succeeded.push(r.identifier);
+            }
+            else {
+                failed.push({ identifier: r.identifier, error: r.error || 'unknown error' });
+            }
+        }
+        return { succeeded, failed };
     }
     async bulkDeleteIssues(options) {
         return this.request('/issues/bulk', {

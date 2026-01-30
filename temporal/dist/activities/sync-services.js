@@ -167,26 +167,19 @@ async function syncBeadsToHulyBatch(input) {
     console.log(`[Temporal:Beads→Huly] Batch syncing ${beadsIssues.length} issues`);
     try {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const byStatus = {};
-        for (const issue of beadsIssues) {
-            const hulyStatus = (0, lib_1.mapBeadsStatusToHuly)(issue.status);
-            if (!byStatus[hulyStatus]) {
-                byStatus[hulyStatus] = [];
-            }
-            byStatus[hulyStatus].push(issue.hulyIdentifier);
-        }
+        const updates = beadsIssues.map(issue => ({
+            identifier: issue.hulyIdentifier,
+            changes: { status: (0, lib_1.mapBeadsStatusToHuly)(issue.status) },
+        }));
+        console.log(`[Temporal:Beads→Huly] Bulk updating ${updates.length} issues`);
         let totalUpdated = 0;
         let totalFailed = 0;
         const allErrors = [];
-        for (const [hulyStatus, identifiers] of Object.entries(byStatus)) {
-            if (identifiers.length === 0)
-                continue;
-            console.log(`[Temporal:Beads→Huly] Bulk updating ${identifiers.length} issues to ${hulyStatus}`);
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+            const batch = updates.slice(i, i + BATCH_SIZE);
             try {
-                const result = await hulyClient.bulkUpdateIssues({
-                    identifiers,
-                    updates: { status: hulyStatus },
-                });
+                const result = await hulyClient.bulkUpdateIssues({ updates: batch });
                 totalUpdated += result.succeeded.length;
                 totalFailed += result.failed.length;
                 allErrors.push(...result.failed);
@@ -194,9 +187,9 @@ async function syncBeadsToHulyBatch(input) {
             catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 console.error(`[Temporal:Beads→Huly] Bulk update failed: ${errorMsg}`);
-                totalFailed += identifiers.length;
-                for (const id of identifiers) {
-                    allErrors.push({ identifier: id, error: errorMsg });
+                totalFailed += batch.length;
+                for (const entry of batch) {
+                    allErrors.push({ identifier: entry.identifier, error: errorMsg });
                 }
             }
         }
