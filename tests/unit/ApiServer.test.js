@@ -36,6 +36,14 @@ vi.mock('../../lib/HealthService.js', () => ({
   })),
 }));
 
+vi.mock('child_process', () => ({
+  execSync: vi.fn(() => ''),
+}));
+
+vi.mock('../../temporal/dist/client.js', () => ({
+  listSyncWorkflows: vi.fn().mockResolvedValue([{ id: 'wf-1', status: 'completed' }]),
+}));
+
 // We need to test the classes directly, so we'll recreate them for testing
 // since they're not exported from ApiServer.js
 
@@ -1179,5 +1187,1038 @@ describe('ApiServer', () => {
         );
       });
     });
+  });
+});
+
+// ============================================================
+// HTTP Route Tests - createApiServer()
+// ============================================================
+
+import http from 'http';
+import {
+  createApiServer,
+  broadcastSyncEvent,
+  recordIssueMapping,
+  sseManager,
+  syncHistory,
+} from '../../lib/ApiServer.js';
+
+function getRandomPort() {
+  return 10000 + Math.floor(Math.random() * 50000);
+}
+
+function makeRequest(port, method, path, body = null) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'localhost',
+      port,
+      path,
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    const req = http.request(options, res => {
+      let data = '';
+      res.on('data', chunk => (data += chunk));
+      res.on('end', () => {
+        try {
+          resolve({ statusCode: res.statusCode, headers: res.headers, body: JSON.parse(data) });
+        } catch {
+          resolve({ statusCode: res.statusCode, headers: res.headers, body: data });
+        }
+      });
+    });
+    req.on('error', reject);
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
+describe('createApiServer - HTTP Routes', () => {
+  let server;
+  let port;
+  let mockOnSyncTrigger;
+  let mockOnConfigUpdate;
+  let mockDb;
+  let mockLettaCodeService;
+  let mockWebhookHandler;
+  let mockTemporalClient;
+  let mockGetTemporalClient;
+  let mockCodePerceptionWatcher;
+  let mockConfig;
+
+  beforeAll(async () => {
+    port = getRandomPort();
+    process.env.HEALTH_PORT = String(port);
+
+    mockConfig = {
+      huly: { apiUrl: 'http://localhost:3457/api', useRestApi: true },
+      vibeKanban: { apiUrl: 'http://localhost:9717', useRestApi: true },
+      sync: {
+        interval: 10000,
+        dryRun: false,
+        incremental: true,
+        parallel: true,
+        maxWorkers: 5,
+        skipEmpty: true,
+        apiDelay: 100,
+      },
+      stacks: { baseDir: '/opt/stacks' },
+      letta: { enabled: true, baseURL: 'http://localhost:8283', password: 'secret' },
+    };
+
+    mockDb = {
+      getStats: vi.fn(() => ({ tables: 5, total_rows: 100 })),
+      getProjectSummary: vi.fn(() => [{ identifier: 'TEST', name: 'Test Project', issueCount: 5 }]),
+      getProjectIssues: vi.fn(() => [{ id: 'issue-1', title: 'Test Issue' }]),
+      getProjectFilesystemPath: vi.fn(() => '/opt/stacks/test-project'),
+      resolveProjectIdentifier: vi.fn(id => (id === 'testfolder' ? 'TEST' : null)),
+      getProjectFiles: vi.fn(() => []),
+      getOrphanedFiles: vi.fn(() => []),
+    };
+
+    mockOnSyncTrigger = vi.fn().mockResolvedValue(undefined);
+    mockOnConfigUpdate = vi.fn();
+
+    mockLettaCodeService = {
+      listSessions: vi.fn(() => [{ agentId: 'agent-1', projectDir: '/test' }]),
+      getSession: vi.fn(id =>
+        id === 'agent-1' ? { agentId: 'agent-1', projectDir: '/test' } : null
+      ),
+      linkTools: vi.fn().mockResolvedValue({ success: true, message: 'Linked' }),
+      runTask: vi.fn().mockResolvedValue({ success: true, result: 'Done' }),
+      configureForProject: vi
+        .fn()
+        .mockResolvedValue({ success: true, session: { projectDir: '/test' } }),
+      removeSession: vi.fn(id => id === 'agent-1'),
+      checkLettaCodeAvailable: vi.fn().mockResolvedValue(true),
+      projectRoot: '/opt/stacks',
+    };
+
+    mockWebhookHandler = {
+      handleWebhook: vi
+        .fn()
+        .mockResolvedValue({ success: true, processed: 1, skipped: 0, errors: [] }),
+      getStats: vi.fn(() => ({ total: 10, processed: 8 })),
+      getWatcherStats: vi.fn().mockResolvedValue({ running: true }),
+    };
+
+    mockTemporalClient = {
+      getActiveScheduledSync: vi.fn().mockResolvedValue(null),
+      startScheduledSync: vi.fn().mockResolvedValue({ workflowId: 'wf-1' }),
+      stopScheduledSync: vi.fn().mockResolvedValue(true),
+      restartScheduledSync: vi.fn().mockResolvedValue({ workflowId: 'wf-2' }),
+    };
+    mockGetTemporalClient = vi.fn().mockResolvedValue(mockTemporalClient);
+
+    mockCodePerceptionWatcher = {
+      astInitialSync: vi.fn().mockResolvedValue({ files: 10, functions: 50 }),
+    };
+
+    server = createApiServer({
+      config: mockConfig,
+      healthStats: {},
+      db: mockDb,
+      onSyncTrigger: mockOnSyncTrigger,
+      onConfigUpdate: mockOnConfigUpdate,
+      lettaCodeService: mockLettaCodeService,
+      webhookHandler: mockWebhookHandler,
+      getTemporalClient: mockGetTemporalClient,
+      codePerceptionWatcher: mockCodePerceptionWatcher,
+    });
+
+    await new Promise(resolve => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise(resolve => server.close(resolve));
+  });
+
+  // --------------------------------------------------------
+  // 1. OPTIONS (CORS preflight)
+  // --------------------------------------------------------
+  describe('OPTIONS (CORS preflight)', () => {
+    it('should return 204 for any OPTIONS request', async () => {
+      const res = await makeRequest(port, 'OPTIONS', '/api/config');
+      expect(res.statusCode).toBe(204);
+      expect(res.headers['access-control-allow-origin']).toBe('*');
+      expect(res.headers['access-control-allow-methods']).toContain('GET');
+    });
+
+    it('should return 204 for OPTIONS on unknown path', async () => {
+      const res = await makeRequest(port, 'OPTIONS', '/unknown');
+      expect(res.statusCode).toBe(204);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 2. GET /health
+  // --------------------------------------------------------
+  describe('GET /health', () => {
+    it('should return health metrics', async () => {
+      const res = await makeRequest(port, 'GET', '/health');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.status).toBe('healthy');
+      expect(res.body.uptime).toBeDefined();
+    });
+  });
+
+  // --------------------------------------------------------
+  // 3. GET /metrics
+  // --------------------------------------------------------
+  describe('GET /metrics', () => {
+    it('should return Prometheus metrics', async () => {
+      const res = await makeRequest(port, 'GET', '/metrics');
+      expect(res.statusCode).toBe(200);
+      // body is text 'metrics', not JSON
+      expect(res.body).toBe('metrics');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 4. GET /api/stats
+  // --------------------------------------------------------
+  describe('GET /api/stats', () => {
+    it('should return statistics with db', async () => {
+      const res = await makeRequest(port, 'GET', '/api/stats');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.uptime).toBeDefined();
+      expect(res.body.sync).toBeDefined();
+      expect(res.body.sseClients).toBeDefined();
+      expect(res.body.database).toEqual({ tables: 5, total_rows: 100 });
+    });
+
+    it('should handle db.getStats throwing', async () => {
+      mockDb.getStats.mockImplementationOnce(() => {
+        throw new Error('DB error');
+      });
+      const res = await makeRequest(port, 'GET', '/api/stats');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.database).toEqual({ error: 'Failed to fetch database statistics' });
+    });
+  });
+
+  // --------------------------------------------------------
+  // 5. GET /api/projects
+  // --------------------------------------------------------
+  describe('GET /api/projects', () => {
+    it('should return projects with db', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.projects).toHaveLength(1);
+      expect(res.body.projects[0].identifier).toBe('TEST');
+    });
+
+    it('should handle db.getProjectSummary throwing', async () => {
+      mockDb.getProjectSummary.mockImplementationOnce(() => {
+        throw new Error('fail');
+      });
+      const res = await makeRequest(port, 'GET', '/api/projects');
+      expect(res.statusCode).toBe(500);
+      expect(res.body.error).toBe('Failed to fetch projects');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 6. GET /api/projects/:id/issues
+  // --------------------------------------------------------
+  describe('GET /api/projects/:id/issues', () => {
+    it('should return project issues', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/TEST/issues');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.projectIdentifier).toBe('TEST');
+      expect(res.body.issues).toHaveLength(1);
+    });
+
+    it('should handle db error', async () => {
+      mockDb.getProjectIssues.mockImplementationOnce(() => {
+        throw new Error('fail');
+      });
+      const res = await makeRequest(port, 'GET', '/api/projects/TEST/issues');
+      expect(res.statusCode).toBe(500);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 7. POST /api/projects/:id/ast-sync
+  // --------------------------------------------------------
+  describe('POST /api/projects/:id/ast-sync', () => {
+    it('should trigger AST sync for a project', async () => {
+      const res = await makeRequest(port, 'POST', '/api/projects/TEST/ast-sync', {});
+      expect(res.statusCode).toBe(200);
+      expect(res.body.status).toBe('complete');
+      expect(res.body.files).toBe(10);
+    });
+
+    it('should return 404 if project has no filesystem path', async () => {
+      mockDb.getProjectFilesystemPath.mockReturnValueOnce(null);
+      const res = await makeRequest(port, 'POST', '/api/projects/UNKNOWN/ast-sync', {});
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 8. GET /api/config
+  // --------------------------------------------------------
+  describe('GET /api/config', () => {
+    it('should return safe config', async () => {
+      const res = await makeRequest(port, 'GET', '/api/config');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.config).toBeDefined();
+      expect(res.body.config.huly.apiUrl).toBe('http://localhost:3457/api');
+      // password should not be exposed
+      expect(res.body.config.letta.password).toBeUndefined();
+    });
+  });
+
+  // --------------------------------------------------------
+  // 9. PATCH /api/config
+  // --------------------------------------------------------
+  describe('PATCH /api/config', () => {
+    it('should update config successfully', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/config', { maxWorkers: 8 });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toBe('Configuration updated successfully');
+      expect(mockOnConfigUpdate).toHaveBeenCalled();
+    });
+
+    it('should return 400 for invalid config', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/config', { syncInterval: 100 });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('Failed to update configuration');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 10. POST /api/config/reset
+  // --------------------------------------------------------
+  describe('POST /api/config/reset', () => {
+    it('should reset config to defaults', async () => {
+      const res = await makeRequest(port, 'POST', '/api/config/reset');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toBe('Configuration reset to defaults');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 11. POST /api/sync/trigger
+  // --------------------------------------------------------
+  describe('POST /api/sync/trigger', () => {
+    it('should trigger full sync without projectId', async () => {
+      const res = await makeRequest(port, 'POST', '/api/sync/trigger', {});
+      expect(res.statusCode).toBe(202);
+      expect(res.body.message).toBe('Full sync triggered');
+      expect(res.body.status).toBe('accepted');
+    });
+
+    it('should trigger sync for specific project', async () => {
+      const res = await makeRequest(port, 'POST', '/api/sync/trigger', { projectId: 'TEST' });
+      expect(res.statusCode).toBe(202);
+      expect(res.body.message).toContain('TEST');
+    });
+
+    it('should resolve folder name to project ID', async () => {
+      const res = await makeRequest(port, 'POST', '/api/sync/trigger', { projectId: 'testfolder' });
+      expect(res.statusCode).toBe(202);
+      expect(mockDb.resolveProjectIdentifier).toHaveBeenCalledWith('testfolder');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 12. POST /api/beads/label
+  // --------------------------------------------------------
+  describe('POST /api/beads/label', () => {
+    it('should add a label to a beads issue', async () => {
+      const res = await makeRequest(port, 'POST', '/api/beads/label', {
+        repoPath: '/opt/stacks/test',
+        issueId: 'issue-1',
+        label: 'bug',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 400 if required fields missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/beads/label', { repoPath: '/test' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('Missing required fields');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 13. GET /api/sync/history
+  // --------------------------------------------------------
+  describe('GET /api/sync/history', () => {
+    it('should return sync history', async () => {
+      const res = await makeRequest(port, 'GET', '/api/sync/history');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.total).toBeDefined();
+      expect(res.body.entries).toBeDefined();
+    });
+
+    it('should support pagination params', async () => {
+      const res = await makeRequest(port, 'GET', '/api/sync/history?limit=5&offset=0');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.limit).toBe(5);
+      expect(res.body.offset).toBe(0);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 14. GET /api/sync/history/:id
+  // --------------------------------------------------------
+  describe('GET /api/sync/history/:id', () => {
+    it('should return 404 for non-existent event', async () => {
+      const res = await makeRequest(port, 'GET', '/api/sync/history/nonexistent');
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Sync event not found');
+    });
+
+    it('should return event if found', async () => {
+      // Add an event to history via the exported syncHistory
+      syncHistory.addEvent({ type: 'test_event', detail: 'found' });
+      const entries = syncHistory.getHistory(1, 0).entries;
+      const eventId = entries[0].id;
+      const res = await makeRequest(port, 'GET', `/api/sync/history/${eventId}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.type).toBe('test_event');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 15. GET /api/sync/mappings
+  // --------------------------------------------------------
+  describe('GET /api/sync/mappings', () => {
+    it('should return all mappings', async () => {
+      const res = await makeRequest(port, 'GET', '/api/sync/mappings');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.total).toBeDefined();
+      expect(res.body.mappings).toBeDefined();
+    });
+  });
+
+  // --------------------------------------------------------
+  // 16. GET /api/sync/mappings/:id
+  // --------------------------------------------------------
+  describe('GET /api/sync/mappings/:id', () => {
+    it('should return 404 for non-existent mapping', async () => {
+      const res = await makeRequest(port, 'GET', '/api/sync/mappings/NONEXISTENT');
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Mapping not found');
+    });
+
+    it('should return mapping if found', async () => {
+      syncHistory.addMapping('MAP-1', 'vibe-1');
+      const res = await makeRequest(port, 'GET', '/api/sync/mappings/MAP-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.hulyIdentifier).toBe('MAP-1');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 17. GET /api/events/stream (SSE)
+  // --------------------------------------------------------
+  describe('GET /api/events/stream', () => {
+    it('should return SSE headers', async () => {
+      const res = await new Promise((resolve, reject) => {
+        const req = http.request(
+          { hostname: 'localhost', port, path: '/api/events/stream', method: 'GET' },
+          res => {
+            // Just read the headers and first chunk, then abort
+            resolve({ statusCode: res.statusCode, headers: res.headers });
+            res.destroy();
+          }
+        );
+        req.on('error', () => {}); // ignore abort error
+        req.end();
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('text/event-stream');
+      expect(res.headers['cache-control']).toBe('no-cache');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 18. POST /api/files/read
+  // --------------------------------------------------------
+  describe('POST /api/files/read', () => {
+    it('should return 400 if file_path missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/read', {});
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('file_path is required');
+    });
+
+    it('should return 404 if file does not exist', async () => {
+      // fs is not mocked globally so existsSync will run for real.
+      // Use a path that definitely doesn't exist.
+      const res = await makeRequest(port, 'POST', '/api/files/read', {
+        file_path: 'definitely_nonexistent_file_xyz_12345.txt',
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('File not found');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 19. POST /api/files/edit
+  // --------------------------------------------------------
+  describe('POST /api/files/edit', () => {
+    it('should return 400 if file_path missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/edit', {});
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('file_path is required');
+    });
+
+    it('should return 400 if start_line/end_line missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/edit', { file_path: 'test.js' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('start_line and end_line are required');
+    });
+
+    it('should return 400 if new_content missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/edit', {
+        file_path: 'test.js',
+        start_line: 1,
+        end_line: 2,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('new_content is required');
+    });
+
+    it('should return 404 if file does not exist', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/edit', {
+        file_path: 'nonexistent_xyz.txt',
+        start_line: 1,
+        end_line: 2,
+        new_content: 'hello',
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 20. POST /api/files/info
+  // --------------------------------------------------------
+  describe('POST /api/files/info', () => {
+    it('should return 400 if file_path missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/info', {});
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('file_path is required');
+    });
+
+    it('should return exists: false for non-existent file', async () => {
+      const res = await makeRequest(port, 'POST', '/api/files/info', {
+        file_path: 'nonexistent_xyz.txt',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.exists).toBe(false);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 21. GET /api/letta-code/sessions
+  // --------------------------------------------------------
+  describe('GET /api/letta-code/sessions', () => {
+    it('should list sessions', async () => {
+      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.sessions).toHaveLength(1);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 22. GET /api/letta-code/sessions/:id
+  // --------------------------------------------------------
+  describe('GET /api/letta-code/sessions/:id', () => {
+    it('should return session for known agent', async () => {
+      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/agent-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.agentId).toBe('agent-1');
+    });
+
+    it('should return 404 for unknown agent', async () => {
+      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/unknown');
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 23. POST /api/letta-code/link
+  // --------------------------------------------------------
+  describe('POST /api/letta-code/link', () => {
+    it('should link agent to project', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/link', {
+        agentId: 'agent-1',
+        projectDir: '/test',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 400 if agentId missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/link', { projectDir: '/test' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('agentId is required');
+    });
+
+    it('should return 400 if projectDir missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/link', { agentId: 'agent-1' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('projectDir is required');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 24. POST /api/letta-code/task
+  // --------------------------------------------------------
+  describe('POST /api/letta-code/task', () => {
+    it('should run a headless task', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/task', {
+        agentId: 'agent-1',
+        prompt: 'do something',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 400 if agentId missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/task', { prompt: 'test' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should return 400 if prompt missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/task', { agentId: 'agent-1' });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 25. POST /api/letta-code/configure-project
+  // --------------------------------------------------------
+  describe('POST /api/letta-code/configure-project', () => {
+    it('should configure project for agent', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
+        agentId: 'agent-1',
+        hulyProject: { identifier: 'TEST' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 400 if agentId missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
+        hulyProject: { identifier: 'TEST' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should return 400 if hulyProject missing', async () => {
+      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
+        agentId: 'agent-1',
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 26. DELETE /api/letta-code/sessions/:id
+  // --------------------------------------------------------
+  describe('DELETE /api/letta-code/sessions/:id', () => {
+    it('should remove known session', async () => {
+      const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/agent-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should return 404 for unknown session', async () => {
+      const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/unknown');
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 27. GET /api/letta-code/status
+  // --------------------------------------------------------
+  describe('GET /api/letta-code/status', () => {
+    it('should return availability status', async () => {
+      const res = await makeRequest(port, 'GET', '/api/letta-code/status');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.available).toBe(true);
+      expect(res.body.sessions).toBeDefined();
+      expect(res.body.projectRoot).toBe('/opt/stacks');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 28. POST /webhook
+  // --------------------------------------------------------
+  describe('POST /webhook', () => {
+    it('should process webhook with handler', async () => {
+      const res = await makeRequest(port, 'POST', '/webhook', {
+        type: 'issue_update',
+        changes: [{ id: 1 }],
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.processed).toBe(1);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 29. GET /api/webhook/stats
+  // --------------------------------------------------------
+  describe('GET /api/webhook/stats', () => {
+    it('should return webhook stats with handler', async () => {
+      const res = await makeRequest(port, 'GET', '/api/webhook/stats');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.handler).toEqual({ total: 10, processed: 8 });
+      expect(res.body.watcher).toEqual({ running: true });
+    });
+  });
+
+  // --------------------------------------------------------
+  // 30. GET /api/temporal/schedule
+  // --------------------------------------------------------
+  describe('GET /api/temporal/schedule', () => {
+    it('should return schedule status', async () => {
+      const res = await makeRequest(port, 'GET', '/api/temporal/schedule');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.available).toBe(true);
+      expect(res.body.active).toBe(false);
+    });
+
+    it('should handle temporal client returning null', async () => {
+      mockGetTemporalClient.mockResolvedValueOnce(null);
+      const res = await makeRequest(port, 'GET', '/api/temporal/schedule');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.available).toBe(false);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 31. POST /api/temporal/schedule/start
+  // --------------------------------------------------------
+  describe('POST /api/temporal/schedule/start', () => {
+    it('should start scheduled sync', async () => {
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/start', {});
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.workflowId).toBe('wf-1');
+    });
+
+    it('should return already active if schedule exists', async () => {
+      mockTemporalClient.getActiveScheduledSync.mockResolvedValueOnce({ workflowId: 'existing' });
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/start', {});
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('already active');
+    });
+
+    it('should handle temporal client null', async () => {
+      mockGetTemporalClient.mockResolvedValueOnce(null);
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/start', {});
+      expect(res.statusCode).toBe(503);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 32. POST /api/temporal/schedule/stop
+  // --------------------------------------------------------
+  describe('POST /api/temporal/schedule/stop', () => {
+    it('should stop scheduled sync', async () => {
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/stop');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('should handle no active schedule', async () => {
+      mockTemporalClient.stopScheduledSync.mockResolvedValueOnce(false);
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/stop');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('should handle temporal client null', async () => {
+      mockGetTemporalClient.mockResolvedValueOnce(null);
+      const res = await makeRequest(port, 'POST', '/api/temporal/schedule/stop');
+      expect(res.statusCode).toBe(503);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 33. PATCH /api/temporal/schedule
+  // --------------------------------------------------------
+  describe('PATCH /api/temporal/schedule', () => {
+    it('should update schedule interval', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/temporal/schedule', {
+        intervalMinutes: 5,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.workflowId).toBe('wf-2');
+    });
+
+    it('should return 400 for invalid interval', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/temporal/schedule', {
+        intervalMinutes: 0,
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should handle restartScheduledSync returning null', async () => {
+      mockTemporalClient.restartScheduledSync.mockResolvedValueOnce(null);
+      const res = await makeRequest(port, 'PATCH', '/api/temporal/schedule', {
+        intervalMinutes: 5,
+      });
+      expect(res.statusCode).toBe(500);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 34. GET /api/temporal/workflows
+  // --------------------------------------------------------
+  describe('GET /api/temporal/workflows', () => {
+    it('should list workflows', async () => {
+      const res = await makeRequest(port, 'GET', '/api/temporal/workflows');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.available).toBe(true);
+      expect(res.body.workflows).toHaveLength(1);
+    });
+
+    it('should handle temporal client null', async () => {
+      mockGetTemporalClient.mockResolvedValueOnce(null);
+      const res = await makeRequest(port, 'GET', '/api/temporal/workflows');
+      expect(res.statusCode).toBe(200);
+      expect(res.body.available).toBe(false);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 35. GET / (API documentation)
+  // --------------------------------------------------------
+  describe('GET / (API documentation)', () => {
+    it('should return API documentation text', async () => {
+      const res = await makeRequest(port, 'GET', '/');
+      expect(res.statusCode).toBe(200);
+      // body is plain text, not JSON
+      expect(typeof res.body).toBe('string');
+      expect(res.body).toContain('Huly-Vibe Sync Service API');
+    });
+  });
+
+  // --------------------------------------------------------
+  // 36. 404 - unknown endpoint
+  // --------------------------------------------------------
+  describe('404 - unknown endpoint', () => {
+    it('should return 404 for unknown path', async () => {
+      const res = await makeRequest(port, 'GET', '/api/nonexistent');
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Endpoint not found');
+      expect(res.body.details.path).toBe('/api/nonexistent');
+    });
+
+    it('should return 404 for wrong method on known path', async () => {
+      const res = await makeRequest(port, 'DELETE', '/api/config');
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 37. broadcastSyncEvent() exported helper
+  // --------------------------------------------------------
+  describe('broadcastSyncEvent()', () => {
+    it('should broadcast via SSE manager', () => {
+      const broadcastSpy = vi.spyOn(sseManager, 'broadcast');
+      broadcastSyncEvent('sync:started', { projectId: 'TEST' });
+      expect(broadcastSpy).toHaveBeenCalledWith('sync:started', { projectId: 'TEST' });
+      broadcastSpy.mockRestore();
+    });
+
+    it('should add sync events to history', () => {
+      const initialTotal = syncHistory.getHistory().total;
+      broadcastSyncEvent('sync:completed', { projectId: 'TEST', status: 'success' });
+      const newTotal = syncHistory.getHistory().total;
+      expect(newTotal).toBeGreaterThan(initialTotal);
+    });
+
+    it('should not add non-sync events to history', () => {
+      const initialTotal = syncHistory.getHistory().total;
+      broadcastSyncEvent('config:updated', { key: 'value' });
+      const newTotal = syncHistory.getHistory().total;
+      expect(newTotal).toBe(initialTotal);
+    });
+  });
+
+  // --------------------------------------------------------
+  // 38. recordIssueMapping() exported helper
+  // --------------------------------------------------------
+  describe('recordIssueMapping()', () => {
+    it('should record mapping in syncHistory', () => {
+      recordIssueMapping('PROJ-999', 'vibe-999', { direction: 'huly-to-vibe' });
+      const mapping = syncHistory.getMapping('PROJ-999');
+      expect(mapping).not.toBeNull();
+      expect(mapping.vibeTaskId).toBe('vibe-999');
+      expect(mapping.direction).toBe('huly-to-vibe');
+    });
+  });
+});
+
+// ============================================================
+// HTTP Routes - No-dependency server (db=null, no services)
+// ============================================================
+describe('createApiServer - No dependencies', () => {
+  let server;
+  let port;
+
+  beforeAll(async () => {
+    port = getRandomPort();
+    process.env.HEALTH_PORT = String(port);
+
+    server = createApiServer({
+      config: {
+        huly: { apiUrl: 'http://localhost:3457/api', useRestApi: true },
+        vibeKanban: { apiUrl: 'http://localhost:9717', useRestApi: true },
+        sync: {
+          interval: 10000,
+          dryRun: false,
+          incremental: true,
+          parallel: true,
+          maxWorkers: 5,
+          skipEmpty: true,
+          apiDelay: 100,
+        },
+        stacks: { baseDir: '/opt/stacks' },
+        letta: { enabled: false, baseURL: 'http://localhost:8283' },
+      },
+      healthStats: {},
+      db: null,
+      onSyncTrigger: null,
+      onConfigUpdate: vi.fn(),
+    });
+
+    await new Promise(resolve => {
+      if (server.listening) resolve();
+      else server.on('listening', resolve);
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise(resolve => server.close(resolve));
+  });
+
+  it('GET /api/projects should return 503 without db', async () => {
+    const res = await makeRequest(port, 'GET', '/api/projects');
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error).toBe('Database not available');
+  });
+
+  it('GET /api/projects/:id/issues should return 503 without db', async () => {
+    const res = await makeRequest(port, 'GET', '/api/projects/TEST/issues');
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/projects/:id/ast-sync should return 503 without watcher', async () => {
+    const res = await makeRequest(port, 'POST', '/api/projects/TEST/ast-sync', {});
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/sync/trigger should return 503 without trigger', async () => {
+    const res = await makeRequest(port, 'POST', '/api/sync/trigger', {});
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error).toBe('Sync trigger not available');
+  });
+
+  it('GET /api/letta-code/sessions should return 503 without service', async () => {
+    const res = await makeRequest(port, 'GET', '/api/letta-code/sessions');
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('GET /api/letta-code/sessions/:id should return 503 without service', async () => {
+    const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/agent-1');
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/letta-code/link should return 503 without service', async () => {
+    const res = await makeRequest(port, 'POST', '/api/letta-code/link', {
+      agentId: 'a',
+      projectDir: '/b',
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/letta-code/task should return 503 without service', async () => {
+    const res = await makeRequest(port, 'POST', '/api/letta-code/task', {
+      agentId: 'a',
+      prompt: 'test',
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/letta-code/configure-project should return 503 without service', async () => {
+    const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
+      agentId: 'a',
+      hulyProject: { identifier: 'T' },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('DELETE /api/letta-code/sessions/:id should return 503 without service', async () => {
+    const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/agent-1');
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('GET /api/letta-code/status should return available: false without service', async () => {
+    const res = await makeRequest(port, 'GET', '/api/letta-code/status');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.available).toBe(false);
+  });
+
+  it('POST /webhook should acknowledge without handler', async () => {
+    const res = await makeRequest(port, 'POST', '/webhook', { type: 'test' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toContain('no handler configured');
+  });
+
+  it('GET /api/webhook/stats should indicate no handler', async () => {
+    const res = await makeRequest(port, 'GET', '/api/webhook/stats');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.handler).toBeNull();
+  });
+
+  it('GET /api/temporal/schedule should indicate not configured', async () => {
+    const res = await makeRequest(port, 'GET', '/api/temporal/schedule');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.available).toBe(false);
+  });
+
+  it('POST /api/temporal/schedule/start should return 503', async () => {
+    const res = await makeRequest(port, 'POST', '/api/temporal/schedule/start', {});
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('POST /api/temporal/schedule/stop should return 503', async () => {
+    const res = await makeRequest(port, 'POST', '/api/temporal/schedule/stop');
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('PATCH /api/temporal/schedule should return 503', async () => {
+    const res = await makeRequest(port, 'PATCH', '/api/temporal/schedule', { intervalMinutes: 5 });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('GET /api/temporal/workflows should indicate not configured', async () => {
+    const res = await makeRequest(port, 'GET', '/api/temporal/workflows');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.available).toBe(false);
+  });
+
+  it('GET /api/stats should work without db', async () => {
+    const res = await makeRequest(port, 'GET', '/api/stats');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.database).toBeUndefined();
   });
 });
