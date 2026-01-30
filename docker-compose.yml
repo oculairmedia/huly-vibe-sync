@@ -15,9 +15,9 @@ services:
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
       # Change Watcher (webhook-driven sync)
-      # Note: 172.17.10.1 is the gateway for huly-test_default network (where huly-change-watcher runs)
+      # Uses host LAN IP (not Docker bridge) — vibesync runs in host network mode
       - HULY_CHANGE_WATCHER_URL=http://localhost:3459
-      - WEBHOOK_CALLBACK_URL=${WEBHOOK_CALLBACK_URL:-http://172.17.10.1:3099/webhook}
+      - WEBHOOK_CALLBACK_URL=${WEBHOOK_CALLBACK_URL:-http://192.168.50.90:3099/webhook}
 
       # Sync Configuration
       - SYNC_INTERVAL=${SYNC_INTERVAL:-60000} # 60 seconds fallback (webhook is primary)
