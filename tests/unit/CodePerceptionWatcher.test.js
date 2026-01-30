@@ -125,6 +125,7 @@ class MockGraphitiClient {
     this.healthy = true;
     this.shouldThrow = false;
     this.edgeShouldFail = false;
+    this.failEntityNames = new Set();
   }
 
   async healthCheck() {
@@ -140,12 +141,14 @@ class MockGraphitiClient {
   async upsertEntitiesBatch(entities, batchSize) {
     if (this.shouldThrow) throw new Error('Graphiti unavailable');
     this.callOrder.push({ method: 'upsertEntitiesBatch', count: entities.length });
-    this.upserts.push(...entities);
+    const successful = entities.filter(e => !this.failEntityNames.has(e.name));
+    const failed = entities.filter(e => this.failEntityNames.has(e.name));
+    this.upserts.push(...successful);
     return {
-      success: entities.length,
-      failed: 0,
-      errors: [],
-      successfulEntities: entities.map(e => e.name),
+      success: successful.length,
+      failed: failed.length,
+      errors: failed.map(e => ({ entity: e.name, error: 'Simulated failure' })),
+      successfulEntities: successful.map(e => e.name),
     };
   }
 
@@ -2005,6 +2008,261 @@ describe('CodePerceptionWatcher', () => {
 
       // Should have processed the deletion
       expect(watcher.processing.has('TEST')).toBe(false);
+    });
+  });
+
+  describe('HVSYN-904: AST sync only for successfully upserted files', () => {
+    it('should skip AST processing for files whose entity upsert failed', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher({ astEnabled: true });
+
+      mockClient.failEntityNames.add('File:src/broken.js');
+
+      mockFs.setFile('/projects/test-project/src/good.js', 'function good() { return 1; }');
+      mockFs.setFile('/projects/test-project/src/broken.js', 'function broken() { return 2; }');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.pendingChanges.set(
+        'TEST',
+        new Map([
+          ['/projects/test-project/src/good.js', 'change'],
+          ['/projects/test-project/src/broken.js', 'change'],
+        ])
+      );
+
+      await watcher.processPendingChanges('TEST');
+
+      const syncCall = mockClient.callOrder.find(c => c.method === 'syncFilesWithFunctions');
+      if (syncCall) {
+        expect(syncCall.files).toBe(1);
+      }
+
+      expect(mockClient.upserts.length).toBe(1);
+      expect(mockClient.upserts[0].name).toBe('File:src/good.js');
+    });
+
+    it('should skip AST when all entity upserts fail', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher({ astEnabled: true });
+
+      mockClient.failEntityNames.add('File:src/a.js');
+      mockClient.failEntityNames.add('File:src/b.js');
+
+      mockFs.setFile('/projects/test-project/src/a.js', 'const a = 1;');
+      mockFs.setFile('/projects/test-project/src/b.js', 'const b = 2;');
+
+      watcher.graphitiClients.set('TEST', mockClient);
+      watcher.watchers.set('TEST', {
+        _projectMeta: { projectIdentifier: 'TEST', projectPath: '/projects/test-project' },
+      });
+
+      watcher.pendingChanges.set(
+        'TEST',
+        new Map([
+          ['/projects/test-project/src/a.js', 'change'],
+          ['/projects/test-project/src/b.js', 'change'],
+        ])
+      );
+
+      await watcher.processPendingChanges('TEST');
+
+      const syncCall = mockClient.callOrder.find(c => c.method === 'syncFilesWithFunctions');
+      expect(syncCall).toBeUndefined();
+    });
+  });
+
+  describe('HVSYN-905: initialSync creates Project entity and containment edges', () => {
+    it('should create Project entity before file entities', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [{ name: 'main.js', isDirectory: () => false }];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/main.js', 'const main = 1;');
+
+      await watcher.initialSync('TEST', '/projects/test-project');
+
+      const projectUpsert = mockClient.callOrder.find(
+        c => c.method === 'upsertEntity' && c.entity === 'Project:TEST'
+      );
+      const batchUpsert = mockClient.callOrder.find(c => c.method === 'upsertEntitiesBatch');
+      const edgeBatch = mockClient.callOrder.find(c => c.method === 'createContainmentEdgesBatch');
+
+      expect(projectUpsert).toBeDefined();
+      expect(batchUpsert).toBeDefined();
+      expect(edgeBatch).toBeDefined();
+
+      const projectIdx = mockClient.callOrder.indexOf(projectUpsert);
+      const batchIdx = mockClient.callOrder.indexOf(batchUpsert);
+      const edgeIdx = mockClient.callOrder.indexOf(edgeBatch);
+      expect(projectIdx).toBeLessThan(batchIdx);
+      expect(batchIdx).toBeLessThan(edgeIdx);
+    });
+
+    it('should create containment edges for successfully upserted files', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [
+            { name: 'a.js', isDirectory: () => false },
+            { name: 'b.js', isDirectory: () => false },
+          ];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/a.js', 'const a = 1;');
+      mockFs.setFile('/projects/test-project/b.js', 'const b = 2;');
+
+      await watcher.initialSync('TEST', '/projects/test-project');
+
+      expect(mockClient.edges.length).toBe(2);
+      expect(mockClient.edges[0]).toEqual({ project: 'TEST', file: 'a.js' });
+      expect(mockClient.edges[1]).toEqual({ project: 'TEST', file: 'b.js' });
+    });
+
+    it('should skip edges when Project entity upsert fails', async () => {
+      const { watcher, mockFs, mockClient, mockLogger } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockClient.upsertEntity = async () => {
+        throw new Error('Graphiti unavailable');
+      };
+      mockClient.shouldThrow = false;
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [{ name: 'main.js', isDirectory: () => false }];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/main.js', 'const main = 1;');
+
+      await watcher.initialSync('TEST', '/projects/test-project');
+
+      expect(mockClient.upserts.length).toBe(1);
+      expect(mockClient.edges.length).toBe(0);
+    });
+
+    it('should skip edges for files whose entity upsert failed', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockClient.failEntityNames.add('File:broken.js');
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [
+            { name: 'good.js', isDirectory: () => false },
+            { name: 'broken.js', isDirectory: () => false },
+          ];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/good.js', 'const good = 1;');
+      mockFs.setFile('/projects/test-project/broken.js', 'const broken = 2;');
+
+      await watcher.initialSync('TEST', '/projects/test-project');
+
+      expect(mockClient.edges.length).toBe(1);
+      expect(mockClient.edges[0]).toEqual({ project: 'TEST', file: 'good.js' });
+    });
+  });
+
+  describe('HVSYN-905: astInitialSync creates Project entity and containment edges', () => {
+    it('should create Project entity before file processing', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [{ name: 'main.js', isDirectory: () => false }];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/main.js', 'function main() {}');
+
+      await watcher.astInitialSync('TEST', '/projects/test-project');
+
+      const projectUpsert = mockClient.callOrder.find(
+        c => c.method === 'upsertEntity' && c.entity === 'Project:TEST'
+      );
+      expect(projectUpsert).toBeDefined();
+    });
+
+    it('should create containment edges for successfully upserted file entities', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [{ name: 'main.js', isDirectory: () => false }];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/main.js', 'function main() {}');
+
+      await watcher.astInitialSync('TEST', '/projects/test-project');
+
+      const edgeBatch = mockClient.callOrder.find(c => c.method === 'createContainmentEdgesBatch');
+      expect(edgeBatch).toBeDefined();
+      expect(mockClient.edges.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should skip edges when Project entity upsert fails', async () => {
+      const { watcher, mockFs, mockClient, mockLogger } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockClient.upsertEntity = async () => {
+        throw new Error('Graphiti unavailable');
+      };
+      mockClient.shouldThrow = false;
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [{ name: 'main.js', isDirectory: () => false }];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/main.js', 'function main() {}');
+
+      await watcher.astInitialSync('TEST', '/projects/test-project');
+
+      const edgeBatch = mockClient.callOrder.find(c => c.method === 'createContainmentEdgesBatch');
+      expect(edgeBatch).toBeUndefined();
+    });
+
+    it('should only sync functions for files with successful entity upsert', async () => {
+      const { watcher, mockFs, mockClient } = createWatcher();
+      watcher.graphitiClients.set('TEST', mockClient);
+
+      mockClient.failEntityNames.add('File:broken.js');
+
+      mockFs.readdir = dir => {
+        if (dir === '/projects/test-project') {
+          return [
+            { name: 'good.js', isDirectory: () => false },
+            { name: 'broken.js', isDirectory: () => false },
+          ];
+        }
+        return [];
+      };
+      mockFs.setFile('/projects/test-project/good.js', 'function good() {}');
+      mockFs.setFile('/projects/test-project/broken.js', 'function broken() {}');
+
+      await watcher.astInitialSync('TEST', '/projects/test-project');
+
+      const syncCall = mockClient.callOrder.find(c => c.method === 'syncFilesWithFunctions');
+      if (syncCall) {
+        expect(syncCall.files).toBe(1);
+      }
     });
   });
 });
