@@ -242,7 +242,7 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
 async function SyncFromVibeWorkflow(input) {
     const vibeTask = await getVibeTask({ taskId: input.vibeTaskId });
     if (!vibeTask) {
-        throw new Error(`Vibe task not found: ${input.vibeTaskId}`);
+        throw workflow_1.ApplicationFailure.nonRetryable(`Vibe task not found: ${input.vibeTaskId}`, 'NotFoundError');
     }
     return BidirectionalSyncWorkflow({
         source: 'vibe',
@@ -263,7 +263,7 @@ async function SyncFromVibeWorkflow(input) {
 async function SyncFromHulyWorkflow(input) {
     const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
     if (!hulyIssue) {
-        throw new Error(`Huly issue not found: ${input.hulyIdentifier}`);
+        throw workflow_1.ApplicationFailure.nonRetryable(`Huly issue not found: ${input.hulyIdentifier}`, 'NotFoundError');
     }
     let vibeProjectId = input.context.vibeProjectId;
     if (!vibeProjectId) {
@@ -299,14 +299,14 @@ async function SyncFromHulyWorkflow(input) {
  */
 async function SyncFromBeadsWorkflow(input) {
     if (!input.context.gitRepoPath) {
-        throw new Error('gitRepoPath required for Beads sync');
+        throw workflow_1.ApplicationFailure.nonRetryable('gitRepoPath required for Beads sync', 'ValidationError');
     }
     const beadsIssue = await getBeadsIssue({
         issueId: input.beadsIssueId,
         gitRepoPath: input.context.gitRepoPath,
     });
     if (!beadsIssue) {
-        throw new Error(`Beads issue not found: ${input.beadsIssueId}`);
+        throw workflow_1.ApplicationFailure.nonRetryable(`Beads issue not found: ${input.beadsIssueId}`, 'NotFoundError');
     }
     return BidirectionalSyncWorkflow({
         source: 'beads',

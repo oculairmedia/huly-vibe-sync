@@ -69,11 +69,14 @@ export async function triggerSyncFromVibe(
   await temporal.workflow.start('SyncFromVibeWorkflow', {
     taskQueue: TASK_QUEUE,
     workflowId,
-    args: [{
-      vibeTaskId,
-      context,
-      linkedIds,
-    }],
+    workflowExecutionTimeout: '5 minutes',
+    args: [
+      {
+        vibeTaskId,
+        context,
+        linkedIds,
+      },
+    ],
   });
 
   console.log(`[Temporal] Started SyncFromVibeWorkflow: ${workflowId}`);
@@ -94,11 +97,14 @@ export async function triggerSyncFromHuly(
   await temporal.workflow.start('SyncFromHulyWorkflow', {
     taskQueue: TASK_QUEUE,
     workflowId,
-    args: [{
-      hulyIdentifier,
-      context,
-      linkedIds,
-    }],
+    workflowExecutionTimeout: '5 minutes',
+    args: [
+      {
+        hulyIdentifier,
+        context,
+        linkedIds,
+      },
+    ],
   });
 
   console.log(`[Temporal] Started SyncFromHulyWorkflow: ${workflowId}`);
@@ -119,11 +125,14 @@ export async function triggerSyncFromBeads(
   await temporal.workflow.start('SyncFromBeadsWorkflow', {
     taskQueue: TASK_QUEUE,
     workflowId,
-    args: [{
-      beadsIssueId,
-      context,
-      linkedIds,
-    }],
+    workflowExecutionTimeout: '5 minutes',
+    args: [
+      {
+        beadsIssueId,
+        context,
+        linkedIds,
+      },
+    ],
   });
 
   console.log(`[Temporal] Started SyncFromBeadsWorkflow: ${workflowId}`);
@@ -152,12 +161,15 @@ export async function triggerBidirectionalSync(
   await temporal.workflow.start('BidirectionalSyncWorkflow', {
     taskQueue: TASK_QUEUE,
     workflowId,
-    args: [{
-      source,
-      issueData,
-      context,
-      linkedIds,
-    }],
+    workflowExecutionTimeout: '5 minutes',
+    args: [
+      {
+        source,
+        issueData,
+        context,
+        linkedIds,
+      },
+    ],
   });
 
   console.log(`[Temporal] Started BidirectionalSyncWorkflow: ${workflowId}`);

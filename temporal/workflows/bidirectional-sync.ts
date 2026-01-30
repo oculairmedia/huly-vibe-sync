@@ -10,7 +10,13 @@
  * - Huly updates → sync to Vibe + Beads
  */
 
-import { proxyActivities, log, sleep, executeChild } from '@temporalio/workflow';
+import {
+  proxyActivities,
+  log,
+  sleep,
+  executeChild,
+  ApplicationFailure,
+} from '@temporalio/workflow';
 import type * as syncActivities from '../activities/bidirectional';
 import type * as orchestrationActivities from '../activities/orchestration';
 
@@ -367,7 +373,10 @@ export async function SyncFromVibeWorkflow(input: {
   const vibeTask = await getVibeTask({ taskId: input.vibeTaskId });
 
   if (!vibeTask) {
-    throw new Error(`Vibe task not found: ${input.vibeTaskId}`);
+    throw ApplicationFailure.nonRetryable(
+      `Vibe task not found: ${input.vibeTaskId}`,
+      'NotFoundError'
+    );
   }
 
   return BidirectionalSyncWorkflow({
@@ -395,7 +404,10 @@ export async function SyncFromHulyWorkflow(input: {
   const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
 
   if (!hulyIssue) {
-    throw new Error(`Huly issue not found: ${input.hulyIdentifier}`);
+    throw ApplicationFailure.nonRetryable(
+      `Huly issue not found: ${input.hulyIdentifier}`,
+      'NotFoundError'
+    );
   }
 
   let vibeProjectId = input.context.vibeProjectId;
@@ -439,7 +451,7 @@ export async function SyncFromBeadsWorkflow(input: {
   linkedIds?: { hulyId?: string; vibeId?: string };
 }): Promise<BidirectionalSyncResult> {
   if (!input.context.gitRepoPath) {
-    throw new Error('gitRepoPath required for Beads sync');
+    throw ApplicationFailure.nonRetryable('gitRepoPath required for Beads sync', 'ValidationError');
   }
 
   const beadsIssue = await getBeadsIssue({
@@ -448,7 +460,10 @@ export async function SyncFromBeadsWorkflow(input: {
   });
 
   if (!beadsIssue) {
-    throw new Error(`Beads issue not found: ${input.beadsIssueId}`);
+    throw ApplicationFailure.nonRetryable(
+      `Beads issue not found: ${input.beadsIssueId}`,
+      'NotFoundError'
+    );
   }
 
   return BidirectionalSyncWorkflow({

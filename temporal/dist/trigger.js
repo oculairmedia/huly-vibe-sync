@@ -50,11 +50,14 @@ async function triggerSyncFromVibe(vibeTaskId, context, linkedIds) {
     await temporal.workflow.start('SyncFromVibeWorkflow', {
         taskQueue: TASK_QUEUE,
         workflowId,
-        args: [{
+        workflowExecutionTimeout: '5 minutes',
+        args: [
+            {
                 vibeTaskId,
                 context,
                 linkedIds,
-            }],
+            },
+        ],
     });
     console.log(`[Temporal] Started SyncFromVibeWorkflow: ${workflowId}`);
     return { workflowId };
@@ -68,11 +71,14 @@ async function triggerSyncFromHuly(hulyIdentifier, context, linkedIds) {
     await temporal.workflow.start('SyncFromHulyWorkflow', {
         taskQueue: TASK_QUEUE,
         workflowId,
-        args: [{
+        workflowExecutionTimeout: '5 minutes',
+        args: [
+            {
                 hulyIdentifier,
                 context,
                 linkedIds,
-            }],
+            },
+        ],
     });
     console.log(`[Temporal] Started SyncFromHulyWorkflow: ${workflowId}`);
     return { workflowId };
@@ -86,11 +92,14 @@ async function triggerSyncFromBeads(beadsIssueId, context, linkedIds) {
     await temporal.workflow.start('SyncFromBeadsWorkflow', {
         taskQueue: TASK_QUEUE,
         workflowId,
-        args: [{
+        workflowExecutionTimeout: '5 minutes',
+        args: [
+            {
                 beadsIssueId,
                 context,
                 linkedIds,
-            }],
+            },
+        ],
     });
     console.log(`[Temporal] Started SyncFromBeadsWorkflow: ${workflowId}`);
     return { workflowId };
@@ -104,12 +113,15 @@ async function triggerBidirectionalSync(source, issueData, context, linkedIds) {
     await temporal.workflow.start('BidirectionalSyncWorkflow', {
         taskQueue: TASK_QUEUE,
         workflowId,
-        args: [{
+        workflowExecutionTimeout: '5 minutes',
+        args: [
+            {
                 source,
                 issueData,
                 context,
                 linkedIds,
-            }],
+            },
+        ],
     });
     console.log(`[Temporal] Started BidirectionalSyncWorkflow: ${workflowId}`);
     return { workflowId };
