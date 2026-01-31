@@ -27,7 +27,8 @@
     "control-agent": "node create-control-agent.js",
     "compare-agents": "node tests/compare-agent-sources.js",
     "migrate-agents-md": "node migrate-agents-md.js",
-    "migrate-agents-db": "node migrate-agents-to-db.js"
+    "migrate-agents-db": "node migrate-agents-to-db.js",
+    "vibesync": "node cli.js"
   },
   "keywords": [
     "huly",
