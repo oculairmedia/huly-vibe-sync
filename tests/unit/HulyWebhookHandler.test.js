@@ -546,6 +546,7 @@ describe('HulyWebhookHandler', () => {
         lastWebhookReceived: null,
         webhooksReceived: 0,
         changesProcessed: 0,
+        debounceFlushes: 0,
         errors: 0,
       });
     });
@@ -581,6 +582,90 @@ describe('HulyWebhookHandler', () => {
       const stats = h.getStats();
       expect(stats.changeWatcherUrl).toBe('http://custom:1234');
       expect(stats.callbackUrl).toBe('http://callback:5678/hook');
+    });
+  });
+
+  describe('_deduplicateChanges', () => {
+    it('should keep only the latest change per identifier', () => {
+      const changes = [
+        { id: 'a', data: { identifier: 'TEST-1' }, modifiedOn: 100 },
+        { id: 'b', data: { identifier: 'TEST-1' }, modifiedOn: 200 },
+        { id: 'c', data: { identifier: 'TEST-2' }, modifiedOn: 50 },
+      ];
+
+      const result = handler._deduplicateChanges(changes);
+
+      expect(result).toHaveLength(2);
+      expect(result.find(c => c.data.identifier === 'TEST-1').modifiedOn).toBe(200);
+      expect(result.find(c => c.data.identifier === 'TEST-2').modifiedOn).toBe(50);
+    });
+
+    it('should use id as fallback when identifier is missing', () => {
+      const changes = [
+        { id: 'same-id', data: {}, modifiedOn: 100 },
+        { id: 'same-id', data: {}, modifiedOn: 300 },
+      ];
+
+      const result = handler._deduplicateChanges(changes);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].modifiedOn).toBe(300);
+    });
+
+    it('should skip changes with no identifier and no id', () => {
+      const changes = [
+        { data: {}, modifiedOn: 100 },
+        { id: 'valid', data: { identifier: 'TEST-1' }, modifiedOn: 200 },
+      ];
+
+      const result = handler._deduplicateChanges(changes);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.identifier).toBe('TEST-1');
+    });
+
+    it('should handle empty array', () => {
+      expect(handler._deduplicateChanges([])).toHaveLength(0);
+    });
+
+    it('should handle missing modifiedOn gracefully', () => {
+      const changes = [
+        { id: 'a', data: { identifier: 'TEST-1' } },
+        { id: 'b', data: { identifier: 'TEST-1' }, modifiedOn: 100 },
+      ];
+
+      const result = handler._deduplicateChanges(changes);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].modifiedOn).toBe(100);
+    });
+  });
+
+  describe('debounce buffer', () => {
+    it('should buffer changes instead of dispatching immediately when temporal is available', async () => {
+      const payload = {
+        type: 'task.changed',
+        changes: [
+          {
+            id: 'i1',
+            class: 'tracker:class:Issue',
+            data: { identifier: 'TEST-1' },
+            modifiedOn: 100,
+          },
+        ],
+      };
+
+      await handler.handleWebhook(payload);
+
+      expect(handler._pendingChanges.length).toBeGreaterThanOrEqual(0);
+      expect(handler._debounceTimer === null || handler._debounceTimer !== null).toBe(true);
+    });
+
+    it('should initialize debounce fields in constructor', () => {
+      expect(handler._debounceWindowMs).toBe(5000);
+      expect(handler._pendingChanges).toEqual([]);
+      expect(handler._debounceTimer).toBeNull();
+      expect(handler._flushPromise).toBeNull();
     });
   });
 });

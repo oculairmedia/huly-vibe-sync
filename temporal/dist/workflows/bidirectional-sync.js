@@ -595,9 +595,25 @@ async function HulyWebhookChangeWorkflow(input) {
         result.success = true;
         return result;
     }
-    result.issuesProcessed = issueChanges.length;
-    // Process each issue change
+    const issueMap = new Map();
     for (const change of issueChanges) {
+        const key = change.data?.identifier || change.id;
+        if (!key)
+            continue;
+        const existing = issueMap.get(key);
+        if (!existing || (change.modifiedOn ?? 0) > (existing.modifiedOn ?? 0)) {
+            issueMap.set(key, change);
+        }
+    }
+    const dedupedChanges = Array.from(issueMap.values());
+    if (dedupedChanges.length < issueChanges.length) {
+        workflow_1.log.info('[HulyWebhookChange] Deduplicated issues', {
+            before: issueChanges.length,
+            after: dedupedChanges.length,
+        });
+    }
+    result.issuesProcessed = dedupedChanges.length;
+    for (const change of dedupedChanges) {
         const issueId = change.data?.identifier || change.id;
         try {
             if (!issueId) {
@@ -653,8 +669,7 @@ async function HulyWebhookChangeWorkflow(input) {
                     result.errors.push({ issueId, error: syncResult.error });
                 }
             }
-            // Small delay between issues to avoid overwhelming APIs
-            await (0, workflow_1.sleep)('200ms');
+            await (0, workflow_1.sleep)('500ms');
         }
         catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);

@@ -872,10 +872,27 @@ export async function HulyWebhookChangeWorkflow(
     return result;
   }
 
-  result.issuesProcessed = issueChanges.length;
-
-  // Process each issue change
+  const issueMap = new Map<string, (typeof issueChanges)[0]>();
   for (const change of issueChanges) {
+    const key = change.data?.identifier || change.id;
+    if (!key) continue;
+    const existing = issueMap.get(key);
+    if (!existing || (change.modifiedOn ?? 0) > (existing.modifiedOn ?? 0)) {
+      issueMap.set(key, change);
+    }
+  }
+  const dedupedChanges = Array.from(issueMap.values());
+
+  if (dedupedChanges.length < issueChanges.length) {
+    log.info('[HulyWebhookChange] Deduplicated issues', {
+      before: issueChanges.length,
+      after: dedupedChanges.length,
+    });
+  }
+
+  result.issuesProcessed = dedupedChanges.length;
+
+  for (const change of dedupedChanges) {
     const issueId = change.data?.identifier || change.id;
 
     try {
@@ -936,8 +953,7 @@ export async function HulyWebhookChangeWorkflow(
         }
       }
 
-      // Small delay between issues to avoid overwhelming APIs
-      await sleep('200ms');
+      await sleep('500ms');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log.error('[HulyWebhookChange] Failed to process issue', {
