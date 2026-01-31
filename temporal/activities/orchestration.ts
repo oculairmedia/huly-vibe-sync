@@ -304,6 +304,51 @@ export async function fetchHulyIssuesBulk(input: {
 }
 
 /**
+ * Resolve git repo path for a Huly project by identifier.
+ * Fetches the project from Huly API and extracts the filesystem path from its description.
+ * Returns null (not throws) if project not found or no path configured — caller decides severity.
+ */
+export async function resolveGitRepoPath(input: {
+  projectIdentifier: string;
+}): Promise<string | null> {
+  const { projectIdentifier } = input;
+
+  console.log(`[Temporal:Orchestration] Resolving gitRepoPath for project: ${projectIdentifier}`);
+
+  try {
+    const hulyClient = createHulyClient(process.env.HULY_API_URL);
+    const projects = await hulyClient.listProjects();
+    const project = projects.find((p: HulyProject) => p.identifier === projectIdentifier);
+
+    if (!project) {
+      console.log(
+        `[Temporal:Orchestration] Project not found for gitRepoPath: ${projectIdentifier}`
+      );
+      return null;
+    }
+
+    const path = extractGitRepoPath({ description: project.description });
+
+    if (path) {
+      console.log(
+        `[Temporal:Orchestration] Resolved gitRepoPath: ${path} for ${projectIdentifier}`
+      );
+    } else {
+      console.log(
+        `[Temporal:Orchestration] No gitRepoPath in description for ${projectIdentifier}`
+      );
+    }
+
+    return path;
+  } catch (error) {
+    console.warn(
+      `[Temporal:Orchestration] resolveGitRepoPath failed for ${projectIdentifier}: ${error}`
+    );
+    return null;
+  }
+}
+
+/**
  * Extract git repo path from Huly project description.
  * Supports: Filesystem:, Path:, Directory:, Location: (case-insensitive)
  */

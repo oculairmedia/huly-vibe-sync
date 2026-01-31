@@ -75,6 +75,14 @@ export declare function fetchHulyIssuesBulk(input: {
     limit?: number;
 }): Promise<Record<string, HulyIssue[]>>;
 /**
+ * Resolve git repo path for a Huly project by identifier.
+ * Fetches the project from Huly API and extracts the filesystem path from its description.
+ * Returns null (not throws) if project not found or no path configured — caller decides severity.
+ */
+export declare function resolveGitRepoPath(input: {
+    projectIdentifier: string;
+}): Promise<string | null>;
+/**
  * Extract git repo path from Huly project description.
  * Supports: Filesystem:, Path:, Directory:, Location: (case-insensitive)
  */

@@ -13,6 +13,7 @@ exports.resolveProjectIdentifier = resolveProjectIdentifier;
 exports.ensureVibeProject = ensureVibeProject;
 exports.fetchProjectData = fetchProjectData;
 exports.fetchHulyIssuesBulk = fetchHulyIssuesBulk;
+exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
 exports.initializeBeads = initializeBeads;
 exports.fetchBeadsIssues = fetchBeadsIssues;
@@ -205,6 +206,36 @@ async function fetchHulyIssuesBulk(input) {
     }
     catch (error) {
         throw handleOrchestratorError(error, 'fetchHulyIssuesBulk');
+    }
+}
+/**
+ * Resolve git repo path for a Huly project by identifier.
+ * Fetches the project from Huly API and extracts the filesystem path from its description.
+ * Returns null (not throws) if project not found or no path configured — caller decides severity.
+ */
+async function resolveGitRepoPath(input) {
+    const { projectIdentifier } = input;
+    console.log(`[Temporal:Orchestration] Resolving gitRepoPath for project: ${projectIdentifier}`);
+    try {
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const projects = await hulyClient.listProjects();
+        const project = projects.find((p) => p.identifier === projectIdentifier);
+        if (!project) {
+            console.log(`[Temporal:Orchestration] Project not found for gitRepoPath: ${projectIdentifier}`);
+            return null;
+        }
+        const path = extractGitRepoPath({ description: project.description });
+        if (path) {
+            console.log(`[Temporal:Orchestration] Resolved gitRepoPath: ${path} for ${projectIdentifier}`);
+        }
+        else {
+            console.log(`[Temporal:Orchestration] No gitRepoPath in description for ${projectIdentifier}`);
+        }
+        return path;
+    }
+    catch (error) {
+        console.warn(`[Temporal:Orchestration] resolveGitRepoPath failed for ${projectIdentifier}: ${error}`);
+        return null;
     }
 }
 /**

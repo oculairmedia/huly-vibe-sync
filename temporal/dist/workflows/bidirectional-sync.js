@@ -38,6 +38,15 @@ const { fetchBeadsIssues, getVibeProjectId } = (0, workflow_1.proxyActivities)({
         maximumAttempts: 3,
     },
 });
+const { resolveGitRepoPath } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '10 seconds',
+    retry: {
+        initialInterval: '1 second',
+        backoffCoefficient: 2,
+        maximumInterval: '5 seconds',
+        maximumAttempts: 2,
+    },
+});
 // ============================================================
 // MAIN BIDIRECTIONAL SYNC WORKFLOW
 // ============================================================
@@ -603,7 +612,17 @@ async function HulyWebhookChangeWorkflow(input) {
             });
             // Extract project identifier from issue identifier (e.g., "PROJ-123" -> "PROJ")
             const projectIdentifier = issueId.split('-')[0];
-            // Use SyncFromHulyWorkflow as child to handle the sync properly
+            // Resolve gitRepoPath for Beads sync — non-blocking, null on failure
+            let gitRepoPath;
+            try {
+                gitRepoPath = (await resolveGitRepoPath({ projectIdentifier })) || undefined;
+            }
+            catch (err) {
+                workflow_1.log.warn('[HulyWebhookChange] gitRepoPath resolution failed, proceeding without Beads', {
+                    projectIdentifier,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
             const syncResult = await (0, workflow_1.executeChild)(SyncFromHulyWorkflow, {
                 args: [
                     {
@@ -611,6 +630,7 @@ async function HulyWebhookChangeWorkflow(input) {
                         context: {
                             projectIdentifier,
                             vibeProjectId: '', // Will be looked up by the workflow
+                            gitRepoPath,
                         },
                     },
                 ],
