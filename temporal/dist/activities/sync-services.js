@@ -171,13 +171,14 @@ async function syncBeadsToHulyBatch(input) {
             identifier: issue.hulyIdentifier,
             changes: { status: (0, lib_1.mapBeadsStatusToHuly)(issue.status) },
         }));
-        console.log(`[Temporal:Beads→Huly] Bulk updating ${updates.length} issues`);
+        console.log(`[Temporal:Beads→Huly] Syncing ${updates.length} issues in batches of 25`);
         let totalUpdated = 0;
         let totalFailed = 0;
         const allErrors = [];
-        const BATCH_SIZE = 100;
+        const BATCH_SIZE = 25;
         for (let i = 0; i < updates.length; i += BATCH_SIZE) {
             const batch = updates.slice(i, i + BATCH_SIZE);
+            console.log(`[Temporal:Beads→Huly] Batch ${Math.floor(i / BATCH_SIZE) + 1}: updating ${batch.length} issues`);
             try {
                 const result = await hulyClient.bulkUpdateIssues({ updates: batch });
                 totalUpdated += result.succeeded.length;

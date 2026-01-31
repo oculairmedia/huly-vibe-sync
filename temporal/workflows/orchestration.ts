@@ -882,13 +882,15 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         const toCreate: typeof beadsIssues = [];
 
         for (const beadsIssue of beadsIssues) {
-          const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
-          if (hulyLabel) {
-            toSync.push({
-              beadsId: beadsIssue.id,
-              hulyIdentifier: hulyLabel.replace('huly:', ''),
-              status: beadsIssue.status,
-            });
+          const hulyLabels = beadsIssue.labels?.filter(l => l.startsWith('huly:')) ?? [];
+          if (hulyLabels.length > 0) {
+            for (const label of hulyLabels) {
+              toSync.push({
+                beadsId: beadsIssue.id,
+                hulyIdentifier: label.replace('huly:', ''),
+                status: beadsIssue.status,
+              });
+            }
           } else {
             toCreate.push(beadsIssue);
           }
