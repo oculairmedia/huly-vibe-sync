@@ -21,6 +21,7 @@ import {
   ensureVibeProject,
   fetchProjectData,
   extractGitRepoPath,
+  resolveGitRepoPath,
   initializeBeads,
   fetchBeadsIssues,
   updateLettaMemory,
@@ -221,9 +222,15 @@ describe('Orchestration Activities', () => {
     });
 
     it('should handle various formats', () => {
-      expect(extractGitRepoPath({ description: 'Filesystem: /path/to/repo' })).toBe('/path/to/repo');
-      expect(extractGitRepoPath({ description: 'filesystem: /path/to/repo' })).toBe('/path/to/repo');
-      expect(extractGitRepoPath({ description: 'FILESYSTEM: /path/to/repo' })).toBe('/path/to/repo');
+      expect(extractGitRepoPath({ description: 'Filesystem: /path/to/repo' })).toBe(
+        '/path/to/repo'
+      );
+      expect(extractGitRepoPath({ description: 'filesystem: /path/to/repo' })).toBe(
+        '/path/to/repo'
+      );
+      expect(extractGitRepoPath({ description: 'FILESYSTEM: /path/to/repo' })).toBe(
+        '/path/to/repo'
+      );
     });
 
     it('should return null when no path found', () => {
@@ -242,6 +249,83 @@ describe('Orchestration Activities', () => {
         description: 'Filesystem:   /opt/stacks/test   ',
       });
       expect(result).toBe('/opt/stacks/test');
+    });
+  });
+
+  // ============================================================
+  // resolveGitRepoPath Tests
+  // ============================================================
+  describe('resolveGitRepoPath', () => {
+    it('should return path when project has Filesystem in description', async () => {
+      mockHulyClient.listProjects.mockResolvedValue([
+        {
+          identifier: 'HVSYN',
+          name: 'Huly-Vibe Sync',
+          description: 'Filesystem: /opt/stacks/huly-vibe-sync',
+        },
+      ]);
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBe('/opt/stacks/huly-vibe-sync');
+      expect(mockHulyClient.listProjects).toHaveBeenCalled();
+    });
+
+    it('should return null when project not found', async () => {
+      mockHulyClient.listProjects.mockResolvedValue([
+        {
+          identifier: 'OTHER',
+          name: 'Other Project',
+          description: 'Filesystem: /opt/stacks/other',
+        },
+      ]);
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when description has no filesystem path', async () => {
+      mockHulyClient.listProjects.mockResolvedValue([
+        { identifier: 'HVSYN', name: 'Huly-Vibe Sync', description: 'Just a regular description' },
+      ]);
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when description is undefined', async () => {
+      mockHulyClient.listProjects.mockResolvedValue([
+        { identifier: 'HVSYN', name: 'Huly-Vibe Sync' },
+      ]);
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null (not throw) when API fails', async () => {
+      mockHulyClient.listProjects.mockRejectedValue(new Error('Connection refused'));
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBeNull();
+    });
+
+    it('should support Path, Directory, and Location patterns', async () => {
+      for (const [keyword, path] of [
+        ['Path: /opt/stacks/path-test', '/opt/stacks/path-test'],
+        ['Directory: /opt/stacks/dir-test', '/opt/stacks/dir-test'],
+        ['Location: /opt/stacks/loc-test', '/opt/stacks/loc-test'],
+      ]) {
+        mockHulyClient.listProjects.mockResolvedValue([
+          { identifier: 'TEST', name: 'Test', description: keyword },
+        ]);
+
+        const result = await resolveGitRepoPath({ projectIdentifier: 'TEST' });
+        expect(result).toBe(path);
+      }
     });
   });
 
