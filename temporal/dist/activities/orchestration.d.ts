@@ -48,9 +48,6 @@ export declare function fetchHulyProjects(): Promise<HulyProject[]>;
 export declare function fetchVibeProjects(): Promise<VibeProject[]>;
 export declare function getVibeProjectId(hulyProjectIdentifier: string): Promise<string | null>;
 export declare function resolveProjectIdentifier(projectIdOrFolder: string): Promise<string | null>;
-/**
- * Create or get a Vibe project for a Huly project
- */
 export declare function ensureVibeProject(input: {
     hulyProject: HulyProject;
     existingVibeProjects: VibeProject[];

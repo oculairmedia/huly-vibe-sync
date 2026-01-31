@@ -206,13 +206,29 @@ async function syncFromVibe(
 ) {
   const results: BidirectionalSyncResult['results'] = {};
 
+  // Determine Huly ID - either from linkedIds or extract from task description
+  let hulyId = linkedIds?.hulyId;
+
+  if (!hulyId && issueData.description) {
+    // Extract from description: "Synced from Huly: PROJ-123" or "Huly Issue: PROJ-123"
+    const hulyIdMatch = issueData.description.match(
+      /(?:Synced from Huly|Huly Issue):\s*([A-Z]+-\d+)/i
+    );
+    if (hulyIdMatch) {
+      hulyId = hulyIdMatch[1];
+      log.info(`[syncFromVibe] Extracted hulyId from description: ${hulyId}`);
+    }
+  }
+
   // Vibe → Huly
-  if (linkedIds?.hulyId) {
+  if (hulyId) {
     results.huly = await syncVibeToHuly({
       vibeTask: issueData,
-      hulyIdentifier: linkedIds.hulyId,
+      hulyIdentifier: hulyId,
       context,
     });
+  } else {
+    log.warn(`[syncFromVibe] No hulyId found for Vibe task ${issueData.id}, skipping Huly sync`);
   }
 
   // Vibe → Beads

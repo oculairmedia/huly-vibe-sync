@@ -192,9 +192,26 @@ export async function resolveProjectIdentifier(projectIdOrFolder: string): Promi
   }
 }
 
-/**
- * Create or get a Vibe project for a Huly project
- */
+function extractFilesystemPath(description?: string): string | null {
+  if (!description) return null;
+  const match = description.match(/(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i);
+  if (match) {
+    return match[1]
+      .trim()
+      .replace(/[,;.]$/, '')
+      .trim();
+  }
+  return null;
+}
+
+function determineGitRepoPath(hulyProject: HulyProject): string {
+  const filesystemPath = extractFilesystemPath(hulyProject.description);
+  if (filesystemPath) {
+    return filesystemPath;
+  }
+  return `/opt/stacks/huly-sync-placeholders/${hulyProject.identifier}`;
+}
+
 export async function ensureVibeProject(input: {
   hulyProject: HulyProject;
   existingVibeProjects: VibeProject[];
@@ -204,7 +221,6 @@ export async function ensureVibeProject(input: {
   console.log(`[Temporal:Orchestration] Ensuring Vibe project for ${hulyProject.identifier}`);
 
   try {
-    // Check if project already exists (case-insensitive match on name)
     const existing = existingVibeProjects.find(
       vp => vp.name.toLowerCase() === hulyProject.name.toLowerCase()
     );
@@ -214,11 +230,15 @@ export async function ensureVibeProject(input: {
       return existing;
     }
 
-    // Create new Vibe project
+    const gitRepoPath = determineGitRepoPath(hulyProject);
+    const displayName = gitRepoPath.split('/').pop() || hulyProject.name;
+
+    console.log(`[Temporal:Orchestration] Creating Vibe project with repo: ${gitRepoPath}`);
+
     const vibeClient = createVibeClient(process.env.VIBE_API_URL);
     const created = await vibeClient.createProject({
       name: hulyProject.name,
-      // Note: Vibe API doesn't support description in createProject
+      repositories: [{ display_name: displayName, git_repo_path: gitRepoPath }],
     });
 
     console.log(`[Temporal:Orchestration] Created Vibe project: ${created.id}`);
