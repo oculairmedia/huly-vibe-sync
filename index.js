@@ -48,7 +48,6 @@ import {
   updateHulyIssueStatus,
   updateHulyIssueDescription,
 } from './lib/HulyService.js';
-import { syncHulyToVibe } from './lib/SyncOrchestrator.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
 
 // Temporal orchestration (lazy-loaded)
@@ -596,19 +595,8 @@ async function main() {
           'Temporal orchestration sync completed'
         );
       } else {
-        // Fall back to legacy sync
-        await withTimeout(
-          syncHulyToVibe(
-            hulyClient,
-            vibeClient,
-            db,
-            config,
-            lettaService,
-            projectId,
-            bookstackService
-          ),
-          900000, // 15-minute timeout for entire sync
-          'Full sync cycle'
+        throw new Error(
+          'Temporal orchestration is required (legacy SyncOrchestrator is deprecated)'
         );
       }
 
