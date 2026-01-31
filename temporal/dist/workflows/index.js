@@ -5,7 +5,7 @@
  * This file re-exports all workflows so the worker can load them.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CleanupFailedProvisionsWorkflow = exports.ProvisionSingleAgentWorkflow = exports.ProvisionAgentsWorkflow = exports.ProjectSyncWorkflow = exports.ScheduledSyncWorkflow = exports.FullOrchestrationWorkflow = exports.HulyWebhookChangeWorkflow = exports.VibeSSEChangeWorkflow = exports.BeadsFileChangeWorkflow = exports.SyncFromBeadsWorkflow = exports.SyncFromHulyWorkflow = exports.SyncFromVibeWorkflow = exports.BidirectionalSyncWorkflow = exports.SyncVibeToHulyWorkflow = exports.SyncProjectWorkflow = exports.SyncSingleIssueWorkflow = exports.BatchIssueSyncWorkflow = exports.IssueSyncWorkflow = exports.BatchMemoryUpdateWorkflow = exports.MemoryUpdateWorkflow = void 0;
+exports.CleanupFailedProvisionsWorkflow = exports.ProvisionSingleAgentWorkflow = exports.ProvisionAgentsWorkflow = exports.ScheduledReconciliationWorkflow = exports.DataReconciliationWorkflow = exports.ProjectSyncWorkflow = exports.ScheduledSyncWorkflow = exports.FullOrchestrationWorkflow = exports.HulyWebhookChangeWorkflow = exports.VibeSSEChangeWorkflow = exports.BeadsFileChangeWorkflow = exports.SyncFromBeadsWorkflow = exports.SyncFromHulyWorkflow = exports.SyncFromVibeWorkflow = exports.BidirectionalSyncWorkflow = exports.SyncVibeToHulyWorkflow = exports.SyncProjectWorkflow = exports.SyncSingleIssueWorkflow = exports.BatchIssueSyncWorkflow = exports.IssueSyncWorkflow = exports.BatchMemoryUpdateWorkflow = exports.MemoryUpdateWorkflow = void 0;
 // Memory update workflows
 var memory_update_1 = require("./memory-update");
 Object.defineProperty(exports, "MemoryUpdateWorkflow", { enumerable: true, get: function () { return memory_update_1.MemoryUpdateWorkflow; } });
@@ -33,6 +33,10 @@ var orchestration_1 = require("./orchestration");
 Object.defineProperty(exports, "FullOrchestrationWorkflow", { enumerable: true, get: function () { return orchestration_1.FullOrchestrationWorkflow; } });
 Object.defineProperty(exports, "ScheduledSyncWorkflow", { enumerable: true, get: function () { return orchestration_1.ScheduledSyncWorkflow; } });
 Object.defineProperty(exports, "ProjectSyncWorkflow", { enumerable: true, get: function () { return orchestration_1.ProjectSyncWorkflow; } });
+// Data reconciliation workflows
+var reconciliation_1 = require("./reconciliation");
+Object.defineProperty(exports, "DataReconciliationWorkflow", { enumerable: true, get: function () { return reconciliation_1.DataReconciliationWorkflow; } });
+Object.defineProperty(exports, "ScheduledReconciliationWorkflow", { enumerable: true, get: function () { return reconciliation_1.ScheduledReconciliationWorkflow; } });
 // Agent provisioning workflows
 var agent_provisioning_1 = require("./agent-provisioning");
 Object.defineProperty(exports, "ProvisionAgentsWorkflow", { enumerable: true, get: function () { return agent_provisioning_1.ProvisionAgentsWorkflow; } });

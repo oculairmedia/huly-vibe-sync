@@ -30,21 +30,11 @@ import type {
   BatchMemoryUpdateResult,
 } from './workflows/memory-update';
 
-import type {
-  IssueSyncInput,
-  IssueSyncResult,
-} from './workflows/issue-sync';
+import type { IssueSyncInput, IssueSyncResult } from './workflows/issue-sync';
 
-import type {
-  SyncIssueInput,
-  SyncIssueResult,
-} from './workflows/full-sync';
+import type { SyncIssueInput, SyncIssueResult } from './workflows/full-sync';
 
-import type {
-  FullSyncInput,
-  FullSyncResult,
-  SyncProgress,
-} from './workflows/orchestration';
+import type { FullSyncInput, FullSyncResult, SyncProgress } from './workflows/orchestration';
 
 import type {
   SyncContext,
@@ -126,7 +116,9 @@ export async function scheduleBatchMemoryUpdate(
     args: [input],
   });
 
-  console.log(`[Temporal] Scheduled batch memory update: ${workflowId} (${updates.length} updates)`);
+  console.log(
+    `[Temporal] Scheduled batch memory update: ${workflowId} (${updates.length} updates)`
+  );
 
   return {
     workflowId: handle.workflowId,
@@ -140,9 +132,7 @@ export async function scheduleBatchMemoryUpdate(
  * Blocks until the workflow completes (with all retries).
  * Use for synchronous flows where you need the result.
  */
-export async function executeMemoryUpdate(
-  input: MemoryUpdateInput
-): Promise<MemoryUpdateResult> {
+export async function executeMemoryUpdate(input: MemoryUpdateInput): Promise<MemoryUpdateResult> {
   const client = await getClient();
 
   const workflowId = `memory-update-${input.agentId}-${input.blockLabel}-${Date.now()}`;
@@ -296,9 +286,7 @@ export async function scheduleIssueSync(
  * Blocks until the workflow completes (with all retries).
  * Use when you need to know if sync succeeded before continuing.
  */
-export async function executeIssueSync(
-  input: IssueSyncInput
-): Promise<IssueSyncResult> {
+export async function executeIssueSync(input: IssueSyncInput): Promise<IssueSyncResult> {
   const client = await getClient();
 
   const identifier = input.issue.identifier || input.issue.title.substring(0, 20);
@@ -394,9 +382,7 @@ export async function scheduleSingleIssueSync(
 /**
  * Execute a single issue sync and wait for result
  */
-export async function executeSingleIssueSync(
-  input: SyncIssueInput
-): Promise<SyncIssueResult> {
+export async function executeSingleIssueSync(input: SyncIssueInput): Promise<SyncIssueResult> {
   const client = await getClient();
 
   const workflowId = `sync-issue-${input.issue.identifier}-${Date.now()}`;
@@ -579,9 +565,7 @@ export async function startScheduledSync(input: {
 /**
  * List running sync workflows
  */
-export async function listSyncWorkflows(
-  limit = 20
-): Promise<
+export async function listSyncWorkflows(limit = 20): Promise<
   Array<{
     workflowId: string;
     status: string;
@@ -697,6 +681,115 @@ export async function restartScheduledSync(input: {
 export async function isScheduledSyncActive(): Promise<boolean> {
   const active = await getActiveScheduledSync();
   return active !== null;
+}
+
+// ============================================================================
+// Data Reconciliation Workflows
+// ============================================================================
+
+export type ReconciliationAction = 'mark_deleted' | 'hard_delete';
+
+export interface DataReconciliationInput {
+  projectIdentifier?: string;
+  action?: ReconciliationAction;
+  dryRun?: boolean;
+}
+
+export interface DataReconciliationResult {
+  success: boolean;
+  action: ReconciliationAction;
+  dryRun: boolean;
+  projectsProcessed: number;
+  projectsWithVibeChecked: number;
+  projectsWithBeadsChecked: number;
+  staleVibe: Array<{ identifier: string; projectIdentifier: string; vibeTaskId: string }>;
+  staleBeads: Array<{ identifier: string; projectIdentifier: string; beadsIssueId: string }>;
+  updated: { markedVibe: number; markedBeads: number; deleted: number };
+  errors: string[];
+}
+
+export async function executeDataReconciliation(
+  input: DataReconciliationInput = {}
+): Promise<DataReconciliationResult> {
+  const client = await getClient();
+
+  const workflowId = `reconcile-${Date.now()}`;
+
+  return await client.workflow.execute('DataReconciliationWorkflow', {
+    taskQueue: TASK_QUEUE,
+    workflowId,
+    args: [input],
+  });
+}
+
+export async function startScheduledReconciliation(input: {
+  intervalMinutes: number;
+  maxIterations?: number;
+  reconcileOptions?: DataReconciliationInput;
+}): Promise<{ workflowId: string; runId: string }> {
+  const client = await getClient();
+
+  const workflowId = `scheduled-reconcile-${Date.now()}`;
+
+  const handle = await client.workflow.start('ScheduledReconciliationWorkflow', {
+    taskQueue: TASK_QUEUE,
+    workflowId,
+    args: [input],
+  });
+
+  console.log(
+    `[Temporal] Started scheduled reconciliation: ${workflowId} (every ${input.intervalMinutes} minutes)`
+  );
+
+  return {
+    workflowId: handle.workflowId,
+    runId: handle.firstExecutionRunId,
+  };
+}
+
+export async function getActiveScheduledReconciliation(): Promise<{
+  workflowId: string;
+  status: string;
+  startTime: Date;
+  intervalMinutes?: number;
+} | null> {
+  const client = await getClient();
+
+  for await (const workflow of client.workflow.list({
+    query: `WorkflowType = 'ScheduledReconciliationWorkflow' AND ExecutionStatus = 'Running'`,
+  })) {
+    return {
+      workflowId: workflow.workflowId,
+      status: workflow.status.name,
+      startTime: workflow.startTime,
+    };
+  }
+
+  return null;
+}
+
+export async function stopScheduledReconciliation(workflowId?: string): Promise<boolean> {
+  const client = await getClient();
+
+  let targetWorkflowId = workflowId;
+  if (!targetWorkflowId) {
+    const active = await getActiveScheduledReconciliation();
+    if (!active) {
+      console.log('[Temporal] No active scheduled reconciliation to stop');
+      return false;
+    }
+    targetWorkflowId = active.workflowId;
+  }
+
+  try {
+    const handle = client.workflow.getHandle(targetWorkflowId);
+    await handle.cancel();
+    console.log(`[Temporal] Stopped scheduled reconciliation: ${targetWorkflowId}`);
+    return true;
+  } catch (error) {
+    console.error(`[Temporal] Failed to stop scheduled reconciliation: ${error}`);
+    return false;
+  }
 }
 
 // ============================================================================
@@ -881,9 +974,7 @@ export async function scheduleBeadsSync(
  *
  * Blocks until the workflow completes (with all retries).
  */
-export async function executeBeadsSync(
-  input: BeadsSyncInput
-): Promise<BidirectionalSyncResult> {
+export async function executeBeadsSync(input: BeadsSyncInput): Promise<BidirectionalSyncResult> {
   const client = await getClient();
 
   const workflowId = `sync-beads-${input.context.projectIdentifier}-${input.beadsIssueId}-${Date.now()}`;
@@ -911,10 +1002,7 @@ export async function scheduleBatchBeadsSync(
       const result = await scheduleBeadsSync(input);
       results.push(result);
     } catch (error) {
-      console.error(
-        `[Temporal] Failed to schedule Beads sync for ${input.beadsIssueId}:`,
-        error
-      );
+      console.error(`[Temporal] Failed to schedule Beads sync for ${input.beadsIssueId}:`, error);
     }
   }
 

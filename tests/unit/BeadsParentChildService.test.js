@@ -5,21 +5,24 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  createMockBeadsIssue,
-  createMockBeadsDbRecord,
-} from '../mocks/beadsMocks.js';
+import { createMockBeadsIssue, createMockBeadsDbRecord } from '../mocks/beadsMocks.js';
 
 // Mock child_process before importing
-const mockExecSync = vi.fn();
+const mockExec = vi.fn();
 vi.mock('child_process', () => ({
-  execSync: mockExecSync,
+  exec: mockExec,
 }));
 
 describe('BeadsParentChildService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecSync.mockReset();
+    mockExec.mockReset();
+    mockExec.mockImplementation((command, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options;
+      }
+      callback(null, '', '');
+    });
   });
 
   afterEach(() => {
@@ -64,13 +67,17 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should export getAllParentChildRelationships', async () => {
-      const { getAllParentChildRelationships } = await import('../../lib/BeadsParentChildService.js');
+      const { getAllParentChildRelationships } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
       expect(getAllParentChildRelationships).toBeDefined();
       expect(typeof getAllParentChildRelationships).toBe('function');
     });
 
     it('should export validateParentChildConsistency', async () => {
-      const { validateParentChildConsistency } = await import('../../lib/BeadsParentChildService.js');
+      const { validateParentChildConsistency } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
       expect(validateParentChildConsistency).toBeDefined();
       expect(typeof validateParentChildConsistency).toBe('function');
     });
@@ -90,7 +97,9 @@ describe('BeadsParentChildService', () => {
 
   describe('getAllParentChildRelationships', () => {
     it('should return empty array for issues without dependencies', async () => {
-      const { getAllParentChildRelationships } = await import('../../lib/BeadsParentChildService.js');
+      const { getAllParentChildRelationships } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       const beadsIssues = [
         createMockBeadsIssue({ id: 'issue-1', dependency_count: 0 }),
@@ -103,7 +112,9 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should find parent relationships', async () => {
-      const { getAllParentChildRelationships } = await import('../../lib/BeadsParentChildService.js');
+      const { getAllParentChildRelationships } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       const beadsIssues = [
         createMockBeadsIssue({ id: 'child-1', dependency_count: 1 }),
@@ -111,10 +122,19 @@ describe('BeadsParentChildService', () => {
       ];
 
       // Mock dep tree response
-      mockExecSync.mockReturnValue(JSON.stringify([
-        { id: 'child-1', depth: 0 },
-        { id: 'parent-1', depth: 1 },
-      ]));
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(
+          null,
+          JSON.stringify([
+            { id: 'child-1', depth: 0 },
+            { id: 'parent-1', depth: 1 },
+          ]),
+          ''
+        );
+      });
 
       const result = await getAllParentChildRelationships('/test/project', beadsIssues);
 
@@ -128,14 +148,17 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      const { getAllParentChildRelationships } = await import('../../lib/BeadsParentChildService.js');
+      const { getAllParentChildRelationships } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
-      const beadsIssues = [
-        createMockBeadsIssue({ id: 'child-1', dependency_count: 1 }),
-      ];
+      const beadsIssues = [createMockBeadsIssue({ id: 'child-1', dependency_count: 1 })];
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(new Error('Command failed'), '', '');
       });
 
       const result = await getAllParentChildRelationships('/test/project', beadsIssues);
@@ -148,7 +171,9 @@ describe('BeadsParentChildService', () => {
 
   describe('validateParentChildConsistency', () => {
     it('should return valid for consistent data', async () => {
-      const { validateParentChildConsistency } = await import('../../lib/BeadsParentChildService.js');
+      const { validateParentChildConsistency } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       const mockDb = {
         getAllIssues: () => [
@@ -171,7 +196,9 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should detect Huly-only parent', async () => {
-      const { validateParentChildConsistency } = await import('../../lib/BeadsParentChildService.js');
+      const { validateParentChildConsistency } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       // Create issue with only Huly parent set
       const issueWithHulyParent = {
@@ -192,7 +219,9 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should detect Beads-only parent', async () => {
-      const { validateParentChildConsistency } = await import('../../lib/BeadsParentChildService.js');
+      const { validateParentChildConsistency } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       // Create issue with only Beads parent set
       const issueWithBeadsParent = {
@@ -213,7 +242,9 @@ describe('BeadsParentChildService', () => {
     });
 
     it('should detect orphaned children', async () => {
-      const { validateParentChildConsistency } = await import('../../lib/BeadsParentChildService.js');
+      const { validateParentChildConsistency } = await import(
+        '../../lib/BeadsParentChildService.js'
+      );
 
       // Create child issue and parent issue, but parent has different identifier
       const childIssue = {
@@ -259,18 +290,22 @@ describe('BeadsParentChildService', () => {
       const mockDb = { upsertIssue: vi.fn() };
 
       // Mock successful dep add
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(null, '', '');
+      });
 
-      const relationships = [
-        { childId: 'child-1', parentId: 'parent-1' },
-      ];
+      const relationships = [{ childId: 'child-1', parentId: 'parent-1' }];
 
       const result = await batchCreateDependencies('/test/project', relationships, mockDb, {});
 
       expect(result.synced).toBe(1);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('dep add'),
         expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -279,13 +314,14 @@ describe('BeadsParentChildService', () => {
 
       const mockDb = { upsertIssue: vi.fn() };
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Failed to add dependency');
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(new Error('Failed to add dependency'), '', '');
       });
 
-      const relationships = [
-        { childId: 'child-1', parentId: 'parent-1' },
-      ];
+      const relationships = [{ childId: 'child-1', parentId: 'parent-1' }];
 
       const result = await batchCreateDependencies('/test/project', relationships, mockDb, {});
 
@@ -311,18 +347,22 @@ describe('BeadsParentChildService', () => {
       const { batchRemoveDependencies } = await import('../../lib/BeadsParentChildService.js');
 
       // Mock successful dep remove
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(null, '', '');
+      });
 
-      const relationships = [
-        { childId: 'child-1', parentId: 'parent-1' },
-      ];
+      const relationships = [{ childId: 'child-1', parentId: 'parent-1' }];
 
       const result = await batchRemoveDependencies('/test/project', relationships, {});
 
       expect(result.synced).toBe(1);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('dep remove'),
         expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -353,9 +393,7 @@ describe('BeadsParentChildService', () => {
         getIssue: vi.fn(() => null), // No Beads mapping
       };
 
-      const hulyIssues = [
-        { identifier: 'PROJ-1', parent: 'PROJ-2' },
-      ];
+      const hulyIssues = [{ identifier: 'PROJ-1', parent: 'PROJ-2' }];
 
       const result = await syncAllParentChildFromHuly('/test/project', hulyIssues, mockDb, {});
 
@@ -366,20 +404,28 @@ describe('BeadsParentChildService', () => {
       const { syncAllParentChildFromHuly } = await import('../../lib/BeadsParentChildService.js');
 
       const mockDb = {
-        getIssue: vi.fn((id) => {
-          if (id === 'PROJ-1') return createMockBeadsDbRecord({ identifier: 'PROJ-1', beads_issue_id: 'beads-child' });
-          if (id === 'PROJ-2') return createMockBeadsDbRecord({ identifier: 'PROJ-2', beads_issue_id: 'beads-parent' });
+        getIssue: vi.fn(id => {
+          if (id === 'PROJ-1')
+            return createMockBeadsDbRecord({ identifier: 'PROJ-1', beads_issue_id: 'beads-child' });
+          if (id === 'PROJ-2')
+            return createMockBeadsDbRecord({
+              identifier: 'PROJ-2',
+              beads_issue_id: 'beads-parent',
+            });
           return null;
         }),
         upsertIssue: vi.fn(),
       };
 
       // Mock successful dep add
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((command, options, callback) => {
+        if (typeof options === 'function') {
+          callback = options;
+        }
+        callback(null, '', '');
+      });
 
-      const hulyIssues = [
-        { identifier: 'PROJ-1', parent: 'PROJ-2' },
-      ];
+      const hulyIssues = [{ identifier: 'PROJ-1', parent: 'PROJ-2' }];
 
       const result = await syncAllParentChildFromHuly('/test/project', hulyIssues, mockDb, {});
 

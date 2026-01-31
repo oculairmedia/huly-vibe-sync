@@ -25,7 +25,14 @@ export {
 } from './bidirectional-sync';
 
 // Full orchestration workflows (replaces SyncOrchestrator)
-export { FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow } from './orchestration';
+export {
+  FullOrchestrationWorkflow,
+  ScheduledSyncWorkflow,
+  ProjectSyncWorkflow,
+} from './orchestration';
+
+// Data reconciliation workflows
+export { DataReconciliationWorkflow, ScheduledReconciliationWorkflow } from './reconciliation';
 
 // Agent provisioning workflows
 export {

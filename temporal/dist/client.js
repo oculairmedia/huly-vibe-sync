@@ -49,6 +49,10 @@ exports.getActiveScheduledSync = getActiveScheduledSync;
 exports.stopScheduledSync = stopScheduledSync;
 exports.restartScheduledSync = restartScheduledSync;
 exports.isScheduledSyncActive = isScheduledSyncActive;
+exports.executeDataReconciliation = executeDataReconciliation;
+exports.startScheduledReconciliation = startScheduledReconciliation;
+exports.getActiveScheduledReconciliation = getActiveScheduledReconciliation;
+exports.stopScheduledReconciliation = stopScheduledReconciliation;
 exports.startAgentProvisioning = startAgentProvisioning;
 exports.executeAgentProvisioning = executeAgentProvisioning;
 exports.getProvisioningProgress = getProvisioningProgress;
@@ -521,6 +525,64 @@ async function restartScheduledSync(input) {
 async function isScheduledSyncActive() {
     const active = await getActiveScheduledSync();
     return active !== null;
+}
+async function executeDataReconciliation(input = {}) {
+    const client = await getClient();
+    const workflowId = `reconcile-${Date.now()}`;
+    return await client.workflow.execute('DataReconciliationWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+}
+async function startScheduledReconciliation(input) {
+    const client = await getClient();
+    const workflowId = `scheduled-reconcile-${Date.now()}`;
+    const handle = await client.workflow.start('ScheduledReconciliationWorkflow', {
+        taskQueue: TASK_QUEUE,
+        workflowId,
+        args: [input],
+    });
+    console.log(`[Temporal] Started scheduled reconciliation: ${workflowId} (every ${input.intervalMinutes} minutes)`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
+}
+async function getActiveScheduledReconciliation() {
+    const client = await getClient();
+    for await (const workflow of client.workflow.list({
+        query: `WorkflowType = 'ScheduledReconciliationWorkflow' AND ExecutionStatus = 'Running'`,
+    })) {
+        return {
+            workflowId: workflow.workflowId,
+            status: workflow.status.name,
+            startTime: workflow.startTime,
+        };
+    }
+    return null;
+}
+async function stopScheduledReconciliation(workflowId) {
+    const client = await getClient();
+    let targetWorkflowId = workflowId;
+    if (!targetWorkflowId) {
+        const active = await getActiveScheduledReconciliation();
+        if (!active) {
+            console.log('[Temporal] No active scheduled reconciliation to stop');
+            return false;
+        }
+        targetWorkflowId = active.workflowId;
+    }
+    try {
+        const handle = client.workflow.getHandle(targetWorkflowId);
+        await handle.cancel();
+        console.log(`[Temporal] Stopped scheduled reconciliation: ${targetWorkflowId}`);
+        return true;
+    }
+    catch (error) {
+        console.error(`[Temporal] Failed to stop scheduled reconciliation: ${error}`);
+        return false;
+    }
 }
 /**
  * Start agent provisioning workflow

@@ -66,6 +66,10 @@ async function getTemporalOrchestration() {
         getActiveScheduledSync,
         restartScheduledSync,
         isScheduledSyncActive,
+        executeDataReconciliation,
+        startScheduledReconciliation,
+        stopScheduledReconciliation,
+        getActiveScheduledReconciliation,
         isTemporalAvailable,
       } = await import('./temporal/dist/client.js');
 
@@ -78,6 +82,10 @@ async function getTemporalOrchestration() {
           getActiveScheduledSync,
           restartScheduledSync,
           isScheduledSyncActive,
+          executeDataReconciliation,
+          startScheduledReconciliation,
+          stopScheduledReconciliation,
+          getActiveScheduledReconciliation,
         };
         console.log('[Main] Temporal orchestration enabled');
       } else {
@@ -369,6 +377,7 @@ class MCPClient {
       // Parse SSE response
       const text = await response.text();
       const lines = text.split('\n');
+      /** @type {any} */
       let jsonData = null;
 
       for (const line of lines) {
@@ -393,6 +402,7 @@ class MCPClient {
       return jsonData.result;
     } else {
       // Parse JSON response
+      /** @type {any} */
       const data = await response.json();
 
       if (data.error) {
@@ -1121,6 +1131,39 @@ async function main() {
         'Scheduling periodic syncs (legacy mode)'
       );
       syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
+    }
+    // Schedule periodic reconciliation (daily by default)
+    if (config.reconciliation?.enabled) {
+      const reconcileIntervalMinutes = Math.max(1, config.reconciliation.intervalMinutes);
+      const temporal = await getTemporalOrchestration();
+
+      if (temporal?.startScheduledReconciliation) {
+        try {
+          const existing = await temporal.getActiveScheduledReconciliation?.();
+          if (existing) {
+            logger.info(
+              { workflowId: existing.workflowId, startTime: existing.startTime },
+              'Temporal scheduled reconciliation already active, skipping new schedule'
+            );
+          } else {
+            const schedule = await temporal.startScheduledReconciliation({
+              intervalMinutes: reconcileIntervalMinutes,
+              reconcileOptions: {
+                action: config.reconciliation.action,
+                dryRun: config.reconciliation.dryRun,
+              },
+            });
+            logger.info(
+              { workflowId: schedule.workflowId, intervalMinutes: reconcileIntervalMinutes },
+              '✓ Temporal scheduled reconciliation started'
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Failed to start Temporal scheduled reconciliation');
+        }
+      } else {
+        logger.info('Temporal reconciliation scheduling not available');
+      }
     }
   } else {
     logger.info('One-time sync completed, exiting');
