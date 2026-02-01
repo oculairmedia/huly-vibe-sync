@@ -98,7 +98,7 @@ services:
       - /opt/stacks:/opt/stacks:rw
 
     network_mode: host
-    user: root
+    user: '1000:1000'
 
     healthcheck:
       test:
@@ -124,7 +124,7 @@ services:
     image: vibesync-temporal-worker:latest
     container_name: vibesync-temporal-worker
     restart: unless-stopped
-    user: root
+    user: '1000:1000'
     environment:
       - TEMPORAL_ADDRESS=localhost:7233
       - TEMPORAL_TASK_QUEUE=vibesync-queue

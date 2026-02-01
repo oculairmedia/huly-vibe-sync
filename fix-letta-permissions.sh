@@ -1,39 +1,15 @@
 #!/bin/bash
 
-# Fix .letta directory permissions for huly-vibe-sync
-# This script makes all .letta directories writable by the sync service
+# Fix .letta directory ownership for huly-vibe-sync
+# Ensures directories are owned by mcp-user (UID 1000) to match container user
 
-echo "🔧 Fixing .letta directory permissions..."
+echo "Fixing .letta directory ownership..."
 
-# List of project paths with permission issues
-PROJECTS=(
-  "/opt/stacks/augment-mcp-tool"
-  "/opt/stacks/bookstack-mcp"
-  "/opt/stacks/claude api gateway"
-  "/opt/stacks/graphiti"
-  "/opt/stacks/huly-selfhost/huly-mcp-server"
-  "/opt/stacks/letta-MCP-server"
-  "/opt/stacks/letta-opencode-plugin"
-  "/opt/stacks/opencode"
-  "/opt/stacks/surefinance-mcp-server"
-)
-
-for project in "${PROJECTS[@]}"; do
-  if [ -d "$project/.letta" ]; then
-    echo "  Fixing: $project/.letta"
-    sudo chmod 777 "$project/.letta"
-    
-    # If settings.local.json exists, make it writable
-    if [ -f "$project/.letta/settings.local.json" ]; then
-      sudo chmod 666 "$project/.letta/settings.local.json"
-    fi
-  else
-    echo "  ⚠️  Not found: $project/.letta"
-  fi
+find /opt/stacks -name ".letta" -type d 2>/dev/null | while read lettaDir; do
+  echo "  Fixing: $lettaDir"
+  sudo chown -R 1000:1000 "$lettaDir"
 done
 
 echo ""
-echo "✅ Permission fix complete!"
-echo ""
-echo "Summary of fixed directories:"
-find /opt/stacks -name ".letta" -type d -perm 0777 2>/dev/null | wc -l
+echo "Done. Fixed directories:"
+find /opt/stacks -name ".letta" -type d -user 1000 2>/dev/null | wc -l

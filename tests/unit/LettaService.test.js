@@ -1424,8 +1424,7 @@ describe('LettaService', () => {
       expect(fs.mkdirSync).toHaveBeenCalled();
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('settings.local.json'),
-        expect.stringContaining('agent-123'),
-        expect.any(Object)
+        expect.stringContaining('agent-123')
       );
     });
 

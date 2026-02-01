@@ -47,26 +47,21 @@ COPY .letta ./.letta
 
 # Create logs directory, .letta-code state dir, and ensure writable by node user
 RUN mkdir -p /app/logs /app/.letta-code && \
-    chown -R node:node /app/.letta /app/.letta-code /app/logs && \
+    chown -R node:node /app /app/.letta /app/.letta-code /app/logs && \
     chmod -R 755 /app/.letta /app/.letta-code
 
-# Configure git identity for beads commits (as node user)
+# Configure git identity and safe directory as node user (UID 1000)
 USER node
 RUN git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
-    git config --global user.name "Huly Vibe Sync Service"
-USER root
-
-# Configure git safe directory for root user (when running container as root)
-RUN git config --global --add safe.directory '*' && \
-    git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
-    git config --global user.name "Huly Vibe Sync Service"
+    git config --global user.name "Huly Vibe Sync Service" && \
+    git config --global --add safe.directory '*'
 
 # Health check - query the /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '"status": "healthy"' || exit 1
 
-# Note: Container runs as root via docker-compose.yml user: root
-# This allows access to mounted /opt/stacks directories regardless of ownership
+# Run as node user (UID 1000) — matches host mcp-user for correct file ownership
+USER node
 
 # Default command
 CMD ["node", "index.js"]
