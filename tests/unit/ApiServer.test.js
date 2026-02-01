@@ -8,7 +8,7 @@
  * - Helper functions (parseJsonBody, sendJson, sendError)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
 
 // Mock dependencies before importing the module
@@ -40,7 +40,11 @@ vi.mock('child_process', () => ({
   execSync: vi.fn(() => ''),
 }));
 
-vi.mock('../../temporal/dist/client.js', () => ({
+const temporalClientUrl = vi.hoisted(
+  () => new URL('../../temporal/dist/client.js', import.meta.url).href
+);
+
+vi.mock(temporalClientUrl, () => ({
   listSyncWorkflows: vi.fn().mockResolvedValue([{ id: 'wf-1', status: 'completed' }]),
 }));
 
@@ -389,15 +393,20 @@ function sendError(res, statusCode, message, details = null) {
   sendJson(res, statusCode, error);
 }
 
+class MockResponse extends EventEmitter {
+  constructor() {
+    super();
+    this.writeHead = vi.fn();
+    this.write = vi.fn();
+    this.end = vi.fn();
+  }
+}
+
 /**
  * Create mock HTTP response
  */
 function createMockResponse() {
-  const res = new EventEmitter();
-  res.writeHead = vi.fn();
-  res.write = vi.fn();
-  res.end = vi.fn();
-  return res;
+  return new MockResponse();
 }
 
 /**
@@ -578,6 +587,9 @@ describe('ApiServer', () => {
         sseManager.addClient(res2);
 
         vi.spyOn(sseManager, 'sendEvent').mockImplementation((res, eventType, data) => {
+          if (!(res instanceof MockResponse)) {
+            throw new Error('Invalid response');
+          }
           if (res === res1) {
             throw new Error('Connection closed');
           }
