@@ -16,6 +16,7 @@ import {
   extractHulyIdentifier,
   getGitUrl,
   determineGitRepoPath,
+  validateGitRepoPath,
 } from '../../lib/textParsers.js';
 
 describe('textParsers', () => {
@@ -713,8 +714,85 @@ Description: Document all API endpoints
       expect(issues[2]).toMatchObject({
         identifier: 'PROJ-3',
         status: 'done',
-        milestone: null, // No milestone specified
+        milestone: null,
       });
+    });
+  });
+
+  describe('validateGitRepoPath', () => {
+    let existsSyncSpy;
+    let statSyncSpy;
+
+    beforeEach(() => {
+      existsSyncSpy = vi.spyOn(fs, 'existsSync');
+      statSyncSpy = vi.spyOn(fs, 'statSync');
+    });
+
+    afterEach(() => {
+      existsSyncSpy.mockRestore();
+      statSyncSpy.mockRestore();
+    });
+
+    it('should reject null path', () => {
+      const result = validateGitRepoPath(null);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('null');
+    });
+
+    it('should reject empty string', () => {
+      const result = validateGitRepoPath('');
+      expect(result.valid).toBe(false);
+    });
+
+    it('should reject relative path', () => {
+      const result = validateGitRepoPath('relative/path');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('not absolute');
+    });
+
+    it('should reject path that does not exist', () => {
+      existsSyncSpy.mockReturnValue(false);
+      const result = validateGitRepoPath('/nonexistent/path');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('does not exist');
+    });
+
+    it('should reject path that is not a directory', () => {
+      existsSyncSpy.mockReturnValue(true);
+      statSyncSpy.mockReturnValue({ isDirectory: () => false });
+      const result = validateGitRepoPath('/some/file.txt');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('not a directory');
+    });
+
+    it('should reject path without .git directory', () => {
+      existsSyncSpy.mockImplementation(p => {
+        if (p === '/opt/stacks/some-project') return true;
+        if (p === '/opt/stacks/some-project/.git') return false;
+        return false;
+      });
+      statSyncSpy.mockReturnValue({ isDirectory: () => true });
+      const result = validateGitRepoPath('/opt/stacks/some-project');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('not a git repository');
+    });
+
+    it('should accept valid git repo path', () => {
+      existsSyncSpy.mockReturnValue(true);
+      statSyncSpy.mockReturnValue({ isDirectory: () => true });
+      const result = validateGitRepoPath('/opt/stacks/valid-repo');
+      expect(result.valid).toBe(true);
+      expect(result.reason).toBeUndefined();
+    });
+
+    it('should handle statSync throwing', () => {
+      existsSyncSpy.mockReturnValue(true);
+      statSyncSpy.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
+      const result = validateGitRepoPath('/opt/stacks/no-access');
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('cannot stat');
     });
   });
 });

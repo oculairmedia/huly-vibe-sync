@@ -7,6 +7,8 @@
 
 import { ApplicationFailure } from '@temporalio/activity';
 import { createVibeClient, createHulyClient, createBeadsClient } from '../lib';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ============================================================
 // TYPE DEFINITIONS
@@ -212,6 +214,31 @@ function determineGitRepoPath(hulyProject: HulyProject): string {
   return `/opt/stacks/huly-sync-placeholders/${hulyProject.identifier}`;
 }
 
+function validateGitRepoPath(repoPath: string): { valid: boolean; reason?: string } {
+  if (!repoPath || typeof repoPath !== 'string') {
+    return { valid: false, reason: 'path is null or not a string' };
+  }
+  if (!path.isAbsolute(repoPath)) {
+    return { valid: false, reason: `path is not absolute: ${repoPath}` };
+  }
+  if (!fs.existsSync(repoPath)) {
+    return { valid: false, reason: `path does not exist on disk: ${repoPath}` };
+  }
+  try {
+    const stat = fs.statSync(repoPath);
+    if (!stat.isDirectory()) {
+      return { valid: false, reason: `path is not a directory: ${repoPath}` };
+    }
+  } catch {
+    return { valid: false, reason: `cannot stat path: ${repoPath}` };
+  }
+  const gitDir = path.join(repoPath, '.git');
+  if (!fs.existsSync(gitDir)) {
+    return { valid: false, reason: `not a git repository (no .git): ${repoPath}` };
+  }
+  return { valid: true };
+}
+
 export async function ensureVibeProject(input: {
   hulyProject: HulyProject;
   existingVibeProjects: VibeProject[];
@@ -231,6 +258,18 @@ export async function ensureVibeProject(input: {
     }
 
     const gitRepoPath = determineGitRepoPath(hulyProject);
+
+    const validation = validateGitRepoPath(gitRepoPath);
+    if (!validation.valid) {
+      console.warn(
+        `[Temporal:Orchestration] ⚠ Skipping project ${hulyProject.identifier}: invalid repo path — ${validation.reason}`
+      );
+      throw ApplicationFailure.nonRetryable(
+        `Invalid repo path for ${hulyProject.identifier}: ${validation.reason}`,
+        'INVALID_REPO_PATH'
+      );
+    }
+
     const displayName = gitRepoPath.split('/').pop() || hulyProject.name;
 
     console.log(`[Temporal:Orchestration] Creating Vibe project with repo: ${gitRepoPath}`);

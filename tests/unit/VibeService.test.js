@@ -29,7 +29,6 @@ vi.mock('../../lib/HealthService.js', () => ({
 // Mock the textParsers
 vi.mock('../../lib/textParsers.js', () => ({
   determineGitRepoPath: vi.fn(project => {
-    // Extract filesystem path from description if present
     if (project.description) {
       const patterns = [/(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i];
       for (const pattern of patterns) {
@@ -39,9 +38,9 @@ vi.mock('../../lib/textParsers.js', () => ({
         }
       }
     }
-    // Default fallback
     return `/home/user/projects/${project.name.toLowerCase().replace(/\s+/g, '-')}`;
   }),
+  validateGitRepoPath: vi.fn(() => ({ valid: true })),
 }));
 
 describe('VibeService', () => {
@@ -61,6 +60,7 @@ describe('VibeService', () => {
     // Suppress console output during tests
     consoleSpy = {
       log: vi.spyOn(console, 'log').mockImplementation(() => {}),
+      warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
       error: vi.spyOn(console, 'error').mockImplementation(() => {}),
     };
   });
@@ -382,6 +382,23 @@ describe('VibeService', () => {
             }),
           ]),
         })
+      );
+    });
+
+    it('should skip project creation when repo path validation fails', async () => {
+      const { validateGitRepoPath } = await import('../../lib/textParsers.js');
+      validateGitRepoPath.mockReturnValueOnce({
+        valid: false,
+        reason: 'path does not exist on disk: /bad/path',
+      });
+      mockVibeClient.listProjects.mockResolvedValue([]);
+
+      const result = await createVibeProject(mockVibeClient, hulyProject);
+
+      expect(result).toBeNull();
+      expect(mockVibeClient.createProject).not.toHaveBeenCalled();
+      expect(consoleSpy.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping project Test Project')
       );
     });
   });
