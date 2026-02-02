@@ -20,6 +20,15 @@ import {
 
 // ── Mock all external dependencies ──────────────────────────
 
+vi.mock('fs', async () => {
+  const actual = await vi.importActual('fs');
+  return {
+    ...actual,
+    default: { ...actual, existsSync: vi.fn(() => true) },
+    existsSync: vi.fn(() => true),
+  };
+});
+
 vi.mock('../../lib/statusMapper.js', () => ({
   mapHulyStatusToBeads: vi.fn(status => {
     const map = {

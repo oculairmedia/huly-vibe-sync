@@ -188,10 +188,14 @@ describe('config', () => {
         huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
+        reconciliation: { intervalMinutes: 60, action: 'mark_deleted' },
+        bookstack: { enabled: false },
         letta: { enabled: true, baseURL: '', password: 'secret' },
       };
 
-      expect(() => validateConfig(config)).toThrow('LETTA_BASE_URL must be set when Letta is enabled');
+      expect(() => validateConfig(config)).toThrow(
+        'LETTA_BASE_URL must be set when Letta is enabled'
+      );
     });
 
     it('should reject enabled Letta without password', () => {
@@ -199,10 +203,14 @@ describe('config', () => {
         huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
+        reconciliation: { intervalMinutes: 60, action: 'mark_deleted' },
+        bookstack: { enabled: false },
         letta: { enabled: true, baseURL: 'http://letta.local', password: '' },
       };
 
-      expect(() => validateConfig(config)).toThrow('LETTA_PASSWORD must be set when Letta is enabled');
+      expect(() => validateConfig(config)).toThrow(
+        'LETTA_PASSWORD must be set when Letta is enabled'
+      );
     });
   });
 

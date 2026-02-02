@@ -14,6 +14,28 @@ vi.mock('../../temporal/lib', () => ({
   createBeadsClient: vi.fn(),
 }));
 
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof import('fs')>('fs');
+  return {
+    ...actual,
+    existsSync: vi.fn((p: string) => {
+      if (
+        typeof p === 'string' &&
+        (p.endsWith('.git') || p.startsWith('/opt/stacks/huly-sync-placeholders'))
+      ) {
+        return true;
+      }
+      return actual.existsSync(p);
+    }),
+    statSync: vi.fn((p: string) => {
+      if (typeof p === 'string' && p.startsWith('/opt/stacks/huly-sync-placeholders')) {
+        return { isDirectory: () => true };
+      }
+      return actual.statSync(p);
+    }),
+  };
+});
+
 // Import after mocking
 import {
   fetchHulyProjects,
@@ -160,7 +182,9 @@ describe('Orchestration Activities', () => {
       });
 
       expect(result).toEqual(created);
-      expect(mockVibeClient.createProject).toHaveBeenCalledWith({ name: 'New Project' });
+      expect(mockVibeClient.createProject).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'New Project' })
+      );
     });
 
     it('should throw on create failure', async () => {
