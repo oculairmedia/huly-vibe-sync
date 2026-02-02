@@ -89,6 +89,7 @@ vi.mock('../../lib/LettaMemoryBuilders.js', () => ({
     context: {},
     usage_guide: 'Test scratchpad',
   })),
+  buildExpression: vi.fn(() => 'Test expression block content'),
 }));
 
 vi.mock('fs', () => {
@@ -117,7 +118,7 @@ vi.mock('../../lib/AgentsMdGenerator.js', () => ({
 
 import { LettaClient } from '@letta-ai/letta-client';
 import { fetchWithPool } from '../../lib/http.js';
-import { buildScratchpad } from '../../lib/LettaMemoryBuilders.js';
+import { buildScratchpad, buildExpression } from '../../lib/LettaMemoryBuilders.js';
 import { agentsMdGenerator } from '../../lib/AgentsMdGenerator.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -340,12 +341,16 @@ describe('LettaService', () => {
   // ============================================================
   describe('ensureAgent', () => {
     beforeEach(() => {
-      // Setup control agent cache
       service._controlAgentCache = {
         agentId: 'control-123',
         toolIds: ['tool-1'],
         persona: 'Control persona',
       };
+      // _ensureTemplateBlocks is called for existing agents — provide default mocks
+      mockClient.agents.blocks.list.mockResolvedValue([
+        { id: 'scratch-1', label: 'scratchpad', value: '{}' },
+      ]);
+      mockClient.agents.blocks.attach.mockResolvedValue({});
     });
 
     it('should return existing agent from Letta by name', async () => {
@@ -1328,26 +1333,79 @@ describe('LettaService', () => {
   });
 
   // ============================================================
-  // _attachMeridianHumanBlock Tests
+  // _attachSharedHumanBlock Tests
   // ============================================================
-  describe('_attachMeridianHumanBlock', () => {
-    it('should attach human block', async () => {
+  describe('_attachSharedHumanBlock', () => {
+    it('should attach shared human block when configured', async () => {
+      service.sharedHumanBlockId = 'block-test-human-id';
       mockClient.agents.blocks.attach.mockResolvedValue({});
 
-      await service._attachMeridianHumanBlock('agent-123');
+      await service._attachSharedHumanBlock('agent-123');
 
       expect(mockClient.agents.blocks.attach).toHaveBeenCalledWith(
         'agent-123',
-        'block-3da80889-c509-4c68-b502-a3f54c28c137'
+        'block-test-human-id'
       );
     });
 
+    it('should skip when sharedHumanBlockId is null', async () => {
+      service.sharedHumanBlockId = null;
+
+      await service._attachSharedHumanBlock('agent-123');
+
+      expect(mockClient.agents.blocks.attach).not.toHaveBeenCalled();
+    });
+
     it('should handle errors gracefully without throwing', async () => {
+      service.sharedHumanBlockId = 'block-test-human-id';
       mockClient.agents.blocks.attach.mockRejectedValue(new Error('fail'));
 
-      await service._attachMeridianHumanBlock('agent-123');
+      await service._attachSharedHumanBlock('agent-123');
 
       expect(consoleSpy.warn).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================
+  // _ensureTemplateBlocks Tests
+  // ============================================================
+  describe('_ensureTemplateBlocks', () => {
+    it('should upsert expression block, attach human block, and init scratchpad', async () => {
+      service.sharedHumanBlockId = 'block-human-123';
+      mockClient.agents.blocks.list.mockResolvedValue([]);
+      mockClient.blocks.create.mockResolvedValue({ id: 'new-block' });
+      mockClient.agents.blocks.attach.mockResolvedValue({});
+
+      await service._ensureTemplateBlocks('agent-123');
+
+      expect(mockClient.agents.blocks.list).toHaveBeenCalled();
+      expect(buildExpression).toHaveBeenCalledWith('pm');
+    });
+
+    it('should skip expression upsert when hash matches cache', async () => {
+      const expressionContent = 'Test expression block content';
+      const hash = service._hashContent(expressionContent);
+      service._blockHashCache.set('agent-123', new Map([['expression', hash]]));
+
+      service.sharedHumanBlockId = null;
+      mockClient.agents.blocks.list.mockResolvedValue([
+        { id: 'scratch-1', label: 'scratchpad', value: '{}' },
+      ]);
+
+      await service._ensureTemplateBlocks('agent-123');
+
+      expect(mockClient.blocks.modify).not.toHaveBeenCalled();
+      expect(mockClient.blocks.create).not.toHaveBeenCalled();
+    });
+
+    it('should not throw on failure — logs warning instead', async () => {
+      mockClient.agents.blocks.list.mockRejectedValue(new Error('API down'));
+
+      await service._ensureTemplateBlocks('agent-123');
+
+      expect(consoleSpy.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Template block update failed')
+      );
     });
   });
 
