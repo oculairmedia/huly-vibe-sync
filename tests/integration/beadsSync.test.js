@@ -7,6 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { promisify } from 'util';
+import fs from 'fs';
 
 const isCI = process.env.CI === 'true';
 const describeOrSkip = isCI ? describe.skip : describe;
@@ -21,10 +23,35 @@ import {
 import { createMockHulyIssue } from '../mocks/hulyMocks.js';
 
 // Mock child_process before importing BeadsService
-const mockExecSync = vi.fn();
+const mockExec = vi.fn((cmd, opts, cb) => {
+  if (typeof opts === 'function') {
+    cb = opts;
+    opts = {};
+  }
+  cb(null, '', '');
+});
+mockExec[promisify.custom] = (cmd, opts) =>
+  new Promise((resolve, reject) => {
+    const resolvedOpts = typeof opts === 'function' ? undefined : opts;
+    mockExec(cmd, resolvedOpts, (error, stdout, stderr) => {
+      if (error) {
+        if (error.stdout === undefined && stdout !== undefined) {
+          error.stdout = stdout;
+        }
+        if (error.stderr === undefined && stderr !== undefined) {
+          error.stderr = stderr;
+        }
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 vi.mock('child_process', () => ({
-  execSync: mockExecSync,
+  exec: mockExec,
 }));
+
+const realExistsSync = fs.existsSync;
 
 // Now import the sync functions (after mocking)
 const {
@@ -53,7 +80,20 @@ describeOrSkip('Beads Sync Integration Tests', () => {
 
     // Reset mocks
     vi.clearAllMocks();
-    mockExecSync.mockReset();
+    mockExec.mockReset();
+    mockExec.mockImplementation((cmd, opts, cb) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      cb(null, '', '');
+    });
+    vi.spyOn(fs, 'existsSync').mockImplementation(testPath => {
+      if (testPath === testProjectPath) {
+        return true;
+      }
+      return realExistsSync(testPath);
+    });
   });
 
   afterEach(() => {
@@ -82,7 +122,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         priority: 1,
       });
 
-      mockExecSync.mockReturnValue(JSON.stringify(createdBeadsIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdBeadsIssue), '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -117,15 +162,30 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       // First call creates, second adds comment (description), third closes
-      mockExecSync
-        .mockReturnValueOnce(JSON.stringify(createdBeadsIssue))
-        .mockReturnValueOnce('') // comment command (adds description)
-        .mockReturnValueOnce(''); // close command
+      mockExec
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(null, JSON.stringify(createdBeadsIssue), '');
+        })
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(null, '', '');
+        }) // comment command (adds description)
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(null, '', '');
+        }); // close command
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
       // Verify close was called (might be call 2 or 3 depending on description)
-      const closeCall = mockExecSync.mock.calls.find(call => call[0].includes('close'));
+      const closeCall = mockExec.mock.calls.find(call => call[0].includes('close'));
       expect(closeCall).toBeDefined();
       expect(closeCall[0]).toContain('close');
     });
@@ -146,7 +206,7 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       );
 
       expect(result).toBeNull();
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
   });
 
@@ -174,7 +234,7 @@ describeOrSkip('Beads Sync Integration Tests', () => {
 
       // No changes needed
       expect(result).toBeNull();
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should update Beads when Huly status changes', async () => {
@@ -204,7 +264,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         updated_at: new Date(Date.now() - 20000).toISOString(),
       });
 
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -215,9 +280,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       );
 
       expect(result).toBeDefined();
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('close'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -248,13 +314,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         updated_at: new Date(Date.now() - 20000).toISOString(),
       });
 
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [beadsIssue], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=0'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -298,7 +370,7 @@ describeOrSkip('Beads Sync Integration Tests', () => {
 
       // Should defer to Beads (return null, don't update)
       expect(result).toBeNull();
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should apply Huly changes when Huly is newer in conflict', async () => {
@@ -328,7 +400,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         updated_at: new Date(now - 10000).toISOString(), // Beads: 10 sec ago
       });
 
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -340,9 +417,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
 
       // Should apply Huly changes (Huly wins conflict)
       expect(result).toBeDefined();
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--title='),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -367,7 +445,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         updated_at: new Date(now).toISOString(),
       });
 
-      mockExecSync.mockReturnValue(JSON.stringify(createdBeadsIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdBeadsIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
@@ -407,7 +490,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         updated_at: new Date(Date.now() - 20000).toISOString(),
       });
 
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [beadsIssue], db, MOCK_CONFIG.default);
 
@@ -460,8 +548,11 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         project: 'TEST',
       });
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('CLI error: database locked');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('CLI error: database locked'), '', '');
       });
 
       const result = await syncHulyIssueToBeads(
@@ -482,8 +573,11 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         project: 'TEST',
       });
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Not a beads repository');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Not a beads repository'), '', '');
       });
 
       const result = await syncHulyIssueToBeads(
@@ -508,13 +602,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-urgent' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=0'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -527,13 +627,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-high' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=1'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -546,13 +652,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-low' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=3'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -764,13 +876,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-bug' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--type=bug'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -783,13 +901,19 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-feature' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       await syncHulyIssueToBeads(testProjectPath, hulyIssue, [], db, MOCK_CONFIG.default);
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--type=feature'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -827,9 +951,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       expect(result.id).toBe('test-existing-abc');
 
       // Should NOT have called bd create
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
 
       // Database should have the mapping
@@ -867,9 +992,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       expect(result.id).toBe('test-important-xyz');
 
       // Verify linking, not creation
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -923,7 +1049,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
         id: 'test-new-created',
         title: 'Completely New Feature',
       });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -937,9 +1068,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       expect(result.id).toBe('test-new-created');
 
       // SHOULD have called bd create since no match
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -974,9 +1106,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       expect(result.id).toBe('test-with-huly-id');
 
       // Should NOT have called bd create
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
 
       // Database should have the mapping
@@ -1013,9 +1146,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe('test-synced-from-huly');
 
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -1037,7 +1171,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       const createdIssue = createMockBeadsIssue({ id: 'test-new', title: 'Fix bug' });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -1048,9 +1187,10 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       );
 
       // Should create new (short titles don't partial match for safety)
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -1439,7 +1579,12 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       });
 
       // Mock the close command
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await syncHulyIssueToBeads(
         testProjectPath,
@@ -1450,7 +1595,7 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       );
 
       // Should have attempted update (Huly wins)
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should skip update when no changes detected', async () => {
@@ -1495,7 +1640,7 @@ describeOrSkip('Beads Sync Integration Tests', () => {
       // Should return null (no changes needed)
       expect(result).toBeNull();
       // No exec calls for updates
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
   });
 

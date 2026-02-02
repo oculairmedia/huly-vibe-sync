@@ -2,15 +2,12 @@
  * Unit Tests for BeadsService
  *
  * Tests the Beads CLI wrapper service for issue tracking.
- * These tests mock child_process.execSync to avoid actual CLI calls.
- *
- * SKIPPED in CI: Requires 'bd' CLI which is not installed in GitHub Actions runners.
+ * These tests mock child_process.exec to avoid actual CLI calls.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
-const isCI = process.env.CI === 'true';
-const describeOrSkip = isCI ? describe.skip : describe;
+import { promisify } from 'util';
+import fs from 'fs';
 import {
   createMockBeadsIssue,
   createMockBeadsIssueList,
@@ -27,9 +24,36 @@ import {
 
 // Mock child_process before importing BeadsService
 const mockExecSync = vi.fn();
+const mockExec = vi.fn((cmd, opts, cb) => {
+  if (typeof opts === 'function') {
+    cb = opts;
+    opts = {};
+  }
+  cb(null, '', '');
+});
+mockExec[promisify.custom] = (cmd, opts) =>
+  new Promise((resolve, reject) => {
+    const resolvedOpts = typeof opts === 'function' ? undefined : opts;
+    mockExec(cmd, resolvedOpts, (error, stdout, stderr) => {
+      if (error) {
+        if (error.stdout === undefined && stdout !== undefined) {
+          error.stdout = stdout;
+        }
+        if (error.stderr === undefined && stderr !== undefined) {
+          error.stderr = stderr;
+        }
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 vi.mock('child_process', () => ({
   execSync: mockExecSync,
+  exec: mockExec,
 }));
+
+const realExistsSync = fs.existsSync;
 
 // Now import the functions we're testing (after mocking)
 const {
@@ -41,11 +65,24 @@ const {
   reopenBeadsIssue,
 } = await import('../../lib/BeadsService.js');
 
-describeOrSkip('BeadsService', () => {
+describe('BeadsService', () => {
   beforeEach(() => {
     // Clear all mocks before each test
     vi.clearAllMocks();
-    mockExecSync.mockReset();
+    mockExec.mockReset();
+    mockExec.mockImplementation((cmd, opts, cb) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      cb(null, '', '');
+    });
+    vi.spyOn(fs, 'existsSync').mockImplementation(testPath => {
+      if (testPath === '/test/project') {
+        return true;
+      }
+      return realExistsSync(testPath);
+    });
   });
 
   afterEach(() => {
@@ -54,20 +91,31 @@ describeOrSkip('BeadsService', () => {
 
   describe('listBeadsIssues', () => {
     it('should return empty array when no issues exist', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       const issues = await listBeadsIssues('/test/project');
 
       expect(issues).toEqual([]);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd list --json'),
-        expect.objectContaining({ cwd: '/test/project' })
+        expect.objectContaining({ cwd: '/test/project' }),
+        expect.any(Function)
       );
     });
 
     it('should parse and return issues list', async () => {
       const mockIssues = createMockBeadsIssueList(3);
-      mockExecSync.mockReturnValue(JSON.stringify(mockIssues));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockIssues), '');
+      });
 
       const issues = await listBeadsIssues('/test/project');
 
@@ -78,30 +126,45 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should filter by open status when specified', async () => {
-      mockExecSync.mockReturnValue(createMockListOutput([SAMPLE_ISSUES.openTask]));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockListOutput([SAMPLE_ISSUES.openTask]), '');
+      });
 
       await listBeadsIssues('/test/project', { status: 'open' });
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--status=open'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should filter by closed status when specified', async () => {
-      mockExecSync.mockReturnValue(createMockListOutput([SAMPLE_ISSUES.closedBug]));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockListOutput([SAMPLE_ISSUES.closedBug]), '');
+      });
 
       await listBeadsIssues('/test/project', { status: 'closed' });
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--status=closed'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should return empty array on CLI error', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw createBeadsCliError(BEADS_ERRORS.NOT_INITIALIZED);
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(createBeadsCliError(BEADS_ERRORS.NOT_INITIALIZED), '', '');
       });
 
       const issues = await listBeadsIssues('/test/project');
@@ -110,7 +173,12 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should return empty array when output is empty', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const issues = await listBeadsIssues('/test/project');
 
@@ -118,21 +186,30 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should always use --no-daemon flag', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/test/project');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--no-daemon'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
 
   describe('getBeadsIssue', () => {
     it('should return null when issue not found', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw createBeadsCliError(BEADS_ERRORS.ISSUE_NOT_FOUND('nonexistent'));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(createBeadsCliError(BEADS_ERRORS.ISSUE_NOT_FOUND('nonexistent')), '', '');
       });
 
       const issue = await getBeadsIssue('/test/project', 'nonexistent');
@@ -142,7 +219,12 @@ describeOrSkip('BeadsService', () => {
 
     it('should return issue when found', async () => {
       const mockIssue = SAMPLE_ISSUES.openTask;
-      mockExecSync.mockReturnValue(createMockShowOutput(mockIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockShowOutput(mockIssue), '');
+      });
 
       const issue = await getBeadsIssue('/test/project', mockIssue.id);
 
@@ -152,18 +234,29 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should call bd show with correct issue ID', async () => {
-      mockExecSync.mockReturnValue(createMockShowOutput());
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockShowOutput(), '');
+      });
 
       await getBeadsIssue('/test/project', 'test-issue-123');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd show test-issue-123 --json'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should return null on empty output', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const issue = await getBeadsIssue('/test/project', 'test-123');
 
@@ -174,43 +267,66 @@ describeOrSkip('BeadsService', () => {
   describe('createBeadsIssue', () => {
     it('should create issue with title', async () => {
       const created = createMockBeadsIssue({ title: 'New Feature' });
-      mockExecSync.mockReturnValue(JSON.stringify(created));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(created), '');
+      });
 
       const issue = await createBeadsIssue('/test/project', { title: 'New Feature' });
 
       expect(issue).toBeDefined();
       expect(issue.title).toBe('New Feature');
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd create "New Feature" --json'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should include priority when specified', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ priority: 1 }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ priority: 1 }), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'High Priority', priority: 1 });
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=1'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should include type when specified', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ issue_type: 'bug' }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ issue_type: 'bug' }), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'Bug Report', type: 'bug' });
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--type=bug'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should add description as comment when provided', async () => {
       const created = createMockBeadsIssue({ id: 'proj-new1', title: 'With Description' });
-      mockExecSync.mockReturnValue(JSON.stringify(created));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(created), '');
+      });
 
       await createBeadsIssue('/test/project', {
         title: 'With Description',
@@ -218,15 +334,17 @@ describeOrSkip('BeadsService', () => {
       });
 
       // First call: create
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd create "With Description"'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
 
       // Second call: add comment with description
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd comment proj-new1'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -238,12 +356,15 @@ describeOrSkip('BeadsService', () => {
       );
 
       expect(issue).toBeNull();
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return null on CLI error', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const issue = await createBeadsIssue('/test/project', { title: 'Will Fail' });
@@ -252,73 +373,108 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should handle title passed to command', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ title: 'Issue with quotes' }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title: 'Issue with quotes' }), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'Issue with "quotes"' });
 
       // The title is passed directly
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
   });
 
   describe('updateBeadsIssue', () => {
     it('should update status to closed by calling close command', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'status', 'closed');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd close issue-123'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should update status to open by calling reopen command', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'status', 'open');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd reopen issue-123'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should update priority', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'priority', 1);
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd update issue-123 --priority=1'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should update title', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'title', 'New Title');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd update issue-123 --title="New Title"'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should update type', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'type', 'bug');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd update issue-123 --type=bug'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -326,7 +482,7 @@ describeOrSkip('BeadsService', () => {
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'status', 'unknown');
 
       expect(result).toBe(false);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return false for unsupported field', async () => {
@@ -345,12 +501,15 @@ describeOrSkip('BeadsService', () => {
       );
 
       expect(result).toBe(true);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return false on CLI error', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'priority', 1);
@@ -359,27 +518,39 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should escape quotes in title update', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       await updateBeadsIssue('/test/project', 'issue-123', 'title', 'Title with "quotes"');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--title="Title with \\"quotes\\""'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
 
   describe('closeBeadsIssue', () => {
     it('should close issue using updateBeadsIssue', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await closeBeadsIssue('/test/project', 'issue-123');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd close issue-123'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -387,20 +558,26 @@ describeOrSkip('BeadsService', () => {
       const result = await closeBeadsIssue('/test/project', 'issue-123', MOCK_CONFIG.dryRun);
 
       expect(result).toBe(true);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
   });
 
   describe('reopenBeadsIssue', () => {
     it('should reopen issue using updateBeadsIssue', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await reopenBeadsIssue('/test/project', 'issue-123');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd reopen issue-123'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -408,57 +585,83 @@ describeOrSkip('BeadsService', () => {
       const result = await reopenBeadsIssue('/test/project', 'issue-123', MOCK_CONFIG.dryRun);
 
       expect(result).toBe(true);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
   });
 
   describe('CLI command construction', () => {
     it('should always add --no-daemon to avoid WAL permission issues', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/test/project');
 
-      const call = mockExecSync.mock.calls[0][0];
+      const call = mockExec.mock.calls[0][0];
       expect(call).toContain('--no-daemon');
     });
 
     it('should not duplicate --no-daemon if already present', async () => {
-      // This tests the internal command construction
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/test/project');
 
-      const call = mockExecSync.mock.calls[0][0];
+      const call = mockExec.mock.calls[0][0];
       const count = (call.match(/--no-daemon/g) || []).length;
       expect(count).toBe(1);
     });
 
     it('should use correct working directory', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/path/to/project');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ cwd: '/path/to/project' })
+        expect.objectContaining({ cwd: '/path/to/project' }),
+        expect.any(Function)
       );
     });
 
     it('should use utf-8 encoding', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/test/project');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ encoding: 'utf-8' })
+        expect.objectContaining({ encoding: 'utf-8' }),
+        expect.any(Function)
       );
     });
   });
 
   describe('error handling', () => {
     it('should handle JSON parse errors gracefully in list', async () => {
-      mockExecSync.mockReturnValue('not valid json');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, 'not valid json', '');
+      });
 
       const issues = await listBeadsIssues('/test/project');
 
@@ -466,7 +669,12 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should handle JSON parse errors gracefully in get', async () => {
-      mockExecSync.mockReturnValue('not valid json');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, 'not valid json', '');
+      });
 
       const issue = await getBeadsIssue('/test/project', 'test-123');
 
@@ -474,8 +682,11 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should handle not initialized error in list', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw createBeadsCliError(BEADS_ERRORS.NOT_INITIALIZED);
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(createBeadsCliError(BEADS_ERRORS.NOT_INITIALIZED), '', '');
       });
 
       const issues = await listBeadsIssues('/test/project');
@@ -484,8 +695,11 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should handle database locked error', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw createBeadsCliError(BEADS_ERRORS.DATABASE_LOCKED);
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(createBeadsCliError(BEADS_ERRORS.DATABASE_LOCKED), '', '');
       });
 
       const result = await updateBeadsIssue('/test/project', 'issue-123', 'priority', 1);
@@ -494,8 +708,11 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should handle permission denied error', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw createBeadsCliError(BEADS_ERRORS.PERMISSION_DENIED);
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(createBeadsCliError(BEADS_ERRORS.PERMISSION_DENIED), '', '');
       });
 
       const issue = await createBeadsIssue('/test/project', { title: 'Test' });
@@ -506,78 +723,118 @@ describeOrSkip('BeadsService', () => {
 
   describe('edge cases', () => {
     it('should handle empty title in create', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ title: '' }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title: '' }), '');
+      });
 
-      // Empty title should still attempt to create
       const issue = await createBeadsIssue('/test/project', { title: '' });
 
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should handle special characters in title', async () => {
       const title = 'Issue with $pecial ch@rs & "quotes" \'single\' `backticks`';
-      mockExecSync.mockReturnValue(createMockCreateOutput({ title }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title }), '');
+      });
 
       await createBeadsIssue('/test/project', { title });
 
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should handle unicode in title', async () => {
       const title = 'Issue with unicode: cafe, , emoji ';
-      mockExecSync.mockReturnValue(createMockCreateOutput({ title }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title }), '');
+      });
 
       await createBeadsIssue('/test/project', { title });
 
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should handle very long title', async () => {
       const title = 'A'.repeat(1000);
-      mockExecSync.mockReturnValue(createMockCreateOutput({ title }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title }), '');
+      });
 
       await createBeadsIssue('/test/project', { title });
 
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should handle null description', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({}));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({}), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'Test', description: null });
 
       // Should only call create, not comment
-      expect(mockExecSync).toHaveBeenCalledTimes(1);
+      expect(mockExec).toHaveBeenCalledTimes(1);
     });
 
     it('should handle undefined filters', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       await listBeadsIssues('/test/project', undefined);
 
-      expect(mockExecSync).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalled();
     });
 
     it('should handle priority 0 (P0 urgent)', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ priority: 0 }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ priority: 0 }), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'Urgent', priority: 0 });
 
-      // Priority 0 (P0/urgent) should now be passed correctly
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=0'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should handle priority 4 (P4 no priority)', async () => {
-      mockExecSync.mockReturnValue(createMockCreateOutput({ priority: 4 }));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ priority: 4 }), '');
+      });
 
       await createBeadsIssue('/test/project', { title: 'No Priority', priority: 4 });
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('--priority=4'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
   });
@@ -682,7 +939,12 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should attempt initialization if not initialized', async () => {
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const { ensureBeadsInitialized } = await import('../../lib/BeadsService.js');
 
@@ -710,7 +972,12 @@ describeOrSkip('BeadsService', () => {
     });
 
     it('should pass project path to service methods', async () => {
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       const { createBeadsService } = await import('../../lib/BeadsService.js');
 
@@ -718,9 +985,10 @@ describeOrSkip('BeadsService', () => {
       // The factory methods take projectPath as first argument
       await service.listIssues('/test/project');
 
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ cwd: '/test/project' })
+        expect.objectContaining({ cwd: '/test/project' }),
+        expect.any(Function)
       );
     });
   });
@@ -731,14 +999,20 @@ describeOrSkip('BeadsService', () => {
   describe('addParentChildDependency', () => {
     it('should add parent-child dependency via bd dep add', async () => {
       const { addParentChildDependency } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd dep add child-123 parent-456 --type=parent-child'),
-        expect.objectContaining({ cwd: '/test/project' })
+        expect.objectContaining({ cwd: '/test/project' }),
+        expect.any(Function)
       );
     });
 
@@ -750,13 +1024,16 @@ describeOrSkip('BeadsService', () => {
       });
 
       expect(result).toBe(true);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return true if dependency already exists', async () => {
       const { addParentChildDependency } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('dependency already exists');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('dependency already exists'), '', '');
       });
 
       const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
@@ -766,8 +1043,11 @@ describeOrSkip('BeadsService', () => {
 
     it('should return false on other CLI errors', async () => {
       const { addParentChildDependency } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await addParentChildDependency('/test/project', 'child-123', 'parent-456');
@@ -779,14 +1059,20 @@ describeOrSkip('BeadsService', () => {
   describe('removeParentChildDependency', () => {
     it('should remove parent-child dependency via bd dep remove', async () => {
       const { removeParentChildDependency } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const result = await removeParentChildDependency('/test/project', 'child-123', 'parent-456');
 
       expect(result).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd dep remove child-123 parent-456'),
-        expect.objectContaining({ cwd: '/test/project' })
+        expect.objectContaining({ cwd: '/test/project' }),
+        expect.any(Function)
       );
     });
 
@@ -798,13 +1084,16 @@ describeOrSkip('BeadsService', () => {
       });
 
       expect(result).toBe(true);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return false on CLI error', async () => {
       const { removeParentChildDependency } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await removeParentChildDependency('/test/project', 'child-123', 'parent-456');
@@ -820,21 +1109,30 @@ describeOrSkip('BeadsService', () => {
         { id: 'issue-1', depth: 0 },
         { id: 'issue-2', depth: 1, parent_id: 'issue-1' },
       ];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getDependencyTree('/test/project', 'issue-1');
 
       expect(result).toEqual(mockTree);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd dep tree issue-1 --json'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should return null on error', async () => {
       const { getDependencyTree } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await getDependencyTree('/test/project', 'issue-1');
@@ -850,7 +1148,12 @@ describeOrSkip('BeadsService', () => {
         { id: 'root-issue', depth: 0 },
         { id: 'parent-issue', depth: 1, parent_id: 'root-issue' },
       ];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getParentChildRelationships('/test/project', 'root-issue');
 
@@ -865,7 +1168,12 @@ describeOrSkip('BeadsService', () => {
     it('should return empty array when no relationships exist', async () => {
       const { getParentChildRelationships } = await import('../../lib/BeadsService.js');
       const mockTree = [{ id: 'solo-issue', depth: 0 }];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getParentChildRelationships('/test/project', 'solo-issue');
 
@@ -874,8 +1182,11 @@ describeOrSkip('BeadsService', () => {
 
     it('should return empty array on error', async () => {
       const { getParentChildRelationships } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await getParentChildRelationships('/test/project', 'issue-1');
@@ -891,7 +1202,12 @@ describeOrSkip('BeadsService', () => {
         { id: 'issue-1', title: 'Parent', dependency_count: 0, dependent_count: 2 },
         { id: 'issue-2', title: 'Child', dependency_count: 1, dependent_count: 0 },
       ];
-      mockExecSync.mockReturnValue(JSON.stringify(mockIssues));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockIssues), '');
+      });
 
       const result = await getBeadsIssuesWithDependencies('/test/project');
 
@@ -902,8 +1218,11 @@ describeOrSkip('BeadsService', () => {
 
     it('should return empty array on error', async () => {
       const { getBeadsIssuesWithDependencies } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await getBeadsIssuesWithDependencies('/test/project');
@@ -920,7 +1239,7 @@ describeOrSkip('BeadsService', () => {
       const result = await syncParentChildToBeads('/test/project', null, 'parent-456', mockDb);
 
       expect(result).toBe(false);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should return false when parent ID is missing', async () => {
@@ -930,12 +1249,17 @@ describeOrSkip('BeadsService', () => {
       const result = await syncParentChildToBeads('/test/project', 'child-123', null, mockDb);
 
       expect(result).toBe(false);
-      expect(mockExecSync).not.toHaveBeenCalled();
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it('should add dependency and update database on success', async () => {
       const { syncParentChildToBeads } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockReturnValue('');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
 
       const mockDb = {
         getAllIssues: () => [
@@ -959,7 +1283,12 @@ describeOrSkip('BeadsService', () => {
   describe('syncBeadsParentChildToHuly', () => {
     it('should return empty results when no issues have dependencies', async () => {
       const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockReturnValue(JSON.stringify([]));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify([]), '');
+      });
 
       const mockHulyClient = {};
       const mockDb = { getAllIssues: () => [] };
@@ -979,16 +1308,30 @@ describeOrSkip('BeadsService', () => {
 
       // First call: list issues with dependencies
       // Second call: get dependency tree
-      mockExecSync
-        .mockReturnValueOnce(
-          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
-        )
-        .mockReturnValueOnce(
-          JSON.stringify([
-            { id: 'beads-child', depth: 0 },
-            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
-          ])
-        );
+      mockExec
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }]),
+            ''
+          );
+        })
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([
+              { id: 'beads-child', depth: 0 },
+              { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+            ]),
+            ''
+          );
+        });
 
       const mockHulyClient = {};
       const mockDb = {
@@ -1009,16 +1352,30 @@ describeOrSkip('BeadsService', () => {
     it('should skip relationships that are already synced', async () => {
       const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
 
-      mockExecSync
-        .mockReturnValueOnce(
-          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
-        )
-        .mockReturnValueOnce(
-          JSON.stringify([
-            { id: 'beads-child', depth: 0 },
-            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
-          ])
-        );
+      mockExec
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }]),
+            ''
+          );
+        })
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([
+              { id: 'beads-child', depth: 0 },
+              { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+            ]),
+            ''
+          );
+        });
 
       const mockHulyClient = {};
       const mockDb = {
@@ -1046,16 +1403,30 @@ describeOrSkip('BeadsService', () => {
     it('should sync new parent-child relationships', async () => {
       const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
 
-      mockExecSync
-        .mockReturnValueOnce(
-          JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }])
-        )
-        .mockReturnValueOnce(
-          JSON.stringify([
-            { id: 'beads-child', depth: 0 },
-            { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
-          ])
-        );
+      mockExec
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([{ id: 'beads-child', dependency_count: 1, dependent_count: 0 }]),
+            ''
+          );
+        })
+        .mockImplementationOnce((cmd, opts, cb) => {
+          if (typeof opts === 'function') {
+            cb = opts;
+          }
+          cb(
+            null,
+            JSON.stringify([
+              { id: 'beads-child', depth: 0 },
+              { id: 'beads-parent', depth: 1, parent_id: 'beads-child' },
+            ]),
+            ''
+          );
+        });
 
       const mockHulyClient = {};
       const mockDb = {
@@ -1086,8 +1457,11 @@ describeOrSkip('BeadsService', () => {
 
     it('should handle errors gracefully when fetching issues fails', async () => {
       const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const mockHulyClient = {};
@@ -1389,12 +1763,19 @@ describeOrSkip('BeadsService', () => {
       ];
 
       // Mock the dependency tree
-      mockExecSync.mockReturnValue(
-        JSON.stringify([
-          { id: 'beads-child', depth: 0 },
-          { id: 'beads-parent', depth: 1 },
-        ])
-      );
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(
+          null,
+          JSON.stringify([
+            { id: 'beads-child', depth: 0 },
+            { id: 'beads-parent', depth: 1 },
+          ]),
+          ''
+        );
+      });
 
       const result = await syncAllParentChildToHuly(
         hulyClient,
@@ -1405,9 +1786,10 @@ describeOrSkip('BeadsService', () => {
       );
 
       // Should process the child with dependencies
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('dep tree beads-child'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
@@ -1418,8 +1800,11 @@ describeOrSkip('BeadsService', () => {
 
       const beadsIssues = [createMockBeadsIssue({ id: 'beads-child', dependency_count: 1 })];
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       // Should not throw
@@ -1444,21 +1829,30 @@ describeOrSkip('BeadsService', () => {
         dependency_count: 1,
         dependent_count: 2,
       };
-      mockExecSync.mockReturnValue(JSON.stringify([mockIssue]));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify([mockIssue]), '');
+      });
 
       const result = await getIssueWithDependencies('/test/project', 'issue-123');
 
       expect(result).toEqual(mockIssue);
-      expect(mockExecSync).toHaveBeenCalledWith(
+      expect(mockExec).toHaveBeenCalledWith(
         expect.stringContaining('bd show issue-123 --json'),
-        expect.any(Object)
+        expect.any(Object),
+        expect.any(Function)
       );
     });
 
     it('should return null on error', async () => {
       const { getIssueWithDependencies } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await getIssueWithDependencies('/test/project', 'issue-123');
@@ -1468,7 +1862,12 @@ describeOrSkip('BeadsService', () => {
 
     it('should return null when issue array is empty', async () => {
       const { getIssueWithDependencies } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockReturnValue('[]');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '[]', '');
+      });
 
       const result = await getIssueWithDependencies('/test/project', 'nonexistent');
 
@@ -1486,7 +1885,12 @@ describeOrSkip('BeadsService', () => {
         { id: 'child-issue', depth: 0 },
         { id: 'parent-issue', depth: 1 },
       ];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getBeadsParentId('/test/project', 'child-issue');
 
@@ -1496,7 +1900,12 @@ describeOrSkip('BeadsService', () => {
     it('should return null when no dependencies', async () => {
       const { getBeadsParentId } = await import('../../lib/BeadsService.js');
       const mockTree = [{ id: 'solo-issue', depth: 0 }];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getBeadsParentId('/test/project', 'solo-issue');
 
@@ -1505,8 +1914,11 @@ describeOrSkip('BeadsService', () => {
 
     it('should return null on error', async () => {
       const { getBeadsParentId } = await import('../../lib/BeadsService.js');
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Command failed'), '', '');
       });
 
       const result = await getBeadsParentId('/test/project', 'issue-1');
@@ -1520,7 +1932,12 @@ describeOrSkip('BeadsService', () => {
         { id: 'issue-1', depth: 0 },
         { id: 'issue-1', depth: 1 }, // Self-reference should be ignored
       ];
-      mockExecSync.mockReturnValue(JSON.stringify(mockTree));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(mockTree), '');
+      });
 
       const result = await getBeadsParentId('/test/project', 'issue-1');
 
@@ -1563,7 +1980,12 @@ describeOrSkip('BeadsService', () => {
         title: hulyIssue.title,
         status: 'open',
       });
-      mockExecSync.mockReturnValue(JSON.stringify(createdIssue));
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, JSON.stringify(createdIssue), '');
+      });
 
       const result = await syncHulyIssueToBeads('/test/project', hulyIssue, beadsIssues, db, {
         sync: { dryRun: false },
@@ -1652,9 +2074,10 @@ describeOrSkip('BeadsService', () => {
       });
 
       // Should not update when beads is newer
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd edit'),
-        expect.anything()
+        expect.anything(),
+        expect.any(Function)
       );
     });
 
@@ -1669,9 +2092,10 @@ describeOrSkip('BeadsService', () => {
       });
 
       // Should not call execSync for create in dry run
-      expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect(mockExec).not.toHaveBeenCalledWith(
         expect.stringContaining('bd create'),
-        expect.anything()
+        expect.anything(),
+        expect.any(Function)
       );
     });
 
@@ -1681,8 +2105,11 @@ describeOrSkip('BeadsService', () => {
       const hulyIssue = createHulyIssue();
       const beadsIssues = [];
 
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Beads CLI error');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Beads CLI error'), '', '');
       });
 
       // Should not throw, should return null
@@ -1897,8 +2324,11 @@ describeOrSkip('BeadsService', () => {
       const { syncBeadsToGit } = await import('../../lib/BeadsService.js');
 
       // Mock fs.existsSync to return false for .beads directory
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Not a beads repository');
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(new Error('Not a beads repository'), '', '');
       });
 
       const result = await syncBeadsToGit('/nonexistent/path');
@@ -1910,13 +2340,17 @@ describeOrSkip('BeadsService', () => {
       const { syncBeadsToGit } = await import('../../lib/BeadsService.js');
 
       // Mock bd sync returning "nothing to commit"
-      mockExecSync.mockImplementation(cmd => {
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
         if (cmd.includes('bd sync')) {
           const error = new Error('nothing to commit');
-          error.status = 1;
-          throw error;
+          const cliError = Object.assign(error, { status: 1 });
+          cb(cliError, '', '');
+          return;
         }
-        return '';
+        cb(null, '', '');
       });
 
       // Note: This test depends on the project path having .beads and .git
@@ -1930,12 +2364,16 @@ describeOrSkip('BeadsService', () => {
       const { syncBeadsToGit } = await import('../../lib/BeadsService.js');
 
       let syncCommand = '';
-      mockExecSync.mockImplementation(cmd => {
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
         if (cmd.includes('bd sync')) {
           syncCommand = cmd;
-          return 'Synced';
+          cb(null, 'Synced', '');
+          return;
         }
-        return '';
+        cb(null, '', '');
       });
 
       // This will fail on path check but we can verify the commit message format

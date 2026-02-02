@@ -5,24 +5,78 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { promisify } from 'util';
 import { createMockBeadsIssue, createMockBeadsDbRecord } from '../mocks/beadsMocks.js';
 
-// Mock child_process before importing
-const mockExec = vi.fn();
+// Mock child_process before importing (exec for BeadsParentChildService, execSync for BeadsService)
+const mockExec = vi.fn((cmd, opts, cb) => {
+  if (typeof opts === 'function') {
+    cb = opts;
+    opts = {};
+  }
+  cb(null, '', '');
+});
+mockExec[promisify.custom] = (cmd, opts) =>
+  new Promise((resolve, reject) => {
+    const resolvedOpts = typeof opts === 'function' ? undefined : opts;
+    mockExec(cmd, resolvedOpts, (error, stdout, stderr) => {
+      if (error) {
+        if (error.stdout === undefined && stdout !== undefined) {
+          error.stdout = stdout;
+        }
+        if (error.stderr === undefined && stderr !== undefined) {
+          error.stderr = stderr;
+        }
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+const mockExecSync = vi.fn(() => '[]');
 vi.mock('child_process', () => ({
   exec: mockExec,
+  execSync: mockExecSync,
 }));
+
+vi.mock('fs', async () => {
+  const actual = await vi.importActual('fs');
+  return {
+    ...actual,
+    default: { ...actual, existsSync: vi.fn(() => true) },
+    existsSync: vi.fn(() => true),
+  };
+});
 
 describe('BeadsParentChildService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExec.mockReset();
-    mockExec.mockImplementation((command, options, callback) => {
-      if (typeof options === 'function') {
-        callback = options;
+    mockExec.mockImplementation((cmd, opts, cb) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
       }
-      callback(null, '', '');
+      cb(null, '', '');
     });
+    // Re-attach promisify.custom after reset
+    mockExec[promisify.custom] = (cmd, opts) =>
+      new Promise((resolve, reject) => {
+        const resolvedOpts = typeof opts === 'function' ? undefined : opts;
+        mockExec(cmd, resolvedOpts, (error, stdout, stderr) => {
+          if (error) {
+            if (error.stdout === undefined && stdout !== undefined) {
+              error.stdout = stdout;
+            }
+            if (error.stderr === undefined && stderr !== undefined) {
+              error.stderr = stderr;
+            }
+            reject(error);
+            return;
+          }
+          resolve({ stdout, stderr });
+        });
+      });
   });
 
   afterEach(() => {
