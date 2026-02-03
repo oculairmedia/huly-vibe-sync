@@ -1,12 +1,12 @@
 {
   "projectId": "HVSYN",
   "version": 2,
-  "updatedAt": 1769885316723,
+  "updatedAt": 1770088891241,
   "files": {
     "temporal/activities/orchestration.ts": {
       "path": "temporal/activities/orchestration.ts",
-      "contentHash": "4c730248cfb547588fd2b8a231b4a926",
-      "mtime": 1769834664804.623,
+      "contentHash": "63225fab36015875b0da3fe94eac65b5",
+      "mtime": 1769974414901.7136,
       "functions": [
         {
           "name": "fetchHulyProjects",
@@ -15,8 +15,8 @@
           "return_type": "Promise<HulyProject[]>",
           "docstring": "/**\n * Fetch all Huly projects\n */",
           "decorators": [],
-          "start_line": 61,
-          "end_line": 73,
+          "start_line": 63,
+          "end_line": 75,
           "is_async": true,
           "is_generator": false
         },
@@ -27,8 +27,8 @@
           "return_type": "Promise<VibeProject[]>",
           "docstring": "/**\n * Fetch all Vibe projects\n */",
           "decorators": [],
-          "start_line": 78,
-          "end_line": 90,
+          "start_line": 80,
+          "end_line": 92,
           "is_async": true,
           "is_generator": false
         },
@@ -39,8 +39,8 @@
           "return_type": "Promise<string | null>",
           "docstring": null,
           "decorators": [],
-          "start_line": 92,
-          "end_line": 123,
+          "start_line": 94,
+          "end_line": 125,
           "is_async": true,
           "is_generator": false
         },
@@ -51,8 +51,8 @@
           "return_type": "Promise<string | null>",
           "docstring": null,
           "decorators": [],
-          "start_line": 125,
-          "end_line": 193,
+          "start_line": 127,
+          "end_line": 195,
           "is_async": true,
           "is_generator": false
         },
@@ -63,8 +63,8 @@
           "return_type": "ring | null {\n ",
           "docstring": null,
           "decorators": [],
-          "start_line": 195,
-          "end_line": 205,
+          "start_line": 197,
+          "end_line": 207,
           "is_async": false,
           "is_generator": false
         },
@@ -75,8 +75,20 @@
           "return_type": "ring {\n ",
           "docstring": null,
           "decorators": [],
-          "start_line": 207,
-          "end_line": 213,
+          "start_line": 209,
+          "end_line": 215,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "dateGitRepoPath(rep",
+          "signature": "function dateGitRepoPath(repoPath: string): { : valid: boolean; reason?: string } {\n ",
+          "parameters": "oPath: string): { ",
+          "return_type": "valid: boolean; reason?: string } {\n ",
+          "docstring": null,
+          "decorators": [],
+          "start_line": 217,
+          "end_line": 240,
           "is_async": false,
           "is_generator": false
         },
@@ -87,140 +99,140 @@
           "return_type": "omise<VibeProject> {\n ",
           "docstring": null,
           "decorators": [],
-          "start_line": 215,
-          "end_line": 249,
+          "start_line": 242,
+          "end_line": 288,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "hProjectData(inp",
-          "signature": "async function hProjectData(input: {\n  hulyProject: HulyProject;\n  vibeProjectId: string;\n}): Pr: omise<{ hulyIssues: HulyIssue[]; vibeTasks: VibeTask[] }> {\n ",
-          "parameters": "ut: {\n  hulyProject: HulyProject;\n  vibeProjectId: string;\n}): Pr",
-          "return_type": "omise<{ hulyIssues: HulyIssue[]; vibeTasks: VibeTask[] }> {\n ",
+          "name": "jectData(input: ",
+          "signature": "async function jectData(input: {\n  hulyProject: HulyProject;\n  vibeProjectId: string;\n}): Promis: e<{ hulyIssues: HulyIssue[]; vibeTasks: VibeTask[] }> {\n  con",
+          "parameters": "{\n  hulyProject: HulyProject;\n  vibeProjectId: string;\n}): Promis",
+          "return_type": "e<{ hulyIssues: HulyIssue[]; vibeTasks: VibeTask[] }> {\n  con",
           "docstring": null,
           "decorators": [],
-          "start_line": 254,
-          "end_line": 280,
+          "start_line": 293,
+          "end_line": 319,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "hHulyIssuesBulk(inp",
-          "signature": "async function hHulyIssuesBulk(input: {\n  projectIdentifiers: string[];\n  modifiedSince?: string;\n  limit?: number;\n}): Pr: omise<Record<string, HulyIssue[]>> {\n ",
-          "parameters": "ut: {\n  projectIdentifiers: string[];\n  modifiedSince?: string;\n  limit?: number;\n}): Pr",
-          "return_type": "omise<Record<string, HulyIssue[]>> {\n ",
+          "name": "yIssuesBulk(input: ",
+          "signature": "async function yIssuesBulk(input: {\n  projectIdentifiers: string[];\n  modifiedSince?: string;\n  limit?: number;\n}): Promis: e<Record<string, HulyIssue[]>> {\n  con",
+          "parameters": "{\n  projectIdentifiers: string[];\n  modifiedSince?: string;\n  limit?: number;\n}): Promis",
+          "return_type": "e<Record<string, HulyIssue[]>> {\n  con",
           "docstring": null,
           "decorators": [],
-          "start_line": 286,
-          "end_line": 324,
+          "start_line": 325,
+          "end_line": 363,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "eGitRepoPath(input",
-          "signature": "async function eGitRepoPath(input: {\n  projectIdentifier: string;\n}): Prom: ise<string | null> {\n  c",
-          "parameters": ": {\n  projectIdentifier: string;\n}): Prom",
-          "return_type": "ise<string | null> {\n  c",
+          "name": "RepoPath(input: {\n",
+          "signature": "async function RepoPath(input: {\n  projectIdentifier: string;\n}): Promise<: string | null> {\n  const",
+          "parameters": "  projectIdentifier: string;\n}): Promise<",
+          "return_type": "string | null> {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 331,
-          "end_line": 369,
+          "start_line": 370,
+          "end_line": 408,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "tGitRepoPath(input",
-          "signature": "function tGitRepoPath(input: { description?: string }): stri: ng | null {\n  c",
-          "parameters": ": { description?: string }): stri",
-          "return_type": "ng | null {\n  c",
+          "name": "RepoPath(input: { ",
+          "signature": "function RepoPath(input: { description?: string }): string |: null {\n  const",
+          "parameters": "description?: string }): string |",
+          "return_type": "null {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 375,
-          "end_line": 398,
+          "start_line": 414,
+          "end_line": 437,
           "is_async": false,
           "is_generator": false
         },
         {
-          "name": "lizeBeads(input",
-          "signature": "async function lizeBeads(input: {\n  gitRepoPath: string;\n  projectName: string;\n  projectIdentifier: string;\n}): Prom: ise<boolean> {\n  c",
-          "parameters": ": {\n  gitRepoPath: string;\n  projectName: string;\n  projectIdentifier: string;\n}): Prom",
-          "return_type": "ise<boolean> {\n  c",
+          "name": "Beads(input: {\n",
+          "signature": "async function Beads(input: {\n  gitRepoPath: string;\n  projectName: string;\n  projectIdentifier: string;\n}): Promise<: boolean> {\n  const",
+          "parameters": "  gitRepoPath: string;\n  projectName: string;\n  projectIdentifier: string;\n}): Promise<",
+          "return_type": "boolean> {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 407,
-          "end_line": 432,
+          "start_line": 446,
+          "end_line": 471,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "eadsIssues(input",
-          "signature": "async function eadsIssues(input: { gitRepoPath: string }): Prom: ise<\n  Array<{\n    id: string;\n    title: string;\n    status: string;\n    priority?: number;\n    description?: string;\n    labels?: string[];\n  }>\n> {\n  c",
-          "parameters": ": { gitRepoPath: string }): Prom",
-          "return_type": "ise<\n  Array<{\n    id: string;\n    title: string;\n    status: string;\n    priority?: number;\n    description?: string;\n    labels?: string[];\n  }>\n> {\n  c",
+          "name": "Issues(input: { ",
+          "signature": "async function Issues(input: { gitRepoPath: string }): Promise<: \n  Array<{\n    id: string;\n    title: string;\n    status: string;\n    priority?: number;\n    description?: string;\n    labels?: string[];\n  }>\n> {\n  const",
+          "parameters": "gitRepoPath: string }): Promise<",
+          "return_type": "\n  Array<{\n    id: string;\n    title: string;\n    status: string;\n    priority?: number;\n    description?: string;\n    labels?: string[];\n  }>\n> {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 437,
-          "end_line": 465,
+          "start_line": 476,
+          "end_line": 504,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "LettaMemory(input",
-          "signature": "async function LettaMemory(input: {\n  agentId: string;\n  hulyProject: HulyProject;\n  vibeProject: VibeProject;\n  hulyIssues: HulyIssue[];\n  vibeTasks: VibeTask[];\n  gitRepoPath?: string;\n}): Prom: ise<{ success: boolean; error?: string }> {\n  c",
-          "parameters": ": {\n  agentId: string;\n  hulyProject: HulyProject;\n  vibeProject: VibeProject;\n  hulyIssues: HulyIssue[];\n  vibeTasks: VibeTask[];\n  gitRepoPath?: string;\n}): Prom",
-          "return_type": "ise<{ success: boolean; error?: string }> {\n  c",
+          "name": "aMemory(input: {\n",
+          "signature": "async function aMemory(input: {\n  agentId: string;\n  hulyProject: HulyProject;\n  vibeProject: VibeProject;\n  hulyIssues: HulyIssue[];\n  vibeTasks: VibeTask[];\n  gitRepoPath?: string;\n}): Promise<: { success: boolean; error?: string }> {\n  const",
+          "parameters": "  agentId: string;\n  hulyProject: HulyProject;\n  vibeProject: VibeProject;\n  hulyIssues: HulyIssue[];\n  vibeTasks: VibeTask[];\n  gitRepoPath?: string;\n}): Promise<",
+          "return_type": "{ success: boolean; error?: string }> {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 474,
-          "end_line": 526,
+          "start_line": 513,
+          "end_line": 565,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "SyncMetrics(input",
-          "signature": "async function SyncMetrics(input: {\n  projectsProcessed: number;\n  issuesSynced: number;\n  durationMs: number;\n  errors: number;\n}): Prom: ise<void> {\n  c",
-          "parameters": ": {\n  projectsProcessed: number;\n  issuesSynced: number;\n  durationMs: number;\n  errors: number;\n}): Prom",
-          "return_type": "ise<void> {\n  c",
+          "name": "Metrics(input: {\n",
+          "signature": "async function Metrics(input: {\n  projectsProcessed: number;\n  issuesSynced: number;\n  durationMs: number;\n  errors: number;\n}): Promise<: void> {\n  const",
+          "parameters": "  projectsProcessed: number;\n  issuesSynced: number;\n  durationMs: number;\n  errors: number;\n}): Promise<",
+          "return_type": "void> {\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 535,
-          "end_line": 551,
+          "start_line": 574,
+          "end_line": 590,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "oardMetrics(hulyI",
-          "signature": "function oardMetrics(hulyIssues: HulyIssue[], vibeTasks: VibeTask[]): stri: ng {\n  c",
-          "parameters": "ssues: HulyIssue[], vibeTasks: VibeTask[]): stri",
-          "return_type": "ng {\n  c",
+          "name": "Metrics(hulyIssue",
+          "signature": "function Metrics(hulyIssues: HulyIssue[], vibeTasks: VibeTask[]): string {: \n  const",
+          "parameters": "s: HulyIssue[], vibeTasks: VibeTask[]): string {",
+          "return_type": "\n  const",
           "docstring": null,
           "decorators": [],
-          "start_line": 557,
-          "end_line": 571,
+          "start_line": 596,
+          "end_line": 610,
           "is_async": false,
           "is_generator": false
         },
         {
-          "name": "rojectMeta(hulyP",
-          "signature": "function rojectMeta(hulyProject: HulyProject, hulyIssues: HulyIssue[]): stri: ng {\n  r",
-          "parameters": "roject: HulyProject, hulyIssues: HulyIssue[]): stri",
-          "return_type": "ng {\n  r",
+          "name": "ctMeta(hulyProje",
+          "signature": "function ctMeta(hulyProject: HulyProject, hulyIssues: HulyIssue[]): string {: \n  retur",
+          "parameters": "ct: HulyProject, hulyIssues: HulyIssue[]): string {",
+          "return_type": "\n  retur",
           "docstring": null,
           "decorators": [],
-          "start_line": 573,
-          "end_line": 580,
+          "start_line": 612,
+          "end_line": 619,
           "is_async": false,
           "is_generator": false
         },
         {
-          "name": "OrchestratorError(error",
-          "signature": "function OrchestratorError(error: unknown, operation: string): neve: r {\n  i",
-          "parameters": ": unknown, operation: string): neve",
-          "return_type": "r {\n  i",
+          "name": "estratorError(error: un",
+          "signature": "function estratorError(error: unknown, operation: string): never {\n: if (e",
+          "parameters": "known, operation: string): never {\n",
+          "return_type": "if (e",
           "docstring": null,
           "decorators": [],
-          "start_line": 582,
-          "end_line": 606,
+          "start_line": 621,
+          "end_line": 645,
           "is_async": false,
           "is_generator": false
         }
@@ -228,12 +240,12 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769834669669
+      "parsedAt": 1769974426029
     },
     "tests/unit/OrchestrationActivities.test.ts": {
       "path": "tests/unit/OrchestrationActivities.test.ts",
-      "contentHash": "56835b6a1bd76b5c64f0a1acd0b42879",
-      "mtime": 1769824908508.964,
+      "contentHash": "f0994d881bcbc8ab4699ded1f33984ad",
+      "mtime": 1769997756085.5715,
       "functions": [
         {
           "name": "extractGitRepoPath",
@@ -242,8 +254,8 @@
           "return_type": "string | null",
           "docstring": null,
           "decorators": [],
-          "start_line": 533,
-          "end_line": 541,
+          "start_line": 557,
+          "end_line": 565,
           "is_async": false,
           "is_generator": false
         },
@@ -254,8 +266,8 @@
           "return_type": "string | null",
           "docstring": null,
           "decorators": [],
-          "start_line": 558,
-          "end_line": 562,
+          "start_line": 582,
+          "end_line": 586,
           "is_async": false,
           "is_generator": false
         }
@@ -263,7 +275,7 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769824921316
+      "parsedAt": 1769997762177
     },
     "cli.js": {
       "path": "cli.js",
@@ -11753,8 +11765,8 @@
     },
     "lib/BeadsService.js": {
       "path": "lib/BeadsService.js",
-      "contentHash": "0e660088a8d43786aa07a3c99cdb8e86",
-      "mtime": 1769876048938.7197,
+      "contentHash": "b8d873db1f1224f53a80dc5aae7b3a4a",
+      "mtime": 1769890087069.2488,
       "functions": [
         {
           "name": "execShellCommand",
@@ -11788,7 +11800,7 @@
           "docstring": null,
           "decorators": [],
           "start_line": 60,
-          "end_line": 67,
+          "end_line": 75,
           "is_async": true,
           "is_generator": false
         },
@@ -11799,8 +11811,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 69,
-          "end_line": 76,
+          "start_line": 77,
+          "end_line": 84,
           "is_async": true,
           "is_generator": false
         },
@@ -11811,8 +11823,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 78,
-          "end_line": 91,
+          "start_line": 86,
+          "end_line": 99,
           "is_async": true,
           "is_generator": false
         },
@@ -11823,8 +11835,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 93,
-          "end_line": 114,
+          "start_line": 101,
+          "end_line": 122,
           "is_async": true,
           "is_generator": false
         },
@@ -11835,8 +11847,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 116,
-          "end_line": 136,
+          "start_line": 124,
+          "end_line": 144,
           "is_async": true,
           "is_generator": false
         },
@@ -11847,8 +11859,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 138,
-          "end_line": 149,
+          "start_line": 146,
+          "end_line": 157,
           "is_async": true,
           "is_generator": false
         },
@@ -11859,8 +11871,8 @@
           "return_type": null,
           "docstring": "/**\n * Execute a beads CLI command and return parsed JSON output\n *\n * @param {string} command - The bd command to execute (without 'bd' prefix)\n * @param {string} workingDir - The directory to run the command in\n * @returns {Promise<string>} Parsed JSON output from the command\n */",
           "decorators": [],
-          "start_line": 158,
-          "end_line": 180,
+          "start_line": 166,
+          "end_line": 188,
           "is_async": true,
           "is_generator": false
         },
@@ -11871,8 +11883,8 @@
           "return_type": null,
           "docstring": "/**\n * List all issues in the beads repository\n *\n * @param {string} projectPath - Path to the project containing .beads directory\n * @param {Object} filters - Optional filters (status, priority, etc.)\n * @returns {Promise<Array>} Array of beads issues\n */",
           "decorators": [],
-          "start_line": 189,
-          "end_line": 221,
+          "start_line": 197,
+          "end_line": 229,
           "is_async": true,
           "is_generator": false
         },
@@ -11883,8 +11895,8 @@
           "return_type": null,
           "docstring": "/**\n * Get a single issue by ID\n *\n * @param {string} projectPath - Path to the project\n * @param {string} issueId - Beads issue ID (e.g., \"huly-vibe-sync-abc123\")\n * @returns {Promise<Object|null>} Issue object or null if not found\n */",
           "decorators": [],
-          "start_line": 230,
-          "end_line": 244,
+          "start_line": 238,
+          "end_line": 252,
           "is_async": true,
           "is_generator": false
         },
@@ -11895,8 +11907,8 @@
           "return_type": null,
           "docstring": "/**\n * Create a new issue in beads\n *\n * @param {string} projectPath - Path to the project\n * @param {Object} issueData - Issue data\n * @param {string} issueData.title - Issue title\n * @param {string} [issueData.description] - Issue description\n * @param {number} [issueData.priority] - Priority (1-5, default 2)\n * @param {string} [issueData.type] - Issue type (task, bug, feature, epic, chore)\n * @param {string[]} [issueData.labels] - Optional labels\n * @param {Object} config - Configuration object\n * @returns {Promise<Object|null>} Created issue object or null\n */",
           "decorators": [],
-          "start_line": 259,
-          "end_line": 306,
+          "start_line": 267,
+          "end_line": 314,
           "is_async": true,
           "is_generator": false
         },
@@ -11907,8 +11919,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 318,
-          "end_line": 374,
+          "start_line": 326,
+          "end_line": 382,
           "is_async": true,
           "is_generator": false
         },
@@ -11919,8 +11931,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 387,
-          "end_line": 435,
+          "start_line": 395,
+          "end_line": 443,
           "is_async": true,
           "is_generator": false
         },
@@ -11931,8 +11943,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 445,
-          "end_line": 447,
+          "start_line": 453,
+          "end_line": 455,
           "is_async": true,
           "is_generator": false
         },
@@ -11943,8 +11955,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 457,
-          "end_line": 459,
+          "start_line": 465,
+          "end_line": 467,
           "is_async": true,
           "is_generator": false
         },
@@ -11955,8 +11967,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 500,
-          "end_line": 503,
+          "start_line": 508,
+          "end_line": 519,
           "is_async": false,
           "is_generator": false
         },
@@ -11967,8 +11979,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 514,
-          "end_line": 675,
+          "start_line": 530,
+          "end_line": 696,
           "is_async": true,
           "is_generator": false
         },
@@ -11979,8 +11991,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 685,
-          "end_line": 691,
+          "start_line": 706,
+          "end_line": 712,
           "is_async": true,
           "is_generator": false
         },
@@ -11991,8 +12003,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 710,
-          "end_line": 743,
+          "start_line": 731,
+          "end_line": 764,
           "is_async": false,
           "is_generator": false
         }
@@ -12000,13 +12012,25 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769876053633
+      "parsedAt": 1769890090848
     },
     "lib/BeadsParentChildService.js": {
       "path": "lib/BeadsParentChildService.js",
-      "contentHash": "c767dcacb219331059f103e3c083c969",
-      "mtime": 1769876123592.4797,
+      "contentHash": "cb710e727eace7006389d919d9d6529c",
+      "mtime": 1769890754989.3755,
       "functions": [
+        {
+          "name": "isValidProjectPath",
+          "signature": "function isValidProjectPath(projectPath)",
+          "parameters": "(projectPath)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 18,
+          "end_line": 28,
+          "is_async": false,
+          "is_generator": false
+        },
         {
           "name": "ms",
           "signature": "const delay = () =>",
@@ -12014,8 +12038,8 @@
           "return_type": null,
           "docstring": "/**\n * Delay execution for throttling\n * @param {number} ms - Milliseconds to delay\n * @returns {Promise<void>}\n */",
           "decorators": [],
-          "start_line": 21,
-          "end_line": 21,
+          "start_line": 35,
+          "end_line": 35,
           "is_async": false,
           "is_generator": false
         },
@@ -12026,8 +12050,8 @@
           "return_type": null,
           "docstring": "/**\n * Get throttle delay from config\n * @param {Object} config - Configuration object\n * @returns {number} Delay in milliseconds\n */",
           "decorators": [],
-          "start_line": 28,
-          "end_line": 28,
+          "start_line": 42,
+          "end_line": 42,
           "is_async": false,
           "is_generator": false
         },
@@ -12038,8 +12062,8 @@
           "return_type": null,
           "docstring": "/**\n * Add a parent-child dependency between two Beads issues\n *\n * @param {string} projectPath - Path to the project\n * @param {string} childId - Child issue ID (the sub-issue)\n * @param {string} parentId - Parent issue ID\n * @param {Object} config - Configuration object\n * @returns {Promise<boolean>} True if dependency added successfully\n */",
           "decorators": [],
-          "start_line": 61,
-          "end_line": 86,
+          "start_line": 75,
+          "end_line": 105,
           "is_async": true,
           "is_generator": false
         },
@@ -12050,8 +12074,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 97,
-          "end_line": 112,
+          "start_line": 116,
+          "end_line": 136,
           "is_async": true,
           "is_generator": false
         },
@@ -12062,8 +12086,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 121,
-          "end_line": 130,
+          "start_line": 145,
+          "end_line": 159,
           "is_async": true,
           "is_generator": false
         },
@@ -12074,8 +12098,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 139,
-          "end_line": 147,
+          "start_line": 168,
+          "end_line": 180,
           "is_async": true,
           "is_generator": false
         },
@@ -12086,8 +12110,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 156,
-          "end_line": 167,
+          "start_line": 189,
+          "end_line": 205,
           "is_async": true,
           "is_generator": false
         },
@@ -12098,8 +12122,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 179,
-          "end_line": 204,
+          "start_line": 217,
+          "end_line": 247,
           "is_async": true,
           "is_generator": false
         },
@@ -12110,8 +12134,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 213,
-          "end_line": 243,
+          "start_line": 256,
+          "end_line": 291,
           "is_async": true,
           "is_generator": false
         },
@@ -12122,8 +12146,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 252,
-          "end_line": 272,
+          "start_line": 300,
+          "end_line": 325,
           "is_async": true,
           "is_generator": false
         },
@@ -12134,8 +12158,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 280,
-          "end_line": 292,
+          "start_line": 333,
+          "end_line": 350,
           "is_async": true,
           "is_generator": false
         },
@@ -12146,8 +12170,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 307,
-          "end_line": 391,
+          "start_line": 365,
+          "end_line": 454,
           "is_async": true,
           "is_generator": false
         },
@@ -12158,44 +12182,44 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 403,
-          "end_line": 468,
+          "start_line": 466,
+          "end_line": 531,
           "is_async": true,
           "is_generator": false
         },
         {
           "name": "ulyClient,\n  projectP",
-          "signature": "async function ulyClient,\n  projectPath,\n  childBeadsIssue,\n  parentBeadsIssue,\n  db,\n  config = {}\n) {\n  if (!childBeadsIssue ",
-          "parameters": "ath,\n  childBeadsIssue,\n  parentBeadsIssue,\n  db,\n  config = {}\n) {\n  if (!childBeadsIssue ",
+          "signature": "async function ulyClient,\n  projectPath,\n  childBeadsIssue,\n  parentBeadsIssue,\n  db,\n  config = {}\n) {\n  if (!isValidProjectPa",
+          "parameters": "ath,\n  childBeadsIssue,\n  parentBeadsIssue,\n  db,\n  config = {}\n) {\n  if (!isValidProjectPa",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 482,
-          "end_line": 540,
+          "start_line": 545,
+          "end_line": 608,
           "is_async": true,
           "is_generator": false
         },
         {
           "name": "  projectPath,\n  beadsIs",
-          "signature": "async function   projectPath,\n  beadsIssues,\n  db,\n  config = {}\n) {\n  let syncedCount = 0;\n  const opDela",
-          "parameters": "sues,\n  db,\n  config = {}\n) {\n  let syncedCount = 0;\n  const opDela",
+          "signature": "async function   projectPath,\n  beadsIssues,\n  db,\n  config = {}\n) {\n  if (!isValidProjectPath(projectPath",
+          "parameters": "sues,\n  db,\n  config = {}\n) {\n  if (!isValidProjectPath(projectPath",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 552,
-          "end_line": 604,
+          "start_line": 620,
+          "end_line": 677,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "beadsIssues) {\n  const relatio",
-          "signature": "async function beadsIssues) {\n  const relationships = [];\n\n  for (const",
-          "parameters": "nships = [];\n\n  for (const",
+          "name": "beadsIssues) {\n  if (!isValidP",
+          "signature": "async function beadsIssues) {\n  if (!isValidProjectPath(projectPath)) {",
+          "parameters": "rojectPath(projectPath)) {",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 617,
-          "end_line": 645,
+          "start_line": 690,
+          "end_line": 723,
           "is_async": true,
           "is_generator": false
         },
@@ -12206,44 +12230,44 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 654,
-          "end_line": 697,
+          "start_line": 732,
+          "end_line": 775,
           "is_async": false,
           "is_generator": false
         },
         {
           "name": "nships, db, config = {}",
-          "signature": "async function nships, db, config = {}) {\n  const result = {\n    synced: 0,\n    ski",
-          "parameters": ") {\n  const result = {\n    synced: 0,\n    ski",
+          "signature": "async function nships, db, config = {}) {\n  if (!isValidProjectPath(projectPath)) {",
+          "parameters": ") {\n  if (!isValidProjectPath(projectPath)) {",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 708,
-          "end_line": 733,
+          "start_line": 786,
+          "end_line": 816,
           "is_async": true,
           "is_generator": false
         },
         {
           "name": "nships, config = {}) {\n",
-          "signature": "async function nships, config = {}) {\n  const result = {\n    synced: 0,\n    ski",
-          "parameters": "  const result = {\n    synced: 0,\n    ski",
+          "signature": "async function nships, config = {}) {\n  if (!isValidProjectPath(projectPath)) {",
+          "parameters": "  if (!isValidProjectPath(projectPath)) {",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 743,
-          "end_line": 768,
+          "start_line": 826,
+          "end_line": 856,
           "is_async": true,
           "is_generator": false
         },
         {
           "name": "Issues, db, config = {}) {",
-          "signature": "async function Issues, db, config = {}) {\n  const result = {\n    synced: 0,\n    ski",
-          "parameters": "\n  const result = {\n    synced: 0,\n    ski",
+          "signature": "async function Issues, db, config = {}) {\n  if (!isValidProjectPath(projectPath)) {",
+          "parameters": "\n  if (!isValidProjectPath(projectPath)) {",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 779,
-          "end_line": 823,
+          "start_line": 867,
+          "end_line": 916,
           "is_async": true,
           "is_generator": false
         }
@@ -12251,12 +12275,12 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769876127282
+      "parsedAt": 1769890758674
     },
     "lib/BeadsSyncService.js": {
       "path": "lib/BeadsSyncService.js",
-      "contentHash": "b63f76f4ff381057ec46ff087654c36a",
-      "mtime": 1769876199638.2783,
+      "contentHash": "0ad4359cec6fcd04a43b88ac20f89ba4",
+      "mtime": 1769890238768.932,
       "functions": [
         {
           "name": "ireProjectMutex(pro",
@@ -12271,14 +12295,26 @@
           "is_generator": false
         },
         {
+          "name": "lidProjectPath(pro",
+          "signature": "function lidProjectPath(projectPath) {\n ",
+          "parameters": "jectPath) {\n ",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 78,
+          "end_line": 88,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
           "name": "> ",
           "signature": "const y = m = () =>",
           "parameters": "()",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 81,
-          "end_line": 81,
+          "start_line": 95,
+          "end_line": 95,
           "is_async": false,
           "is_generator": false
         },
@@ -12289,8 +12325,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 88,
-          "end_line": 88,
+          "start_line": 102,
+          "end_line": 102,
           "is_async": false,
           "is_generator": false
         },
@@ -12301,8 +12337,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 89,
-          "end_line": 89,
+          "start_line": 103,
+          "end_line": 103,
           "is_async": false,
           "is_generator": false
         },
@@ -12313,8 +12349,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 116,
-          "end_line": 128,
+          "start_line": 130,
+          "end_line": 142,
           "is_async": false,
           "is_generator": false
         },
@@ -12325,8 +12361,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 138,
-          "end_line": 156,
+          "start_line": 152,
+          "end_line": 170,
           "is_async": false,
           "is_generator": false
         },
@@ -12337,32 +12373,32 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 168,
-          "end_line": 504,
+          "start_line": 182,
+          "end_line": 523,
           "is_async": true,
           "is_generator": false
         },
         {
           "name": ",\n  projectPath,\n  b",
-          "signature": "async function ,\n  projectPath,\n  beadsIssue,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config = {},\n  phase3UpdatedIssues = new Set(),\n  vibeContext = null\n) {\n  const { updateHulyIssueStatus",
-          "parameters": "eadsIssue,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config = {},\n  phase3UpdatedIssues = new Set(),\n  vibeContext = null\n) {\n  const { updateHulyIssueStatus",
+          "signature": "async function ,\n  projectPath,\n  beadsIssue,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config = {},\n  phase3UpdatedIssues = new Set(),\n  vibeContext = null\n) {\n  if (!isValidProjectPath(proje",
+          "parameters": "eadsIssue,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config = {},\n  phase3UpdatedIssues = new Set(),\n  vibeContext = null\n) {\n  if (!isValidProjectPath(proje",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 522,
-          "end_line": 833,
+          "start_line": 541,
+          "end_line": 857,
           "is_async": true,
           "is_generator": false
         },
         {
-          "name": "', push = true",
-          "signature": "async function ', push = true } = options;\n\n  try {\n    ",
-          "parameters": " } = options;\n\n  try {\n    ",
+          "name": ") {\n    consol",
+          "signature": "async function ) {\n    console.log(`[Beads] Invalid proj",
+          "parameters": "e.log(`[Beads] Invalid proj",
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 845,
-          "end_line": 950,
+          "start_line": 869,
+          "end_line": 979,
           "is_async": true,
           "is_generator": false
         },
@@ -12373,8 +12409,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 966,
-          "end_line": 1001,
+          "start_line": 995,
+          "end_line": 1030,
           "is_async": true,
           "is_generator": false
         },
@@ -12385,8 +12421,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 1016,
-          "end_line": 1102,
+          "start_line": 1045,
+          "end_line": 1131,
           "is_async": true,
           "is_generator": false
         },
@@ -12397,8 +12433,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 1121,
-          "end_line": 1166,
+          "start_line": 1150,
+          "end_line": 1195,
           "is_async": true,
           "is_generator": false
         }
@@ -12406,22 +12442,22 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769876203347
+      "parsedAt": 1769890244135
     },
     "tests/unit/BeadsParentChildService.test.js": {
       "path": "tests/unit/BeadsParentChildService.test.js",
-      "contentHash": "14abed83c2d88bd6e6b6c89ec7feca16",
-      "mtime": 1769876730186.8271,
+      "contentHash": "00c3a3febe943783a47a4bb5767e8d81",
+      "mtime": 1770002442268.6587,
       "functions": [],
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769876734140
+      "parsedAt": 1770002448126
     },
     "lib/database.js": {
       "path": "lib/database.js",
-      "contentHash": "9fd3bc1300d33a7ac1a5e9d2bf0ed74b",
-      "mtime": 1769885312022.893,
+      "contentHash": "be0dee6c8d89ed451898ebbe9232be33",
+      "mtime": 1770088761282.2974,
       "functions": [
         {
           "name": "ateFromJSON(db,",
@@ -12430,8 +12466,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 1402,
-          "end_line": 1430,
+          "start_line": 868,
+          "end_line": 896,
           "is_async": false,
           "is_generator": false
         },
@@ -12442,8 +12478,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 1435,
-          "end_line": 1439,
+          "start_line": 901,
+          "end_line": 905,
           "is_async": false,
           "is_generator": false
         }
@@ -12451,7 +12487,7 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769885315917
+      "parsedAt": 1770088765150
     },
     "temporal/activities/reconciliation.ts": {
       "path": "temporal/activities/reconciliation.ts",
@@ -13145,8 +13181,8 @@
     },
     "index.js": {
       "path": "index.js",
-      "contentHash": "e1865e3c818d025d83b2de93152a14be",
-      "mtime": 1769878801460.2678,
+      "contentHash": "16b1071747d7c525535d6589f77ad167",
+      "mtime": 1769889166675.1372,
       "functions": [
         {
           "name": "tTemporalOrchestration()",
@@ -13155,8 +13191,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 58,
-          "end_line": 99,
+          "start_line": 57,
+          "end_line": 98,
           "is_async": true,
           "is_generator": false
         },
@@ -13167,8 +13203,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 442,
-          "end_line": 492,
+          "start_line": 441,
+          "end_line": 491,
           "is_async": false,
           "is_generator": false
         },
@@ -13179,8 +13215,8 @@
           "return_type": null,
           "docstring": null,
           "decorators": [],
-          "start_line": 497,
-          "end_line": 1172,
+          "start_line": 496,
+          "end_line": 1160,
           "is_async": true,
           "is_generator": false
         }
@@ -13188,12 +13224,12 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769878805044
+      "parsedAt": 1769889170378
     },
     "lib/ApiServer.js": {
       "path": "lib/ApiServer.js",
-      "contentHash": "5d6b783ec5920f2b0b110ccb166e3fba",
-      "mtime": 1769878675337.2825,
+      "contentHash": "a6ae209121f9de53343ae18f164bf7f0",
+      "mtime": 1770088837476.1443,
       "functions": [
         {
           "name": "parseJsonBody",
@@ -13202,8 +13238,8 @@
           "return_type": null,
           "docstring": "/**\n * Parse JSON body from request\n *\n * @param {http.IncomingMessage} req - HTTP request\n * @returns {Promise<Object>} Parsed JSON object\n */",
           "decorators": [],
-          "start_line": 25,
-          "end_line": 44,
+          "start_line": 35,
+          "end_line": 54,
           "is_async": false,
           "is_generator": false
         },
@@ -13214,8 +13250,8 @@
           "return_type": null,
           "docstring": "/**\n * Send JSON response\n *\n * @param {http.ServerResponse} res - HTTP response\n * @param {number} statusCode - HTTP status code\n * @param {Object} data - Data to send as JSON\n */",
           "decorators": [],
-          "start_line": 53,
-          "end_line": 61,
+          "start_line": 63,
+          "end_line": 71,
           "is_async": false,
           "is_generator": false
         },
@@ -13226,8 +13262,8 @@
           "return_type": null,
           "docstring": "/**\n * Send error response\n *\n * @param {http.ServerResponse} res - HTTP response\n * @param {number} statusCode - HTTP status code\n * @param {string} message - Error message\n * @param {Object} [details] - Additional error details\n */",
           "decorators": [],
-          "start_line": 71,
-          "end_line": 83,
+          "start_line": 81,
+          "end_line": 93,
           "is_async": false,
           "is_generator": false
         },
@@ -13238,32 +13274,32 @@
           "return_type": null,
           "docstring": "/**\n * Create comprehensive API server with all endpoints\n *\n * @param {Object} params - Server parameters\n * @param {Object} params.config - Application configuration\n * @param {Object} params.healthStats - Health statistics object\n * @param {Object} params.db - Database instance for accessing project/issue data\n * @param {Function} params.onSyncTrigger - Callback to trigger manual sync\n * @param {Function} params.onConfigUpdate - Callback when config is updated\n * @param {Object} [params.lettaCodeService] - Optional LettaCodeService instance for filesystem mode\n * @param {Object} [params.webhookHandler] - Optional HulyWebhookHandler instance for change watcher integration\n * @param {Function} [params.getTemporalClient] - Optional function to get Temporal orchestration client\n * @param {Object} [params.codePerceptionWatcher] - Optional CodePerceptionWatcher instance\n * @returns {http.Server} HTTP server instance\n */",
           "decorators": [],
-          "start_line": 538,
-          "end_line": 1744,
+          "start_line": 548,
+          "end_line": 672,
           "is_async": false,
           "is_generator": false
         },
         {
-          "name": "oadcastSyncEvent(e",
-          "signature": "function oadcastSyncEvent(eventType, data) {",
-          "parameters": "ventType, data) {",
+          "name": "broadcastSyncEvent",
+          "signature": "function broadcastSyncEvent(eventType, data)",
+          "parameters": "(eventType, data)",
           "return_type": null,
-          "docstring": null,
+          "docstring": "/**\n * Helper function to broadcast sync events from external code\n * (e.g., from SyncOrchestrator)\n *\n * @param {string} eventType - Event type\n * @param {Object} data - Event data\n */",
           "decorators": [],
-          "start_line": 1753,
-          "end_line": 1763,
+          "start_line": 681,
+          "end_line": 691,
           "is_async": false,
           "is_generator": false
         },
         {
-          "name": "cordIssueMapping(h",
-          "signature": "function cordIssueMapping(hulyIdentifier, vibeTaskId, metadata = {}) {",
-          "parameters": "ulyIdentifier, vibeTaskId, metadata = {}) {",
+          "name": "recordIssueMapping",
+          "signature": "function recordIssueMapping(hulyIdentifier, vibeTaskId, metadata = {})",
+          "parameters": "(hulyIdentifier, vibeTaskId, metadata = {})",
           "return_type": null,
-          "docstring": null,
+          "docstring": "/**\n * Helper function to record issue mapping\n *\n * @param {string} hulyIdentifier - Huly issue identifier\n * @param {string} vibeTaskId - Vibe task ID\n * @param {Object} metadata - Additional metadata\n */",
           "decorators": [],
-          "start_line": 1772,
-          "end_line": 1774,
+          "start_line": 700,
+          "end_line": 702,
           "is_async": false,
           "is_generator": false
         }
@@ -13271,7 +13307,7 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769878678855
+      "parsedAt": 1770088841269
     },
     "lib/config.js": {
       "path": "lib/config.js",
@@ -13469,6 +13505,1220 @@
       "classes": [],
       "exports": [],
       "parsedAt": 1769878845998
+    },
+    "lib/database/utils.js": {
+      "path": "lib/database/utils.js",
+      "contentHash": "ce3a6a8fd4872cf18536ebaf8bcb58e7",
+      "mtime": 1769887120697.7761,
+      "functions": [
+        {
+          "name": "computeDescriptionHash",
+          "signature": "function computeDescriptionHash(description)",
+          "parameters": "(description)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 3,
+          "end_line": 6,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "computeIssueContentHash",
+          "signature": "function computeIssueContentHash(issue)",
+          "parameters": "(issue)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 8,
+          "end_line": 19,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "hasIssueContentChanged",
+          "signature": "function hasIssueContentChanged(newIssue, storedHash)",
+          "parameters": "(newIssue, storedHash)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 21,
+          "end_line": 25,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887124249
+    },
+    "lib/database/repositories/MetadataRepository.js": {
+      "path": "lib/database/repositories/MetadataRepository.js",
+      "contentHash": "026bc9e5debee30e028f52f02bcafeed",
+      "mtime": 1769887142886.3013,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887146640
+    },
+    "lib/database/repositories/IssueRepository.js": {
+      "path": "lib/database/repositories/IssueRepository.js",
+      "contentHash": "884b711a3d8cec0b2fae6bf8f8cd3b46",
+      "mtime": 1769887248824.8086,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887252924
+    },
+    "lib/database/repositories/ProjectRepository.js": {
+      "path": "lib/database/repositories/ProjectRepository.js",
+      "contentHash": "dc2434f8400623e03e4e19c771c072a3",
+      "mtime": 1770088746981.951,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770088750833
+    },
+    "lib/database/repositories/BookStackRepository.js": {
+      "path": "lib/database/repositories/BookStackRepository.js",
+      "contentHash": "2722e82dc6bc65b89f155bec7d33cdb7",
+      "mtime": 1769887346067.1104,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887349907
+    },
+    "lib/database/repositories/ProjectFilesRepository.js": {
+      "path": "lib/database/repositories/ProjectFilesRepository.js",
+      "contentHash": "20b7382d59a1e55f3eed115256b6077f",
+      "mtime": 1769887373447.7583,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887377247
+    },
+    "lib/database/repositories/SyncHistoryRepository.js": {
+      "path": "lib/database/repositories/SyncHistoryRepository.js",
+      "contentHash": "677efee44c22360d08c79874b0f8de33",
+      "mtime": 1769887399316.3706,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769887402739
+    },
+    "lib/SyncOrchestrator.js": {
+      "path": "lib/SyncOrchestrator.js",
+      "contentHash": "150d9faf615448c52126ae3e0bcba84d",
+      "mtime": 1770065601647.2556,
+      "functions": [
+        {
+          "name": "LegacyUsage() {",
+          "signature": "function LegacyUsage() {\n ",
+          "parameters": "\n ",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 66,
+          "end_line": 70,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "emporalClient() {",
+          "signature": "async function emporalClient() {\n ",
+          "parameters": "\n ",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 75,
+          "end_line": 93,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "emporalLettaClient() {",
+          "signature": "async function emporalLettaClient() {\n ",
+          "parameters": "\n ",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 98,
+          "end_line": 118,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "reAgentWithFallback(let",
+          "signature": "async function reAgentWithFallback(lettaService, projectIdentifier, projectName) {\n ",
+          "parameters": "taService, projectIdentifier, projectName) {\n ",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 131,
+          "end_line": 163,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "sueToVibeWithFallback(\n  vi",
+          "signature": "async function sueToVibeWithFallback(\n  vibeClient,\n  vibeProjectId,\n  hulyIssue,\n  config,\n  existingTaskId = null,\n  context = {}\n) {\n  c",
+          "parameters": "beClient,\n  vibeProjectId,\n  hulyIssue,\n  config,\n  existingTaskId = null,\n  context = {}\n) {\n  c",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 173,
+          "end_line": 221,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "beTaskToHuly(\n  hu",
+          "signature": "async function beTaskToHuly(\n  hulyClient,\n  vibeTask,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config,\n  phase1UpdatedTasks = new Set(),\n  log\n) {\n  /",
+          "parameters": "lyClient,\n  vibeTask,\n  hulyIssues,\n  projectIdentifier,\n  db,\n  config,\n  phase1UpdatedTasks = new Set(),\n  log\n) {\n  /",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 235,
+          "end_line": 329,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "be(\n  hulyClie",
+          "signature": "async function be(\n  hulyClient,\n  vibeClient,\n  db,\n  config,\n  lettaService = null,\n  projectId = null,\n  bookstackService = null\n) {\n  warnLeg",
+          "parameters": "nt,\n  vibeClient,\n  db,\n  config,\n  lettaService = null,\n  projectId = null,\n  bookstackService = null\n) {\n  warnLeg",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 340,
+          "end_line": 1368,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": " lettaService = null, ",
+          "signature": "function  lettaService = null, bookstackService = null) {\n  warnLegacyUsage();\n  return {",
+          "parameters": "bookstackService = null) {\n  warnLegacyUsage();\n  return {",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1379,
+          "end_line": 1385,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770065605326
+    },
+    "lib/api/routes/healthRoutes.js": {
+      "path": "lib/api/routes/healthRoutes.js",
+      "contentHash": "f5412e1bd6da54d73ce7ef06e85b57c5",
+      "mtime": 1769892306642.2747,
+      "functions": [
+        {
+          "name": "handleHealthRoutes",
+          "signature": "async function handleHealthRoutes({\n  pathname,\n  method,\n  res,\n  config,\n  healthStats,\n  db,\n  sseManager,\n  syncHistory,\n  getHealthMetrics,\n  getMetricsRegistry,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "parameters": "({\n  pathname,\n  method,\n  res,\n  config,\n  healthStats,\n  db,\n  sseManager,\n  syncHistory,\n  getHealthMetrics,\n  getMetricsRegistry,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 63,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892310243
+    },
+    "lib/api/routes/projectRoutes.js": {
+      "path": "lib/api/routes/projectRoutes.js",
+      "contentHash": "72fef8aaa831f00c0dbaf4ef70cc0941",
+      "mtime": 1769892346955.2356,
+      "functions": [
+        {
+          "name": "handleProjectRoutes",
+          "signature": "async function handleProjectRoutes({\n  pathname,\n  method,\n  req,\n  res,\n  db,\n  codePerceptionWatcher,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "parameters": "({\n  pathname,\n  method,\n  req,\n  res,\n  db,\n  codePerceptionWatcher,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 110,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892350778
+    },
+    "lib/api/routes/configRoutes.js": {
+      "path": "lib/api/routes/configRoutes.js",
+      "contentHash": "1d0471a671097f3b690c58f26405ef77",
+      "mtime": 1769892371947.8313,
+      "functions": [
+        {
+          "name": "handleConfigRoutes",
+          "signature": "async function handleConfigRoutes({ pathname, method, req, res, configHandler })",
+          "parameters": "({ pathname, method, req, res, configHandler })",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 21,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892375415
+    },
+    "lib/api/routes/syncRoutes.js": {
+      "path": "lib/api/routes/syncRoutes.js",
+      "contentHash": "7fa9cf697c75d0222bc87b4c49f1a062",
+      "mtime": 1769892435969.3574,
+      "functions": [
+        {
+          "name": "handleSyncRoutes",
+          "signature": "async function handleSyncRoutes({\n  pathname,\n  method,\n  req,\n  res,\n  url,\n  db,\n  onSyncTrigger,\n  syncHistory,\n  sseManager,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "parameters": "({\n  pathname,\n  method,\n  req,\n  res,\n  url,\n  db,\n  onSyncTrigger,\n  syncHistory,\n  sseManager,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 129,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892440595
+    },
+    "lib/api/routes/beadsRoutes.js": {
+      "path": "lib/api/routes/beadsRoutes.js",
+      "contentHash": "dda87ca3990ce256174743dcff2b7dd3",
+      "mtime": 1769892476498.3235,
+      "functions": [
+        {
+          "name": "handleBeadsRoutes",
+          "signature": "async function handleBeadsRoutes({\n  pathname,\n  method,\n  req,\n  res,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "parameters": "({\n  pathname,\n  method,\n  req,\n  res,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 42,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892480143
+    },
+    "lib/api/routes/eventsRoutes.js": {
+      "path": "lib/api/routes/eventsRoutes.js",
+      "contentHash": "ef4828d801c4794a61afb3424e4f2a6d",
+      "mtime": 1769892500362.8926,
+      "functions": [
+        {
+          "name": "handleEventsRoutes",
+          "signature": "async function handleEventsRoutes({ pathname, method, res, sseManager })",
+          "parameters": "({ pathname, method, res, sseManager })",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 9,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892503928
+    },
+    "lib/api/routes/filesRoutes.js": {
+      "path": "lib/api/routes/filesRoutes.js",
+      "contentHash": "49e0365d115a8974e72da8d5ac12065a",
+      "mtime": 1769892555328.2026,
+      "functions": [
+        {
+          "name": "handleFilesRoutes",
+          "signature": "async function handleFilesRoutes({\n  pathname,\n  method,\n  req,\n  res,\n  config,\n  lettaCodeService,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "parameters": "({\n  pathname,\n  method,\n  req,\n  res,\n  config,\n  lettaCodeService,\n  parseJsonBody,\n  sendJson,\n  sendError,\n  logger,\n})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 4,
+          "end_line": 207,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892558834
+    },
+    "lib/api/routes/health.js": {
+      "path": "lib/api/routes/health.js",
+      "contentHash": "b880e57a2bc1156b025948cb343e4a75",
+      "mtime": 1769892921772.9868,
+      "functions": [
+        {
+          "name": "registerHealthRoutes",
+          "signature": "function registerHealthRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 62,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892925615
+    },
+    "lib/api/routes/config.js": {
+      "path": "lib/api/routes/config.js",
+      "contentHash": "4e2e99f5171dd2221f6d0d36c9055699",
+      "mtime": 1769892950313.6724,
+      "functions": [
+        {
+          "name": "registerConfigRoutes",
+          "signature": "function registerConfigRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 24,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892954172
+    },
+    "lib/api/routes/projects.js": {
+      "path": "lib/api/routes/projects.js",
+      "contentHash": "603207b3cb8a7fde2963147ec89c04ce",
+      "mtime": 1769892988506.5898,
+      "functions": [
+        {
+          "name": "registerProjectRoutes",
+          "signature": "function registerProjectRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 103,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769892992148
+    },
+    "lib/api/routes/sync.js": {
+      "path": "lib/api/routes/sync.js",
+      "contentHash": "3c888bbccc261dd9f243eebd225b8e94",
+      "mtime": 1769893029559.576,
+      "functions": [
+        {
+          "name": "registerSyncRoutes",
+          "signature": "function registerSyncRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 121,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893033061
+    },
+    "lib/api/routes/beads.js": {
+      "path": "lib/api/routes/beads.js",
+      "contentHash": "31f1efd23e97868036ea6d39f742f605",
+      "mtime": 1769893058688.2756,
+      "functions": [
+        {
+          "name": "registerBeadsRoutes",
+          "signature": "function registerBeadsRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 34,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893062171
+    },
+    "lib/api/routes/events.js": {
+      "path": "lib/api/routes/events.js",
+      "contentHash": "71936a4701931d7da48ab526eae010f7",
+      "mtime": 1769893082936.8582,
+      "functions": [
+        {
+          "name": "registerEventsRoutes",
+          "signature": "function registerEventsRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 10,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893087307
+    },
+    "lib/api/routes/files.js": {
+      "path": "lib/api/routes/files.js",
+      "contentHash": "3fe8f01b3cbfd62aeebc63733a36555c",
+      "mtime": 1769893140166.233,
+      "functions": [
+        {
+          "name": "registerFilesRoutes",
+          "signature": "function registerFilesRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 4,
+          "end_line": 199,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893143906
+    },
+    "lib/api/routes/lettaCode.js": {
+      "path": "lib/api/routes/lettaCode.js",
+      "contentHash": "8f2e3097314cfb1d57c835b8cb11c195",
+      "mtime": 1769893197295.6052,
+      "functions": [
+        {
+          "name": "registerLettaCodeRoutes",
+          "signature": "function registerLettaCodeRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 210,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893205290
+    },
+    "lib/api/routes/docs.js": {
+      "path": "lib/api/routes/docs.js",
+      "contentHash": "d5ea6a40792ce65eccfd2e09f33bf0dd",
+      "mtime": 1769893235676.527,
+      "functions": [
+        {
+          "name": "registerDocsRoutes",
+          "signature": "function registerDocsRoutes(app)",
+          "parameters": "(app)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 79,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893239243
+    },
+    "lib/api/routes/webhooks.js": {
+      "path": "lib/api/routes/webhooks.js",
+      "contentHash": "708c74369ba60b270e50df8b9d69c294",
+      "mtime": 1769893272621.4146,
+      "functions": [
+        {
+          "name": "registerWebhooksRoutes",
+          "signature": "function registerWebhooksRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 68,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769893276346
+    },
+    "lib/api/routes/temporal.js": {
+      "path": "lib/api/routes/temporal.js",
+      "contentHash": "7f6ebafd434c816d6b5b22e9d989068b",
+      "mtime": 1769971572914.6628,
+      "functions": [
+        {
+          "name": "registerTemporalRoutes",
+          "signature": "function registerTemporalRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 255,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769971576836
+    },
+    "lib/textParsers.js": {
+      "path": "lib/textParsers.js",
+      "contentHash": "7cf8ee2635f793cbccbc860f9faa0c93",
+      "mtime": 1770065576158.6484,
+      "functions": [
+        {
+          "name": "seProjectsFromText(te",
+          "signature": "function seProjectsFromText(text) {\n",
+          "parameters": "xt) {\n",
+          "return_type": null,
+          "docstring": "/**\n * Parse projects from structured text output\n *\n * Expected format:\n * 📁 Project Name (CODE)\n * Description: Project description\n * Issues: 10 open\n * Status: active\n *\n * @param {string} text - The text to parse\n * @returns {Array} Array of project objects\n */\nex",
+          "decorators": [],
+          "start_line": 22,
+          "end_line": 87,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "Text(text, projectI",
+          "signature": "function Text(text, projectId = null) {\n  const issu",
+          "parameters": "d = null) {\n  const issu",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 102,
+          "end_line": 164,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "scription) {\n  if (!d",
+          "signature": "function scription) {\n  if (!description) {",
+          "parameters": "escription) {",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 172,
+          "end_line": 190,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "mDescription(description) {\n  if (!d",
+          "signature": "function mDescription(description) {\n  if (!description) {",
+          "parameters": "escription) {",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 198,
+          "end_line": 220,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "  if (!text) {\n",
+          "signature": "function   if (!text) {\n    re",
+          "parameters": "    re",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 228,
+          "end_line": 240,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "etailText) {\n  const l",
+          "signature": "function etailText) {\n  const lines = detai",
+          "parameters": "ines = detai",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 254,
+          "end_line": 285,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "scription) {\n  if (!d",
+          "signature": "function scription) {\n  if (!description) {",
+          "parameters": "escription) {",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 300,
+          "end_line": 321,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "const fs ",
+          "signature": "function const fs = require(",
+          "parameters": "= require(",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 340,
+          "end_line": 359,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "Path) {\n  if (!repo",
+          "signature": "function Path) {\n  if (!repoPath || ty",
+          "parameters": "Path || ty",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 365,
+          "end_line": 393,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "yProject) {\n  // Pri",
+          "signature": "function yProject) {\n  // Priority 1: Extr",
+          "parameters": "ority 1: Extr",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 409,
+          "end_line": 421,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "Path, { timeo",
+          "signature": "async function Path, { timeoutMs = 3000 } = {}) {\n  if (!filesystemPath",
+          "parameters": "utMs = 3000 } = {}) {\n  if (!filesystemPath",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 433,
+          "end_line": 452,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "if (!rawUrl",
+          "signature": "function if (!rawUrl) return",
+          "parameters": ") return",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 463,
+          "end_line": 478,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770065580074
+    },
+    "lib/VibeService.js": {
+      "path": "lib/VibeService.js",
+      "contentHash": "fe0674d3e979fcd6f3ec202c435d1fcd",
+      "mtime": 1769974278714.4954,
+      "functions": [
+        {
+          "name": "listVibeProjects",
+          "signature": "async function listVibeProjects(vibeClient)",
+          "parameters": "(vibeClient)",
+          "return_type": null,
+          "docstring": "/**\n * List all existing projects in Vibe Kanban\n *\n * @param {Object} vibeClient - Vibe REST API client\n * @returns {Promise<Array>} Array of Vibe projects\n */",
+          "decorators": [],
+          "start_line": 21,
+          "end_line": 39,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "normalizeProjectName",
+          "signature": "function normalizeProjectName(name)",
+          "parameters": "(name)",
+          "return_type": null,
+          "docstring": "/**\n * Normalize project name for comparison (case-insensitive, trimmed)\n * @param {string} name - Project name\n * @returns {string} Normalized name\n */",
+          "decorators": [],
+          "start_line": 46,
+          "end_line": 49,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "findVibeProjectByName",
+          "signature": "async function findVibeProjectByName(vibeClient, projectName)",
+          "parameters": "(vibeClient, projectName)",
+          "return_type": null,
+          "docstring": "/**\n * Find existing Vibe project by name (with deduplication)\n *\n * @param {Object} vibeClient - Vibe REST API client\n * @param {string} projectName - Project name to search for\n * @returns {Promise<Object|null>} Existing project or null\n */",
+          "decorators": [],
+          "start_line": 58,
+          "end_line": 68,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "createVibeProject",
+          "signature": "async function createVibeProject(vibeClient, hulyProject, config = {})",
+          "parameters": "(vibeClient, hulyProject, config = {})",
+          "return_type": null,
+          "docstring": "/**\n * Create a new project in Vibe Kanban (with deduplication check)\n *\n * @param {Object} vibeClient - Vibe REST API client\n * @param {Object} hulyProject - Huly project object\n * @param {Object} config - Configuration object\n * @returns {Promise<Object|null>} Created project or null\n */",
+          "decorators": [],
+          "start_line": 78,
+          "end_line": 134,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "sks(vibeClien",
+          "signature": "async function sks(vibeClient, projectId) {\n  const",
+          "parameters": "t, projectId) {\n  const",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 143,
+          "end_line": 158,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "askTitle(title) {\n",
+          "signature": "function askTitle(title) {\n  if (!",
+          "parameters": "  if (!",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 165,
+          "end_line": 177,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "yIdFromDescription(descripti",
+          "signature": "function yIdFromDescription(description) {\n  if (!",
+          "parameters": "on) {\n  if (!",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 184,
+          "end_line": 190,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "skByHulyIssue(vibeClien",
+          "signature": "async function skByHulyIssue(vibeClient, vibeProjectId, hulyIssue) {\n  try {",
+          "parameters": "t, vibeProjectId, hulyIssue) {\n  try {",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 200,
+          "end_line": 237,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "Task(vibeClien",
+          "signature": "async function Task(vibeClient, vibeProjectId, hulyIssue, config = {}) {\n  if (c",
+          "parameters": "t, vibeProjectId, hulyIssue, config = {}) {\n  if (c",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 248,
+          "end_line": 294,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "atus(vibeClient, tas",
+          "signature": "async function atus(vibeClient, taskId, status, config = {}) {\n  if (config.",
+          "parameters": "kId, status, config = {}) {\n  if (config.",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 305,
+          "end_line": 324,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "ription(vibeClient, taskI",
+          "signature": "async function ription(vibeClient, taskId, description, config = {}) {\n  if (config.sy",
+          "parameters": "d, description, config = {}) {\n  if (config.sy",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 335,
+          "end_line": 354,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "nfig) {\n  return ",
+          "signature": "function nfig) {\n  return {\n    li",
+          "parameters": "{\n    li",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 363,
+          "end_line": 378,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769974282515
+    },
+    "lib/LettaService.js": {
+      "path": "lib/LettaService.js",
+      "contentHash": "4c715bf06eeb713735ff3d01903fafad",
+      "mtime": 1769994029840.456,
+      "functions": [
+        {
+          "name": "word) {\n    throw ",
+          "signature": "function word) {\n    throw ne",
+          "parameters": "ne",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1700,
+          "end_line": 1712,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769994033871
+    },
+    "tests/unit/config.test.js": {
+      "path": "tests/unit/config.test.js",
+      "contentHash": "0d8a202997ca20c074e319a48da515ec",
+      "mtime": 1769997673403.6003,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769997679318
+    },
+    "tests/unit/BeadsSyncService.test.js": {
+      "path": "tests/unit/BeadsSyncService.test.js",
+      "contentHash": "c68245415b9fcef5b033ce247388f7d3",
+      "mtime": 1769997972162.723,
+      "functions": [
+        {
+          "name": "\n    upsertI",
+          "signature": "function \n    upsertIssue: vi.fn()",
+          "parameters": "ssue: vi.fn()",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 151,
+          "end_line": 160,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "tion: 'A test is",
+          "signature": "function tion: 'A test issue',\n    modifi",
+          "parameters": "sue',\n    modifi",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 162,
+          "end_line": 175,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "──────────────",
+          "signature": "function ────────────────────\n\ndescribe",
+          "parameters": "──────\n\ndescribe",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 177,
+          "end_line": 183,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769997979092
+    },
+    "tests/unit/BeadsService.test.js": {
+      "path": "tests/unit/BeadsService.test.js",
+      "contentHash": "5b597ad66fce3d9b87c9063001f9198a",
+      "mtime": 1770002217631.346,
+      "functions": [
+        {
+          "name": "createMockDb",
+          "signature": "const createMockDb = (issues = []) =>",
+          "parameters": "(issues = [])",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1489,
+          "end_line": 1493,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockHulyClient",
+          "signature": "const createMockHulyClient = () =>",
+          "parameters": "()",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1495,
+          "end_line": 1503,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockDb",
+          "signature": "const createMockDb = (issues = []) =>",
+          "parameters": "(issues = [])",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1601,
+          "end_line": 1606,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockHulyClient",
+          "signature": "const createMockHulyClient = () =>",
+          "parameters": "()",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1608,
+          "end_line": 1616,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockDb",
+          "signature": "const createMockDb = (issues = []) =>",
+          "parameters": "(issues = [])",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1710,
+          "end_line": 1715,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockHulyClient",
+          "signature": "const createMockHulyClient = () =>",
+          "parameters": "()",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1717,
+          "end_line": 1721,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockDb",
+          "signature": "const createMockDb = (issues = []) =>",
+          "parameters": "(issues = [])",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1953,
+          "end_line": 1958,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createHulyIssue",
+          "signature": "const createHulyIssue = (overrides = {}) =>",
+          "parameters": "(overrides = {})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1960,
+          "end_line": 1969,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockDb",
+          "signature": "const createMockDb = (issues = []) =>",
+          "parameters": "(issues = [])",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 2129,
+          "end_line": 2134,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createMockHulyClient",
+          "signature": "const createMockHulyClient = () =>",
+          "parameters": "()",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 2137,
+          "end_line": 2142,
+          "is_async": false,
+          "is_generator": false
+        },
+        {
+          "name": "createHulyIssue",
+          "signature": "const createHulyIssue = (overrides = {}) =>",
+          "parameters": "(overrides = {})",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 2144,
+          "end_line": 2153,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770002221801
+    },
+    "tests/integration/beadsSync.test.js": {
+      "path": "tests/integration/beadsSync.test.js",
+      "contentHash": "01b9da99fe769f86e799d3633bac07f6",
+      "mtime": 1770002656629.7283,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770002662365
+    },
+    "tests/unit/ASTParser.test.js": {
+      "path": "tests/unit/ASTParser.test.js",
+      "contentHash": "1c1c0a74e0918859b6acfa5f2f960a70",
+      "mtime": 1769999496418.9897,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1769999503471
+    },
+    "lib/api/routes/agents.js": {
+      "path": "lib/api/routes/agents.js",
+      "contentHash": "42e96d366b8a781973f4f68c085478e1",
+      "mtime": 1770088797975.1868,
+      "functions": [
+        {
+          "name": "registerAgentRoutes",
+          "signature": "function registerAgentRoutes(app, deps)",
+          "parameters": "(app, deps)",
+          "return_type": null,
+          "docstring": null,
+          "decorators": [],
+          "start_line": 1,
+          "end_line": 54,
+          "is_async": false,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770088803191
+    },
+    "tests/unit/agentRoutes.test.js": {
+      "path": "tests/unit/agentRoutes.test.js",
+      "contentHash": "6f11a875b9e275ac02a4e46285473efd",
+      "mtime": 1770088887801.3643,
+      "functions": [],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770088891240
     }
   }
 }

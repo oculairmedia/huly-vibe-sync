@@ -17,6 +17,8 @@ import {
   getGitUrl,
   determineGitRepoPath,
   validateGitRepoPath,
+  cleanGitUrl,
+  resolveGitUrl,
 } from '../../lib/textParsers.js';
 
 describe('textParsers', () => {
@@ -793,6 +795,62 @@ Description: Document all API endpoints
       const result = validateGitRepoPath('/opt/stacks/no-access');
       expect(result.valid).toBe(false);
       expect(result.reason).toContain('cannot stat');
+    });
+  });
+
+  describe('cleanGitUrl', () => {
+    it('should strip HTTPS PAT credentials', () => {
+      expect(cleanGitUrl('https://ghp_abc123@github.com/oculairmedia/repo.git')).toBe(
+        'https://github.com/oculairmedia/repo'
+      );
+    });
+
+    it('should strip github_pat credentials', () => {
+      expect(cleanGitUrl('https://github_pat_LONG_TOKEN@github.com/oculairmedia/repo.git')).toBe(
+        'https://github.com/oculairmedia/repo'
+      );
+    });
+
+    it('should convert SSH to HTTPS', () => {
+      expect(cleanGitUrl('git@github.com:oculairmedia/repo.git')).toBe(
+        'https://github.com/oculairmedia/repo'
+      );
+    });
+
+    it('should strip trailing .git from clean URLs', () => {
+      expect(cleanGitUrl('https://github.com/oculairmedia/repo.git')).toBe(
+        'https://github.com/oculairmedia/repo'
+      );
+    });
+
+    it('should pass through already-clean URLs', () => {
+      expect(cleanGitUrl('https://github.com/oculairmedia/repo')).toBe(
+        'https://github.com/oculairmedia/repo'
+      );
+    });
+
+    it('should return null for non-GitHub URLs', () => {
+      expect(cleanGitUrl('https://gitlab.com/user/repo')).toBeNull();
+    });
+
+    it('should return null for empty/null input', () => {
+      expect(cleanGitUrl(null)).toBeNull();
+      expect(cleanGitUrl('')).toBeNull();
+    });
+  });
+
+  describe('resolveGitUrl', () => {
+    it('should return null for non-existent path', async () => {
+      expect(await resolveGitUrl('/nonexistent/path')).toBeNull();
+    });
+
+    it('should return null for null input', async () => {
+      expect(await resolveGitUrl(null)).toBeNull();
+    });
+
+    it('should resolve a real git repo', async () => {
+      const url = await resolveGitUrl('/opt/stacks/huly-vibe-sync');
+      expect(url).toBe('https://github.com/oculairmedia/huly-vibe-sync');
     });
   });
 });
