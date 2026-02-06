@@ -62,9 +62,9 @@ services:
       # Node Environment
       - NODE_ENV=production
 
-      # Temporal Orchestration (uses FullOrchestrationWorkflow instead of SyncOrchestrator)
+      # Temporal Orchestration
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-localhost:7233}
-      - USE_TEMPORAL_ORCHESTRATION=${USE_TEMPORAL_ORCHESTRATION:-false}
+      - USE_TEMPORAL_ORCHESTRATION=${USE_TEMPORAL_ORCHESTRATION:-true}
       - USE_TEMPORAL_BEADS=${USE_TEMPORAL_BEADS:-false}
       - USE_TEMPORAL_VIBE=${USE_TEMPORAL_VIBE:-false}
       - USE_TEMPORAL_HULY_WEBHOOK=${USE_TEMPORAL_HULY_WEBHOOK:-false}

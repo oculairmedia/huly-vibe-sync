@@ -79,4 +79,33 @@ export declare function getProvisioningStatus(): Promise<{
     lastCheckpoint?: CheckpointData;
     completedProjects: string[];
 }>;
+export interface CheckAgentExistsInput {
+    projectIdentifier: string;
+}
+export interface CheckAgentExistsResult {
+    exists: boolean;
+    agentId?: string;
+    source?: 'database' | 'letta';
+}
+/**
+ * Check if a PM agent exists for a project
+ *
+ * First checks the sync database, then falls back to querying Letta API.
+ * This is idempotent and safe to call multiple times.
+ */
+export declare function checkAgentExists(input: CheckAgentExistsInput): Promise<CheckAgentExistsResult>;
+export interface UpdateProjectAgentInput {
+    projectIdentifier: string;
+    agentId: string;
+}
+export interface UpdateProjectAgentResult {
+    success: boolean;
+    error?: string;
+}
+/**
+ * Update the sync database with agent info after provisioning
+ *
+ * This is idempotent - calling multiple times with the same agent ID is safe.
+ */
+export declare function updateProjectAgent(input: UpdateProjectAgentInput): Promise<UpdateProjectAgentResult>;
 //# sourceMappingURL=agent-provisioning.d.ts.map

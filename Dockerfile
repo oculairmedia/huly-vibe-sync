@@ -1,40 +1,59 @@
-FROM node:20-alpine
+# =============================================================================
+# Stage 1: Build the `bd` (beads) Go binary
+# =============================================================================
+FROM golang:1.22-alpine AS go-builder
+
+RUN go install github.com/steveyegge/beads/cmd/bd@latest
+
+# =============================================================================
+# Stage 2: Install Node.js production dependencies (with native compilation)
+# =============================================================================
+FROM node:20-alpine AS node-builder
+
+# Native deps needed to compile better-sqlite3, etc.
+RUN apk add --no-cache make g++ python3
+
+WORKDIR /build
+COPY package*.json ./
+RUN npm ci --production
+
+# =============================================================================
+# Stage 3: Install Python tree-sitter dependencies
+# =============================================================================
+FROM node:20-alpine AS python-builder
+
+RUN apk add --no-cache python3 py3-pip
+
+COPY python/requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages --prefix=/python-deps -r /tmp/requirements.txt
+
+# =============================================================================
+# Stage 4: Runtime image
+# =============================================================================
+FROM node:20-alpine AS runtime
 
 LABEL maintainer="Oculair Media"
 LABEL description="Huly to Vibe Kanban bidirectional sync service with Letta Code support"
 
-# Install build dependencies for better-sqlite3 and other native modules
-# Also install bash for Letta Code shell operations, Go for beads, and pip for Tree-sitter
-RUN apk add --no-cache \
-    git \
-    curl \
-    bash \
-    python3 \
-    py3-pip \
-    make \
-    g++ \
-    go
+# Runtime-only system packages
+RUN apk add --no-cache git curl bash python3
 
 # Install Letta Code CLI globally
 RUN npm install -g @letta-ai/letta-code
 
-# Install beads CLI
-RUN go install github.com/steveyegge/beads/cmd/bd@latest && \
-    cp /root/go/bin/bd /usr/local/bin/bd && \
-    chmod +x /usr/local/bin/bd
+# Copy Go binary from builder
+COPY --from=go-builder /go/bin/bd /usr/local/bin/bd
 
-# Create app directory
+# Copy Python packages from builder
+COPY --from=python-builder /python-deps /usr
+
 WORKDIR /app
 
-# Copy and install Python dependencies for Tree-sitter AST parsing
-COPY python/requirements.txt ./python/
-RUN pip3 install --no-cache-dir --break-system-packages -r python/requirements.txt
+# Copy node_modules from builder
+COPY --from=node-builder /build/node_modules ./node_modules
 
-# Copy package files
+# Copy package files (needed at runtime for version info, etc.)
 COPY package*.json ./
-
-# Install Node.js dependencies
-RUN npm install --production
 
 # Copy application files
 COPY index.js ./

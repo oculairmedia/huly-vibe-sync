@@ -596,7 +596,7 @@ async function main() {
         );
       } else {
         throw new Error(
-          'Temporal orchestration is required (legacy SyncOrchestrator is deprecated)'
+          'Temporal orchestration is required — set USE_TEMPORAL_ORCHESTRATION=true'
         );
       }
 
