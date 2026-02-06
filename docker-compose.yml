@@ -139,6 +139,10 @@ services:
       - /opt/stacks:/opt/stacks:rw
       # Mount local compiled Temporal code
       - ./temporal/dist:/app/temporal/dist:ro
+      # Mount lib folder for database and other shared modules
+      - ./lib:/app/lib:ro
+      # Mount logs directory for database access
+      - ./logs:/app/logs:rw
     network_mode: host
     depends_on:
       - huly-vibe-sync

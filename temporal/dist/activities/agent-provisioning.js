@@ -14,14 +14,12 @@ exports.cleanupFailedProvision = cleanupFailedProvision;
 exports.getProvisioningStatus = getProvisioningStatus;
 const activity_1 = require("@temporalio/activity");
 const letta_client_1 = require("@letta-ai/letta-client");
+const lib_1 = require("../lib");
 // Configuration
 const LETTA_API_BASE = process.env.LETTA_API_URL || 'https://letta.oculair.ca';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
 const LETTA_MODEL = process.env.LETTA_MODEL || 'letta/letta-free';
 const LETTA_EMBEDDING = process.env.LETTA_EMBEDDING || 'letta/letta-free';
-// Huly configuration
-const HULY_API_URL = process.env.HULY_API_URL || 'https://pm.oculair.ca/api/v1';
-const HULY_PASSWORD = process.env.HULY_PASSWORD || '';
 // Initialize Letta client
 const lettaClient = new letta_client_1.LettaClient({
     baseUrl: LETTA_API_BASE,
@@ -39,17 +37,10 @@ const lettaClient = new letta_client_1.LettaClient({
 async function fetchAgentsToProvision(projectIdentifiers) {
     console.log('[Activity:FetchAgents] Fetching agents to provision...');
     try {
-        // Fetch Huly projects
-        const hulyResponse = await fetch(`${HULY_API_URL}/projects`, {
-            headers: {
-                Authorization: `Bearer ${HULY_PASSWORD}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        if (!hulyResponse.ok) {
-            throw activity_1.ApplicationFailure.retryable(`Failed to fetch Huly projects: HTTP ${hulyResponse.status}`, 'HulyApiError');
-        }
-        const hulyProjects = (await hulyResponse.json());
+        // Fetch Huly projects using the shared client (same as orchestration activities)
+        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
+        const hulyProjects = await hulyClient.listProjects();
+        console.log(`[Activity:FetchAgents] Found ${hulyProjects.length} Huly projects`);
         // Filter to specific projects if provided
         let projects = hulyProjects;
         if (projectIdentifiers && projectIdentifiers.length > 0) {
@@ -216,7 +207,9 @@ async function attachToolsToAgent(agentId) {
         const controlAgent = controlAgents[0];
         // Get control agent's tools
         const controlTools = await lettaClient.agents.tools.list(controlAgent.id);
-        const controlToolIds = controlTools.map(t => t.id).filter((id) => id !== undefined);
+        const controlToolIds = controlTools
+            .map(t => t.id)
+            .filter((id) => id !== undefined);
         console.log(`[Activity:AttachTools] Control agent has ${controlToolIds.length} tools`);
         // Get target agent's existing tools
         const existingTools = await lettaClient.agents.tools.list(agentId);

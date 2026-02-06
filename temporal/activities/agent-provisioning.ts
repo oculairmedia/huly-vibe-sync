@@ -7,16 +7,13 @@
 
 import { ApplicationFailure } from '@temporalio/activity';
 import { LettaClient } from '@letta-ai/letta-client';
+import { createHulyClient } from '../lib';
 
 // Configuration
 const LETTA_API_BASE = process.env.LETTA_API_URL || 'https://letta.oculair.ca';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
 const LETTA_MODEL = process.env.LETTA_MODEL || 'letta/letta-free';
 const LETTA_EMBEDDING = process.env.LETTA_EMBEDDING || 'letta/letta-free';
-
-// Huly configuration
-const HULY_API_URL = process.env.HULY_API_URL || 'https://pm.oculair.ca/api/v1';
-const HULY_PASSWORD = process.env.HULY_PASSWORD || '';
 
 // Initialize Letta client
 const lettaClient = new LettaClient({
@@ -63,35 +60,20 @@ export interface CheckpointData {
  * @param projectIdentifiers - Optional list of specific projects to provision
  * @returns Array of agent info objects
  */
-export async function fetchAgentsToProvision(
-  projectIdentifiers?: string[]
-): Promise<AgentInfo[]> {
+export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Promise<AgentInfo[]> {
   console.log('[Activity:FetchAgents] Fetching agents to provision...');
 
   try {
-    // Fetch Huly projects
-    const hulyResponse = await fetch(`${HULY_API_URL}/projects`, {
-      headers: {
-        Authorization: `Bearer ${HULY_PASSWORD}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // Fetch Huly projects using the shared client (same as orchestration activities)
+    const hulyClient = createHulyClient(process.env.HULY_API_URL);
+    const hulyProjects = await hulyClient.listProjects();
 
-    if (!hulyResponse.ok) {
-      throw ApplicationFailure.retryable(
-        `Failed to fetch Huly projects: HTTP ${hulyResponse.status}`,
-        'HulyApiError'
-      );
-    }
-
-    const hulyProjects = (await hulyResponse.json()) as Array<{ identifier: string; name: string }>;
+    console.log(`[Activity:FetchAgents] Found ${hulyProjects.length} Huly projects`);
 
     // Filter to specific projects if provided
     let projects = hulyProjects;
     if (projectIdentifiers && projectIdentifiers.length > 0) {
-      projects = hulyProjects.filter(p =>
-        projectIdentifiers.includes(p.identifier)
-      );
+      projects = hulyProjects.filter(p => projectIdentifiers.includes(p.identifier));
     }
 
     // Get existing Letta agents with huly-vibe-sync tag
@@ -122,7 +104,9 @@ export async function fetchAgentsToProvision(
       }
     }
 
-    console.log(`[Activity:FetchAgents] Found ${existingAgents.length} existing huly-vibe-sync agents`);
+    console.log(
+      `[Activity:FetchAgents] Found ${existingAgents.length} existing huly-vibe-sync agents`
+    );
 
     // Build list of agents to provision
     const agentsToProvision: AgentInfo[] = [];
@@ -143,7 +127,6 @@ export async function fetchAgentsToProvision(
 
     console.log(`[Activity:FetchAgents] Found ${agentsToProvision.length} agents to provision`);
     return agentsToProvision;
-
   } catch (error) {
     if (error instanceof ApplicationFailure) {
       throw error;
@@ -240,7 +223,6 @@ export async function provisionSingleAgent(
       agentId: agent.id,
       created: true,
     };
-
   } catch (error) {
     if (error instanceof ApplicationFailure) {
       throw error;
@@ -250,32 +232,20 @@ export async function provisionSingleAgent(
 
     // Rate limit errors are retryable
     if (message.includes('429') || message.includes('rate limit')) {
-      throw ApplicationFailure.retryable(
-        `Rate limit hit: ${message}`,
-        'RateLimitError'
-      );
+      throw ApplicationFailure.retryable(`Rate limit hit: ${message}`, 'RateLimitError');
     }
 
     // Server errors are retryable
     if (message.includes('500') || message.includes('502') || message.includes('503')) {
-      throw ApplicationFailure.retryable(
-        `Server error: ${message}`,
-        'LettaServerError'
-      );
+      throw ApplicationFailure.retryable(`Server error: ${message}`, 'LettaServerError');
     }
 
     // Not found errors are non-retryable
     if (message.includes('404')) {
-      throw ApplicationFailure.nonRetryable(
-        `Not found: ${message}`,
-        'LettaNotFoundError'
-      );
+      throw ApplicationFailure.nonRetryable(`Not found: ${message}`, 'LettaNotFoundError');
     }
 
-    throw ApplicationFailure.retryable(
-      `Failed to provision agent: ${message}`,
-      'ProvisionError'
-    );
+    throw ApplicationFailure.retryable(`Failed to provision agent: ${message}`, 'ProvisionError');
   }
 }
 
@@ -314,13 +284,17 @@ export async function attachToolsToAgent(agentId: string): Promise<ToolAttachmen
 
     // Get control agent's tools
     const controlTools = await lettaClient.agents.tools.list(controlAgent.id);
-    const controlToolIds = controlTools.map(t => t.id).filter((id): id is string => id !== undefined);
+    const controlToolIds = controlTools
+      .map(t => t.id)
+      .filter((id): id is string => id !== undefined);
 
     console.log(`[Activity:AttachTools] Control agent has ${controlToolIds.length} tools`);
 
     // Get target agent's existing tools
     const existingTools = await lettaClient.agents.tools.list(agentId);
-    const existingToolIds = new Set(existingTools.map(t => t.id).filter((id): id is string => id !== undefined));
+    const existingToolIds = new Set(
+      existingTools.map(t => t.id).filter((id): id is string => id !== undefined)
+    );
 
     // Attach missing tools
     for (const toolId of controlToolIds) {
@@ -343,7 +317,6 @@ export async function attachToolsToAgent(agentId: string): Promise<ToolAttachmen
     );
 
     return result;
-
   } catch (error) {
     if (error instanceof ApplicationFailure) {
       throw error;
@@ -411,7 +384,6 @@ export async function cleanupFailedProvision(projectIdentifier: string): Promise
     }
 
     console.log(`[Activity:Cleanup] Cleaned up ${allAgents.length} agents`);
-
   } catch (error) {
     if (error instanceof ApplicationFailure) {
       throw error;
