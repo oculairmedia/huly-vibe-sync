@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HulyWebhookHandler, createWebhookHandler } from '../../lib/HulyWebhookHandler.js';
+import { groupChangesByProject } from '../../lib/webhook/WebhookPayloadTransformer.js';
+import { WebhookDebouncer } from '../../lib/webhook/WebhookDebouncer.js';
 
 describe('HulyWebhookHandler', () => {
   let handler;
@@ -173,7 +175,7 @@ describe('HulyWebhookHandler', () => {
         { data: { identifier: 'OTHER-1' } },
       ];
 
-      const grouped = handler.groupChangesByProject(changes);
+      const grouped = groupChangesByProject(changes);
 
       expect(grouped.get('PROJ')).toHaveLength(2);
       expect(grouped.get('OTHER')).toHaveLength(1);
@@ -186,7 +188,7 @@ describe('HulyWebhookHandler', () => {
         { data: { identifier: 'PROJ-2' } },
       ];
 
-      const grouped = handler.groupChangesByProject(changes);
+      const grouped = groupChangesByProject(changes);
 
       expect(grouped.get('PROJ')).toHaveLength(2);
       expect(grouped.size).toBe(1);
@@ -585,7 +587,16 @@ describe('HulyWebhookHandler', () => {
     });
   });
 
-  describe('_deduplicateChanges', () => {
+  describe('_deduplicateChanges (WebhookDebouncer)', () => {
+    let debouncer;
+
+    beforeEach(() => {
+      debouncer = new WebhookDebouncer({
+        getTemporalClient: async () => null,
+        groupChangesByProject,
+      });
+    });
+
     it('should keep only the latest change per identifier', () => {
       const changes = [
         { id: 'a', data: { identifier: 'TEST-1' }, modifiedOn: 100 },
@@ -593,7 +604,7 @@ describe('HulyWebhookHandler', () => {
         { id: 'c', data: { identifier: 'TEST-2' }, modifiedOn: 50 },
       ];
 
-      const result = handler._deduplicateChanges(changes);
+      const result = debouncer._deduplicateChanges(changes);
 
       expect(result).toHaveLength(2);
       expect(result.find(c => c.data.identifier === 'TEST-1').modifiedOn).toBe(200);
@@ -606,7 +617,7 @@ describe('HulyWebhookHandler', () => {
         { id: 'same-id', data: {}, modifiedOn: 300 },
       ];
 
-      const result = handler._deduplicateChanges(changes);
+      const result = debouncer._deduplicateChanges(changes);
 
       expect(result).toHaveLength(1);
       expect(result[0].modifiedOn).toBe(300);
@@ -618,14 +629,14 @@ describe('HulyWebhookHandler', () => {
         { id: 'valid', data: { identifier: 'TEST-1' }, modifiedOn: 200 },
       ];
 
-      const result = handler._deduplicateChanges(changes);
+      const result = debouncer._deduplicateChanges(changes);
 
       expect(result).toHaveLength(1);
       expect(result[0].data.identifier).toBe('TEST-1');
     });
 
     it('should handle empty array', () => {
-      expect(handler._deduplicateChanges([])).toHaveLength(0);
+      expect(debouncer._deduplicateChanges([])).toHaveLength(0);
     });
 
     it('should handle missing modifiedOn gracefully', () => {
@@ -634,7 +645,7 @@ describe('HulyWebhookHandler', () => {
         { id: 'b', data: { identifier: 'TEST-1' }, modifiedOn: 100 },
       ];
 
-      const result = handler._deduplicateChanges(changes);
+      const result = debouncer._deduplicateChanges(changes);
 
       expect(result).toHaveLength(1);
       expect(result[0].modifiedOn).toBe(100);
@@ -657,15 +668,15 @@ describe('HulyWebhookHandler', () => {
 
       await handler.handleWebhook(payload);
 
-      expect(handler._pendingChanges.length).toBeGreaterThanOrEqual(0);
-      expect(handler._debounceTimer === null || handler._debounceTimer !== null).toBe(true);
+      expect(handler._debouncer._pendingChanges.length).toBeGreaterThanOrEqual(0);
+      expect(handler._debouncer._debounceTimer === null || handler._debouncer._debounceTimer !== null).toBe(true);
     });
 
     it('should initialize debounce fields in constructor', () => {
-      expect(handler._debounceWindowMs).toBe(5000);
-      expect(handler._pendingChanges).toEqual([]);
-      expect(handler._debounceTimer).toBeNull();
-      expect(handler._flushPromise).toBeNull();
+      expect(handler._debouncer._debounceWindowMs).toBe(5000);
+      expect(handler._debouncer._pendingChanges).toEqual([]);
+      expect(handler._debouncer._debounceTimer).toBeNull();
+      expect(handler._debouncer._flushPromise).toBeNull();
     });
   });
 });
