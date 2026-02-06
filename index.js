@@ -5,50 +5,46 @@
  *
  * Syncs projects and issues from Huly to Vibe Kanban
  * Uses Huly REST API and Vibe Kanban MCP servers
+ *
+ * Delegates to:
+ * - lib/MCPClient.js — MCP protocol client
+ * - lib/SyncController.js — sync mutex/debounce control
+ * - lib/EventHandlers.js — webhook/SSE/file-change event handlers
+ * - lib/SchedulerSetup.js — Temporal scheduled sync + reconciliation
  */
 
 import 'dotenv/config';
-import fetch from 'node-fetch';
 import { execSync } from 'child_process';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Mutex } from 'async-mutex';
-import pDebounce from 'p-debounce';
-import http from 'http';
+import { createRequire } from 'module';
 
 setInterval(() => {
   try {
     execSync('true', { stdio: 'ignore', timeout: 100 });
   } catch (e) {}
 }, 60000);
+
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createVibeRestClient } from './lib/VibeRestClient.js';
 import { createSyncDatabase, migrateFromJSON } from './lib/database.js';
-import { fetchWithPool, getPoolStats } from './lib/http.js';
-import { withTimeout, processBatch, formatDuration } from './lib/utils.js';
-import {
-  extractFilesystemPath,
-  extractFullDescription,
-  extractHulyIdentifier,
-  getGitUrl,
-  determineGitRepoPath,
-} from './lib/textParsers.js';
-import {
-  mapHulyStatusToVibe,
-  mapVibeStatusToHuly,
-  normalizeStatus,
-  areStatusesEquivalent,
-} from './lib/statusMapper.js';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
-import {
-  createHulyService,
-  fetchHulyProjects,
-  fetchHulyIssues,
-  updateHulyIssueStatus,
-  updateHulyIssueDescription,
-} from './lib/HulyService.js';
+import { initializeHealthStats } from './lib/HealthService.js';
+import { createApiServer } from './lib/ApiServer.js';
+import { createWebhookHandler } from './lib/HulyWebhookHandler.js';
+import { createLettaService } from './lib/LettaService.js';
+import { createLettaCodeService } from './lib/LettaCodeService.js';
+import { FileWatcher } from './lib/FileWatcher.js';
+import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
+import { logger } from './lib/logger.js';
+import { createBeadsWatcher } from './lib/BeadsWatcher.js';
+import { createBookStackWatcher } from './lib/BookStackWatcher.js';
+import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
+import { MCPClient } from './lib/MCPClient.js';
+import { createSyncController } from './lib/SyncController.js';
+import { createEventHandlers } from './lib/EventHandlers.js';
+import { setupScheduler } from './lib/SchedulerSetup.js';
 
 // Temporal orchestration (lazy-loaded)
 let temporalOrchestration = null;
@@ -96,40 +92,6 @@ async function getTemporalOrchestration() {
   }
   return temporalOrchestration;
 }
-import {
-  createVibeService,
-  listVibeProjects,
-  createVibeProject,
-  listVibeTasks,
-  createVibeTask,
-  updateVibeTaskStatus,
-  updateVibeTaskDescription,
-} from './lib/VibeService.js';
-import {
-  initializeHealthStats,
-  recordSuccessfulSync,
-  recordFailedSync,
-} from './lib/HealthService.js';
-import { createApiServer, broadcastSyncEvent, recordIssueMapping } from './lib/ApiServer.js';
-import { createWebhookHandler } from './lib/HulyWebhookHandler.js';
-import {
-  createLettaService,
-  buildProjectMeta,
-  buildBoardConfig,
-  buildBoardMetrics,
-  buildHotspots,
-  buildBacklogSummary,
-  buildChangeLog,
-  buildScratchpad,
-} from './lib/LettaService.js';
-import { createLettaCodeService } from './lib/LettaCodeService.js';
-import { FileWatcher } from './lib/FileWatcher.js';
-import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
-import { logger } from './lib/logger.js';
-import { createBeadsWatcher } from './lib/BeadsWatcher.js';
-import { createBookStackWatcher } from './lib/BookStackWatcher.js';
-import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
-import { createRequire } from 'module';
 
 // Temporal workflow triggers for bidirectional sync (CommonJS module)
 const require = createRequire(import.meta.url);
@@ -147,7 +109,6 @@ try {
   isTemporalAvailable = temporalTrigger.isTemporalAvailable;
 } catch (err) {
   console.warn('[Temporal] Failed to load trigger module:', err.message);
-  // Provide no-op functions if Temporal not available
   isTemporalAvailable = async () => false;
   triggerSyncFromVibe = async () => {
     throw new Error('Temporal not available');
@@ -173,17 +134,14 @@ const config = loadConfig();
 // Health tracking
 const healthStats = initializeHealthStats();
 
-// Database initialization (replaces JSON file state management)
+// Database initialization
 const DB_PATH = path.join(__dirname, 'logs', 'sync-state.db');
-const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json'); // For migration
+const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json');
 
-// Initialize database
 let db;
 try {
   db = createSyncDatabase(DB_PATH);
   logger.info({ dbPath: DB_PATH }, 'Database initialized successfully');
-
-  // One-time migration from JSON to SQLite
   migrateFromJSON(db, SYNC_STATE_FILE);
 } catch (dbError) {
   logger.error({ err: dbError }, 'Failed to initialize database, exiting');
@@ -206,7 +164,7 @@ if (isLettaEnabled(config)) {
   logger.info('Letta PM agent integration disabled (credentials not set)');
 }
 
-// Initialize Letta Code service for filesystem-based agent operations
+// Initialize Letta Code service
 let lettaCodeService = null;
 try {
   lettaCodeService = createLettaCodeService({
@@ -306,190 +264,6 @@ let temporalEnabled = false;
 logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
 logger.info({ config: getConfigSummary(config) }, 'Configuration loaded');
 
-// Utility functions imported from lib/utils.js
-
-// Simple MCP client with session support
-class MCPClient {
-  constructor(url, name) {
-    this.url = url;
-    this.name = name;
-    this.requestId = 1;
-    this.sessionId = null;
-  }
-
-  async initialize() {
-    logger.debug({ client: this.name }, 'Initializing MCP session');
-
-    // Initialize session
-    const initResult = await this.call('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: {
-        name: 'huly-vibe-sync',
-        version: '1.0.0',
-      },
-    });
-
-    logger.info({ client: this.name }, 'MCP session initialized successfully');
-    return initResult;
-  }
-
-  async call(method, params = {}) {
-    const headers = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-    };
-
-    // Add session ID to headers if we have one (use lowercase for compatibility)
-    if (this.sessionId) {
-      headers['mcp-session-id'] = this.sessionId;
-    }
-
-    const response = await fetchWithPool(this.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: this.requestId++,
-        method,
-        params,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    // Check for session ID in response headers (try multiple header names)
-    const newSessionId =
-      response.headers.get('mcp-session-id') ||
-      response.headers.get('Mcp-Session-Id') ||
-      response.headers.get('X-Session-ID');
-    if (newSessionId && !this.sessionId) {
-      this.sessionId = newSessionId;
-      logger.debug({ client: this.name, sessionId: newSessionId }, 'MCP session ID received');
-    }
-
-    // Check if response is SSE or JSON
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('text/event-stream')) {
-      // Parse SSE response
-      const text = await response.text();
-      const lines = text.split('\n');
-      /** @type {any} */
-      let jsonData = null;
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.substring(6);
-          try {
-            jsonData = JSON.parse(dataStr);
-          } catch (e) {
-            // Skip invalid JSON lines
-          }
-        }
-      }
-
-      if (!jsonData) {
-        throw new Error('No valid JSON data in SSE response');
-      }
-
-      if (jsonData.error) {
-        throw new Error(`MCP Error: ${jsonData.error.message}`);
-      }
-
-      return jsonData.result;
-    } else {
-      // Parse JSON response
-      /** @type {any} */
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(`MCP Error: ${data.error.message}`);
-      }
-
-      return data.result;
-    }
-  }
-
-  async callTool(name, args) {
-    // Wrap MCP call with 60-second timeout
-    const result = await withTimeout(
-      this.call('tools/call', { name, arguments: args }),
-      60000,
-      `MCP ${this.name} callTool(${name})`
-    );
-
-    if (result && result.content && result.content[0]) {
-      const content = result.content[0];
-      if (content.type === 'text') {
-        try {
-          return JSON.parse(content.text);
-        } catch (e) {
-          return content.text;
-        }
-      }
-    }
-
-    return result;
-  }
-}
-
-/**
- * Parse issues from Huly MCP text response (legacy - kept for MCP compatibility)
- */
-function parseIssuesFromText(text, projectId) {
-  const issues = [];
-  const lines = text.split('\n');
-
-  let currentIssue = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Issue header: 📋 **PROJ-123**: Issue Title
-    if (trimmed.startsWith('📋 **') && trimmed.includes('**:')) {
-      if (currentIssue) {
-        issues.push(currentIssue);
-      }
-
-      // Extract identifier and title
-      const parts = trimmed.split('**:', 1);
-      const identifier = parts[0].substring(5).trim(); // Remove "📋 **"
-      const title = trimmed.substring(trimmed.indexOf('**:') + 3).trim();
-
-      currentIssue = {
-        identifier,
-        title,
-        description: '',
-        status: 'unknown',
-        priority: 'medium',
-        component: null,
-        milestone: null,
-      };
-    }
-    // Status line
-    else if (trimmed.startsWith('Status: ') && currentIssue) {
-      currentIssue.status = trimmed.substring(8).trim().toLowerCase();
-    }
-    // Priority line
-    else if (trimmed.startsWith('Priority: ') && currentIssue) {
-      currentIssue.priority = trimmed.substring(10).trim().toLowerCase();
-    }
-    // Description line
-    else if (trimmed.startsWith('Description: ') && currentIssue) {
-      currentIssue.description = trimmed.substring(13).trim();
-    }
-  }
-
-  // Add the last issue
-  if (currentIssue) {
-    issues.push(currentIssue);
-  }
-
-  return issues;
-}
-
 /**
  * Start the sync service
  */
@@ -520,7 +294,7 @@ async function main() {
 
   logger.info('All clients initialized successfully');
 
-  // Check Temporal availability for bidirectional sync
+  // Check Temporal availability
   try {
     temporalEnabled = await isTemporalAvailable();
     if (temporalEnabled) {
@@ -536,316 +310,36 @@ async function main() {
   // Track sync interval timer (for dynamic config updates)
   let syncTimer = null;
 
-  // ============================================================
-  // SYNC CONTROL: Mutex + Debounce to prevent sync storms
-  // ============================================================
+  // Create SyncController
+  const syncController = createSyncController({
+    config,
+    healthStats,
+    lettaService,
+    fileWatcher,
+    codePerceptionWatcher,
+    astMemorySync,
+    getTemporalOrchestration,
+    getSyncTimer: () => syncTimer,
+    setSyncTimer: t => { syncTimer = t; },
+  });
 
-  // Per-project mutexes to prevent concurrent syncs for same project
-  const syncMutexes = new Map(); // projectId -> Mutex
-  const globalSyncMutex = new Mutex(); // For full syncs (projectId = null)
-
-  // Get or create mutex for a project
-  const getSyncMutex = projectId => {
-    if (!projectId) return globalSyncMutex;
-    if (!syncMutexes.has(projectId)) {
-      syncMutexes.set(projectId, new Mutex());
-    }
-    return syncMutexes.get(projectId);
-  };
-
-  // Pending sync requests (for coalescing)
-  const pendingSyncs = new Map(); // projectId -> timestamp
-
-  // Core sync function (called by debounced wrapper)
-  const runSyncCore = async (projectId = null) => {
-    const syncStartTime = Date.now();
-
-    // Broadcast sync started event
-    broadcastSyncEvent('sync:started', {
-      projectId,
-      timestamp: new Date().toISOString(),
-    });
-
-    try {
-      // Check if Temporal orchestration is enabled
-      const temporal = await getTemporalOrchestration();
-
-      if (temporal) {
-        // Use Temporal FullOrchestrationWorkflow for durable sync
-        logger.info({ projectId }, 'Starting Temporal orchestration sync');
-
-        const result = await temporal.executeFullSync({
-          projectIdentifier: projectId || undefined,
-          enableBeads: config.beads?.enabled ?? true,
-          enableLetta: !!lettaService,
-          batchSize: config.sync.maxWorkers || 5,
-        });
-
-        if (!result.success) {
-          throw new Error(`Temporal sync failed: ${result.errors.join(', ')}`);
-        }
-
-        logger.info(
-          {
-            projectId,
-            projectsProcessed: result.projectsProcessed,
-            issuesSynced: result.issuesSynced,
-            durationMs: result.durationMs,
-          },
-          'Temporal orchestration sync completed'
-        );
-      } else {
-        throw new Error(
-          'Temporal orchestration is required — set USE_TEMPORAL_ORCHESTRATION=true'
-        );
-      }
-
-      // Update health stats on success
-      const duration = Date.now() - syncStartTime;
-      recordSuccessfulSync(healthStats, duration);
-
-      // Broadcast sync completed event
-      broadcastSyncEvent('sync:completed', {
-        projectId,
-        duration,
-        status: 'success',
-      });
-
-      // Clear Letta cache after successful sync to prevent memory leak
-      if (lettaService) {
-        lettaService.clearCache();
-      }
-
-      // Sync file watchers to pick up new projects with Letta folders
-      if (fileWatcher) {
-        fileWatcher.syncWatchedProjects().catch(err => {
-          logger.warn({ err }, 'Failed to sync file watchers');
-        });
-      }
-
-      if (codePerceptionWatcher) {
-        codePerceptionWatcher.syncWatchedProjects().catch(err => {
-          logger.warn({ err }, 'Failed to sync code perception watchers');
-        });
-      }
-
-      if (astMemorySync) {
-        astMemorySync.syncAllProjects().catch(err => {
-          logger.warn({ err }, 'Failed to sync AST summaries to PM agents');
-        });
-      }
-    } catch (error) {
-      logger.error(
-        { err: error, timeoutMs: 900000 },
-        'Sync exceeded 15-minute timeout, will retry in next cycle'
-      );
-
-      // Update health stats on error
-      recordFailedSync(healthStats, error);
-
-      // Broadcast sync error event
-      broadcastSyncEvent('sync:error', {
-        projectId,
-        error: error.message,
-        stack: error.stack,
-      });
-
-      // Clear cache even on error to prevent memory buildup
-      if (lettaService) {
-        lettaService.clearCache();
-      }
-    }
-  };
-
-  // Wrapper with mutex to prevent concurrent syncs for same project
-  const runSyncWithMutex = async (projectId = null) => {
-    const mutex = getSyncMutex(projectId);
-    const key = projectId || 'global';
-
-    // Check if sync is already running for this project
-    if (mutex.isLocked()) {
-      logger.debug({ projectId: key }, 'Sync already in progress, skipping');
-      return;
-    }
-
-    // Acquire mutex and run sync
-    await mutex.runExclusive(async () => {
-      logger.info({ projectId: key }, 'Acquired sync lock');
-      await runSyncCore(projectId);
-    });
-  };
-
-  // Debounced sync - waits 3 seconds for triggers to settle before syncing
-  // This coalesces rapid webhook/SSE events into a single sync
-  const SYNC_DEBOUNCE_MS = 3000;
-  const debouncedSyncByProject = new Map(); // projectId -> debounced function
-
-  const getDebouncedSync = projectId => {
-    const key = projectId || 'global';
-    if (!debouncedSyncByProject.has(key)) {
-      const debounced = pDebounce(async () => {
-        await runSyncWithMutex(projectId);
-      }, SYNC_DEBOUNCE_MS);
-      debouncedSyncByProject.set(key, debounced);
-    }
-    return debouncedSyncByProject.get(key);
-  };
-
-  // Public sync function - debounced + mutex protected
-  const runSyncWithTimeout = async (projectId = null) => {
-    const key = projectId || 'global';
-    logger.debug({ projectId: key }, 'Sync requested (will debounce)');
-    pendingSyncs.set(key, Date.now());
-    return getDebouncedSync(projectId)();
-  };
-
-  // Callback for manual sync trigger via API
-  const handleSyncTrigger = async (projectId = null) => {
-    logger.info({ projectId }, 'Manual sync triggered via API');
-    return runSyncWithTimeout(projectId);
-  };
-
-  // Callback for configuration updates via API
-  const handleConfigUpdate = async updates => {
-    logger.info({ updates }, 'Configuration updated via API');
-
-    // If sync interval changed, restart the schedule
-    if (updates.syncInterval !== undefined) {
-      const newIntervalMinutes = Math.max(1, Math.round(updates.syncInterval / 60000));
-
-      // Try to update Temporal scheduled workflow first
-      const temporal = await getTemporalOrchestration();
-      if (temporal?.restartScheduledSync) {
-        try {
-          const schedule = await temporal.restartScheduledSync({
-            intervalMinutes: newIntervalMinutes,
-            syncOptions: { dryRun: config.sync.dryRun },
-          });
-          if (schedule) {
-            logger.info(
-              { workflowId: schedule.workflowId, intervalMinutes: newIntervalMinutes },
-              'Temporal scheduled sync restarted with new interval'
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'Failed to restart Temporal schedule, trying legacy');
-        }
-      }
-
-      // Also update legacy timer if it exists
-      if (syncTimer) {
-        clearInterval(syncTimer);
-        logger.info(
-          {
-            oldInterval: config.sync.interval / 1000,
-            newInterval: updates.syncInterval / 1000,
-          },
-          'Restarting sync timer with new interval (legacy mode)'
-        );
-        syncTimer = setInterval(() => runSyncWithTimeout(), updates.syncInterval);
-      }
-    }
-  };
-
-  // Callback for webhook changes from huly-change-watcher
-  const handleWebhookChanges = async changeData => {
-    const projectIds = Array.from(changeData.byProject?.keys() || []);
-
-    logger.info(
-      {
-        type: changeData.type,
-        changeCount: changeData.changes.length,
-        projects: projectIds,
-        temporalEnabled,
-      },
-      'Processing changes from webhook'
-    );
-
-    if (projectIds.length === 0) {
-      logger.debug('No project-scoped changes, skipping targeted sync');
-      return { success: true, processed: 0 };
-    }
-
-    // Use Temporal workflow for bidirectional sync
-    if (temporalEnabled) {
-      let totalSucceeded = 0;
-      let totalFailed = 0;
-
-      for (const [projectId, changes] of changeData.byProject || []) {
-        const project = db.getProjectByIdentifier(projectId);
-        if (!project) {
-          logger.warn({ projectId }, 'Project not found in database');
-          continue;
-        }
-
-        const context = {
-          projectIdentifier: projectId,
-          vibeProjectId: project.vibe_project_id,
-          gitRepoPath: project.filesystem_path,
-        };
-
-        // Trigger workflow for each changed Huly issue
-        const results = await Promise.allSettled(
-          changes.map(change => {
-            const identifier = change.data?.identifier;
-            if (!identifier) {
-              logger.debug({ change }, 'Skipping change without identifier');
-              return Promise.resolve();
-            }
-
-            return triggerSyncFromHuly(identifier, context).catch(err => {
-              logger.error(
-                { identifier, err },
-                'Failed to trigger Temporal workflow for Huly issue'
-              );
-              throw err;
-            });
-          })
-        );
-
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-        totalSucceeded += succeeded;
-        totalFailed += failed;
-      }
-
-      logger.info(
-        { succeeded: totalSucceeded, failed: totalFailed, total: changeData.changes.length },
-        'Temporal workflows triggered for Huly changes'
-      );
-
-      return {
-        success: totalFailed === 0,
-        processed: changeData.changes.length,
-        workflows: totalSucceeded,
-      };
-    }
-
-    // Fallback: use legacy sync if Temporal not available
-    logger.debug({ projects: projectIds }, 'Falling back to legacy sync for Huly');
-    const results = await Promise.allSettled(
-      projectIds.map(projectId => runSyncWithTimeout(projectId))
-    );
-
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
-
-    if (failed > 0) {
-      logger.warn({ succeeded, failed, projects: projectIds }, 'Some project syncs failed');
-    } else {
-      logger.info({ synced: succeeded, projects: projectIds }, 'Targeted sync complete');
-    }
-
-    return { success: failed === 0, processed: changeData.changes.length };
-  };
+  // Create EventHandlers
+  const eventHandlers = createEventHandlers({
+    db,
+    temporalEnabled,
+    triggerSyncFromHuly,
+    triggerSyncFromVibe,
+    triggerSyncFromBeads,
+    runSyncWithTimeout: syncController.runSyncWithTimeout,
+    bookstackService,
+  });
 
   // Initialize webhook handler
   const webhookHandler = createWebhookHandler({
     db,
-    onChangesReceived: handleWebhookChanges,
+    onChangesReceived: eventHandlers.handleWebhookChanges,
   });
 
-  // Subscribe to change watcher on startup
   const subscribed = await webhookHandler.subscribe();
   if (subscribed) {
     logger.info('✓ Subscribed to Huly change watcher for real-time updates');
@@ -854,100 +348,13 @@ async function main() {
     logger.warn('✗ Failed to subscribe to change watcher, will rely on polling');
   }
 
-  // Initialize Beads file watcher for .beads directory changes
-  const handleBeadsChange = async changeData => {
-    logger.info(
-      {
-        project: changeData.projectIdentifier,
-        fileCount: changeData.changedFiles.length,
-        temporalEnabled,
-      },
-      'Processing Beads file changes'
-    );
-
-    // Use Temporal workflow for bidirectional sync
-    if (temporalEnabled) {
-      const project = db.getProjectByIdentifier(changeData.projectIdentifier);
-      if (!project) {
-        logger.warn({ project: changeData.projectIdentifier }, 'Project not found in database');
-        return { success: false, project: changeData.projectIdentifier };
-      }
-
-      const context = {
-        projectIdentifier: changeData.projectIdentifier,
-        vibeProjectId: project.vibe_project_id,
-        gitRepoPath: changeData.projectPath || project.filesystem_path,
-      };
-
-      // For Beads changes, we need to detect which issues changed
-      // For now, trigger a general sync workflow for the project
-      // The workflow will read Beads issues and sync them
-      try {
-        // Read changed Beads issues and trigger workflows for each
-        const { BeadsClient } = require('./temporal/dist/lib/BeadsClient.js');
-        const beadsClient = new BeadsClient(context.gitRepoPath);
-        const issues = await beadsClient.listIssues();
-
-        if (issues.length === 0) {
-          logger.debug({ project: changeData.projectIdentifier }, 'No Beads issues found');
-          return { success: true, project: changeData.projectIdentifier, workflows: 0 };
-        }
-
-        // Trigger workflow for each Beads issue (the workflow handles conflict resolution)
-        const results = await Promise.allSettled(
-          issues.slice(0, 10).map(
-            (
-              issue // Limit to 10 at a time
-            ) =>
-              triggerSyncFromBeads(issue.id, context).catch(err => {
-                logger.error(
-                  { issueId: issue.id, err },
-                  'Failed to trigger Temporal workflow for Beads issue'
-                );
-                throw err;
-              })
-          )
-        );
-
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-
-        logger.info(
-          { succeeded, failed, total: issues.length },
-          'Temporal workflows triggered for Beads changes'
-        );
-
-        return {
-          success: failed === 0,
-          project: changeData.projectIdentifier,
-          workflows: succeeded,
-        };
-      } catch (err) {
-        logger.error(
-          { err, project: changeData.projectIdentifier },
-          'Failed to process Beads changes with Temporal'
-        );
-        // Fall through to legacy sync
-      }
-    }
-
-    // Fallback: use legacy sync if Temporal not available or failed
-    logger.debug(
-      { project: changeData.projectIdentifier },
-      'Falling back to legacy sync for Beads'
-    );
-    await runSyncWithTimeout(changeData.projectIdentifier);
-
-    return { success: true, project: changeData.projectIdentifier };
-  };
-
+  // Initialize Beads file watcher
   const beadsWatcher = createBeadsWatcher({
     db,
-    onBeadsChange: handleBeadsChange,
-    debounceDelay: 2000, // Wait 2 seconds for changes to settle
+    onBeadsChange: eventHandlers.handleBeadsChange,
+    debounceDelay: 2000,
   });
 
-  // Start watching all projects with .beads directories
   const beadsWatchResult = await beadsWatcher.syncWithDatabase();
   if (beadsWatchResult.watching > 0) {
     logger.info(
@@ -956,34 +363,13 @@ async function main() {
     );
   }
 
-  // Initialize BookStack file watcher for real-time local→BookStack import
+  // Initialize BookStack file watcher
   let bookstackWatcher = null;
   if (bookstackService && config.bookstack?.enabled) {
-    const handleBookStackChange = async changeData => {
-      logger.info(
-        {
-          project: changeData.projectIdentifier,
-          fileCount: changeData.changedFiles.length,
-        },
-        'Processing BookStack doc file changes'
-      );
-
-      for (const filePath of changeData.changedFiles) {
-        try {
-          await bookstackService.importSingleFile(changeData.projectIdentifier, filePath);
-        } catch (err) {
-          logger.error(
-            { err, file: filePath, project: changeData.projectIdentifier },
-            'Failed to import BookStack file'
-          );
-        }
-      }
-    };
-
     bookstackWatcher = createBookStackWatcher({
       db,
       bookstackService,
-      onBookStackChange: handleBookStackChange,
+      onBookStackChange: eventHandlers.handleBookStackChange,
       debounceDelay: 2000,
     });
 
@@ -996,63 +382,10 @@ async function main() {
     }
   }
 
-  // Initialize Vibe SSE event watcher for real-time Vibe→Huly sync
-  const handleVibeChange = async changeData => {
-    logger.info(
-      {
-        vibeProject: changeData.vibeProjectId,
-        hulyProject: changeData.hulyProjectIdentifier,
-        taskCount: changeData.changedTaskIds.length,
-        temporalEnabled,
-      },
-      'Processing Vibe task changes from SSE'
-    );
-
-    // Use Temporal workflow for bidirectional sync
-    if (temporalEnabled && changeData.changedTaskIds.length > 0) {
-      const context = {
-        projectIdentifier: changeData.hulyProjectIdentifier,
-        vibeProjectId: changeData.vibeProjectId,
-        gitRepoPath: db.getProject(changeData.hulyProjectIdentifier)?.filesystem_path,
-      };
-
-      // Trigger Temporal workflow for each changed task
-      const results = await Promise.allSettled(
-        changeData.changedTaskIds.map(taskId =>
-          triggerSyncFromVibe(taskId, context).catch(err => {
-            logger.error({ taskId, err }, 'Failed to trigger Temporal workflow for Vibe task');
-            throw err;
-          })
-        )
-      );
-
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      logger.info(
-        { succeeded, failed, total: changeData.changedTaskIds.length },
-        'Temporal workflows triggered for Vibe changes'
-      );
-
-      return {
-        success: failed === 0,
-        project: changeData.hulyProjectIdentifier,
-        workflows: succeeded,
-      };
-    }
-
-    // Fallback: use legacy sync if Temporal not available
-    if (changeData.hulyProjectIdentifier) {
-      logger.debug({ project: changeData.hulyProjectIdentifier }, 'Falling back to legacy sync');
-      await runSyncWithTimeout(changeData.hulyProjectIdentifier);
-    }
-
-    return { success: true, project: changeData.hulyProjectIdentifier };
-  };
-
+  // Initialize Vibe SSE event watcher
   const vibeEventWatcher = createVibeEventWatcher({
     db,
-    onTaskChange: handleVibeChange,
+    onTaskChange: eventHandlers.handleVibeChange,
   });
 
   const vibeConnected = await vibeEventWatcher.start();
@@ -1062,13 +395,13 @@ async function main() {
     logger.warn('✗ Failed to connect to Vibe SSE stream, Vibe changes may not sync in real-time');
   }
 
-  // Start API server with extended endpoints
+  // Start API server
   createApiServer({
     config,
     healthStats,
     db,
-    onSyncTrigger: handleSyncTrigger,
-    onConfigUpdate: handleConfigUpdate,
+    onSyncTrigger: syncController.handleSyncTrigger,
+    onConfigUpdate: syncController.handleConfigUpdate,
     lettaCodeService,
     webhookHandler,
     getTemporalClient: getTemporalOrchestration,
@@ -1076,87 +409,16 @@ async function main() {
   });
 
   // Run initial sync
-  await runSyncWithTimeout();
+  await syncController.runSyncWithTimeout();
 
-  // Schedule periodic syncs only if webhooks are not active
-  if (subscribed) {
-    logger.info('Webhook mode active - periodic polling disabled');
-  } else if (config.sync.interval > 0) {
-    const intervalMinutes = Math.max(1, Math.round(config.sync.interval / 60000));
-
-    // Try to use Temporal scheduled workflow if available
-    const temporal = await getTemporalOrchestration();
-    if (temporal?.startScheduledSync) {
-      try {
-        // Check if there's already an active scheduled sync
-        const existing = await temporal.getActiveScheduledSync();
-        if (existing) {
-          logger.info(
-            { workflowId: existing.workflowId, startTime: existing.startTime },
-            'Temporal scheduled sync already active, skipping new schedule'
-          );
-        } else {
-          const schedule = await temporal.startScheduledSync({
-            intervalMinutes,
-            syncOptions: { dryRun: config.sync.dryRun },
-          });
-          logger.info(
-            { workflowId: schedule.workflowId, intervalMinutes },
-            '✓ Temporal scheduled sync started (durable, survives restarts)'
-          );
-        }
-      } catch (err) {
-        logger.warn(
-          { err },
-          'Failed to start Temporal scheduled sync, falling back to setInterval'
-        );
-        syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
-      }
-    } else {
-      // Fallback to legacy setInterval
-      logger.info(
-        { intervalSeconds: config.sync.interval / 1000 },
-        'Scheduling periodic syncs (legacy mode)'
-      );
-      syncTimer = setInterval(() => runSyncWithTimeout(), config.sync.interval);
-    }
-    // Schedule periodic reconciliation (daily by default)
-    if (config.reconciliation?.enabled) {
-      const reconcileIntervalMinutes = Math.max(1, config.reconciliation.intervalMinutes);
-      const temporal = await getTemporalOrchestration();
-
-      if (temporal?.startScheduledReconciliation) {
-        try {
-          const existing = await temporal.getActiveScheduledReconciliation?.();
-          if (existing) {
-            logger.info(
-              { workflowId: existing.workflowId, startTime: existing.startTime },
-              'Temporal scheduled reconciliation already active, skipping new schedule'
-            );
-          } else {
-            const schedule = await temporal.startScheduledReconciliation({
-              intervalMinutes: reconcileIntervalMinutes,
-              reconcileOptions: {
-                action: config.reconciliation.action,
-                dryRun: config.reconciliation.dryRun,
-              },
-            });
-            logger.info(
-              { workflowId: schedule.workflowId, intervalMinutes: reconcileIntervalMinutes },
-              '✓ Temporal scheduled reconciliation started'
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'Failed to start Temporal scheduled reconciliation');
-        }
-      } else {
-        logger.info('Temporal reconciliation scheduling not available');
-      }
-    }
-  } else {
-    logger.info('One-time sync completed, exiting');
-    process.exit(0);
-  }
+  // Schedule periodic syncs
+  await setupScheduler({
+    config,
+    subscribed,
+    getTemporalOrchestration,
+    runSyncWithTimeout: syncController.runSyncWithTimeout,
+    setSyncTimer: t => { syncTimer = t; },
+  });
 }
 
 // Run the service
