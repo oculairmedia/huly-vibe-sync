@@ -27,6 +27,8 @@ import {
 
 import type * as orchestrationActivities from '../activities/orchestration';
 import type * as syncActivities from '../activities/sync-services';
+import type * as agentProvisioningActivities from '../activities/agent-provisioning';
+import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 
 // ============================================================
 // ACTIVITY PROXIES
@@ -96,6 +98,19 @@ const {
     maximumInterval: '60 seconds',
     maximumAttempts: 5,
     nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
+  },
+});
+
+// Agent provisioning activities (for auto-provisioning PM agents)
+const { checkAgentExists, updateProjectAgent } = proxyActivities<
+  typeof agentProvisioningActivities
+>({
+  startToCloseTimeout: '60 seconds',
+  retry: {
+    initialInterval: '2 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '30 seconds',
+    maximumAttempts: 3,
   },
 });
 
@@ -564,6 +579,45 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           projectName: hulyProject.name,
           projectIdentifier: hulyProject.identifier,
         });
+      }
+
+      // Auto-provision PM agent if Letta is enabled and project has a git repo path
+      if (enableLetta && gitRepoPath) {
+        try {
+          const agentCheck = await checkAgentExists({
+            projectIdentifier: hulyProject.identifier,
+          });
+
+          if (!agentCheck.exists) {
+            log.info(`[ProjectSync] Provisioning PM agent for ${hulyProject.identifier}...`);
+
+            const provisionResult = await executeChild(ProvisionSingleAgentWorkflow, {
+              workflowId: `provision-${hulyProject.identifier}-${Date.now()}`,
+              args: [
+                {
+                  projectIdentifier: hulyProject.identifier,
+                  projectName: hulyProject.name,
+                  attachTools: true,
+                },
+              ],
+            });
+
+            if (provisionResult.success && provisionResult.agentId) {
+              await updateProjectAgent({
+                projectIdentifier: hulyProject.identifier,
+                agentId: provisionResult.agentId,
+              });
+              log.info(`[ProjectSync] PM agent provisioned: ${provisionResult.agentId}`);
+            } else if (!provisionResult.success) {
+              log.warn(`[ProjectSync] Agent provisioning failed: ${provisionResult.error}`);
+            }
+          } else {
+            log.debug(`[ProjectSync] Agent already exists: ${agentCheck.agentId}`);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          log.warn(`[ProjectSync] Agent provisioning failed, continuing sync: ${errorMsg}`);
+        }
       }
 
       // Continue to phase1

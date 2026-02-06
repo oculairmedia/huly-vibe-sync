@@ -415,3 +415,123 @@ export async function getProvisioningStatus(): Promise<{
     completedProjects: [],
   };
 }
+
+// ============================================================================
+// Activity: Check Agent Exists
+// ============================================================================
+
+export interface CheckAgentExistsInput {
+  projectIdentifier: string;
+}
+
+export interface CheckAgentExistsResult {
+  exists: boolean;
+  agentId?: string;
+  source?: 'database' | 'letta';
+}
+
+/**
+ * Check if a PM agent exists for a project
+ *
+ * First checks the sync database, then falls back to querying Letta API.
+ * This is idempotent and safe to call multiple times.
+ */
+export async function checkAgentExists(
+  input: CheckAgentExistsInput
+): Promise<CheckAgentExistsResult> {
+  const { projectIdentifier } = input;
+  console.log(`[Activity:CheckAgent] Checking if agent exists for ${projectIdentifier}...`);
+
+  try {
+    // First check the sync database
+    const { createSyncDatabase } = await import('../../lib/database.js');
+    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+    const db = createSyncDatabase(dbPath);
+
+    try {
+      const lettaInfo = db.getProjectLettaInfo(projectIdentifier);
+      if (lettaInfo?.letta_agent_id) {
+        console.log(`[Activity:CheckAgent] Found agent in database: ${lettaInfo.letta_agent_id}`);
+        return {
+          exists: true,
+          agentId: lettaInfo.letta_agent_id,
+          source: 'database',
+        };
+      }
+    } finally {
+      db.close();
+    }
+
+    // Fall back to querying Letta API directly
+    const existingAgents = await lettaClient.agents.list({
+      tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+      matchAllTags: true,
+      limit: 10,
+    });
+
+    if (existingAgents.length > 0) {
+      const agentId = existingAgents[0].id;
+      console.log(`[Activity:CheckAgent] Found agent in Letta: ${agentId}`);
+      return {
+        exists: true,
+        agentId,
+        source: 'letta',
+      };
+    }
+
+    console.log(`[Activity:CheckAgent] No agent found for ${projectIdentifier}`);
+    return { exists: false };
+  } catch (error) {
+    // On error, assume agent doesn't exist (will trigger provisioning)
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Activity:CheckAgent] Error checking agent: ${message}`);
+    return { exists: false };
+  }
+}
+
+// ============================================================================
+// Activity: Update Project Agent
+// ============================================================================
+
+export interface UpdateProjectAgentInput {
+  projectIdentifier: string;
+  agentId: string;
+}
+
+export interface UpdateProjectAgentResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Update the sync database with agent info after provisioning
+ *
+ * This is idempotent - calling multiple times with the same agent ID is safe.
+ */
+export async function updateProjectAgent(
+  input: UpdateProjectAgentInput
+): Promise<UpdateProjectAgentResult> {
+  const { projectIdentifier, agentId } = input;
+  console.log(
+    `[Activity:UpdateAgent] Updating database for ${projectIdentifier} with agent ${agentId}...`
+  );
+
+  try {
+    const { createSyncDatabase } = await import('../../lib/database.js');
+    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+    const db = createSyncDatabase(dbPath);
+
+    try {
+      db.setProjectLettaAgent(projectIdentifier, { agentId });
+      db.setProjectLettaSyncAt(projectIdentifier, Date.now());
+      console.log(`[Activity:UpdateAgent] Database updated successfully`);
+      return { success: true };
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Activity:UpdateAgent] Failed to update database: ${message}`);
+    return { success: false, error: message };
+  }
+}
