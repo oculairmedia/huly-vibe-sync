@@ -9,9 +9,15 @@ import { proxyActivities, log, sleep } from '@temporalio/workflow';
 import type * as activities from '../activities/issue-sync';
 
 // Proxy activities with retry policies
-const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = proxyActivities<
-  typeof activities
->({
+const {
+  syncToHuly,
+  syncToVibe,
+  syncToBeads,
+  updateLettaMemory,
+  compensateHulyCreate,
+  compensateVibeCreate,
+  compensateBeadsCreate,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '1 second',
@@ -23,6 +29,7 @@ const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = proxyActiviti
       'HulyValidationError',
       'VibeNotFoundError',
       'VibeValidationError',
+      'BeadsValidationError',
     ],
   },
 });
@@ -45,6 +52,12 @@ export interface IssueSyncInput {
   };
   operation: 'create' | 'update' | 'delete';
   source: 'huly' | 'vibe' | 'beads';
+  /**
+   * Beads sync behavior:
+   * - atomic (default): Beads failures fail workflow and trigger compensation for creates.
+   * - best_effort: Beads failures are logged and workflow continues.
+   */
+  beadsSyncMode?: 'atomic' | 'best_effort';
   agentId?: string; // Optional Letta agent to update
 }
 
@@ -73,6 +86,7 @@ export interface IssueSyncResult {
 export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyncResult> {
   const startTime = Date.now();
   const { issue, operation, source, agentId } = input;
+  const beadsSyncMode = input.beadsSyncMode || 'atomic';
 
   log.info(`[IssueSyncWorkflow] Starting: ${operation} from ${source}`, {
     identifier: issue.identifier,
@@ -120,14 +134,21 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
     }
 
     // Step 3: Sync to Beads (skip if source is Beads)
-    // Beads sync is non-fatal - we continue even if it fails
     if (source !== 'beads') {
-      log.info(`[IssueSyncWorkflow] Syncing to Beads...`);
-      try {
+      log.info(`[IssueSyncWorkflow] Syncing to Beads...`, { mode: beadsSyncMode });
+
+      if (beadsSyncMode === 'best_effort') {
+        try {
+          result.beadsResult = await syncToBeads({ issue, operation, source });
+        } catch (beadsError) {
+          log.warn(`[IssueSyncWorkflow] Beads sync failed (best-effort): ${beadsError}`);
+          result.beadsResult = { success: false, error: String(beadsError) };
+        }
+      } else {
         result.beadsResult = await syncToBeads({ issue, operation, source });
-      } catch (beadsError) {
-        log.warn(`[IssueSyncWorkflow] Beads sync failed (non-fatal): ${beadsError}`);
-        result.beadsResult = { success: false, error: String(beadsError) };
+        if (!result.beadsResult.success) {
+          throw new Error(`Beads sync failed: ${result.beadsResult.error || 'Unknown error'}`);
+        }
       }
     } else {
       result.beadsResult = { success: true, systemId: issue.beadsId };
@@ -167,6 +188,28 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
 
     return result;
   } catch (error) {
+    // Compensation for atomic create operations: roll back systems in reverse order.
+    if (operation === 'create' && beadsSyncMode === 'atomic') {
+      try {
+        if (result.beadsResult?.systemId) {
+          await compensateBeadsCreate({ beadsId: result.beadsResult.systemId });
+        }
+        if (result.vibeResult?.systemId) {
+          await compensateVibeCreate({ vibeId: result.vibeResult.systemId });
+        }
+        if (result.hulyResult?.systemId) {
+          await compensateHulyCreate({ hulyIdentifier: result.hulyResult.systemId });
+        }
+      } catch (compensationError) {
+        log.warn(`[IssueSyncWorkflow] Compensation failed`, {
+          error:
+            compensationError instanceof Error
+              ? compensationError.message
+              : String(compensationError),
+        });
+      }
+    }
+
     result.success = false;
     result.error = error instanceof Error ? error.message : String(error);
     result.duration = Date.now() - startTime;

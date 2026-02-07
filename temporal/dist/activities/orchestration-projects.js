@@ -44,6 +44,7 @@ exports.getVibeProjectId = getVibeProjectId;
 exports.resolveProjectIdentifier = resolveProjectIdentifier;
 exports.ensureVibeProject = ensureVibeProject;
 exports.fetchProjectData = fetchProjectData;
+exports.fetchVibeTasksForHulyIssues = fetchVibeTasksForHulyIssues;
 exports.fetchHulyIssuesBulk = fetchHulyIssuesBulk;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
@@ -253,6 +254,58 @@ async function fetchProjectData(input) {
     }
     catch (error) {
         throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchProjectData');
+    }
+}
+/**
+ * Fetch only Vibe tasks that map to specific Huly identifiers via sync DB mappings.
+ * Used by webhook-triggered project syncs to avoid full-table task fetches.
+ */
+async function fetchVibeTasksForHulyIssues(input) {
+    const { projectIdentifier, vibeProjectId, hulyIssueIdentifiers } = input;
+    const uniqueHulyIds = Array.from(new Set(hulyIssueIdentifiers.filter(Boolean)));
+    if (uniqueHulyIds.length === 0) {
+        return [];
+    }
+    console.log(`[Temporal:Orchestration] Fetching mapped Vibe tasks for ${uniqueHulyIds.length} prefetched Huly issues in ${projectIdentifier}`);
+    const vibeTaskIds = new Set();
+    try {
+        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+        const db = createSyncDatabase(dbPath);
+        try {
+            const dbAny = db;
+            for (const hulyIdentifier of uniqueHulyIds) {
+                const issue = dbAny.getIssue?.(hulyIdentifier);
+                if (issue?.vibe_task_id) {
+                    vibeTaskIds.add(String(issue.vibe_task_id));
+                }
+            }
+        }
+        finally {
+            db.close();
+        }
+    }
+    catch (error) {
+        throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchVibeTasksForHulyIssues');
+    }
+    if (vibeTaskIds.size === 0) {
+        console.log(`[Temporal:Orchestration] No mapped Vibe tasks found for prefetched issues in ${projectIdentifier}`);
+        return [];
+    }
+    try {
+        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
+        const settled = await Promise.allSettled(Array.from(vibeTaskIds).map(taskId => vibeClient.getTask(taskId)));
+        const vibeTasks = [];
+        for (const item of settled) {
+            if (item.status === 'fulfilled' && item.value) {
+                vibeTasks.push(item.value);
+            }
+        }
+        console.log(`[Temporal:Orchestration] Fetched ${vibeTasks.length}/${vibeTaskIds.size} mapped Vibe tasks for ${projectIdentifier}`);
+        return vibeTasks;
+    }
+    catch (error) {
+        throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchVibeTasksForHulyIssues');
     }
 }
 /**

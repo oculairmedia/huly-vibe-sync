@@ -56,10 +56,11 @@ Located at: `lib/BeadsService.js`
 | Huly Status | Beads Status | Notes |
 |-------------|--------------|-------|
 | Backlog     | open         | Default state |
-| In Progress | open         | Beads only has open/closed |
-| In Review   | open         | |
-| Done        | closed       | |
-| Canceled    | closed       | |
+| Todo        | open + `huly:Todo` label | Preserves Todo vs Backlog |
+| In Progress | in_progress  | Native Beads status |
+| In Review   | in_progress + `huly:In Review` label | Preserves review state |
+| Done        | closed       | Native close state |
+| Canceled    | closed + `huly:Canceled` label | Preserves canceled vs done |
 
 **Priority Mapping:**
 
@@ -134,6 +135,33 @@ Located after Phase 2 in `syncHulyToVibe()` function.
 **Loop Prevention:**
 - Tracks updated issues in `phase3UpdatedIssues` Set
 - Skips bidirectional updates for issues just modified
+
+### 6. Enhanced Beads Status Sync (Phase 3b)
+
+Beads → Huly sync now resolves status using this priority:
+
+1. `beadsIssue.metadata.huly_status` when available
+2. Fallback mapping from Beads status + labels
+
+For closed Beads issues, sync always respects the close action and maps from
+`closed` (typically `Done`, or `Canceled` when `huly:Canceled` is present).
+
+This guarantees:
+
+- Backward compatibility for older issues (no metadata required)
+- Correct close behavior when users run `bd close`
+- Status restoration on reopen when metadata is available
+
+### 7. Repository Path Validation Before Sync
+
+Before any Beads sync phase runs, repository path validation now checks:
+
+- Path is a non-empty absolute string
+- Path exists and is a directory
+- `.git` exists (valid git repository)
+
+Invalid paths are skipped gracefully with clear logs, and sync continues for
+other valid projects.
 
 ## Installation & Setup
 
@@ -268,6 +296,43 @@ When both Huly and Beads change status between syncs:
 5. **Labels/Tags**
    - Beads labels not synced to Huly
    - Huly components/milestones not synced to beads
+
+6. **No Arbitrary Metadata in `bd` CLI**
+   - Current `bd create/update/show` commands expose labels and standard fields
+   - No generic key/value metadata flag is available for issues
+   - `.beads/issues.jsonl` does not include a `metadata` object by default
+
+## Beads Metadata/Tags Research (HVSYN-186)
+
+### Questions Answered
+
+1. **Metadata storage**: No documented generic per-issue key/value metadata write API in current `bd` CLI.
+2. **Tag support**: Labels are fully supported and round-trip via CLI + JSONL.
+3. **CLI access**: Use `--labels`, `--add-label`, `--remove-label`, `--set-labels`.
+4. **JSONL format**: Stores `labels`, no `metadata` field by default.
+5. **Update mechanism**: Label updates were observed without `updated_at` changing in local POC.
+
+### Proof-of-Concept
+
+```bash
+bd create "Metadata POC" --labels "huly:In Review" --json --no-daemon
+bd show <id> --json --no-daemon
+bd update <id> --add-label "huly:Todo" --json --no-daemon
+```
+
+Observed `bd show --json` keys:
+
+`created_at, created_by, description, id, issue_type, labels, owner, priority, status, title, updated_at`
+
+Observed `.beads/issues.jsonl` keys:
+
+`created_at, created_by, description, id, issue_type, labels, owner, priority, status, title, updated_at`
+
+### Recommendation
+
+- Primary status persistence approach: labels (`huly:Todo`, `huly:In Review`, `huly:Canceled`)
+- Forward-compatible enhancement: read `metadata.huly_status` when present
+- Do not depend on custom metadata writes until Beads adds explicit metadata support
 
 ### Project Requirements
 

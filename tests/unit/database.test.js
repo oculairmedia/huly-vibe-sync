@@ -59,6 +59,8 @@ describe('SyncDatabase', () => {
       expect(indexNames.length).toBeGreaterThan(0);
       expect(indexNames).toContain('idx_projects_last_sync');
       expect(indexNames).toContain('idx_issues_project');
+      expect(indexNames).toContain('idx_issues_vibe_task_id');
+      expect(indexNames).toContain('idx_issues_vibe_status');
     });
 
     it('should enable WAL mode', () => {

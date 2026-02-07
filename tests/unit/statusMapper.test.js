@@ -13,6 +13,7 @@ import {
   // Beads mapping functions
   mapHulyStatusToBeads,
   mapBeadsStatusToHuly,
+  getEffectiveHulyStatus,
   mapHulyPriorityToBeads,
   mapBeadsPriorityToHuly,
   mapHulyTypeToBeads,
@@ -330,6 +331,35 @@ describe('beadsStatusMapper', () => {
     it('should ignore non-huly labels', () => {
       expect(mapBeadsStatusToHuly('open', ['bug', 'feature'])).toBe('Backlog');
       expect(mapBeadsStatusToHuly('closed', ['important', 'urgent'])).toBe('Done');
+    });
+  });
+
+  describe('getEffectiveHulyStatus', () => {
+    it('should prefer metadata huly_status for open issues', () => {
+      expect(
+        getEffectiveHulyStatus({
+          status: 'open',
+          metadata: { huly_status: 'In Review' },
+        })
+      ).toBe('In Review');
+    });
+
+    it('should respect close actions over metadata', () => {
+      expect(
+        getEffectiveHulyStatus({
+          status: 'closed',
+          metadata: { huly_status: 'In Progress' },
+        })
+      ).toBe('Done');
+    });
+
+    it('should fall back to label-aware mapping when metadata is absent', () => {
+      expect(
+        getEffectiveHulyStatus({
+          status: 'in_progress',
+          labels: ['huly:In Review'],
+        })
+      ).toBe('In Review');
     });
   });
 

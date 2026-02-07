@@ -21,6 +21,7 @@ export interface IssueData {
 export interface SyncResult {
     success: boolean;
     systemId?: string;
+    skipped?: boolean;
     error?: string;
 }
 export interface IssueSyncInput {
@@ -38,7 +39,7 @@ export declare function syncToHuly(input: IssueSyncInput): Promise<SyncResult>;
 export declare function syncToVibe(input: IssueSyncInput): Promise<SyncResult>;
 /**
  * Sync issue to Beads (via CLI)
- * Note: This runs shell commands, so it needs to run on a host with beads installed
+ * Note: In atomic workflow mode, failures are fatal and retried by Temporal.
  */
 export declare function syncToBeads(input: IssueSyncInput): Promise<SyncResult>;
 /**
@@ -53,5 +54,24 @@ export declare function updateLettaMemory(input: {
         operation: string;
         timestamp: number;
     };
+}): Promise<SyncResult>;
+/**
+ * Best-effort compensation: delete newly created Huly issue.
+ */
+export declare function compensateHulyCreate(input: {
+    hulyIdentifier?: string;
+}): Promise<SyncResult>;
+/**
+ * Best-effort compensation: delete newly created Vibe task.
+ */
+export declare function compensateVibeCreate(input: {
+    vibeId?: string;
+}): Promise<SyncResult>;
+/**
+ * Best-effort compensation: remove newly created Beads issue.
+ * Uses optional VibeSync endpoint if available.
+ */
+export declare function compensateBeadsCreate(input: {
+    beadsId?: string;
 }): Promise<SyncResult>;
 //# sourceMappingURL=issue-sync.d.ts.map

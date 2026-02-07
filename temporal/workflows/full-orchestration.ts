@@ -317,6 +317,7 @@ export async function FullOrchestrationWorkflow(
             enableLetta,
             dryRun,
             prefetchedIssues: prefetchedIssuesByProject[hulyProject.identifier] || undefined,
+            prefetchedIssuesAreComplete: true,
           },
         ],
       });

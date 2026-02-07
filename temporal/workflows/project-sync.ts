@@ -27,6 +27,7 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 const {
   ensureVibeProject,
   fetchProjectData,
+  fetchVibeTasksForHulyIssues,
   initializeBeads,
   fetchBeadsIssues,
 } = proxyActivities<typeof orchestrationActivities>({
@@ -124,6 +125,7 @@ export interface ProjectSyncInput {
     modifiedOn?: number;
     parentIssue?: string;
   }>;
+  prefetchedIssuesAreComplete?: boolean;
 
   // Internal continuation state
   _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
@@ -155,6 +157,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     enableLetta,
     dryRun,
     prefetchedIssues,
+    prefetchedIssuesAreComplete = true,
     // Continuation state
     _phase = 'init',
     _phase1Index = 0,
@@ -188,6 +191,8 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
   let gitRepoPath = _gitRepoPath;
   let beadsInitialized = _beadsInitialized;
   const phase1UpdatedTasks = new Set(_phase1UpdatedTasks);
+  const isWebhookPrefetch = !!prefetchedIssues?.length && prefetchedIssuesAreComplete === false;
+  const effectiveBatchSize = isWebhookPrefetch ? Math.max(batchSize, 20) : batchSize;
   let issuesProcessedThisRun = 0;
 
   try {
@@ -219,31 +224,33 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             projectIdentifier: hulyProject.identifier,
           });
 
-          if (!agentCheck.exists) {
-            log.info(`[ProjectSync] Provisioning PM agent for ${hulyProject.identifier}...`);
-
-            const provisionResult = await executeChild(ProvisionSingleAgentWorkflow, {
-              workflowId: `provision-${hulyProject.identifier}-${Date.now()}`,
-              args: [
-                {
-                  projectIdentifier: hulyProject.identifier,
-                  projectName: hulyProject.name,
-                  attachTools: true,
-                },
-              ],
-            });
-
-            if (provisionResult.success && provisionResult.agentId) {
-              await updateProjectAgent({
-                projectIdentifier: hulyProject.identifier,
-                agentId: provisionResult.agentId,
-              });
-              log.info(`[ProjectSync] PM agent provisioned: ${provisionResult.agentId}`);
-            } else if (!provisionResult.success) {
-              log.warn(`[ProjectSync] Agent provisioning failed: ${provisionResult.error}`);
-            }
+          if (agentCheck.exists) {
+            log.info(
+              `[ProjectSync] Agent exists for ${hulyProject.identifier}, reconciling tools/memory: ${agentCheck.agentId}`
+            );
           } else {
-            log.debug(`[ProjectSync] Agent already exists: ${agentCheck.agentId}`);
+            log.info(`[ProjectSync] Provisioning PM agent for ${hulyProject.identifier}...`);
+          }
+
+          const provisionResult = await executeChild(ProvisionSingleAgentWorkflow, {
+            workflowId: `provision-${hulyProject.identifier}-${Date.now()}`,
+            args: [
+              {
+                projectIdentifier: hulyProject.identifier,
+                projectName: hulyProject.name,
+                attachTools: true,
+              },
+            ],
+          });
+
+          if (provisionResult.success && provisionResult.agentId) {
+            await updateProjectAgent({
+              projectIdentifier: hulyProject.identifier,
+              agentId: provisionResult.agentId,
+            });
+            log.info(`[ProjectSync] PM agent reconciled: ${provisionResult.agentId}`);
+          } else if (!provisionResult.success) {
+            log.warn(`[ProjectSync] Agent provisioning failed: ${provisionResult.error}`);
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
@@ -276,12 +283,24 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
 
     if (prefetchedIssues && prefetchedIssues.length > 0) {
       hulyIssues = prefetchedIssues;
-      const projectData = await fetchProjectData({
-        hulyProject,
-        vibeProjectId: vibeProjectId!,
-      });
-      vibeTasks = projectData.vibeTasks;
-      log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+
+      if (isWebhookPrefetch) {
+        vibeTasks = await fetchVibeTasksForHulyIssues({
+          projectIdentifier: hulyProject.identifier,
+          vibeProjectId: vibeProjectId!,
+          hulyIssueIdentifiers: prefetchedIssues.map(issue => issue.identifier),
+        });
+        log.info(
+          `[ProjectSync] Using webhook-prefetched issues (${prefetchedIssues.length}) with mapped Vibe tasks (${vibeTasks.length}), batch size ${effectiveBatchSize}`
+        );
+      } else {
+        const projectData = await fetchProjectData({
+          hulyProject,
+          vibeProjectId: vibeProjectId!,
+        });
+        vibeTasks = projectData.vibeTasks;
+        log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+      }
     } else {
       const projectData = await fetchProjectData({
         hulyProject,
@@ -306,8 +325,8 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         `[ProjectSync] Phase 1: ${hulyIssues.length} issues → Vibe (starting at ${_phase1Index})`
       );
 
-      for (let i = _phase1Index; i < hulyIssues.length; i += batchSize) {
-        const batch = hulyIssues.slice(i, Math.min(i + batchSize, hulyIssues.length));
+      for (let i = _phase1Index; i < hulyIssues.length; i += effectiveBatchSize) {
+        const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
 
         const batchResults = await Promise.all(
           batch.map(async issue => {
@@ -345,7 +364,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         issuesProcessedThisRun += batch.length;
 
         // Check if we need to continue as new
-        const nextIndex = i + batchSize;
+        const nextIndex = i + effectiveBatchSize;
         if (
           issuesProcessedThisRun >= MAX_ISSUES_PER_CONTINUATION &&
           nextIndex < hulyIssues.length
@@ -481,8 +500,8 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
 
       const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
 
-      for (let i = _phase3Index; i < hulyIssues.length; i += batchSize) {
-        const batch = hulyIssues.slice(i, Math.min(i + batchSize, hulyIssues.length));
+      for (let i = _phase3Index; i < hulyIssues.length; i += effectiveBatchSize) {
+        const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
 
         const batchResults = await Promise.all(
           batch.map(async issue => {
@@ -511,7 +530,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         issuesProcessedThisRun += batch.length;
 
         // Check if we need to continue as new
-        const nextIndex = i + batchSize;
+        const nextIndex = i + effectiveBatchSize;
         if (
           issuesProcessedThisRun >= MAX_ISSUES_PER_CONTINUATION &&
           nextIndex < hulyIssues.length

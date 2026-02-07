@@ -156,13 +156,29 @@ class VibeClient {
                 return { task: existing, created: false, updated: false, skipped: true };
             }
         }
-        // Create description with Huly reference
+        // Create description with Huly + parent metadata
+        const parentValue = issue.parentIssue ?? issue.parent ?? null;
+        const parentIdentifier = typeof parentValue === 'string'
+            ? parentValue
+            : parentValue && typeof parentValue === 'object'
+                ? parentValue.identifier || null
+                : null;
+        const footer = `Huly Issue: ${issue.identifier}\nHuly Parent: ${parentIdentifier || 'none'}`;
         const description = issue.description
-            ? `${issue.description}\n\n---\nHuly Issue: ${issue.identifier}`
-            : `Synced from Huly: ${issue.identifier}`;
+            ? `${issue.description}\n\n---\n${footer}`
+            : `Synced from Huly: ${issue.identifier}\n\n---\n${footer}`;
         if (existingTaskId) {
-            // Update existing task
-            await this.updateTask(existingTaskId, 'status', vibeStatus);
+            // Update existing task with all sync-relevant fields.
+            const existing = await this.getTask(existingTaskId);
+            if (existing.status !== vibeStatus) {
+                await this.updateTask(existingTaskId, 'status', vibeStatus);
+            }
+            if (existing.title !== issue.title) {
+                await this.updateTask(existingTaskId, 'title', issue.title);
+            }
+            if ((existing.description || '').trim() !== description.trim()) {
+                await this.updateTask(existingTaskId, 'description', description);
+            }
             const updated = await this.getTask(existingTaskId);
             return { task: updated, created: false, updated: true, skipped: false };
         }

@@ -54,6 +54,17 @@ ui
 # CI/CD
 .github
 
+# Beads working data
+.beads
+.vibesync-cache
+
+# Vibe Kanban source (separate project)
+vibe-kanban-source
+
+# Temporal source (only dist is needed)
+temporal/src
+temporal/node_modules
+
 # Misc
 *.bak
 *.tmp

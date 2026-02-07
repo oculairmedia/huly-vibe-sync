@@ -54,6 +54,7 @@ vi.mock('child_process', () => ({
 }));
 
 const realExistsSync = fs.existsSync;
+const realStatSync = fs.statSync;
 
 // Now import the functions we're testing (after mocking)
 const {
@@ -78,10 +79,16 @@ describe('BeadsService', () => {
       cb(null, '', '');
     });
     vi.spyOn(fs, 'existsSync').mockImplementation(testPath => {
-      if (testPath === '/test/project') {
+      if (testPath === '/test/project' || testPath === '/test/project/.git') {
         return true;
       }
       return realExistsSync(testPath);
+    });
+    vi.spyOn(fs, 'statSync').mockImplementation(testPath => {
+      if (testPath === '/test/project') {
+        return { isDirectory: () => true };
+      }
+      return realStatSync(testPath);
     });
   });
 
@@ -279,7 +286,7 @@ describe('BeadsService', () => {
       expect(issue).toBeDefined();
       expect(issue.title).toBe('New Feature');
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('bd create "New Feature" --json'),
+        expect.stringContaining("bd create 'New Feature' --json"),
         expect.any(Object),
         expect.any(Function)
       );
@@ -335,7 +342,7 @@ describe('BeadsService', () => {
 
       // First call: create
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('bd create "With Description"'),
+        expect.stringContaining("bd create 'With Description'"),
         expect.any(Object),
         expect.any(Function)
       );
@@ -384,6 +391,23 @@ describe('BeadsService', () => {
 
       // The title is passed directly
       expect(mockExec).toHaveBeenCalled();
+    });
+
+    it('should sanitize newlines and control characters in create title', async () => {
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, createMockCreateOutput({ title: 'Line 1 Line 2' }), '');
+      });
+
+      await createBeadsIssue('/test/project', { title: 'Line 1\nLine\t2\u0000' });
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.stringContaining("bd create 'Line 1 Line 2' --json"),
+        expect.any(Object),
+        expect.any(Function)
+      );
     });
   });
 
@@ -454,7 +478,7 @@ describe('BeadsService', () => {
 
       expect(result).toBe(true);
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('bd update issue-123 --title="New Title"'),
+        expect.stringContaining("bd update issue-123 --title='New Title'"),
         expect.any(Object),
         expect.any(Function)
       );
@@ -528,7 +552,24 @@ describe('BeadsService', () => {
       await updateBeadsIssue('/test/project', 'issue-123', 'title', 'Title with "quotes"');
 
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining('--title="Title with \\"quotes\\""'),
+        expect.stringContaining("--title='Title with \"quotes\"'"),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+
+    it('should sanitize newlines and control characters in title update', async () => {
+      mockExec.mockImplementation((cmd, opts, cb) => {
+        if (typeof opts === 'function') {
+          cb = opts;
+        }
+        cb(null, '', '');
+      });
+
+      await updateBeadsIssue('/test/project', 'issue-123', 'title', 'Line 1\nLine\t2\u0000');
+
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.stringContaining("--title='Line 1 Line 2'"),
         expect.any(Object),
         expect.any(Function)
       );
@@ -747,6 +788,11 @@ describe('BeadsService', () => {
       await createBeadsIssue('/test/project', { title });
 
       expect(mockExec).toHaveBeenCalled();
+      expect(mockExec).toHaveBeenCalledWith(
+        expect.stringContaining("bd create 'Issue with $pecial ch@rs & \"quotes\" '\"'\"'single'\"'\"' `backticks`' --json"),
+        expect.any(Object),
+        expect.any(Function)
+      );
     });
 
     it('should handle unicode in title', async () => {

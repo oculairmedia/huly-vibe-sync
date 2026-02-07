@@ -1,12 +1,5 @@
 # =============================================================================
-# Stage 1: Build the `bd` (beads) Go binary
-# =============================================================================
-FROM golang:1.22-alpine AS go-builder
-
-RUN go install github.com/steveyegge/beads/cmd/bd@latest
-
-# =============================================================================
-# Stage 2: Install Node.js production dependencies (with native compilation)
+# Stage 1: Install Node.js production dependencies (with native compilation)
 # =============================================================================
 FROM node:20-alpine AS node-builder
 
@@ -18,7 +11,7 @@ COPY package*.json ./
 RUN npm ci --production
 
 # =============================================================================
-# Stage 3: Install Python tree-sitter dependencies
+# Stage 2: Install Python tree-sitter dependencies
 # =============================================================================
 FROM node:20-alpine AS python-builder
 
@@ -28,7 +21,7 @@ COPY python/requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages --prefix=/python-deps -r /tmp/requirements.txt
 
 # =============================================================================
-# Stage 4: Runtime image
+# Stage 3: Runtime image
 # =============================================================================
 FROM node:20-alpine AS runtime
 
@@ -41,8 +34,9 @@ RUN apk add --no-cache git curl bash python3
 # Install Letta Code CLI globally
 RUN npm install -g @letta-ai/letta-code
 
-# Copy Go binary from builder
-COPY --from=go-builder /go/bin/bd /usr/local/bin/bd
+# Copy pre-built bd binary (statically linked)
+COPY bd-binary /usr/local/bin/bd
+RUN chmod +x /usr/local/bin/bd
 
 # Copy Python packages from builder
 COPY --from=python-builder /python-deps /usr

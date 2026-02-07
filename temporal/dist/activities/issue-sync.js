@@ -10,6 +10,9 @@ exports.syncToHuly = syncToHuly;
 exports.syncToVibe = syncToVibe;
 exports.syncToBeads = syncToBeads;
 exports.updateLettaMemory = updateLettaMemory;
+exports.compensateHulyCreate = compensateHulyCreate;
+exports.compensateVibeCreate = compensateVibeCreate;
+exports.compensateBeadsCreate = compensateBeadsCreate;
 const activity_1 = require("@temporalio/activity");
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
@@ -201,14 +204,11 @@ async function syncToVibe(input) {
 }
 /**
  * Sync issue to Beads (via CLI)
- * Note: This runs shell commands, so it needs to run on a host with beads installed
+ * Note: In atomic workflow mode, failures are fatal and retried by Temporal.
  */
 async function syncToBeads(input) {
     const { issue, operation } = input;
     console.log(`[Beads Activity] ${operation} issue: ${issue.identifier || issue.title}`);
-    // Beads sync is more complex - it uses shell commands
-    // For now, we'll make a REST call to a beads sync endpoint if available
-    // or skip if beads sync is not configured
     const BEADS_SYNC_ENABLED = process.env.BEADS_SYNC_ENABLED === 'true';
     if (!BEADS_SYNC_ENABLED) {
         console.log(`[Beads Activity] Beads sync disabled, skipping`);
@@ -234,18 +234,14 @@ async function syncToBeads(input) {
             signal: AbortSignal.timeout(TIMEOUT),
         });
         if (!response.ok) {
-            // Beads sync failure is non-fatal - log and continue
-            console.warn(`[Beads Activity] Sync failed but continuing: ${response.status}`);
-            return { success: true }; // Don't fail the workflow for beads
+            await handleHttpError(response, 'Beads', 'sync');
         }
         const result = await response.json();
         console.log(`[Beads Activity] Synced: ${result.beadsId || 'ok'}`);
         return { success: true, systemId: result.beadsId };
     }
     catch (error) {
-        // Beads failures are non-fatal
-        console.warn(`[Beads Activity] Error (non-fatal): ${error instanceof Error ? error.message : error}`);
-        return { success: true };
+        return handleActivityError(error, 'Beads');
     }
 }
 /**
@@ -261,6 +257,93 @@ async function updateLettaMemory(input) {
     // For now, just log - the main Letta memory update happens in the orchestrator
     // after the full sync completes
     return { success: true };
+}
+/**
+ * Best-effort compensation: delete newly created Huly issue.
+ */
+async function compensateHulyCreate(input) {
+    if (!input.hulyIdentifier)
+        return { success: true, skipped: true };
+    try {
+        const response = await fetch(`${HULY_API_URL}/tools/delete_issue`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                arguments: {
+                    issue: input.hulyIdentifier,
+                },
+            }),
+            signal: AbortSignal.timeout(TIMEOUT),
+        });
+        if (!response.ok) {
+            const detail = await response.text().catch(() => response.statusText);
+            console.warn(`[Compensation] Huly delete failed for ${input.hulyIdentifier}: ${response.status} ${detail}`);
+            return { success: false, error: `Huly compensation failed: ${response.status}` };
+        }
+        return { success: true };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+/**
+ * Best-effort compensation: delete newly created Vibe task.
+ */
+async function compensateVibeCreate(input) {
+    if (!input.vibeId)
+        return { success: true, skipped: true };
+    try {
+        const response = await fetch(`${VIBE_API_URL}/tasks/${input.vibeId}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(TIMEOUT),
+        });
+        if (!response.ok) {
+            const detail = await response.text().catch(() => response.statusText);
+            console.warn(`[Compensation] Vibe delete failed for ${input.vibeId}: ${response.status} ${detail}`);
+            return { success: false, error: `Vibe compensation failed: ${response.status}` };
+        }
+        return { success: true };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+/**
+ * Best-effort compensation: remove newly created Beads issue.
+ * Uses optional VibeSync endpoint if available.
+ */
+async function compensateBeadsCreate(input) {
+    if (!input.beadsId)
+        return { success: true, skipped: true };
+    try {
+        const VIBESYNC_API = process.env.VIBESYNC_API_URL || 'http://localhost:3456';
+        const response = await fetch(`${VIBESYNC_API}/api/beads/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beadsId: input.beadsId }),
+            signal: AbortSignal.timeout(TIMEOUT),
+        });
+        if (!response.ok) {
+            return {
+                success: false,
+                error: `Beads compensation failed: ${response.status}`,
+            };
+        }
+        return { success: true };
+    }
+    catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
 }
 /**
  * Handle HTTP errors with proper Temporal error classification

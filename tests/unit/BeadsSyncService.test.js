@@ -51,6 +51,21 @@ vi.mock('../../lib/statusMapper.js', () => ({
     const map = { open: 'Backlog', in_progress: 'In Progress', closed: 'Done', blocked: 'Blocked' };
     return map[status] || 'Backlog';
   }),
+  getEffectiveHulyStatus: vi.fn(issue => {
+    if (issue?.metadata?.huly_status) {
+      if (issue.status === 'closed') {
+        return 'Done';
+      }
+      return issue.metadata.huly_status;
+    }
+    const map = {
+      open: 'Backlog',
+      in_progress: 'In Progress',
+      closed: 'Done',
+      blocked: 'Blocked',
+    };
+    return map[issue?.status] || 'Backlog';
+  }),
   mapBeadsPriorityToHuly: vi.fn(priority => {
     const map = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low', 4: 'None' };
     return map[priority] || 'Medium';
@@ -72,6 +87,7 @@ vi.mock('../../lib/VibeService.js', () => ({
 
 vi.mock('../../lib/textParsers.js', () => ({
   extractHulyIdentifier: vi.fn(() => null),
+  validateGitRepoPath: vi.fn(() => ({ valid: true })),
 }));
 
 vi.mock('../../lib/BeadsService.js', () => ({
@@ -138,7 +154,7 @@ import {
 } from '../../lib/HulyService.js';
 
 import { updateVibeTaskStatus } from '../../lib/VibeService.js';
-import { extractHulyIdentifier } from '../../lib/textParsers.js';
+import { extractHulyIdentifier, validateGitRepoPath } from '../../lib/textParsers.js';
 import { mapBeadsStatusToVibe } from '../../lib/statusMapper.js';
 import {
   findHulyIdentifier,
@@ -798,6 +814,74 @@ describe('BeadsSyncService', () => {
       );
     });
 
+    it('uses stored metadata status when available for open issues', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'beads-1',
+        title: 'Same Title',
+        status: 'open',
+        priority: 2,
+        metadata: { huly_status: 'In Review' },
+      });
+      const hulyIssue = {
+        identifier: 'TEST-1',
+        title: 'Same Title',
+        status: 'Backlog',
+        priority: 'Medium',
+        modifiedOn: Date.now(),
+      };
+      const dbRecord = createMockBeadsDbRecord({
+        identifier: 'TEST-1',
+        beads_issue_id: 'beads-1',
+      });
+      const db = createMockDb([dbRecord]);
+
+      await syncBeadsIssueToHuly(
+        makeHulyClient(),
+        '/proj',
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        {}
+      );
+
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(expect.anything(), 'TEST-1', 'In Review', {});
+    });
+
+    it('maps closed beads issues to Done even when metadata has old status', async () => {
+      const beadsIssue = createMockBeadsIssue({
+        id: 'beads-1',
+        title: 'Same Title',
+        status: 'closed',
+        priority: 2,
+        metadata: { huly_status: 'In Progress' },
+      });
+      const hulyIssue = {
+        identifier: 'TEST-1',
+        title: 'Same Title',
+        status: 'In Progress',
+        priority: 'Medium',
+        modifiedOn: Date.now(),
+      };
+      const dbRecord = createMockBeadsDbRecord({
+        identifier: 'TEST-1',
+        beads_issue_id: 'beads-1',
+      });
+      const db = createMockDb([dbRecord]);
+
+      await syncBeadsIssueToHuly(
+        makeHulyClient(),
+        '/proj',
+        beadsIssue,
+        [hulyIssue],
+        'TEST',
+        db,
+        {}
+      );
+
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(expect.anything(), 'TEST-1', 'Done', {});
+    });
+
     it('updates Huly title when beads title differs', async () => {
       const beadsIssue = createMockBeadsIssue({
         id: 'beads-1',
@@ -1273,6 +1357,20 @@ describe('BeadsSyncService', () => {
         errorMessages: [],
       });
     });
+
+    it('skips sync when repository path is invalid', async () => {
+      validateGitRepoPath.mockReturnValueOnce({
+        valid: false,
+        reason: 'not a git repository (no .git): /proj',
+      });
+      const db = createMockDb();
+      const result = await batchSyncHulyToBeads('/proj', [createHulyIssue_()], [], db, {});
+
+      expect(result.synced).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.errorMessages[0]).toContain('Invalid repo path');
+      expect(createBeadsIssue).not.toHaveBeenCalled();
+    });
   });
 
   // ========================================================
@@ -1325,6 +1423,25 @@ describe('BeadsSyncService', () => {
       expect(client.getIssuesBulk).toHaveBeenCalledWith(['TEST-MISSING']);
     });
 
+    it('uses project-scoped issue query when available', async () => {
+      const beadsIssue = createMockBeadsIssue({ id: 'b-1' });
+      const dbRecord = createMockBeadsDbRecord({
+        identifier: 'TEST-MISSING',
+        beads_issue_id: 'b-1',
+      });
+      const db = createMockDb([dbRecord]);
+      db.getProjectIssues = vi.fn(() => [dbRecord]);
+      const client = makeHulyClient({
+        getIssuesBulk: vi.fn(async () => []),
+      });
+
+      await batchSyncBeadsToHuly(client, '/proj', [beadsIssue], [], 'TEST', db, {
+        beads: { operationDelay: 0 },
+      });
+
+      expect(db.getProjectIssues).toHaveBeenCalledWith('TEST');
+    });
+
     it('handles bulk fetch failure gracefully', async () => {
       const beadsIssue = createMockBeadsIssue({ id: 'b-1' });
       const dbRecord = createMockBeadsDbRecord({
@@ -1375,6 +1492,21 @@ describe('BeadsSyncService', () => {
         errors: 0,
         errorMessages: [],
       });
+    });
+
+    it('skips sync when repository path is invalid', async () => {
+      validateGitRepoPath.mockReturnValueOnce({
+        valid: false,
+        reason: 'path does not exist on disk: /proj',
+      });
+      const db = createMockDb([]);
+      const beadsIssue = createMockBeadsIssue({ id: 'b-1', title: 'Issue 1' });
+      const result = await batchSyncBeadsToHuly(makeHulyClient(), '/proj', [beadsIssue], [], 'TEST', db, {});
+
+      expect(result.synced).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.errorMessages[0]).toContain('Invalid repo path');
+      expect(updateHulyIssueStatus).not.toHaveBeenCalled();
     });
   });
 
@@ -1429,6 +1561,29 @@ describe('BeadsSyncService', () => {
 
       // syncBeadsToGit is called (isBeadsInitialized and isGitRepository return true by default)
       expect(result.gitSync).toBe(true);
+    });
+
+    it('skips both directions when repository path is invalid', async () => {
+      validateGitRepoPath.mockReturnValueOnce({
+        valid: false,
+        reason: 'path is not absolute: proj',
+      });
+      const db = createMockDb();
+      const result = await fullBidirectionalSync(
+        makeHulyClient(),
+        'proj',
+        [createHulyIssue_()],
+        [createMockBeadsIssue({ id: 'b-1' })],
+        'TEST',
+        db,
+        {}
+      );
+
+      expect(result.hulyToBeads.synced).toBe(0);
+      expect(result.hulyToBeads.skipped).toBe(1);
+      expect(result.beadsToHuly.synced).toBe(0);
+      expect(result.beadsToHuly.skipped).toBe(1);
+      expect(result.gitSync).toBe(false);
     });
   });
 });

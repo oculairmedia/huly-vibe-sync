@@ -14,6 +14,7 @@ import {
   parseIssueCount,
   extractFullDescription,
   extractHulyIdentifier,
+  extractHulyParentIdentifier,
   getGitUrl,
   determineGitRepoPath,
   validateGitRepoPath,
@@ -558,6 +559,25 @@ Line 4 after blank line
       const description = 'Huly Issue: PROJ-1 and also Huly Issue: PROJ-2';
       const identifier = extractHulyIdentifier(description);
       expect(identifier).toBe('PROJ-1');
+    });
+  });
+
+  describe('extractHulyParentIdentifier', () => {
+    it('should extract explicit parent identifier', () => {
+      const description = '...\nHuly Parent: PROJ-42';
+      expect(extractHulyParentIdentifier(description)).toBe('PROJ-42');
+    });
+
+    it('should return null for explicit top-level markers', () => {
+      expect(extractHulyParentIdentifier('Huly Parent: none')).toBeNull();
+      expect(extractHulyParentIdentifier('Huly Parent: top-level')).toBeNull();
+      expect(extractHulyParentIdentifier('Parent Huly Issue: null')).toBeNull();
+    });
+
+    it('should return undefined when metadata is missing', () => {
+      expect(extractHulyParentIdentifier('Huly Issue: PROJ-1')).toBeUndefined();
+      expect(extractHulyParentIdentifier('')).toBeUndefined();
+      expect(extractHulyParentIdentifier(null)).toBeUndefined();
     });
   });
 

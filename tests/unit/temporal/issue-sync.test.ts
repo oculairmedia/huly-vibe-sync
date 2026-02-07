@@ -60,6 +60,9 @@ const createMockActivities = () => ({
   syncToVibe: vi.fn().mockResolvedValue({ success: true, systemId: 'vibe-task-id' }),
   syncToBeads: vi.fn().mockResolvedValue({ success: true, systemId: 'beads-id' }),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
+  compensateHulyCreate: vi.fn().mockResolvedValue({ success: true }),
+  compensateVibeCreate: vi.fn().mockResolvedValue({ success: true }),
+  compensateBeadsCreate: vi.fn().mockResolvedValue({ success: true }),
 });
 
 // ============================================================
@@ -274,7 +277,7 @@ describe('IssueSyncWorkflow', () => {
       await expect(runIssueSyncWorkflowTest(input, mockActivities)).rejects.toThrow();
     }, 30000);
 
-    it('should continue when Beads sync fails (non-fatal)', async () => {
+    it('should fail when Beads sync fails in atomic mode (default)', async () => {
       mockActivities.syncToBeads.mockRejectedValue(new Error('Beads sync error'));
 
       const input: IssueSyncInput = {
@@ -283,11 +286,26 @@ describe('IssueSyncWorkflow', () => {
         source: 'huly', // Not beads, so syncToBeads will be called
       };
 
+      await expect(runIssueSyncWorkflowTest(input, mockActivities)).rejects.toThrow();
+      expect(mockActivities.compensateVibeCreate).toHaveBeenCalled();
+    }, 30000);
+
+    it('should continue when Beads sync fails in best-effort mode', async () => {
+      mockActivities.syncToBeads.mockRejectedValue(new Error('Beads sync error'));
+
+      const input: IssueSyncInput = {
+        issue: createMockIssue(),
+        operation: 'create',
+        source: 'huly',
+        beadsSyncMode: 'best_effort',
+      };
+
       const result = await runIssueSyncWorkflowTest(input, mockActivities);
 
       expect(result.success).toBe(true);
       expect(result.beadsResult?.success).toBe(false);
       expect(result.beadsResult?.error).toContain('ActivityFailure');
+      expect(mockActivities.compensateVibeCreate).not.toHaveBeenCalled();
     }, 30000);
   });
 

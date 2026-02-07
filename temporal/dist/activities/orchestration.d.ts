@@ -40,7 +40,7 @@ export interface ProjectSyncContext {
     hulyIssues: HulyIssue[];
     vibeTasks: VibeTask[];
 }
-export { fetchHulyProjects, fetchVibeProjects, getVibeProjectId, resolveProjectIdentifier, ensureVibeProject, fetchProjectData, fetchHulyIssuesBulk, } from './orchestration-projects';
+export { fetchHulyProjects, fetchVibeProjects, getVibeProjectId, resolveProjectIdentifier, ensureVibeProject, fetchProjectData, fetchVibeTasksForHulyIssues, fetchHulyIssuesBulk, } from './orchestration-projects';
 export { resolveGitRepoPath, extractGitRepoPath, initializeBeads, fetchBeadsIssues, } from './orchestration-git';
 export { updateLettaMemory, recordSyncMetrics, buildBoardMetrics, buildProjectMeta, handleOrchestratorError, } from './orchestration-letta';
 //# sourceMappingURL=orchestration.d.ts.map

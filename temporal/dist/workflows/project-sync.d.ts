@@ -50,6 +50,7 @@ export interface ProjectSyncInput {
         modifiedOn?: number;
         parentIssue?: string;
     }>;
+    prefetchedIssuesAreComplete?: boolean;
     _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
     _phase1Index?: number;
     _phase2Index?: number;

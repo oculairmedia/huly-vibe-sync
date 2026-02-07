@@ -1,7 +1,7 @@
 {
   "projectId": "HVSYN",
   "version": 2,
-  "updatedAt": 1770088891241,
+  "updatedAt": 1770329971497,
   "files": {
     "temporal/activities/orchestration.ts": {
       "path": "temporal/activities/orchestration.ts",
@@ -13395,27 +13395,27 @@
     "temporal/dist/activities/reconciliation.d.ts": {
       "path": "temporal/dist/activities/reconciliation.d.ts",
       "contentHash": "76a3c4208f666b9392100341b7a3fabb",
-      "mtime": 1769878836553.0986,
+      "mtime": 1770329956353.9497,
       "functions": [],
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769878845997
+      "parsedAt": 1770329971496
     },
     "temporal/dist/workflows/reconciliation.d.ts": {
       "path": "temporal/dist/workflows/reconciliation.d.ts",
       "contentHash": "f326330fc1fb0e9dd69daf974cb87bc9",
-      "mtime": 1769878836577.099,
+      "mtime": 1770329956377.9502,
       "functions": [],
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769878845997
+      "parsedAt": 1770329971496
     },
     "temporal/dist/activities/reconciliation.js": {
       "path": "temporal/dist/activities/reconciliation.js",
       "contentHash": "386a7b815328903fe8e8b812e2662034",
-      "mtime": 1769885270697.9148,
+      "mtime": 1770329956353.9497,
       "functions": [
         {
           "name": "resolveDbPath",
@@ -13469,12 +13469,12 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769885276471
+      "parsedAt": 1770329971496
     },
     "temporal/dist/workflows/reconciliation.js": {
       "path": "temporal/dist/workflows/reconciliation.js",
       "contentHash": "dd01d8318520eaf18c3a45cbcf70e116",
-      "mtime": 1769878836573.099,
+      "mtime": 1770329956373.9502,
       "functions": [
         {
           "name": "DataReconciliationWorkflow",
@@ -13504,7 +13504,7 @@
       "imports": [],
       "classes": [],
       "exports": [],
-      "parsedAt": 1769878845998
+      "parsedAt": 1770329971496
     },
     "lib/database/utils.js": {
       "path": "lib/database/utils.js",
@@ -14719,6 +14719,89 @@
       "classes": [],
       "exports": [],
       "parsedAt": 1770088891240
+    },
+    "temporal/activities/agent-provisioning.ts": {
+      "path": "temporal/activities/agent-provisioning.ts",
+      "contentHash": "cf7b5e1188296a5ada4963f4859f4826",
+      "mtime": 1770329926725.2302,
+      "functions": [
+        {
+          "name": "fetchAgentsToProvision",
+          "signature": "async function fetchAgentsToProvision(projectIdentifiers?: string[]): Promise<AgentInfo[]>",
+          "parameters": "(projectIdentifiers?: string[])",
+          "return_type": "Promise<AgentInfo[]>",
+          "docstring": "/**\n * Fetch list of projects/agents that need provisioning\n *\n * @param projectIdentifiers - Optional list of specific projects to provision\n * @returns Array of agent info objects\n */",
+          "decorators": [],
+          "start_line": 63,
+          "end_line": 140,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "provisionSingleAgent",
+          "signature": "async function provisionSingleAgent(\n  projectIdentifier: string,\n  projectName: string\n): Promise<ProvisionResult>",
+          "parameters": "(\n  projectIdentifier: string,\n  projectName: string\n)",
+          "return_type": "Promise<ProvisionResult>",
+          "docstring": "/**\n * Provision a single agent for a project\n *\n * Creates the agent if it doesn't exist, or returns existing agent.\n *\n * @param projectIdentifier - Huly project identifier\n * @param projectName - Huly project name\n * @returns Provision result with agent ID and creation status\n */",
+          "decorators": [],
+          "start_line": 155,
+          "end_line": 250,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "chToolsToAgent(age",
+          "signature": "async function chToolsToAgent(agentId: string): Pr: omise<ToolAttachmentResult> {\n ",
+          "parameters": "ntId: string): Pr",
+          "return_type": "omise<ToolAttachmentResult> {\n ",
+          "docstring": null,
+          "decorators": [],
+          "start_line": 264,
+          "end_line": 330,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "rdProvisioningResult(dat",
+          "signature": "async function rdProvisioningResult(data: CheckpointData): Pr: omise<void> {\n ",
+          "parameters": "a: CheckpointData): Pr",
+          "return_type": "omise<void> {\n ",
+          "docstring": null,
+          "decorators": [],
+          "start_line": 343,
+          "end_line": 351,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "nupFailedProvision(pro",
+          "signature": "async function nupFailedProvision(projectIdentifier: string): Pr: omise<void> {\n ",
+          "parameters": "jectIdentifier: string): Pr",
+          "return_type": "omise<void> {\n ",
+          "docstring": null,
+          "decorators": [],
+          "start_line": 364,
+          "end_line": 397,
+          "is_async": true,
+          "is_generator": false
+        },
+        {
+          "name": "rovisioningStatus(): ",
+          "signature": "async function rovisioningStatus(): Pr: omise<{\n  lastCheckpoint?: CheckpointData;\n  completedProjects: string[];\n}> {\n ",
+          "parameters": "Pr",
+          "return_type": "omise<{\n  lastCheckpoint?: CheckpointData;\n  completedProjects: string[];\n}> {\n ",
+          "docstring": null,
+          "decorators": [],
+          "start_line": 408,
+          "end_line": 417,
+          "is_async": true,
+          "is_generator": false
+        }
+      ],
+      "imports": [],
+      "classes": [],
+      "exports": [],
+      "parsedAt": 1770329930757
     }
   }
 }

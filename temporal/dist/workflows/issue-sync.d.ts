@@ -21,6 +21,12 @@ export interface IssueSyncInput {
     };
     operation: 'create' | 'update' | 'delete';
     source: 'huly' | 'vibe' | 'beads';
+    /**
+     * Beads sync behavior:
+     * - atomic (default): Beads failures fail workflow and trigger compensation for creates.
+     * - best_effort: Beads failures are logged and workflow continues.
+     */
+    beadsSyncMode?: 'atomic' | 'best_effort';
     agentId?: string;
 }
 export interface IssueSyncResult {

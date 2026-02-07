@@ -19,6 +19,18 @@ exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
+function extractParentIdentifierFromDescription(description) {
+    if (!description)
+        return undefined;
+    const match = description.match(/(?:Huly Parent(?: Issue)?|Parent Huly Issue):\s*([A-Z]+-\d+|none|null|top-?level)/i);
+    if (!match)
+        return undefined;
+    const value = match[1].trim();
+    if (/^(none|null|top-?level)$/i.test(value)) {
+        return null;
+    }
+    return value.toUpperCase();
+}
 // ============================================================
 // VIBE SYNC ACTIVITIES
 // ============================================================
@@ -36,6 +48,7 @@ async function syncIssueToVibe(input) {
             title: issue.title,
             description: issue.description,
             status: issue.status,
+            parentIssue: issue.parentIssue,
         }, vibeStatus, existingTaskId);
         if (result.skipped) {
             console.log(`[Temporal:Vibe] Skipped ${issue.identifier} - already exists`);
@@ -70,6 +83,20 @@ async function syncTaskToHuly(input) {
         const result = await hulyClient.syncStatusFromVibe(hulyIdentifier, hulyStatus);
         if (!result.success) {
             throw new Error(result.error || 'Failed to update Huly issue');
+        }
+        const desiredParent = extractParentIdentifierFromDescription(task.description);
+        if (desiredParent !== undefined) {
+            const currentIssue = await hulyClient.getIssue(hulyIdentifier);
+            const parentValue = currentIssue?.parentIssue ?? null;
+            const currentParent = typeof parentValue === 'string'
+                ? parentValue
+                : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
+                    ? (parentValue.identifier || null)
+                    : null;
+            if (currentParent !== desiredParent) {
+                await hulyClient.setParentIssue(hulyIdentifier, desiredParent);
+                console.log(`[Temporal:Huly] Updated parent for ${hulyIdentifier}: ${currentParent || 'top-level'} -> ${desiredParent || 'top-level'}`);
+            }
         }
         console.log(`[Temporal:Huly] Updated ${hulyIdentifier} status to ${hulyStatus}`);
         return { success: true, id: hulyIdentifier, updated: true };

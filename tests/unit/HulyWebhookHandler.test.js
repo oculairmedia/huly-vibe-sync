@@ -79,6 +79,34 @@ describe('HulyWebhookHandler', () => {
         expect(result.processed).toBe(1);
       });
 
+      it('should detect notify envelope payloads and process nested events', async () => {
+        const payload = {
+          type: 'notify',
+          data: {
+            source: 'huly-change-watcher',
+            timestamp: Date.now(),
+            events: [
+              {
+                type: 'issue.updated',
+                data: {
+                  id: 'issue-2',
+                  class: 'tracker:class:Issue',
+                  identifier: 'TEST-2',
+                  title: 'Notify Issue',
+                  status: 'active:Active',
+                },
+              },
+            ],
+          },
+        };
+
+        const result = await handler.handleWebhook(payload);
+
+        expect(result.success).toBe(true);
+        expect(result.processed).toBe(1);
+        expect(mockOnChangesReceived).toHaveBeenCalled();
+      });
+
       it('should transform events to expected format for handlers', async () => {
         const payload = {
           source: 'huly-change-watcher',
@@ -674,9 +702,58 @@ describe('HulyWebhookHandler', () => {
 
     it('should initialize debounce fields in constructor', () => {
       expect(handler._debouncer._debounceWindowMs).toBe(5000);
+      expect(handler._debouncer._maxBufferSize).toBe(500);
       expect(handler._debouncer._pendingChanges).toEqual([]);
       expect(handler._debouncer._debounceTimer).toBeNull();
       expect(handler._debouncer._flushPromise).toBeNull();
+    });
+  });
+
+  describe('WebhookDebouncer flush behavior', () => {
+    it('should split oversized flushes into chunks instead of skipping', async () => {
+      const scheduleHulyWebhookChange = vi.fn(async () => ({ workflowId: 'wf-1' }));
+      const debouncer = new WebhookDebouncer({
+        maxBatchSize: 2,
+        getTemporalClient: async () => ({ scheduleHulyWebhookChange }),
+        groupChangesByProject,
+      });
+
+      debouncer.buffer([
+        { id: '1', data: { identifier: 'TEST-1' } },
+        { id: '2', data: { identifier: 'TEST-2' } },
+        { id: '3', data: { identifier: 'TEST-3' } },
+        { id: '4', data: { identifier: 'TEST-4' } },
+        { id: '5', data: { identifier: 'TEST-5' } },
+      ]);
+
+      await debouncer.flush();
+
+      expect(scheduleHulyWebhookChange).toHaveBeenCalledTimes(3);
+      const sentCounts = scheduleHulyWebhookChange.mock.calls.map(call => call[0].changes.length);
+      expect(sentCounts).toEqual([2, 2, 1]);
+    });
+
+    it('should emergency-flush when buffer exceeds maxBufferSize', async () => {
+      const scheduleHulyWebhookChange = vi.fn(async () => ({ workflowId: 'wf-2' }));
+      const debouncer = new WebhookDebouncer({
+        maxBatchSize: 50,
+        maxBufferSize: 3,
+        getTemporalClient: async () => ({ scheduleHulyWebhookChange }),
+        groupChangesByProject,
+      });
+
+      debouncer.buffer([
+        { id: '1', data: { identifier: 'TEST-1' } },
+        { id: '2', data: { identifier: 'TEST-2' } },
+        { id: '3', data: { identifier: 'TEST-3' } },
+        { id: '4', data: { identifier: 'TEST-4' } },
+      ]);
+
+      await debouncer.flush();
+
+      expect(scheduleHulyWebhookChange).toHaveBeenCalledTimes(1);
+      expect(debouncer._pendingChanges).toHaveLength(0);
+      expect(debouncer._debounceTimer).toBeNull();
     });
   });
 });

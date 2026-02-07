@@ -76,6 +76,12 @@ export declare class VibeClient {
         title: string;
         description?: string;
         status: string;
+        parentIssue?: string | {
+            identifier?: string;
+        } | null;
+        parent?: string | {
+            identifier?: string;
+        } | null;
     }, vibeStatus: string, existingTaskId?: string): Promise<{
         task: VibeTask | null;
         created: boolean;

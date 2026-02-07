@@ -18,6 +18,7 @@ import {
   updateHulyIssueDescription,
   updateHulyIssuePriority,
   updateHulyIssueTitle,
+  updateHulyIssueParent,
   createHulyIssue,
   syncVibeTaskToHuly,
   createHulyService,
@@ -40,6 +41,7 @@ describe('HulyService', () => {
       listIssues: vi.fn(),
       listIssuesBulk: vi.fn(),
       updateIssue: vi.fn(),
+      moveIssue: vi.fn(),
       createIssue: vi.fn(),
     };
 
@@ -251,22 +253,24 @@ describe('HulyService', () => {
       expect(result.projects.PROJ3.issues).toHaveLength(0);
     });
 
-    it('should use oldest cursor for incremental bulk fetch', async () => {
+    it('should split incremental bulk fetches by cursor group', async () => {
       const projectIds = ['PROJ1', 'PROJ2', 'PROJ3'];
       mockDb.getHulySyncCursor
         .mockReturnValueOnce('2025-01-22T00:00:00Z') // PROJ1
-        .mockReturnValueOnce('2025-01-20T00:00:00Z') // PROJ2 (oldest)
-        .mockReturnValueOnce('2025-01-23T00:00:00Z'); // PROJ3
+        .mockReturnValueOnce('2025-01-20T00:00:00Z') // PROJ2
+        .mockReturnValueOnce(null); // PROJ3 (full fetch)
 
-      mockRestClient.listIssuesBulk.mockResolvedValue({
-        projects: {
-          PROJ1: { issues: [], syncMeta: { latestModified: '2025-01-24T10:00:00Z' } },
-          PROJ2: { issues: [], syncMeta: { latestModified: '2025-01-24T11:00:00Z' } },
-          PROJ3: { issues: [], syncMeta: { latestModified: '2025-01-24T12:00:00Z' } },
-        },
+      mockRestClient.listIssuesBulk.mockImplementation(async (ids, options) => ({
+        projects: Object.fromEntries(
+          ids.map((id, idx) => [
+            id,
+            { issues: [], syncMeta: { latestModified: `2025-01-24T1${idx}:00:00Z` } },
+          ])
+        ),
         totalIssues: 0,
-        projectCount: 3,
-      });
+        projectCount: ids.length,
+        options,
+      }));
 
       await fetchHulyIssuesBulk(
         mockRestClient,
@@ -275,15 +279,43 @@ describe('HulyService', () => {
         mockDb
       );
 
-      // Should use oldest cursor (2025-01-20T00:00:00Z)
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledTimes(3);
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ1'], {
+        limit: 1000,
+        modifiedSince: '2025-01-22T00:00:00Z',
+      });
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ2'], {
+        limit: 1000,
+        modifiedSince: '2025-01-20T00:00:00Z',
+      });
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ3'], {
+        limit: 1000,
+      });
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('split by')
+      );
+    });
+
+    it('should use a single incremental bulk call when all cursors match', async () => {
+      const projectIds = ['PROJ1', 'PROJ2'];
+      mockDb.getHulySyncCursor.mockReturnValue('2025-01-20T00:00:00Z');
+      mockRestClient.listIssuesBulk.mockResolvedValue({
+        projects: {
+          PROJ1: { issues: [], syncMeta: { latestModified: '2025-01-24T10:00:00Z' } },
+          PROJ2: { issues: [], syncMeta: { latestModified: '2025-01-24T11:00:00Z' } },
+        },
+        totalIssues: 0,
+        projectCount: 2,
+      });
+
+      await fetchHulyIssuesBulk(mockRestClient, projectIds, { sync: { incremental: true } }, mockDb);
+
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledTimes(1);
       expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(projectIds, {
         limit: 1000,
         modifiedSince: '2025-01-20T00:00:00Z',
       });
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('Bulk incremental fetch')
-      );
     });
 
     it('should update cursors for all projects after bulk fetch', async () => {
@@ -632,6 +664,29 @@ describe('HulyService', () => {
   });
 
   // ============================================================
+  // updateHulyIssueParent Tests
+  // ============================================================
+  describe('updateHulyIssueParent', () => {
+    it('should move issue under parent using REST client', async () => {
+      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-2', parentIssue: 'TEST-1' });
+
+      const result = await updateHulyIssueParent(mockRestClient, 'TEST-2', 'TEST-1');
+
+      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-2', 'TEST-1');
+      expect(result).toBe(true);
+    });
+
+    it('should move issue to top-level when parent is null', async () => {
+      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-2', parentIssue: null });
+
+      const result = await updateHulyIssueParent(mockRestClient, 'TEST-2', null);
+
+      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-2', null);
+      expect(result).toBe(true);
+    });
+  });
+
+  // ============================================================
   // createHulyIssue Tests
   // ============================================================
   describe('createHulyIssue', () => {
@@ -746,6 +801,52 @@ describe('HulyService', () => {
         expect.any(String)
       );
     });
+
+    it('should reparent Huly issue when Vibe parent metadata changes', async () => {
+      const vibeTask = {
+        id: 'task-2',
+        title: 'Child Task',
+        description: 'Description\n\n---\nHuly Issue: TEST-2\nHuly Parent: TEST-99',
+        status: 'todo',
+      };
+      const hulyIssues = [
+        {
+          identifier: 'TEST-2',
+          status: 'Backlog',
+          description: 'Description',
+          parentIssue: { identifier: 'TEST-1' },
+        },
+      ];
+
+      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-2', parentIssue: 'TEST-99' });
+
+      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
+
+      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-2', 'TEST-99');
+    });
+
+    it('should move issue to top-level when parent metadata is none', async () => {
+      const vibeTask = {
+        id: 'task-3',
+        title: 'Child Task',
+        description: 'Description\n\n---\nHuly Issue: TEST-3\nHuly Parent: none',
+        status: 'todo',
+      };
+      const hulyIssues = [
+        {
+          identifier: 'TEST-3',
+          status: 'Backlog',
+          description: 'Description',
+          parentIssue: { identifier: 'TEST-1' },
+        },
+      ];
+
+      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-3', parentIssue: null });
+
+      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
+
+      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-3', null);
+    });
   });
 
   // ============================================================
@@ -760,6 +861,7 @@ describe('HulyService', () => {
       expect(service).toHaveProperty('fetchIssues');
       expect(service).toHaveProperty('updateIssueStatus');
       expect(service).toHaveProperty('updateIssueDescription');
+      expect(service).toHaveProperty('updateIssueParent');
       expect(service).toHaveProperty('syncVibeTaskToHuly');
     });
 

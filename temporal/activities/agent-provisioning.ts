@@ -50,6 +50,56 @@ export interface CheckpointData {
   failed: number;
 }
 
+async function syncAgentMemoryFromControl(agentId: string): Promise<number> {
+  const controlAgentName =
+    process.env.LETTA_CONTROL_AGENT_NAME || process.env.LETTA_CONTROL_AGENT || 'Meridian';
+
+  const controlAgents = await lettaClient.agents.list({ name: controlAgentName, limit: 1 });
+  if (controlAgents.length === 0) {
+    return 0;
+  }
+  const controlAgentId = controlAgents[0].id;
+  if (!controlAgentId) {
+    return 0;
+  }
+
+  const controlBlocks = await lettaClient.agents.blocks.list(controlAgentId, { limit: 100 });
+  const controlBlockByLabel = new Map(controlBlocks.map(b => [b.label, b]));
+  const targetBlocks = await lettaClient.agents.blocks.list(agentId, { limit: 100 });
+  const targetBlockByLabel = new Map(targetBlocks.map(b => [b.label, b]));
+
+  const labelsToSync = ['persona', 'expression'];
+  let synced = 0;
+
+  for (const label of labelsToSync) {
+    const controlBlock = controlBlockByLabel.get(label);
+    if (!controlBlock || typeof controlBlock.value !== 'string') {
+      continue;
+    }
+
+    const existingTarget = targetBlockByLabel.get(label);
+    if (existingTarget) {
+      if (existingTarget.value !== controlBlock.value && existingTarget.id) {
+        await lettaClient.blocks.modify(existingTarget.id, { value: controlBlock.value });
+        synced++;
+      }
+      continue;
+    }
+
+    const newBlock = await lettaClient.blocks.create({
+      label,
+      value: controlBlock.value,
+      limit: label === 'persona' ? 20000 : undefined,
+    });
+    if (newBlock.id) {
+      await lettaClient.agents.blocks.attach(agentId, newBlock.id);
+      synced++;
+    }
+  }
+
+  return synced;
+}
+
 // ============================================================================
 // Activity: Fetch Agents to Provision
 // ============================================================================
@@ -193,6 +243,20 @@ export async function provisionSingleAgent(
         const selectedAgent = sortedAgents[0];
         console.warn(`[Activity:ProvisionAgent] Using most recent agent: ${selectedAgent.id}`);
 
+        try {
+          const syncedBlocks = await syncAgentMemoryFromControl(selectedAgent.id);
+          if (syncedBlocks > 0) {
+            console.log(
+              `[Activity:ProvisionAgent] Synced ${syncedBlocks} memory blocks for ${selectedAgent.id}`
+            );
+          }
+        } catch (syncError) {
+          const message = syncError instanceof Error ? syncError.message : String(syncError);
+          console.warn(
+            `[Activity:ProvisionAgent] Memory block sync skipped for ${selectedAgent.id}: ${message}`
+          );
+        }
+
         return {
           agentId: selectedAgent.id,
           created: false,
@@ -200,6 +264,21 @@ export async function provisionSingleAgent(
       }
 
       console.log(`[Activity:ProvisionAgent] Agent already exists: ${matchingAgents[0].id}`);
+
+      try {
+        const syncedBlocks = await syncAgentMemoryFromControl(matchingAgents[0].id);
+        if (syncedBlocks > 0) {
+          console.log(
+            `[Activity:ProvisionAgent] Synced ${syncedBlocks} memory blocks for ${matchingAgents[0].id}`
+          );
+        }
+      } catch (syncError) {
+        const message = syncError instanceof Error ? syncError.message : String(syncError);
+        console.warn(
+          `[Activity:ProvisionAgent] Memory block sync skipped for ${matchingAgents[0].id}: ${message}`
+        );
+      }
+
       return {
         agentId: matchingAgents[0].id,
         created: false,
@@ -218,6 +297,16 @@ export async function provisionSingleAgent(
     });
 
     console.log(`[Activity:ProvisionAgent] Agent created: ${agent.id}`);
+
+    try {
+      const syncedBlocks = await syncAgentMemoryFromControl(agent.id);
+      if (syncedBlocks > 0) {
+        console.log(`[Activity:ProvisionAgent] Synced ${syncedBlocks} memory blocks for ${agent.id}`);
+      }
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : String(syncError);
+      console.warn(`[Activity:ProvisionAgent] Memory block sync skipped for ${agent.id}: ${message}`);
+    }
 
     return {
       agentId: agent.id,
@@ -295,6 +384,18 @@ export async function attachToolsToAgent(agentId: string): Promise<ToolAttachmen
     const existingToolIds = new Set(
       existingTools.map(t => t.id).filter((id): id is string => id !== undefined)
     );
+    const controlToolIdSet = new Set(controlToolIds);
+
+    // Detach stale tools that are no longer on control agent
+    const staleTools = [...existingToolIds].filter(toolId => !controlToolIdSet.has(toolId));
+    for (const toolId of staleTools) {
+      try {
+        await lettaClient.agents.tools.detach(agentId, toolId);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        result.errors.push({ toolId, error: errorMessage });
+      }
+    }
 
     // Attach missing tools
     for (const toolId of controlToolIds) {
@@ -313,7 +414,7 @@ export async function attachToolsToAgent(agentId: string): Promise<ToolAttachmen
     }
 
     console.log(
-      `[Activity:AttachTools] Attached ${result.attached} tools, skipped ${result.skipped}`
+      `[Activity:AttachTools] Attached ${result.attached} tools, detached ${staleTools.length}, skipped ${result.skipped}`
     );
 
     return result;

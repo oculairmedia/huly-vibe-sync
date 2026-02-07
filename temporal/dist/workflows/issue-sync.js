@@ -10,7 +10,7 @@ exports.IssueSyncWorkflow = IssueSyncWorkflow;
 exports.BatchIssueSyncWorkflow = BatchIssueSyncWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 // Proxy activities with retry policies
-const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = (0, workflow_1.proxyActivities)({
+const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory, compensateHulyCreate, compensateVibeCreate, compensateBeadsCreate, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '1 second',
@@ -22,6 +22,7 @@ const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = (0, workflow_
             'HulyValidationError',
             'VibeNotFoundError',
             'VibeValidationError',
+            'BeadsValidationError',
         ],
     },
 });
@@ -40,6 +41,7 @@ const { syncToHuly, syncToVibe, syncToBeads, updateLettaMemory } = (0, workflow_
 async function IssueSyncWorkflow(input) {
     const startTime = Date.now();
     const { issue, operation, source, agentId } = input;
+    const beadsSyncMode = input.beadsSyncMode || 'atomic';
     workflow_1.log.info(`[IssueSyncWorkflow] Starting: ${operation} from ${source}`, {
         identifier: issue.identifier,
         title: issue.title,
@@ -80,15 +82,22 @@ async function IssueSyncWorkflow(input) {
             result.vibeResult = { success: true, systemId: issue.vibeId };
         }
         // Step 3: Sync to Beads (skip if source is Beads)
-        // Beads sync is non-fatal - we continue even if it fails
         if (source !== 'beads') {
-            workflow_1.log.info(`[IssueSyncWorkflow] Syncing to Beads...`);
-            try {
-                result.beadsResult = await syncToBeads({ issue, operation, source });
+            workflow_1.log.info(`[IssueSyncWorkflow] Syncing to Beads...`, { mode: beadsSyncMode });
+            if (beadsSyncMode === 'best_effort') {
+                try {
+                    result.beadsResult = await syncToBeads({ issue, operation, source });
+                }
+                catch (beadsError) {
+                    workflow_1.log.warn(`[IssueSyncWorkflow] Beads sync failed (best-effort): ${beadsError}`);
+                    result.beadsResult = { success: false, error: String(beadsError) };
+                }
             }
-            catch (beadsError) {
-                workflow_1.log.warn(`[IssueSyncWorkflow] Beads sync failed (non-fatal): ${beadsError}`);
-                result.beadsResult = { success: false, error: String(beadsError) };
+            else {
+                result.beadsResult = await syncToBeads({ issue, operation, source });
+                if (!result.beadsResult.success) {
+                    throw new Error(`Beads sync failed: ${result.beadsResult.error || 'Unknown error'}`);
+                }
             }
         }
         else {
@@ -127,6 +136,27 @@ async function IssueSyncWorkflow(input) {
         return result;
     }
     catch (error) {
+        // Compensation for atomic create operations: roll back systems in reverse order.
+        if (operation === 'create' && beadsSyncMode === 'atomic') {
+            try {
+                if (result.beadsResult?.systemId) {
+                    await compensateBeadsCreate({ beadsId: result.beadsResult.systemId });
+                }
+                if (result.vibeResult?.systemId) {
+                    await compensateVibeCreate({ vibeId: result.vibeResult.systemId });
+                }
+                if (result.hulyResult?.systemId) {
+                    await compensateHulyCreate({ hulyIdentifier: result.hulyResult.systemId });
+                }
+            }
+            catch (compensationError) {
+                workflow_1.log.warn(`[IssueSyncWorkflow] Compensation failed`, {
+                    error: compensationError instanceof Error
+                        ? compensationError.message
+                        : String(compensationError),
+                });
+            }
+        }
         result.success = false;
         result.error = error instanceof Error ? error.message : String(error);
         result.duration = Date.now() - startTime;

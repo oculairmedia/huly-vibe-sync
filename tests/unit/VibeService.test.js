@@ -591,7 +591,7 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.createTask).toHaveBeenCalledWith('proj-1', {
         title: 'Test Issue',
-        description: 'Issue description\n\n---\nHuly Issue: TEST-1',
+        description: 'Issue description\n\n---\nHuly Issue: TEST-1\nHuly Parent: none',
         status: 'inprogress', // mapHulyStatusToVibe('In Progress')
       });
       expect(result).toEqual(createdTask);
@@ -610,7 +610,7 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.createTask).toHaveBeenCalledWith('proj-1', {
         title: 'Test',
-        description: 'Original description\n\n---\nHuly Issue: PROJ-42',
+        description: 'Original description\n\n---\nHuly Issue: PROJ-42\nHuly Parent: none',
         status: 'todo',
       });
     });
@@ -628,7 +628,7 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.createTask).toHaveBeenCalledWith('proj-1', {
         title: 'No Description Issue',
-        description: 'Synced from Huly: TEST-2',
+        description: 'Synced from Huly: TEST-2\n\n---\nHuly Issue: TEST-2\nHuly Parent: none',
         status: 'todo',
       });
     });
@@ -646,7 +646,7 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.createTask).toHaveBeenCalledWith('proj-1', {
         title: 'Empty Description Issue',
-        description: 'Synced from Huly: TEST-3',
+        description: 'Synced from Huly: TEST-3\n\n---\nHuly Issue: TEST-3\nHuly Parent: none',
         status: 'done',
       });
     });
@@ -664,9 +664,29 @@ describe('VibeService', () => {
 
       expect(mockVibeClient.createTask).toHaveBeenCalledWith('proj-1', {
         title: 'Multiline Issue',
-        description: 'Line 1\n\nLine 2\n\n## Section\nContent\n\n---\nHuly Issue: TEST-4',
+        description: 'Line 1\n\nLine 2\n\n## Section\nContent\n\n---\nHuly Issue: TEST-4\nHuly Parent: none',
         status: 'inprogress',
       });
+    });
+
+    it('should include parent metadata when Huly issue has a parent', async () => {
+      mockVibeClient.listTasks.mockResolvedValue([]);
+      mockVibeClient.createTask.mockResolvedValue({ id: 'task-1' });
+
+      await createVibeTask(mockVibeClient, 'proj-1', {
+        identifier: 'TEST-5',
+        title: 'Child Issue',
+        description: 'Child description',
+        status: 'Backlog',
+        parentIssue: { identifier: 'TEST-1' },
+      });
+
+      expect(mockVibeClient.createTask).toHaveBeenCalledWith(
+        'proj-1',
+        expect.objectContaining({
+          description: 'Child description\n\n---\nHuly Issue: TEST-5\nHuly Parent: TEST-1',
+        })
+      );
     });
 
     it('should skip creation if task already exists (deduplication)', async () => {
@@ -1009,7 +1029,7 @@ describe('VibeService', () => {
         'proj-1',
         expect.objectContaining({
           description:
-            'Description with <html> & "quotes" and \'apostrophes\'\n\n---\nHuly Issue: TEST-1',
+            'Description with <html> & "quotes" and \'apostrophes\'\n\n---\nHuly Issue: TEST-1\nHuly Parent: none',
         })
       );
     });
