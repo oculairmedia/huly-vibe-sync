@@ -332,22 +332,6 @@ export class HulyClient {
     return true;
   }
 
-  /**
-   * Find an existing issue by title (for deduplication)
-   * Returns the first matching issue or null
-   */
-  async findIssueByTitle(projectIdentifier: string, title: string): Promise<HulyIssue | null> {
-    try {
-      const issues = await this.listIssues(projectIdentifier, { limit: 100 });
-      const normalizedTitle = title.toLowerCase().trim();
-
-      return issues.find(issue => issue.title.toLowerCase().trim() === normalizedTitle) || null;
-    } catch (error) {
-      console.warn(`[HulyClient] findIssueByTitle failed: ${error}`);
-      return null;
-    }
-  }
-
   // ============================================================
   // SUB-ISSUE OPERATIONS
   // ============================================================

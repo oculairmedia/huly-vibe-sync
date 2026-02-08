@@ -11,27 +11,7 @@ import { findMappedIssueByTitle } from './huly-dedupe';
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
-const HULY_REST_API_URL = process.env.HULY_REST_API_URL || 'http://192.168.50.90:3458/api';
 const TIMEOUT = 30000;
-
-/**
- * Normalize title for comparison (lowercase, trim, remove common prefixes)
- */
-function normalizeTitle(title: string): string {
-  if (!title) return '';
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/^\[p[0-4]\]\s*/i, '')
-    .replace(/^\[perf[^\]]*\]\s*/i, '')
-    .replace(/^\[tier\s*\d+\]\s*/i, '')
-    .replace(/^\[action\]\s*/i, '')
-    .replace(/^\[bug\]\s*/i, '')
-    .replace(/^\[fixed\]\s*/i, '')
-    .replace(/^\[epic\]\s*/i, '')
-    .replace(/^\[wip\]\s*/i, '')
-    .trim();
-}
 
 /**
  * Check if an issue with the same title already exists in the project
@@ -41,49 +21,7 @@ async function findExistingIssueByTitle(
   projectIdentifier: string,
   title: string
 ): Promise<string | null> {
-  const mappedIssue = await findMappedIssueByTitle(projectIdentifier, title);
-  if (mappedIssue) {
-    return mappedIssue;
-  }
-
-  if (process.env.HULY_ENABLE_REMOTE_TITLE_DEDUPE !== 'true') {
-    return null;
-  }
-
-  try {
-    const response = await fetch(
-      `${HULY_REST_API_URL}/issues/${projectIdentifier}?limit=500&includeDescriptions=false`,
-      {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(TIMEOUT),
-      }
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `[Huly Activity] Failed to fetch issues for duplicate check: ${response.status}`
-      );
-      return null;
-    }
-
-    const issues = (await response.json()) as Array<{ identifier: string; title: string }>;
-    const normalizedTarget = normalizeTitle(title);
-
-    for (const issue of issues) {
-      if (normalizeTitle(issue.title) === normalizedTarget) {
-        console.log(`[Huly Activity] Found existing issue ${issue.identifier} with matching title`);
-        return issue.identifier;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.warn(
-      `[Huly Activity] Duplicate check failed: ${error instanceof Error ? error.message : error}`
-    );
-    return null;
-  }
+  return findMappedIssueByTitle(projectIdentifier, title);
 }
 
 // Types

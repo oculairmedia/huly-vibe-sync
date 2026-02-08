@@ -139,11 +139,6 @@ export declare class HulyClient {
     updateIssue(issueIdentifier: string, field: string, value: string): Promise<HulyIssue>;
     patchIssue(issueIdentifier: string, updates: Partial<HulyIssue>): Promise<HulyIssue>;
     deleteIssue(issueIdentifier: string, cascade?: boolean): Promise<boolean>;
-    /**
-     * Find an existing issue by title (for deduplication)
-     * Returns the first matching issue or null
-     */
-    findIssueByTitle(projectIdentifier: string, title: string): Promise<HulyIssue | null>;
     getSubIssues(issueIdentifier: string): Promise<{
         subIssues: HulyIssue[];
         count: number;

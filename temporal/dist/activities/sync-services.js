@@ -263,9 +263,6 @@ async function createBeadsIssueInHuly(input) {
         if (mappedByTitle) {
             existingIssue = await hulyClient.getIssue(mappedByTitle);
         }
-        if (!existingIssue) {
-            existingIssue = await hulyClient.findIssueByTitle(context.projectIdentifier, beadsIssue.title);
-        }
         if (existingIssue) {
             console.log(`[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`);
             if (context.gitRepoPath) {
