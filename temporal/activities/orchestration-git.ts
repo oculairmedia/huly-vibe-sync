@@ -7,6 +7,13 @@
 import { createBeadsClient, createHulyClient } from '../lib';
 import type { HulyProject } from './orchestration';
 
+const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
+const gitRepoPathCache = new Map<string, { value: string | null; expiresAt: number }>();
+
+function isFresh(expiresAt: number): boolean {
+  return expiresAt > Date.now();
+}
+
 // ============================================================
 // GIT REPO PATH RESOLUTION
 // ============================================================
@@ -24,6 +31,11 @@ export async function resolveGitRepoPath(input: {
   console.log(`[Temporal:Orchestration] Resolving gitRepoPath for project: ${projectIdentifier}`);
 
   try {
+    const cached = gitRepoPathCache.get(projectIdentifier);
+    if (cached && isFresh(cached.expiresAt)) {
+      return cached.value;
+    }
+
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
     const projects = await hulyClient.listProjects();
     const project = projects.find((p: HulyProject) => p.identifier === projectIdentifier);
@@ -32,6 +44,10 @@ export async function resolveGitRepoPath(input: {
       console.log(
         `[Temporal:Orchestration] Project not found for gitRepoPath: ${projectIdentifier}`
       );
+      gitRepoPathCache.set(projectIdentifier, {
+        value: null,
+        expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
+      });
       return null;
     }
 
@@ -46,6 +62,11 @@ export async function resolveGitRepoPath(input: {
         `[Temporal:Orchestration] No gitRepoPath in description for ${projectIdentifier}`
       );
     }
+
+    gitRepoPathCache.set(projectIdentifier, {
+      value: path,
+      expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
+    });
 
     return path;
   } catch (error) {

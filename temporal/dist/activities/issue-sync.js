@@ -14,6 +14,7 @@ exports.compensateHulyCreate = compensateHulyCreate;
 exports.compensateVibeCreate = compensateVibeCreate;
 exports.compensateBeadsCreate = compensateBeadsCreate;
 const activity_1 = require("@temporalio/activity");
+const huly_dedupe_1 = require("./huly-dedupe");
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
@@ -43,6 +44,13 @@ function normalizeTitle(title) {
  * Returns the existing issue identifier if found, null otherwise
  */
 async function findExistingIssueByTitle(projectIdentifier, title) {
+    const mappedIssue = await (0, huly_dedupe_1.findMappedIssueByTitle)(projectIdentifier, title);
+    if (mappedIssue) {
+        return mappedIssue;
+    }
+    if (process.env.HULY_ENABLE_REMOTE_TITLE_DEDUPE !== 'true') {
+        return null;
+    }
     try {
         const response = await fetch(`${HULY_REST_API_URL}/issues/${projectIdentifier}?limit=500&includeDescriptions=false`, {
             method: 'GET',
@@ -53,7 +61,7 @@ async function findExistingIssueByTitle(projectIdentifier, title) {
             console.warn(`[Huly Activity] Failed to fetch issues for duplicate check: ${response.status}`);
             return null;
         }
-        const issues = await response.json();
+        const issues = (await response.json());
         const normalizedTarget = normalizeTitle(title);
         for (const issue of issues) {
             if (normalizeTitle(issue.title) === normalizedTarget) {
@@ -70,19 +78,19 @@ async function findExistingIssueByTitle(projectIdentifier, title) {
 }
 // Status mapping between systems
 const STATUS_HULY_TO_VIBE = {
-    'Backlog': 'todo',
-    'Todo': 'todo',
+    Backlog: 'todo',
+    Todo: 'todo',
     'In Progress': 'inprogress',
     'In Review': 'inreview',
-    'Done': 'done',
-    'Canceled': 'cancelled',
+    Done: 'done',
+    Canceled: 'cancelled',
 };
 const STATUS_VIBE_TO_HULY = {
-    'todo': 'Todo',
-    'inprogress': 'In Progress',
-    'inreview': 'In Review',
-    'done': 'Done',
-    'cancelled': 'Canceled',
+    todo: 'Todo',
+    inprogress: 'In Progress',
+    inreview: 'In Review',
+    done: 'Done',
+    cancelled: 'Canceled',
 };
 /**
  * Sync issue to Huly
@@ -117,14 +125,14 @@ async function syncToHuly(input) {
                         description: issue.description || '',
                         status: issue.status,
                         priority: issue.priority || 'NoPriority',
-                    }
+                    },
                 }),
                 signal: AbortSignal.timeout(TIMEOUT),
             });
             if (!response.ok) {
                 await handleHttpError(response, 'Huly', 'create');
             }
-            const result = await response.json();
+            const result = (await response.json());
             console.log(`[Huly Activity] Created issue: ${result.identifier || result.id}`);
             return { success: true, systemId: result.identifier || result.id };
         }
@@ -138,7 +146,7 @@ async function syncToHuly(input) {
                         issue: issue.identifier,
                         field: 'status',
                         value: issue.status,
-                    }
+                    },
                 }),
                 signal: AbortSignal.timeout(TIMEOUT),
             });
@@ -177,7 +185,7 @@ async function syncToVibe(input) {
             if (!response.ok) {
                 await handleHttpError(response, 'Vibe', 'create');
             }
-            const result = await response.json();
+            const result = (await response.json());
             console.log(`[Vibe Activity] Created task: ${result.id}`);
             return { success: true, systemId: result.id };
         }
@@ -229,14 +237,14 @@ async function syncToBeads(input) {
                     status: issue.status,
                     priority: issue.priority,
                     projectPath: issue.projectId, // This should be the filesystem path
-                }
+                },
             }),
             signal: AbortSignal.timeout(TIMEOUT),
         });
         if (!response.ok) {
             await handleHttpError(response, 'Beads', 'sync');
         }
-        const result = await response.json();
+        const result = (await response.json());
         console.log(`[Beads Activity] Synced: ${result.beadsId || 'ok'}`);
         return { success: true, systemId: result.beadsId };
     }
@@ -381,7 +389,9 @@ function handleActivityError(error, system) {
         if (message.includes('timeout') || message.includes('aborted')) {
             throw activity_1.ApplicationFailure.retryable(`${system} timeout: ${error.message}`, `${system}TimeoutError`);
         }
-        if (message.includes('fetch') || message.includes('network') || message.includes('econnrefused')) {
+        if (message.includes('fetch') ||
+            message.includes('network') ||
+            message.includes('econnrefused')) {
             throw activity_1.ApplicationFailure.retryable(`${system} network error: ${error.message}`, `${system}NetworkError`);
         }
         if (message.includes('500') || message.includes('502') || message.includes('503')) {

@@ -11,6 +11,44 @@ import * as path from 'path';
 import { handleOrchestratorError } from './orchestration-letta';
 import type { HulyProject, VibeProject, HulyIssue, VibeTask } from './orchestration';
 
+const PROJECT_CACHE_TTL_MS = Number(process.env.TEMPORAL_PROJECT_CACHE_TTL_MS || 30000);
+
+let hulyProjectsCache: { value: HulyProject[]; expiresAt: number } | null = null;
+let vibeProjectsCache: { value: VibeProject[]; expiresAt: number } | null = null;
+const vibeProjectIdCache = new Map<string, { value: string | null; expiresAt: number }>();
+
+function isFresh(expiresAt: number): boolean {
+  return expiresAt > Date.now();
+}
+
+async function getCachedHulyProjects(): Promise<HulyProject[]> {
+  if (hulyProjectsCache && isFresh(hulyProjectsCache.expiresAt)) {
+    return hulyProjectsCache.value;
+  }
+
+  const hulyClient = createHulyClient(process.env.HULY_API_URL);
+  const projects = await hulyClient.listProjects();
+  hulyProjectsCache = {
+    value: projects,
+    expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
+  };
+  return projects;
+}
+
+async function getCachedVibeProjects(): Promise<VibeProject[]> {
+  if (vibeProjectsCache && isFresh(vibeProjectsCache.expiresAt)) {
+    return vibeProjectsCache.value;
+  }
+
+  const vibeClient = createVibeClient(process.env.VIBE_API_URL);
+  const projects = await vibeClient.listProjects();
+  vibeProjectsCache = {
+    value: projects,
+    expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
+  };
+  return projects;
+}
+
 // ============================================================
 // PROJECT FETCHING ACTIVITIES
 // ============================================================
@@ -22,8 +60,7 @@ export async function fetchHulyProjects(): Promise<HulyProject[]> {
   console.log('[Temporal:Orchestration] Fetching Huly projects');
 
   try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-    const projects = await hulyClient.listProjects();
+    const projects = await getCachedHulyProjects();
 
     console.log(`[Temporal:Orchestration] Found ${projects.length} Huly projects`);
     return projects;
@@ -39,8 +76,7 @@ export async function fetchVibeProjects(): Promise<VibeProject[]> {
   console.log('[Temporal:Orchestration] Fetching Vibe projects');
 
   try {
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-    const projects = await vibeClient.listProjects();
+    const projects = await getCachedVibeProjects();
 
     console.log(`[Temporal:Orchestration] Found ${projects.length} Vibe projects`);
     return projects;
@@ -53,17 +89,24 @@ export async function getVibeProjectId(hulyProjectIdentifier: string): Promise<s
   console.log(`[Temporal:Orchestration] Looking up Vibe project for: ${hulyProjectIdentifier}`);
 
   try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-    const hulyProjects = await hulyClient.listProjects();
+    const cached = vibeProjectIdCache.get(hulyProjectIdentifier);
+    if (cached && isFresh(cached.expiresAt)) {
+      return cached.value;
+    }
+
+    const hulyProjects = await getCachedHulyProjects();
     const hulyProject = hulyProjects.find(p => p.identifier === hulyProjectIdentifier);
 
     if (!hulyProject) {
       console.log(`[Temporal:Orchestration] Huly project not found: ${hulyProjectIdentifier}`);
+      vibeProjectIdCache.set(hulyProjectIdentifier, {
+        value: null,
+        expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
+      });
       return null;
     }
 
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-    const vibeProjects = await vibeClient.listProjects();
+    const vibeProjects = await getCachedVibeProjects();
     const normalizedName = hulyProject.name.toLowerCase().trim();
     const match = vibeProjects.find(p => p.name.toLowerCase().trim() === normalizedName);
 
@@ -71,10 +114,18 @@ export async function getVibeProjectId(hulyProjectIdentifier: string): Promise<s
       console.log(
         `[Temporal:Orchestration] Found Vibe project: ${match.id} for ${hulyProjectIdentifier}`
       );
+      vibeProjectIdCache.set(hulyProjectIdentifier, {
+        value: match.id,
+        expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
+      });
       return match.id;
     }
 
     console.log(`[Temporal:Orchestration] No Vibe project found for: ${hulyProject.name}`);
+    vibeProjectIdCache.set(hulyProjectIdentifier, {
+      value: null,
+      expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
+    });
     return null;
   } catch (error) {
     console.warn(`[Temporal:Orchestration] Vibe project lookup failed: ${error}`);
@@ -88,8 +139,7 @@ export async function resolveProjectIdentifier(projectIdOrFolder: string): Promi
   console.log(`[Temporal:Orchestration] Resolving project identifier: ${projectIdOrFolder}`);
 
   try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-    const projects = await hulyClient.listProjects();
+    const projects = await getCachedHulyProjects();
 
     // Normalize input: lowercase, remove path separators
     const normalizedInput =

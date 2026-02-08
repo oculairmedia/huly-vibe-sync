@@ -19,6 +19,7 @@ exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
+const huly_dedupe_1 = require("./huly-dedupe");
 function extractParentIdentifierFromDescription(description) {
     if (!description)
         return undefined;
@@ -91,7 +92,7 @@ async function syncTaskToHuly(input) {
             const currentParent = typeof parentValue === 'string'
                 ? parentValue
                 : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
-                    ? (parentValue.identifier || null)
+                    ? parentValue.identifier || null
                     : null;
             if (currentParent !== desiredParent) {
                 await hulyClient.setParentIssue(hulyIdentifier, desiredParent);
@@ -248,7 +249,23 @@ async function createBeadsIssueInHuly(input) {
     console.log(`[Temporal:Beads→Huly] Creating Huly issue for ${beadsIssue.id}`);
     try {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const existingIssue = await hulyClient.findIssueByTitle(context.projectIdentifier, beadsIssue.title);
+        const mappedByBeads = await (0, huly_dedupe_1.findMappedIssueByBeadsId)(context.projectIdentifier, beadsIssue.id);
+        if (mappedByBeads) {
+            return {
+                success: true,
+                skipped: true,
+                id: mappedByBeads,
+                hulyIdentifier: mappedByBeads,
+            };
+        }
+        let existingIssue = null;
+        const mappedByTitle = await (0, huly_dedupe_1.findMappedIssueByTitle)(context.projectIdentifier, beadsIssue.title);
+        if (mappedByTitle) {
+            existingIssue = await hulyClient.getIssue(mappedByTitle);
+        }
+        if (!existingIssue) {
+            existingIssue = await hulyClient.findIssueByTitle(context.projectIdentifier, beadsIssue.title);
+        }
         if (existingIssue) {
             console.log(`[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`);
             if (context.gitRepoPath) {

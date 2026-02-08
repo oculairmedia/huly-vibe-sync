@@ -185,6 +185,13 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
     if (!linkedIds) {
         return { hasConflict: false, sourceWins: true };
     }
+    const hasComparableTargets = (source !== 'huly' && !!linkedIds.hulyId) ||
+        (source !== 'vibe' && !!linkedIds.vibeId) ||
+        (source !== 'beads' && !!linkedIds.beadsId && !!context.gitRepoPath);
+    // Fast-path: if no comparable linked target exists, avoid extra reads.
+    if (!hasComparableTargets) {
+        return { hasConflict: false, sourceWins: true };
+    }
     const timestamps = [
         { system: source, timestamp: issueData.modifiedAt },
     ];

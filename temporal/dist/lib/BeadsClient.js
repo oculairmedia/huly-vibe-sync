@@ -119,10 +119,19 @@ class BeadsClient {
      * Get the issue prefix from config.yaml
      */
     getIssuePrefix() {
+        try {
+            const configuredPrefix = this.execBeads('config get issue_prefix').trim();
+            if (configuredPrefix) {
+                return configuredPrefix.replace(/-$/, '');
+            }
+        }
+        catch {
+            // Fall through to file-based fallback
+        }
         const configPath = path.join(this.repoPath, '.beads', 'config.yaml');
         try {
             const content = fs.readFileSync(configPath, 'utf-8');
-            const match = content.match(/issue_prefix:\s*["']?([^"'\n]+)["']?/);
+            const match = content.match(/issue[_-]prefix:\s*["']?([^"'\n]+)["']?/);
             return match ? match[1].trim() : 'bd';
         }
         catch {
@@ -191,6 +200,31 @@ class BeadsClient {
             return this.parseBeadsOutput(output);
         }
         catch (error) {
+            if (error instanceof Error && error.message.includes('Database out of sync with JSONL')) {
+                try {
+                    this.execBeads('sync --import-only');
+                }
+                catch (syncError) {
+                    if (syncError instanceof Error &&
+                        syncError.message.includes('prefix mismatch detected')) {
+                        try {
+                            this.execBeads('sync --import-only --rename-on-import');
+                        }
+                        catch (renameError) {
+                            if (renameError instanceof Error) {
+                                console.warn(`[BeadsClient] Prefix migration failed for ${this.repoPath}, falling back to --allow-stale list: ${renameError.message}`);
+                            }
+                            const staleOutput = this.execBeads('list --json --allow-stale');
+                            return this.parseBeadsOutput(staleOutput);
+                        }
+                    }
+                    else {
+                        throw syncError;
+                    }
+                }
+                const output = this.execBeads('list --json');
+                return this.parseBeadsOutput(output);
+            }
             // If no issues exist, return empty array
             if (error instanceof Error && error.message.includes('No issues found')) {
                 return [];

@@ -8,6 +8,34 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HulyClient = void 0;
 exports.createHulyClient = createHulyClient;
+const HULY_MIN_REQUEST_INTERVAL_MS = Number(process.env.HULY_MIN_REQUEST_INTERVAL_MS || 75);
+const HULY_MAX_RETRY_ATTEMPTS = Number(process.env.HULY_MAX_RETRY_ATTEMPTS || 4);
+const HULY_BASE_BACKOFF_MS = Number(process.env.HULY_BASE_BACKOFF_MS || 400);
+let nextHulyRequestAt = 0;
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function throttleHulyRequestStart() {
+    const now = Date.now();
+    const waitMs = Math.max(0, nextHulyRequestAt - now);
+    nextHulyRequestAt = Math.max(nextHulyRequestAt, now) + HULY_MIN_REQUEST_INTERVAL_MS;
+    if (waitMs > 0) {
+        await sleep(waitMs);
+    }
+}
+function parseRetryAfterMs(response) {
+    const value = response.headers.get('retry-after');
+    if (!value)
+        return null;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+        return Math.max(0, numeric * 1000);
+    }
+    const retryDate = Date.parse(value);
+    if (Number.isNaN(retryDate))
+        return null;
+    return Math.max(0, retryDate - Date.now());
+}
 /**
  * TypeScript REST client for Huly
  */
@@ -30,31 +58,57 @@ class HulyClient {
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers,
-                },
-                signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Huly API error (${response.status}): ${errorText}`);
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        };
+        for (let attempt = 0; attempt < HULY_MAX_RETRY_ATTEMPTS; attempt++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+            try {
+                await throttleHulyRequestStart();
+                const response = await fetch(url, {
+                    ...options,
+                    headers,
+                    signal: controller.signal,
+                });
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    if ((response.status === 429 || response.status === 503) &&
+                        attempt < HULY_MAX_RETRY_ATTEMPTS - 1) {
+                        const retryAfterMs = parseRetryAfterMs(response);
+                        const jitter = Math.floor(Math.random() * 200);
+                        const fallbackBackoff = HULY_BASE_BACKOFF_MS * 2 ** attempt;
+                        await sleep((retryAfterMs ?? fallbackBackoff) + jitter);
+                        continue;
+                    }
+                    const errorText = await response.text();
+                    throw new Error(`Huly API error (${response.status}): ${errorText}`);
+                }
+                return (await response.json());
             }
-            return (await response.json());
-        }
-        catch (error) {
-            clearTimeout(timeoutId);
-            if (error instanceof Error && error.name === 'AbortError') {
-                throw new Error(`Huly API timeout after ${this.timeout}ms`);
+            catch (error) {
+                clearTimeout(timeoutId);
+                if (error instanceof Error && error.name === 'AbortError') {
+                    if (attempt < HULY_MAX_RETRY_ATTEMPTS - 1) {
+                        await sleep(HULY_BASE_BACKOFF_MS * 2 ** attempt);
+                        continue;
+                    }
+                    throw new Error(`Huly API timeout after ${this.timeout}ms`);
+                }
+                if (attempt < HULY_MAX_RETRY_ATTEMPTS - 1) {
+                    const message = error instanceof Error ? error.message.toLowerCase() : '';
+                    if (message.includes('fetch') ||
+                        message.includes('network') ||
+                        message.includes('econnrefused')) {
+                        await sleep(HULY_BASE_BACKOFF_MS * 2 ** attempt);
+                        continue;
+                    }
+                }
+                throw error;
             }
-            throw error;
         }
+        throw new Error('Huly API request failed after retries');
     }
     /**
      * Test API connectivity
@@ -135,7 +189,7 @@ class HulyClient {
      */
     async findIssueByTitle(projectIdentifier, title) {
         try {
-            const issues = await this.listIssues(projectIdentifier, { limit: 500 });
+            const issues = await this.listIssues(projectIdentifier, { limit: 100 });
             const normalizedTitle = title.toLowerCase().trim();
             return issues.find(issue => issue.title.toLowerCase().trim() === normalizedTitle) || null;
         }

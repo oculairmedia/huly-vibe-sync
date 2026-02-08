@@ -10,11 +10,7 @@
  * - Huly updates → sync to Vibe + Beads
  */
 
-import {
-  proxyActivities,
-  log,
-  ApplicationFailure,
-} from '@temporalio/workflow';
+import { proxyActivities, log, ApplicationFailure } from '@temporalio/workflow';
 import type * as syncActivities from '../activities/bidirectional';
 import type * as orchestrationActivities from '../activities/orchestration';
 
@@ -303,6 +299,16 @@ async function checkForConflicts(
   context: SyncContext
 ): Promise<ConflictCheckResult> {
   if (!linkedIds) {
+    return { hasConflict: false, sourceWins: true };
+  }
+
+  const hasComparableTargets =
+    (source !== 'huly' && !!linkedIds.hulyId) ||
+    (source !== 'vibe' && !!linkedIds.vibeId) ||
+    (source !== 'beads' && !!linkedIds.beadsId && !!context.gitRepoPath);
+
+  // Fast-path: if no comparable linked target exists, avoid extra reads.
+  if (!hasComparableTargets) {
     return { hasConflict: false, sourceWins: true };
   }
 

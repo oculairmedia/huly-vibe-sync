@@ -19,6 +19,7 @@ import {
   mapBeadsStatusToVibe,
   mapBeadsStatusToHuly,
 } from '../lib';
+import { findMappedIssueByBeadsId, findMappedIssueByTitle } from './huly-dedupe';
 
 // ============================================================
 // TYPE DEFINITIONS
@@ -67,9 +68,7 @@ export interface SyncActivityResult {
   updated?: boolean;
 }
 
-function extractParentIdentifierFromDescription(
-  description?: string
-): string | null | undefined {
+function extractParentIdentifierFromDescription(description?: string): string | null | undefined {
   if (!description) return undefined;
 
   const match = description.match(
@@ -174,7 +173,7 @@ export async function syncTaskToHuly(input: {
         typeof parentValue === 'string'
           ? parentValue
           : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
-            ? ((parentValue as { identifier?: string }).identifier || null)
+            ? (parentValue as { identifier?: string }).identifier || null
             : null;
 
       if (currentParent !== desiredParent) {
@@ -403,10 +402,29 @@ export async function createBeadsIssueInHuly(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
-    const existingIssue = await hulyClient.findIssueByTitle(
-      context.projectIdentifier,
-      beadsIssue.title
-    );
+    const mappedByBeads = await findMappedIssueByBeadsId(context.projectIdentifier, beadsIssue.id);
+    if (mappedByBeads) {
+      return {
+        success: true,
+        skipped: true,
+        id: mappedByBeads,
+        hulyIdentifier: mappedByBeads,
+      };
+    }
+
+    let existingIssue = null;
+    const mappedByTitle = await findMappedIssueByTitle(context.projectIdentifier, beadsIssue.title);
+    if (mappedByTitle) {
+      existingIssue = await hulyClient.getIssue(mappedByTitle);
+    }
+
+    if (!existingIssue) {
+      existingIssue = await hulyClient.findIssueByTitle(
+        context.projectIdentifier,
+        beadsIssue.title
+      );
+    }
+
     if (existingIssue) {
       console.log(
         `[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`

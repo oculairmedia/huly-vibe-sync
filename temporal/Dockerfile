@@ -20,10 +20,9 @@ RUN npm ci --omit=dev
 COPY temporal/dist ./temporal/dist
 COPY temporal/package.json ./temporal/
 
-# Copy Beads CLI binary (optional — may not exist in all environments)
-COPY temporal/bd* /tmp/bd-staging/
-RUN if [ -f /tmp/bd-staging/bd ]; then cp /tmp/bd-staging/bd /usr/local/bin/bd && chmod +x /usr/local/bin/bd; fi \
-    && rm -rf /tmp/bd-staging
+# Copy Beads CLI binary from repository root
+COPY bd-binary /usr/local/bin/bd
+RUN chmod +x /usr/local/bin/bd
 
 # Set environment variables
 ENV NODE_ENV=production

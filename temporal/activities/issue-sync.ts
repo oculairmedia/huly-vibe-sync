@@ -6,6 +6,7 @@
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
+import { findMappedIssueByTitle } from './huly-dedupe';
 
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
@@ -40,6 +41,15 @@ async function findExistingIssueByTitle(
   projectIdentifier: string,
   title: string
 ): Promise<string | null> {
+  const mappedIssue = await findMappedIssueByTitle(projectIdentifier, title);
+  if (mappedIssue) {
+    return mappedIssue;
+  }
+
+  if (process.env.HULY_ENABLE_REMOTE_TITLE_DEDUPE !== 'true') {
+    return null;
+  }
+
   try {
     const response = await fetch(
       `${HULY_REST_API_URL}/issues/${projectIdentifier}?limit=500&includeDescriptions=false`,
@@ -51,11 +61,13 @@ async function findExistingIssueByTitle(
     );
 
     if (!response.ok) {
-      console.warn(`[Huly Activity] Failed to fetch issues for duplicate check: ${response.status}`);
+      console.warn(
+        `[Huly Activity] Failed to fetch issues for duplicate check: ${response.status}`
+      );
       return null;
     }
 
-    const issues = await response.json() as Array<{ identifier: string; title: string }>;
+    const issues = (await response.json()) as Array<{ identifier: string; title: string }>;
     const normalizedTarget = normalizeTitle(title);
 
     for (const issue of issues) {
@@ -67,7 +79,9 @@ async function findExistingIssueByTitle(
 
     return null;
   } catch (error) {
-    console.warn(`[Huly Activity] Duplicate check failed: ${error instanceof Error ? error.message : error}`);
+    console.warn(
+      `[Huly Activity] Duplicate check failed: ${error instanceof Error ? error.message : error}`
+    );
     return null;
   }
 }
@@ -75,7 +89,7 @@ async function findExistingIssueByTitle(
 // Types
 export interface IssueData {
   id?: string;
-  identifier?: string;  // e.g., "HVSYN-123"
+  identifier?: string; // e.g., "HVSYN-123"
   title: string;
   description?: string;
   status: string;
@@ -103,20 +117,20 @@ export interface IssueSyncInput {
 
 // Status mapping between systems
 const STATUS_HULY_TO_VIBE: Record<string, string> = {
-  'Backlog': 'todo',
-  'Todo': 'todo',
+  Backlog: 'todo',
+  Todo: 'todo',
   'In Progress': 'inprogress',
   'In Review': 'inreview',
-  'Done': 'done',
-  'Canceled': 'cancelled',
+  Done: 'done',
+  Canceled: 'cancelled',
 };
 
 const STATUS_VIBE_TO_HULY: Record<string, string> = {
-  'todo': 'Todo',
-  'inprogress': 'In Progress',
-  'inreview': 'In Review',
-  'done': 'Done',
-  'cancelled': 'Canceled',
+  todo: 'Todo',
+  inprogress: 'In Progress',
+  inreview: 'In Review',
+  done: 'Done',
+  cancelled: 'Canceled',
 };
 
 /**
@@ -131,14 +145,20 @@ export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
     if (operation === 'create') {
       // DEDUPLICATION: Check if issue with same title already exists
       if (!issue.projectIdentifier) {
-        console.warn(`[Huly Activity] ⚠️ WARNING: Create operation without projectIdentifier - deduplication check skipped!`);
+        console.warn(
+          `[Huly Activity] ⚠️ WARNING: Create operation without projectIdentifier - deduplication check skipped!`
+        );
         console.warn(`[Huly Activity] ⚠️ Title: "${issue.title}", Source: ${input.source}`);
       }
       if (issue.projectIdentifier) {
         const existingId = await findExistingIssueByTitle(issue.projectIdentifier, issue.title);
         if (existingId) {
-          console.warn(`[Huly Activity] ⚠️ DUPLICATE PREVENTED: Issue "${issue.title}" already exists as ${existingId}`);
-          console.warn(`[Huly Activity] ⚠️ Source: ${input.source}, Project: ${issue.projectIdentifier}`);
+          console.warn(
+            `[Huly Activity] ⚠️ DUPLICATE PREVENTED: Issue "${issue.title}" already exists as ${existingId}`
+          );
+          console.warn(
+            `[Huly Activity] ⚠️ Source: ${input.source}, Project: ${issue.projectIdentifier}`
+          );
           console.warn(`[Huly Activity] ⚠️ Returning existing ID instead of creating duplicate`);
           // Return the existing issue ID instead of creating a duplicate
           return { success: true, systemId: existingId };
@@ -155,7 +175,7 @@ export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
             description: issue.description || '',
             status: issue.status,
             priority: issue.priority || 'NoPriority',
-          }
+          },
         }),
         signal: AbortSignal.timeout(TIMEOUT),
       });
@@ -164,7 +184,7 @@ export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
         await handleHttpError(response, 'Huly', 'create');
       }
 
-      const result = await response.json() as { identifier?: string; id?: string };
+      const result = (await response.json()) as { identifier?: string; id?: string };
       console.log(`[Huly Activity] Created issue: ${result.identifier || result.id}`);
 
       return { success: true, systemId: result.identifier || result.id };
@@ -180,7 +200,7 @@ export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
             issue: issue.identifier,
             field: 'status',
             value: issue.status,
-          }
+          },
         }),
         signal: AbortSignal.timeout(TIMEOUT),
       });
@@ -194,7 +214,6 @@ export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
     }
 
     return { success: true };
-
   } catch (error) {
     return handleActivityError(error, 'Huly');
   }
@@ -228,7 +247,7 @@ export async function syncToVibe(input: IssueSyncInput): Promise<SyncResult> {
         await handleHttpError(response, 'Vibe', 'create');
       }
 
-      const result = await response.json() as { id?: string };
+      const result = (await response.json()) as { id?: string };
       console.log(`[Vibe Activity] Created task: ${result.id}`);
 
       return { success: true, systemId: result.id };
@@ -253,7 +272,6 @@ export async function syncToVibe(input: IssueSyncInput): Promise<SyncResult> {
     }
 
     return { success: true };
-
   } catch (error) {
     return handleActivityError(error, 'Vibe');
   }
@@ -291,7 +309,7 @@ export async function syncToBeads(input: IssueSyncInput): Promise<SyncResult> {
           status: issue.status,
           priority: issue.priority,
           projectPath: issue.projectId, // This should be the filesystem path
-        }
+        },
       }),
       signal: AbortSignal.timeout(TIMEOUT),
     });
@@ -300,11 +318,10 @@ export async function syncToBeads(input: IssueSyncInput): Promise<SyncResult> {
       await handleHttpError(response, 'Beads', 'sync');
     }
 
-    const result = await response.json() as { beadsId?: string };
+    const result = (await response.json()) as { beadsId?: string };
     console.log(`[Beads Activity] Synced: ${result.beadsId || 'ok'}`);
 
     return { success: true, systemId: result.beadsId };
-
   } catch (error) {
     return handleActivityError(error, 'Beads');
   }
@@ -377,9 +394,7 @@ export async function compensateHulyCreate(input: {
 /**
  * Best-effort compensation: delete newly created Vibe task.
  */
-export async function compensateVibeCreate(input: {
-  vibeId?: string;
-}): Promise<SyncResult> {
+export async function compensateVibeCreate(input: { vibeId?: string }): Promise<SyncResult> {
   if (!input.vibeId) return { success: true, skipped: true };
 
   try {
@@ -410,9 +425,7 @@ export async function compensateVibeCreate(input: {
  * Best-effort compensation: remove newly created Beads issue.
  * Uses optional VibeSync endpoint if available.
  */
-export async function compensateBeadsCreate(input: {
-  beadsId?: string;
-}): Promise<SyncResult> {
+export async function compensateBeadsCreate(input: { beadsId?: string }): Promise<SyncResult> {
   if (!input.beadsId) return { success: true, skipped: true };
 
   try {
@@ -443,7 +456,11 @@ export async function compensateBeadsCreate(input: {
 /**
  * Handle HTTP errors with proper Temporal error classification
  */
-async function handleHttpError(response: Response, system: string, operation: string): Promise<never> {
+async function handleHttpError(
+  response: Response,
+  system: string,
+  operation: string
+): Promise<never> {
   const status = response.status;
   let errorDetail = '';
 
@@ -499,7 +516,11 @@ function handleActivityError(error: unknown, system: string): never {
       );
     }
 
-    if (message.includes('fetch') || message.includes('network') || message.includes('econnrefused')) {
+    if (
+      message.includes('fetch') ||
+      message.includes('network') ||
+      message.includes('econnrefused')
+    ) {
       throw ApplicationFailure.retryable(
         `${system} network error: ${error.message}`,
         `${system}NetworkError`
