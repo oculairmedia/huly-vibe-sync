@@ -5,6 +5,10 @@
  */
 import type { HulyProject, VibeProject, HulyIssue, VibeTask } from './orchestration';
 /**
+ * Test-only helper to reset module-level caches between test runs.
+ */
+export declare function clearProjectCaches(): void;
+/**
  * Fetch all Huly projects
  */
 export declare function fetchHulyProjects(): Promise<HulyProject[]>;

@@ -7,6 +7,39 @@
  *
  * This is the production-ready implementation using native TypeScript SDKs.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncIssueToVibe = syncIssueToVibe;
 exports.syncTaskToHuly = syncTaskToHuly;
@@ -20,6 +53,39 @@ exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
 const huly_dedupe_1 = require("./huly-dedupe");
+function normalizeIssueTitle(title) {
+    if (!title)
+        return '';
+    return title.trim().toLowerCase();
+}
+async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
+    try {
+        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+        const db = createSyncDatabase(dbPath);
+        try {
+            const mapped = db.getIssue?.(hulyIdentifier);
+            if (mapped?.beads_issue_id) {
+                return String(mapped.beads_issue_id);
+            }
+            if (title) {
+                const rows = db.getProjectIssues?.(projectIdentifier) || [];
+                const normalizedTitle = normalizeIssueTitle(title);
+                const byTitle = rows.find((row) => !!row?.beads_issue_id && normalizeIssueTitle(row?.title) === normalizedTitle);
+                if (byTitle?.beads_issue_id) {
+                    return String(byTitle.beads_issue_id);
+                }
+            }
+        }
+        finally {
+            db.close();
+        }
+    }
+    catch {
+        // Non-fatal - fallback to in-memory dedupe only
+    }
+    return null;
+}
 function extractParentIdentifierFromDescription(description) {
     if (!description)
         return undefined;
@@ -117,9 +183,14 @@ async function syncIssueToBeads(input) {
     if (!context.gitRepoPath) {
         return { success: true, skipped: true };
     }
+    const mappedBeadsId = await findExistingBeadsLink(context.projectIdentifier, issue.identifier, issue.title);
+    if (mappedBeadsId) {
+        console.log(`[Temporal:Beads] Skipped ${issue.identifier} - mapped as ${mappedBeadsId}`);
+        return { success: true, skipped: true, id: mappedBeadsId };
+    }
     // DEDUPLICATION: Check if issue with same title already exists in Beads
-    const normalizedTitle = issue.title.trim().toLowerCase();
-    const existingByTitle = existingBeadsIssues.find(b => b.title.trim().toLowerCase() === normalizedTitle);
+    const normalizedTitle = normalizeIssueTitle(issue.title);
+    const existingByTitle = existingBeadsIssues.find(b => normalizeIssueTitle(b.title) === normalizedTitle);
     if (existingByTitle) {
         console.log(`[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`);
         return { success: true, skipped: true, id: existingByTitle.id };

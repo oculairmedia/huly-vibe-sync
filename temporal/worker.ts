@@ -13,6 +13,7 @@ import * as bidirectionalActivities from './activities/bidirectional';
 import * as orchestrationActivities from './activities/orchestration';
 import * as agentProvisioningActivities from './activities/agent-provisioning';
 import * as reconciliationActivities from './activities/reconciliation';
+import * as syncDatabaseActivities from './activities/sync-database';
 
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
@@ -26,6 +27,7 @@ const activities = {
   ...orchestrationActivities,
   ...agentProvisioningActivities,
   ...reconciliationActivities,
+  ...syncDatabaseActivities,
 };
 
 async function run() {

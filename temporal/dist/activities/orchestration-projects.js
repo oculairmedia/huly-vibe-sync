@@ -38,6 +38,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.clearProjectCaches = clearProjectCaches;
 exports.fetchHulyProjects = fetchHulyProjects;
 exports.fetchVibeProjects = fetchVibeProjects;
 exports.getVibeProjectId = getVibeProjectId;
@@ -55,6 +56,14 @@ const PROJECT_CACHE_TTL_MS = Number(process.env.TEMPORAL_PROJECT_CACHE_TTL_MS ||
 let hulyProjectsCache = null;
 let vibeProjectsCache = null;
 const vibeProjectIdCache = new Map();
+/**
+ * Test-only helper to reset module-level caches between test runs.
+ */
+function clearProjectCaches() {
+    hulyProjectsCache = null;
+    vibeProjectsCache = null;
+    vibeProjectIdCache.clear();
+}
 function isFresh(expiresAt) {
     return expiresAt > Date.now();
 }

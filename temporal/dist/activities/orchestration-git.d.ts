@@ -4,6 +4,10 @@
  * Activities for git repo path resolution and Beads operations.
  */
 /**
+ * Test-only helper to reset module-level cache between test runs.
+ */
+export declare function clearGitRepoPathCache(): void;
+/**
  * Resolve git repo path for a Huly project by identifier.
  * Fetches the project from Huly API and extracts the filesystem path from its description.
  * Returns null (not throws) if project not found or no path configured.

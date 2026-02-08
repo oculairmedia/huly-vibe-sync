@@ -13,6 +13,7 @@
 import { proxyActivities, log, ApplicationFailure } from '@temporalio/workflow';
 import type * as syncActivities from '../activities/bidirectional';
 import type * as orchestrationActivities from '../activities/orchestration';
+import type * as syncDatabaseActivities from '../activities/sync-database';
 
 const {
   syncVibeToHuly,
@@ -42,6 +43,16 @@ const { getVibeProjectId } = proxyActivities<typeof orchestrationActivities>({
     initialInterval: '2 seconds',
     backoffCoefficient: 2,
     maximumInterval: '60 seconds',
+    maximumAttempts: 3,
+  },
+});
+
+const { persistIssueSyncState } = proxyActivities<typeof syncDatabaseActivities>({
+  startToCloseTimeout: '60 seconds',
+  retry: {
+    initialInterval: '1 second',
+    backoffCoefficient: 2,
+    maximumInterval: '20 seconds',
     maximumAttempts: 3,
   },
 });
@@ -93,6 +104,12 @@ export interface BidirectionalSyncResult {
     loserTimestamp?: number;
   };
   error?: string;
+}
+
+function extractHulyIdentifierFromDescription(description?: string): string | null {
+  if (!description) return null;
+  const match = description.match(/(?:Synced from Huly|Huly Issue):\s*([A-Z]+-\d+)/i);
+  return match ? match[1] : null;
 }
 
 // ============================================================
@@ -160,6 +177,37 @@ export async function BidirectionalSyncWorkflow(
       await commitBeadsChanges({
         gitRepoPath: context.gitRepoPath,
         message: `Sync from ${source}: ${issueData.title}`,
+      });
+    }
+
+    let persistenceIdentifier: string | null = null;
+    if (source === 'huly') {
+      persistenceIdentifier = issueData.id;
+    } else if (source === 'beads') {
+      persistenceIdentifier = linkedIds?.hulyId || result.results.huly?.id || null;
+    } else if (source === 'vibe') {
+      persistenceIdentifier =
+        linkedIds?.hulyId ||
+        result.results.huly?.id ||
+        extractHulyIdentifierFromDescription(issueData.description);
+    }
+
+    if (persistenceIdentifier) {
+      await persistIssueSyncState({
+        identifier: persistenceIdentifier,
+        projectIdentifier: context.projectIdentifier,
+        title: issueData.title,
+        description: issueData.description,
+        status: issueData.status,
+        hulyId: source === 'huly' ? issueData.id : undefined,
+        vibeTaskId: source === 'vibe' ? issueData.id : result.results.vibe?.id || linkedIds?.vibeId,
+        beadsIssueId:
+          source === 'beads' ? issueData.id : result.results.beads?.id || linkedIds?.beadsId,
+        hulyModifiedAt: source === 'huly' ? issueData.modifiedAt : undefined,
+        vibeModifiedAt: source === 'vibe' ? issueData.modifiedAt : undefined,
+        beadsModifiedAt: source === 'beads' ? issueData.modifiedAt : undefined,
+        vibeStatus: source === 'vibe' ? issueData.status : undefined,
+        beadsStatus: source === 'beads' ? issueData.status : undefined,
       });
     }
 

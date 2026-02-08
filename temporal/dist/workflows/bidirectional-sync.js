@@ -36,6 +36,21 @@ const { getVibeProjectId } = (0, workflow_1.proxyActivities)({
         maximumAttempts: 3,
     },
 });
+const { persistIssueSyncState } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '60 seconds',
+    retry: {
+        initialInterval: '1 second',
+        backoffCoefficient: 2,
+        maximumInterval: '20 seconds',
+        maximumAttempts: 3,
+    },
+});
+function extractHulyIdentifierFromDescription(description) {
+    if (!description)
+        return null;
+    const match = description.match(/(?:Synced from Huly|Huly Issue):\s*([A-Z]+-\d+)/i);
+    return match ? match[1] : null;
+}
 // ============================================================
 // MAIN BIDIRECTIONAL SYNC WORKFLOW
 // ============================================================
@@ -91,6 +106,36 @@ async function BidirectionalSyncWorkflow(input) {
             await commitBeadsChanges({
                 gitRepoPath: context.gitRepoPath,
                 message: `Sync from ${source}: ${issueData.title}`,
+            });
+        }
+        let persistenceIdentifier = null;
+        if (source === 'huly') {
+            persistenceIdentifier = issueData.id;
+        }
+        else if (source === 'beads') {
+            persistenceIdentifier = linkedIds?.hulyId || result.results.huly?.id || null;
+        }
+        else if (source === 'vibe') {
+            persistenceIdentifier =
+                linkedIds?.hulyId ||
+                    result.results.huly?.id ||
+                    extractHulyIdentifierFromDescription(issueData.description);
+        }
+        if (persistenceIdentifier) {
+            await persistIssueSyncState({
+                identifier: persistenceIdentifier,
+                projectIdentifier: context.projectIdentifier,
+                title: issueData.title,
+                description: issueData.description,
+                status: issueData.status,
+                hulyId: source === 'huly' ? issueData.id : undefined,
+                vibeTaskId: source === 'vibe' ? issueData.id : result.results.vibe?.id || linkedIds?.vibeId,
+                beadsIssueId: source === 'beads' ? issueData.id : result.results.beads?.id || linkedIds?.beadsId,
+                hulyModifiedAt: source === 'huly' ? issueData.modifiedAt : undefined,
+                vibeModifiedAt: source === 'vibe' ? issueData.modifiedAt : undefined,
+                beadsModifiedAt: source === 'beads' ? issueData.modifiedAt : undefined,
+                vibeStatus: source === 'vibe' ? issueData.status : undefined,
+                beadsStatus: source === 'beads' ? issueData.status : undefined,
             });
         }
         result.success = true;

@@ -21,6 +21,48 @@ import {
 } from '../lib';
 import { findMappedIssueByBeadsId, findMappedIssueByTitle } from './huly-dedupe';
 
+function normalizeIssueTitle(title?: string): string {
+  if (!title) return '';
+  return title.trim().toLowerCase();
+}
+
+async function findExistingBeadsLink(
+  projectIdentifier: string,
+  hulyIdentifier: string,
+  title?: string
+): Promise<string | null> {
+  try {
+    const { createSyncDatabase } = await import('../../lib/database.js');
+    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+    const db = createSyncDatabase(dbPath) as any;
+
+    try {
+      const mapped = db.getIssue?.(hulyIdentifier);
+      if (mapped?.beads_issue_id) {
+        return String(mapped.beads_issue_id);
+      }
+
+      if (title) {
+        const rows = db.getProjectIssues?.(projectIdentifier) || [];
+        const normalizedTitle = normalizeIssueTitle(title);
+        const byTitle = rows.find(
+          (row: { title?: string; beads_issue_id?: string }) =>
+            !!row?.beads_issue_id && normalizeIssueTitle(row?.title) === normalizedTitle
+        );
+        if (byTitle?.beads_issue_id) {
+          return String(byTitle.beads_issue_id);
+        }
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    // Non-fatal - fallback to in-memory dedupe only
+  }
+
+  return null;
+}
+
 // ============================================================
 // TYPE DEFINITIONS
 // ============================================================
@@ -209,10 +251,20 @@ export async function syncIssueToBeads(input: {
     return { success: true, skipped: true };
   }
 
+  const mappedBeadsId = await findExistingBeadsLink(
+    context.projectIdentifier,
+    issue.identifier,
+    issue.title
+  );
+  if (mappedBeadsId) {
+    console.log(`[Temporal:Beads] Skipped ${issue.identifier} - mapped as ${mappedBeadsId}`);
+    return { success: true, skipped: true, id: mappedBeadsId };
+  }
+
   // DEDUPLICATION: Check if issue with same title already exists in Beads
-  const normalizedTitle = issue.title.trim().toLowerCase();
+  const normalizedTitle = normalizeIssueTitle(issue.title);
   const existingByTitle = existingBeadsIssues.find(
-    b => b.title.trim().toLowerCase() === normalizedTitle
+    b => normalizeIssueTitle(b.title) === normalizedTitle
   );
   if (existingByTitle) {
     console.log(

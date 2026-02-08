@@ -47,6 +47,7 @@ const bidirectionalActivities = __importStar(require("./activities/bidirectional
 const orchestrationActivities = __importStar(require("./activities/orchestration"));
 const agentProvisioningActivities = __importStar(require("./activities/agent-provisioning"));
 const reconciliationActivities = __importStar(require("./activities/reconciliation"));
+const syncDatabaseActivities = __importStar(require("./activities/sync-database"));
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
 // Merge all activities
@@ -58,6 +59,7 @@ const activities = {
     ...orchestrationActivities,
     ...agentProvisioningActivities,
     ...reconciliationActivities,
+    ...syncDatabaseActivities,
 };
 async function run() {
     console.log(`[Worker] Connecting to Temporal at ${TEMPORAL_ADDRESS}`);

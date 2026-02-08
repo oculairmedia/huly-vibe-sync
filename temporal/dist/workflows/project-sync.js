@@ -33,6 +33,15 @@ const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, sync
         nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
     },
 });
+const { persistIssueSyncState, persistIssueSyncStateBatch } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '60 seconds',
+    retry: {
+        initialInterval: '1 second',
+        backoffCoefficient: 2,
+        maximumInterval: '20 seconds',
+        maximumAttempts: 3,
+    },
+});
 const { checkAgentExists, updateProjectAgent } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '60 seconds',
     retry: {
@@ -223,6 +232,20 @@ async function ProjectSyncWorkflow(input) {
                     });
                     if (syncResult.success && syncResult.id) {
                         phase1UpdatedTasks.add(syncResult.id);
+                        await persistIssueSyncState({
+                            identifier: issue.identifier,
+                            projectIdentifier: hulyProject.identifier,
+                            title: issue.title,
+                            description: issue.description,
+                            status: issue.status,
+                            priority: issue.priority,
+                            hulyId: String(issue.id || ''),
+                            vibeTaskId: syncResult.id,
+                            hulyModifiedAt: issue.modifiedOn,
+                            vibeModifiedAt: Date.now(),
+                            vibeStatus: existingTask?.status,
+                            parentHulyId: issue.parentIssue || null,
+                        });
                     }
                     return syncResult;
                 }));
@@ -305,6 +328,22 @@ async function ProjectSyncWorkflow(input) {
                     result.phase2.synced++;
                 else
                     result.phase2.errors++;
+                if (syncResult.success) {
+                    await persistIssueSyncState({
+                        identifier: hulyIdentifier,
+                        projectIdentifier: hulyProject.identifier,
+                        title: hulyIssue.title,
+                        description: hulyIssue.description,
+                        status: hulyIssue.status,
+                        priority: hulyIssue.priority,
+                        hulyId: String(hulyIssue.id || ''),
+                        vibeTaskId: task.id,
+                        hulyModifiedAt: hulyIssue.modifiedOn,
+                        vibeModifiedAt: task.description ? Date.now() : undefined,
+                        vibeStatus: task.status,
+                        parentHulyId: hulyIssue.parentIssue || null,
+                    });
+                }
                 issuesProcessedThisRun++;
                 // Check if we need to continue as new
                 const nextIndex = i + 1;
@@ -353,14 +392,24 @@ async function ProjectSyncWorkflow(input) {
             if (!result.phase3) {
                 result.phase3 = { synced: 0, skipped: 0, errors: 0 };
             }
-            const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath });
+            let beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath });
             for (let i = _phase3Index; i < hulyIssues.length; i += effectiveBatchSize) {
                 const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
-                const batchResults = await Promise.all(batch.map(async (issue) => {
+                const seenTitles = new Set();
+                const batchResults = [];
+                const persistenceBatch = [];
+                for (const issue of batch) {
                     if (dryRun) {
-                        return { success: true, skipped: true };
+                        batchResults.push({ success: true, skipped: true });
+                        continue;
                     }
-                    return await syncIssueToBeads({
+                    const normalizedTitle = issue.title.trim().toLowerCase();
+                    if (seenTitles.has(normalizedTitle)) {
+                        batchResults.push({ success: true, skipped: true });
+                        continue;
+                    }
+                    seenTitles.add(normalizedTitle);
+                    const syncResult = await syncIssueToBeads({
                         issue,
                         context: {
                             projectIdentifier: hulyProject.identifier,
@@ -369,7 +418,33 @@ async function ProjectSyncWorkflow(input) {
                         },
                         existingBeadsIssues: beadsIssues,
                     });
-                }));
+                    batchResults.push(syncResult);
+                    if (syncResult.id) {
+                        beadsIssues.push({
+                            id: syncResult.id,
+                            title: issue.title,
+                            status: issue.status,
+                        });
+                        persistenceBatch.push({
+                            identifier: issue.identifier,
+                            projectIdentifier: hulyProject.identifier,
+                            title: issue.title,
+                            description: issue.description,
+                            status: issue.status,
+                            priority: issue.priority,
+                            hulyId: String(issue.id || ''),
+                            beadsIssueId: syncResult.id,
+                            hulyModifiedAt: issue.modifiedOn,
+                            beadsModifiedAt: Date.now(),
+                            beadsStatus: issue.status,
+                            parentHulyId: issue.parentIssue || null,
+                        });
+                    }
+                }
+                if (persistenceBatch.length > 0) {
+                    await persistIssueSyncStateBatch({ issues: persistenceBatch });
+                }
+                beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath });
                 for (const r of batchResults) {
                     if (r.skipped)
                         result.phase3.skipped++;
@@ -460,6 +535,19 @@ async function ProjectSyncWorkflow(input) {
                                 errors: batchResult.errors.slice(0, 5),
                             });
                         }
+                        const failedIdentifiers = new Set(batchResult.errors.map(e => e.identifier));
+                        const statusUpdates = toSync
+                            .filter(item => !failedIdentifiers.has(item.hulyIdentifier))
+                            .map(item => ({
+                            identifier: item.hulyIdentifier,
+                            projectIdentifier: hulyProject.identifier,
+                            beadsIssueId: item.beadsId,
+                            beadsStatus: item.status,
+                            beadsModifiedAt: Date.now(),
+                        }));
+                        if (statusUpdates.length > 0) {
+                            await persistIssueSyncStateBatch({ issues: statusUpdates });
+                        }
                     }
                     catch (error) {
                         workflow_1.log.warn(`[ProjectSync] Phase 3b batch sync failed`, {
@@ -488,9 +576,33 @@ async function ProjectSyncWorkflow(input) {
                         if (createResult.created) {
                             beadsCreated++;
                             workflow_1.log.info(`[ProjectSync] Created Huly issue ${createResult.hulyIdentifier} from ${beadsIssue.id}`);
+                            if (createResult.hulyIdentifier) {
+                                await persistIssueSyncState({
+                                    identifier: createResult.hulyIdentifier,
+                                    projectIdentifier: hulyProject.identifier,
+                                    title: beadsIssue.title,
+                                    description: beadsIssue.description,
+                                    status: beadsIssue.status,
+                                    beadsIssueId: beadsIssue.id,
+                                    beadsStatus: beadsIssue.status,
+                                    beadsModifiedAt: Date.now(),
+                                });
+                            }
                         }
                         else {
                             beadsSkipped++;
+                            if (createResult.hulyIdentifier) {
+                                await persistIssueSyncState({
+                                    identifier: createResult.hulyIdentifier,
+                                    projectIdentifier: hulyProject.identifier,
+                                    title: beadsIssue.title,
+                                    description: beadsIssue.description,
+                                    status: beadsIssue.status,
+                                    beadsIssueId: beadsIssue.id,
+                                    beadsStatus: beadsIssue.status,
+                                    beadsModifiedAt: Date.now(),
+                                });
+                            }
                         }
                     }
                     catch (error) {

@@ -25,6 +25,7 @@ db.close();
 ## Migration Files
 
 - `001_add_letta_columns.sql` - Adds Letta PM agent tracking columns to projects table
+- `006_backfill_huly_identifiers.js` - Backfills `identifier` from `*-VIBE-*` keys to `PROJ-123` and optionally populates `huly_id` from Huly API
 
 ## Notes
 

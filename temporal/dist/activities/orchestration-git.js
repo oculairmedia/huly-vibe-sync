@@ -5,6 +5,7 @@
  * Activities for git repo path resolution and Beads operations.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.clearGitRepoPathCache = clearGitRepoPathCache;
 exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
 exports.initializeBeads = initializeBeads;
@@ -12,6 +13,12 @@ exports.fetchBeadsIssues = fetchBeadsIssues;
 const lib_1 = require("../lib");
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map();
+/**
+ * Test-only helper to reset module-level cache between test runs.
+ */
+function clearGitRepoPathCache() {
+    gitRepoPathCache.clear();
+}
 function isFresh(expiresAt) {
     return expiresAt > Date.now();
 }
