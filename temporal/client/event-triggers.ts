@@ -11,6 +11,11 @@ import type {
   HulyWebhookChangeResult,
 } from '../workflows/bidirectional-sync';
 
+import {
+  WorkflowIdConflictPolicy,
+  WorkflowIdReusePolicy,
+  WorkflowExecutionAlreadyStartedError,
+} from '@temporalio/client';
 import { getClient, TASK_QUEUE } from './connection';
 
 /**
@@ -24,20 +29,30 @@ export async function scheduleVibeSSEChange(
 ): Promise<{ workflowId: string; runId: string }> {
   const client = await getClient();
 
-  const workflowId = `vibe-sse-${input.vibeProjectId}-${Date.now()}`;
+  const workflowId = `vibe-sse-${input.vibeProjectId}`;
 
-  const handle = await client.workflow.start('VibeSSEChangeWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    args: [input],
-  });
+  try {
+    const handle = await client.workflow.start('VibeSSEChangeWorkflow', {
+      taskQueue: TASK_QUEUE,
+      workflowId,
+      args: [input],
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
 
-  console.log(`[Temporal] Scheduled Vibe SSE change workflow: ${workflowId}`);
+    console.log(`[Temporal] Scheduled Vibe SSE change workflow: ${workflowId}`);
 
-  return {
-    workflowId: handle.workflowId,
-    runId: handle.firstExecutionRunId,
-  };
+    return {
+      workflowId: handle.workflowId,
+      runId: handle.firstExecutionRunId,
+    };
+  } catch (error) {
+    if (error instanceof WorkflowExecutionAlreadyStartedError) {
+      console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
+      return { workflowId, runId: 'coalesced' };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -48,13 +63,25 @@ export async function executeVibeSSEChange(
 ): Promise<VibeSSEChangeResult> {
   const client = await getClient();
 
-  const workflowId = `vibe-sse-${input.vibeProjectId}-${Date.now()}`;
+  const workflowId = `vibe-sse-${input.vibeProjectId}`;
 
-  return await client.workflow.execute('VibeSSEChangeWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    args: [input],
-  });
+  try {
+    return await client.workflow.execute('VibeSSEChangeWorkflow', {
+      taskQueue: TASK_QUEUE,
+      workflowId,
+      args: [input],
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
+  } catch (error) {
+    if (error instanceof WorkflowExecutionAlreadyStartedError) {
+      console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
+      // For execute, we need to wait for the existing workflow
+      const handle = client.workflow.getHandle(workflowId);
+      return await handle.result();
+    }
+    throw error;
+  }
 }
 
 /**
@@ -68,20 +95,30 @@ export async function scheduleHulyWebhookChange(
 ): Promise<{ workflowId: string; runId: string }> {
   const client = await getClient();
 
-  const workflowId = `huly-webhook-${input.type}-${Date.now()}`;
+  const workflowId = `huly-webhook-${input.type}`;
 
-  const handle = await client.workflow.start('HulyWebhookChangeWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    args: [input],
-  });
+  try {
+    const handle = await client.workflow.start('HulyWebhookChangeWorkflow', {
+      taskQueue: TASK_QUEUE,
+      workflowId,
+      args: [input],
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
 
-  console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
+    console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
 
-  return {
-    workflowId: handle.workflowId,
-    runId: handle.firstExecutionRunId,
-  };
+    return {
+      workflowId: handle.workflowId,
+      runId: handle.firstExecutionRunId,
+    };
+  } catch (error) {
+    if (error instanceof WorkflowExecutionAlreadyStartedError) {
+      console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
+      return { workflowId, runId: 'coalesced' };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -92,11 +129,23 @@ export async function executeHulyWebhookChange(
 ): Promise<HulyWebhookChangeResult> {
   const client = await getClient();
 
-  const workflowId = `huly-webhook-${input.type}-${Date.now()}`;
+  const workflowId = `huly-webhook-${input.type}`;
 
-  return await client.workflow.execute('HulyWebhookChangeWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    args: [input],
-  });
+  try {
+    return await client.workflow.execute('HulyWebhookChangeWorkflow', {
+      taskQueue: TASK_QUEUE,
+      workflowId,
+      args: [input],
+      workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+      workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
+  } catch (error) {
+    if (error instanceof WorkflowExecutionAlreadyStartedError) {
+      console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
+      // For execute, we need to wait for the existing workflow
+      const handle = client.workflow.getHandle(workflowId);
+      return await handle.result();
+    }
+    throw error;
+  }
 }
