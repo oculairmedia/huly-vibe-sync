@@ -10,6 +10,13 @@ import type { HulyProject } from './orchestration';
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map<string, { value: string | null; expiresAt: number }>();
 
+/**
+ * Test-only helper to reset module-level cache between test runs.
+ */
+export function clearGitRepoPathCache(): void {
+  gitRepoPathCache.clear();
+}
+
 function isFresh(expiresAt: number): boolean {
   return expiresAt > Date.now();
 }

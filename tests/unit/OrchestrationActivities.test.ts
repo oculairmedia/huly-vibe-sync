@@ -44,6 +44,8 @@ import {
   fetchProjectData,
   extractGitRepoPath,
   resolveGitRepoPath,
+  clearGitRepoPathCache,
+  clearProjectCaches,
   initializeBeads,
   fetchBeadsIssues,
   updateLettaMemory,
@@ -75,6 +77,8 @@ const mockBeadsClient = {
 
 describe('Orchestration Activities', () => {
   beforeEach(() => {
+    clearGitRepoPathCache();
+    clearProjectCaches();
     vi.clearAllMocks();
 
     // Set up environment variables
@@ -343,6 +347,7 @@ describe('Orchestration Activities', () => {
         ['Directory: /opt/stacks/dir-test', '/opt/stacks/dir-test'],
         ['Location: /opt/stacks/loc-test', '/opt/stacks/loc-test'],
       ]) {
+        clearGitRepoPathCache();
         mockHulyClient.listProjects.mockResolvedValue([
           { identifier: 'TEST', name: 'Test', description: keyword },
         ]);

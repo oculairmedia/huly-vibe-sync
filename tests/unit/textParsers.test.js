@@ -868,9 +868,12 @@ Description: Document all API endpoints
       expect(await resolveGitUrl(null)).toBeNull();
     });
 
-    it('should resolve a real git repo', async () => {
-      const url = await resolveGitUrl('/opt/stacks/huly-vibe-sync');
-      expect(url).toBe('https://github.com/oculairmedia/huly-vibe-sync');
-    });
+    it.skipIf(!fs.existsSync('/opt/stacks/huly-vibe-sync/.git'))(
+      'should resolve a real git repo',
+      async () => {
+        const url = await resolveGitUrl('/opt/stacks/huly-vibe-sync');
+        expect(url).toBe('https://github.com/oculairmedia/huly-vibe-sync');
+      }
+    );
   });
 });

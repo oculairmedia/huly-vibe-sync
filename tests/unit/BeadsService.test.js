@@ -84,11 +84,12 @@ describe('BeadsService', () => {
       }
       return realExistsSync(testPath);
     });
-    vi.spyOn(fs, 'statSync').mockImplementation(testPath => {
+    const testProjectStats = realStatSync('/tmp');
+    vi.spyOn(fs, 'statSync').mockImplementation((testPath, options) => {
       if (testPath === '/test/project') {
-        return { isDirectory: () => true };
+        return testProjectStats;
       }
-      return realStatSync(testPath);
+      return realStatSync(testPath, options);
     });
   });
 
@@ -552,7 +553,7 @@ describe('BeadsService', () => {
       await updateBeadsIssue('/test/project', 'issue-123', 'title', 'Title with "quotes"');
 
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining("--title='Title with \"quotes\"'"),
+        expect.stringContaining('--title=\'Title with "quotes"\''),
         expect.any(Object),
         expect.any(Function)
       );
@@ -789,7 +790,9 @@ describe('BeadsService', () => {
 
       expect(mockExec).toHaveBeenCalled();
       expect(mockExec).toHaveBeenCalledWith(
-        expect.stringContaining("bd create 'Issue with $pecial ch@rs & \"quotes\" '\"'\"'single'\"'\"' `backticks`' --json"),
+        expect.stringContaining(
+          "bd create 'Issue with $pecial ch@rs & \"quotes\" '\"'\"'single'\"'\"' `backticks`' --json"
+        ),
         expect.any(Object),
         expect.any(Function)
       );
@@ -948,13 +951,16 @@ describe('BeadsService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return true for initialized beads project', async () => {
-      const { isBeadsInitialized } = await import('../../lib/BeadsService.js');
+    it.skipIf(!fs.existsSync('/opt/stacks/huly-vibe-sync/.beads/beads.db'))(
+      'should return true for initialized beads project',
+      async () => {
+        const { isBeadsInitialized } = await import('../../lib/BeadsService.js');
 
-      // Test with the actual project path that has beads initialized
-      const result = isBeadsInitialized('/opt/stacks/huly-vibe-sync');
-      expect(result).toBe(true);
-    });
+        // Test with the actual project path that has beads initialized
+        const result = isBeadsInitialized('/opt/stacks/huly-vibe-sync');
+        expect(result).toBe(true);
+      }
+    );
   });
 
   describe('syncBeadsToGit', () => {

@@ -58,6 +58,7 @@ export {
   fetchHulyProjects,
   fetchVibeProjects,
   getVibeProjectId,
+  clearProjectCaches,
   resolveProjectIdentifier,
   ensureVibeProject,
   fetchProjectData,
@@ -68,6 +69,7 @@ export {
 export {
   resolveGitRepoPath,
   extractGitRepoPath,
+  clearGitRepoPathCache,
   initializeBeads,
   fetchBeadsIssues,
 } from './orchestration-git';

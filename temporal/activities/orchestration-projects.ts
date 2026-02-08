@@ -17,6 +17,15 @@ let hulyProjectsCache: { value: HulyProject[]; expiresAt: number } | null = null
 let vibeProjectsCache: { value: VibeProject[]; expiresAt: number } | null = null;
 const vibeProjectIdCache = new Map<string, { value: string | null; expiresAt: number }>();
 
+/**
+ * Test-only helper to reset module-level caches between test runs.
+ */
+export function clearProjectCaches(): void {
+  hulyProjectsCache = null;
+  vibeProjectsCache = null;
+  vibeProjectIdCache.clear();
+}
+
 function isFresh(expiresAt: number): boolean {
   return expiresAt > Date.now();
 }
