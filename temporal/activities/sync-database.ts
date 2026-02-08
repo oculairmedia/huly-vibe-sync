@@ -42,6 +42,10 @@ function normalizeModifiedAt(value: NullableNumber): number | null {
   return Number(value);
 }
 
+function defaultHulyId(identifier: string): string | null {
+  return /^[A-Z]+-\d+$/i.test(identifier) ? identifier : null;
+}
+
 export async function persistIssueSyncState(
   input: PersistIssueStateInput
 ): Promise<PersistIssueStateResult> {
@@ -75,7 +79,7 @@ export async function persistIssueSyncStateBatch(
         db.upsertIssue({
           identifier: issue.identifier,
           project_identifier: issue.projectIdentifier,
-          huly_id: issue.hulyId || existing?.huly_id || null,
+          huly_id: issue.hulyId || existing?.huly_id || defaultHulyId(issue.identifier),
           vibe_task_id: issue.vibeTaskId || existing?.vibe_task_id || null,
           beads_issue_id: issue.beadsIssueId || existing?.beads_issue_id || null,
           title: issue.title || existing?.title || issue.identifier,

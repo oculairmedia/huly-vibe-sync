@@ -175,6 +175,22 @@ async function main() {
     }
   }
 
+  const fallbackRows = db
+    .prepare(
+      `
+      SELECT rowid, identifier
+      FROM issues
+      WHERE huly_id IS NULL
+        AND identifier GLOB '[A-Z]*-[0-9]*'
+      `
+    )
+    .all();
+
+  for (const row of fallbackRows) {
+    updateHulyId.run(row.identifier, Date.now(), row.rowid);
+    hulyIdUpdated++;
+  }
+
   const summary = db
     .prepare(
       `
