@@ -79,6 +79,31 @@ export declare function getProvisioningStatus(): Promise<{
     lastCheckpoint?: CheckpointData;
     completedProjects: string[];
 }>;
+export interface UpdateAgentsMdInput {
+    projectIdentifier: string;
+    projectName: string;
+    agentId: string;
+}
+export interface UpdateAgentsMdResult {
+    success: boolean;
+    projectPath?: string;
+    sections?: Array<{
+        section: string;
+        action: string;
+    }>;
+    error?: string;
+}
+/**
+ * Resolve the project's filesystem path and regenerate AGENTS.md with
+ * current managed sections (project-info, reporting-hierarchy,
+ * beads-instructions, session-completion, bookstack-docs, codebase-context).
+ *
+ * This ensures existing agents get up-to-date Beads instructions and other
+ * managed content even when the agent was not newly created.
+ *
+ * Idempotent — safe to call on every provisioning run.
+ */
+export declare function updateProjectAgentsMd(input: UpdateAgentsMdInput): Promise<UpdateAgentsMdResult>;
 export interface CheckAgentExistsInput {
     projectIdentifier: string;
 }

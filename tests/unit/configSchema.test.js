@@ -17,7 +17,7 @@ function validConfig(overrides = {}) {
     graphiti: { enabled: false, apiUrl: 'http://localhost:8003', groupIdPrefix: 'vibesync_', timeout: 30000, retries: 3 },
     codePerception: { enabled: false, debounceMs: 2000, batchSize: 50, maxFileSizeKb: 500, excludePatterns: [] },
     bookstack: {
-      enabled: false, url: 'https://knowledge.oculair.ca', tokenId: '', tokenSecret: '',
+      enabled: false, url: 'http://192.168.50.80:8087', tokenId: '', tokenSecret: '',
       syncInterval: 3600000, exportFormats: ['markdown'], exportImages: true, exportAttachments: true,
       exportMeta: true, modifyMarkdownLinks: true, docsSubdir: 'docs/bookstack',
       projectBookMappings: [], exporterOutputPath: '/bookstack-exports',

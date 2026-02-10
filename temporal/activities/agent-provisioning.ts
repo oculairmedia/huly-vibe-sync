@@ -10,7 +10,7 @@ import { LettaClient } from '@letta-ai/letta-client';
 import { createHulyClient } from '../lib';
 
 // Configuration
-const LETTA_API_BASE = process.env.LETTA_API_URL || 'https://letta.oculair.ca';
+const LETTA_API_BASE = process.env.LETTA_API_URL || 'http://192.168.50.90:8289';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
 const LETTA_MODEL = process.env.LETTA_MODEL || 'letta/letta-free';
 const LETTA_EMBEDDING = process.env.LETTA_EMBEDDING || 'letta/letta-free';
@@ -301,11 +301,15 @@ export async function provisionSingleAgent(
     try {
       const syncedBlocks = await syncAgentMemoryFromControl(agent.id);
       if (syncedBlocks > 0) {
-        console.log(`[Activity:ProvisionAgent] Synced ${syncedBlocks} memory blocks for ${agent.id}`);
+        console.log(
+          `[Activity:ProvisionAgent] Synced ${syncedBlocks} memory blocks for ${agent.id}`
+        );
       }
     } catch (syncError) {
       const message = syncError instanceof Error ? syncError.message : String(syncError);
-      console.warn(`[Activity:ProvisionAgent] Memory block sync skipped for ${agent.id}: ${message}`);
+      console.warn(
+        `[Activity:ProvisionAgent] Memory block sync skipped for ${agent.id}: ${message}`
+      );
     }
 
     return {
@@ -515,6 +519,100 @@ export async function getProvisioningStatus(): Promise<{
   return {
     completedProjects: [],
   };
+}
+
+// ============================================================================
+// Activity: Update Project AGENTS.md
+// ============================================================================
+
+export interface UpdateAgentsMdInput {
+  projectIdentifier: string;
+  projectName: string;
+  agentId: string;
+}
+
+export interface UpdateAgentsMdResult {
+  success: boolean;
+  projectPath?: string;
+  sections?: Array<{ section: string; action: string }>;
+  error?: string;
+}
+
+/**
+ * Resolve the project's filesystem path and regenerate AGENTS.md with
+ * current managed sections (project-info, reporting-hierarchy,
+ * beads-instructions, session-completion, bookstack-docs, codebase-context).
+ *
+ * This ensures existing agents get up-to-date Beads instructions and other
+ * managed content even when the agent was not newly created.
+ *
+ * Idempotent — safe to call on every provisioning run.
+ */
+export async function updateProjectAgentsMd(
+  input: UpdateAgentsMdInput
+): Promise<UpdateAgentsMdResult> {
+  const { projectIdentifier, projectName, agentId } = input;
+  console.log(
+    `[Activity:UpdateAgentsMd] Updating AGENTS.md for ${projectIdentifier} (agent ${agentId})...`
+  );
+
+  try {
+    const { resolveGitRepoPath } = await import('./orchestration-git');
+    const projectPath = await resolveGitRepoPath({ projectIdentifier });
+
+    if (!projectPath) {
+      console.log(
+        `[Activity:UpdateAgentsMd] No filesystem path for ${projectIdentifier}, skipping`
+      );
+      return { success: true, error: 'no_project_path' };
+    }
+
+    const { agentsMdGenerator } = await import('../../lib/AgentsMdGenerator.js');
+    const path = await import('path');
+    const agentsMdPath = path.join(projectPath, 'AGENTS.md');
+    const agentName = `Huly - ${projectName}`;
+
+    const vars = {
+      identifier: projectIdentifier,
+      name: projectName,
+      agentId,
+      agentName,
+      projectPath,
+    };
+
+    const { changes } = agentsMdGenerator.generate(agentsMdPath, vars, {
+      sections: [
+        'project-info',
+        'reporting-hierarchy',
+        'beads-instructions',
+        'bookstack-docs',
+        'session-completion',
+        'codebase-context',
+      ],
+    });
+
+    console.log(
+      `[Activity:UpdateAgentsMd] ✓ ${projectIdentifier}: ${changes.map((c: { section: string; action: string }) => `${c.section}:${c.action}`).join(', ')}`
+    );
+
+    return { success: true, projectPath, sections: changes };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Permission errors are non-fatal — agent state is still in the DB
+    if (message.includes('EACCES') || message.includes('permission denied')) {
+      console.warn(
+        `[Activity:UpdateAgentsMd] ⚠️ Permission denied for ${projectIdentifier}: ${message}`
+      );
+      return { success: false, error: message };
+    }
+
+    // Other errors are retryable
+    throw ApplicationFailure.retryable(
+      `Failed to update AGENTS.md for ${projectIdentifier}: ${message}`,
+      'AgentsMdUpdateError'
+    );
+  }
 }
 
 // ============================================================================

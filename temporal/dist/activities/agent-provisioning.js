@@ -45,6 +45,7 @@ exports.attachToolsToAgent = attachToolsToAgent;
 exports.recordProvisioningResult = recordProvisioningResult;
 exports.cleanupFailedProvision = cleanupFailedProvision;
 exports.getProvisioningStatus = getProvisioningStatus;
+exports.updateProjectAgentsMd = updateProjectAgentsMd;
 exports.checkAgentExists = checkAgentExists;
 exports.updateProjectAgent = updateProjectAgent;
 const activity_1 = require("@temporalio/activity");
@@ -424,6 +425,61 @@ async function getProvisioningStatus() {
     return {
         completedProjects: [],
     };
+}
+/**
+ * Resolve the project's filesystem path and regenerate AGENTS.md with
+ * current managed sections (project-info, reporting-hierarchy,
+ * beads-instructions, session-completion, bookstack-docs, codebase-context).
+ *
+ * This ensures existing agents get up-to-date Beads instructions and other
+ * managed content even when the agent was not newly created.
+ *
+ * Idempotent — safe to call on every provisioning run.
+ */
+async function updateProjectAgentsMd(input) {
+    const { projectIdentifier, projectName, agentId } = input;
+    console.log(`[Activity:UpdateAgentsMd] Updating AGENTS.md for ${projectIdentifier} (agent ${agentId})...`);
+    try {
+        const { resolveGitRepoPath } = await Promise.resolve().then(() => __importStar(require('./orchestration-git')));
+        const projectPath = await resolveGitRepoPath({ projectIdentifier });
+        if (!projectPath) {
+            console.log(`[Activity:UpdateAgentsMd] No filesystem path for ${projectIdentifier}, skipping`);
+            return { success: true, error: 'no_project_path' };
+        }
+        const { agentsMdGenerator } = await Promise.resolve().then(() => __importStar(require('../../lib/AgentsMdGenerator.js')));
+        const path = await Promise.resolve().then(() => __importStar(require('path')));
+        const agentsMdPath = path.join(projectPath, 'AGENTS.md');
+        const agentName = `Huly - ${projectName}`;
+        const vars = {
+            identifier: projectIdentifier,
+            name: projectName,
+            agentId,
+            agentName,
+            projectPath,
+        };
+        const { changes } = agentsMdGenerator.generate(agentsMdPath, vars, {
+            sections: [
+                'project-info',
+                'reporting-hierarchy',
+                'beads-instructions',
+                'bookstack-docs',
+                'session-completion',
+                'codebase-context',
+            ],
+        });
+        console.log(`[Activity:UpdateAgentsMd] ✓ ${projectIdentifier}: ${changes.map((c) => `${c.section}:${c.action}`).join(', ')}`);
+        return { success: true, projectPath, sections: changes };
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // Permission errors are non-fatal — agent state is still in the DB
+        if (message.includes('EACCES') || message.includes('permission denied')) {
+            console.warn(`[Activity:UpdateAgentsMd] ⚠️ Permission denied for ${projectIdentifier}: ${message}`);
+            return { success: false, error: message };
+        }
+        // Other errors are retryable
+        throw activity_1.ApplicationFailure.retryable(`Failed to update AGENTS.md for ${projectIdentifier}: ${message}`, 'AgentsMdUpdateError');
+    }
 }
 /**
  * Check if a PM agent exists for a project

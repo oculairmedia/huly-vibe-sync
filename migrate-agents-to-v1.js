@@ -16,7 +16,7 @@ import 'dotenv/config';
 import fetch from 'node-fetch';
 import { createSyncDatabase } from './lib/database.js';
 
-const LETTA_API_URL = process.env.LETTA_BASE_URL || 'https://letta.oculair.ca';
+const LETTA_API_URL = process.env.LETTA_BASE_URL || 'http://192.168.50.90:8289';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD;
 
 if (!LETTA_PASSWORD) {

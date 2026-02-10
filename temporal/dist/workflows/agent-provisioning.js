@@ -17,7 +17,7 @@ exports.ProvisionSingleAgentWorkflow = ProvisionSingleAgentWorkflow;
 exports.CleanupFailedProvisionsWorkflow = CleanupFailedProvisionsWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 // Proxy activities with retry policy
-const { fetchAgentsToProvision, provisionSingleAgent, attachToolsToAgent, recordProvisioningResult, cleanupFailedProvision, } = (0, workflow_1.proxyActivities)({
+const { fetchAgentsToProvision, provisionSingleAgent, attachToolsToAgent, recordProvisioningResult, cleanupFailedProvision, updateProjectAgentsMd, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '5 minutes',
     retry: {
         initialInterval: '2 seconds',
@@ -113,6 +113,22 @@ async function ProvisionAgentsWorkflow(input = {}) {
                         const toolResult = await attachToolsToAgent(agentResult.agentId);
                         toolsAttached = toolResult.attached;
                     }
+                    if (agentResult.agentId) {
+                        try {
+                            await updateProjectAgentsMd({
+                                projectIdentifier: agent.projectIdentifier,
+                                projectName: agent.projectName,
+                                agentId: agentResult.agentId,
+                            });
+                        }
+                        catch (mdError) {
+                            const mdMsg = mdError instanceof Error ? mdError.message : String(mdError);
+                            workflow_1.log.warn('[ProvisionAgents] AGENTS.md update failed (non-fatal)', {
+                                project: agent.projectIdentifier,
+                                error: mdMsg,
+                            });
+                        }
+                    }
                     return {
                         success: true,
                         projectIdentifier: agent.projectIdentifier,
@@ -206,13 +222,27 @@ async function ProvisionAgentsWorkflow(input = {}) {
 async function ProvisionSingleAgentWorkflow(input) {
     const { projectIdentifier, projectName, attachTools = true } = input;
     try {
-        // Create or ensure agent exists
         const agentResult = await provisionSingleAgent(projectIdentifier, projectName);
-        // Attach tools if requested
         let toolsAttached = 0;
         if (attachTools && agentResult.agentId) {
             const toolResult = await attachToolsToAgent(agentResult.agentId);
             toolsAttached = toolResult.attached;
+        }
+        if (agentResult.agentId) {
+            try {
+                await updateProjectAgentsMd({
+                    projectIdentifier,
+                    projectName,
+                    agentId: agentResult.agentId,
+                });
+            }
+            catch (mdError) {
+                const mdMsg = mdError instanceof Error ? mdError.message : String(mdError);
+                workflow_1.log.warn('[ProvisionSingleAgent] AGENTS.md update failed (non-fatal)', {
+                    projectIdentifier,
+                    error: mdMsg,
+                });
+            }
         }
         workflow_1.log.info('[ProvisionSingleAgent] Agent provisioned', {
             projectIdentifier,

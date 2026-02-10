@@ -130,7 +130,7 @@ services:
       - TEMPORAL_TASK_QUEUE=vibesync-queue
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
       - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3458}
-      - LETTA_API_URL=${LETTA_BASE_URL:-https://letta.oculair.ca}
+      - LETTA_API_URL=${LETTA_BASE_URL:-http://192.168.50.90:8289}
       - LETTA_PASSWORD=${LETTA_PASSWORD}
       - STACKS_DIR=/opt/stacks
       - NODE_ENV=production
@@ -170,6 +170,12 @@ services:
       - ./ui/public:/app/public
     ports:
       - '${UI_PORT:-3110}:3000'
+    labels:
+      - homepage.group=Productivity
+      - homepage.name=Huly Vibe Sync UI
+      - homepage.icon=si-react
+      - homepage.href=http://192.168.50.90:3110
+      - homepage.description=Huly and Vibe synchronization dashboard
     healthcheck:
       test:
         [

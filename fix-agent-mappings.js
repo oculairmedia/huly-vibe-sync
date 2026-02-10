@@ -12,7 +12,7 @@ import { LettaService } from './lib/LettaService.js';
 import fs from 'fs';
 import path from 'path';
 
-const LETTA_API_URL = process.env.LETTA_API_URL || 'https://letta.oculair.ca/v1';
+const LETTA_API_URL = process.env.LETTA_API_URL || 'http://192.168.50.90:8289/v1';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || 'lettaSecurePass123';
 
 async function main() {
