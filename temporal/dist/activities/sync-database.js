@@ -36,6 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getIssueSyncTimestamps = getIssueSyncTimestamps;
 exports.persistIssueSyncState = persistIssueSyncState;
 exports.persistIssueSyncStateBatch = persistIssueSyncStateBatch;
 const path_1 = __importDefault(require("path"));
@@ -51,6 +52,23 @@ function normalizeModifiedAt(value) {
 }
 function defaultHulyId(identifier) {
     return /^[A-Z]+-\d+$/i.test(identifier) ? identifier : null;
+}
+async function getIssueSyncTimestamps(input) {
+    const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+    const db = createSyncDatabase(resolveDbPath());
+    try {
+        const issue = db.getIssue(input.identifier);
+        if (!issue)
+            return null;
+        return {
+            huly_modified_at: normalizeModifiedAt(issue.huly_modified_at),
+            vibe_modified_at: normalizeModifiedAt(issue.vibe_modified_at),
+            beads_modified_at: normalizeModifiedAt(issue.beads_modified_at),
+        };
+    }
+    finally {
+        db.close();
+    }
 }
 async function persistIssueSyncState(input) {
     return persistIssueSyncStateBatch({ issues: [input] });

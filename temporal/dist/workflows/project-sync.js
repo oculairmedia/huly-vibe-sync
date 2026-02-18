@@ -336,6 +336,7 @@ async function ProjectSyncWorkflow(input) {
                         projectIdentifier: hulyProject.identifier,
                         vibeProjectId: vibeProjectId,
                     },
+                    knownParentIssue: hulyIssue.parentIssue || null,
                 });
                 if (syncResult.skipped)
                     result.phase2.skipped++;

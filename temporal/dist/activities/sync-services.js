@@ -153,13 +153,22 @@ async function syncTaskToHuly(input) {
         }
         const desiredParent = extractParentIdentifierFromDescription(task.description);
         if (desiredParent !== undefined) {
-            const currentIssue = await hulyClient.getIssue(hulyIdentifier);
-            const parentValue = currentIssue?.parentIssue ?? null;
-            const currentParent = typeof parentValue === 'string'
-                ? parentValue
-                : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
-                    ? parentValue.identifier || null
-                    : null;
+            let currentParent;
+            if (input.knownParentIssue !== undefined) {
+                // Fast path: caller already has the parent info, skip the API call
+                currentParent = input.knownParentIssue;
+            }
+            else {
+                // Slow path: fetch from Huly API
+                const currentIssue = await hulyClient.getIssue(hulyIdentifier);
+                const parentValue = currentIssue?.parentIssue ?? null;
+                currentParent =
+                    typeof parentValue === 'string'
+                        ? parentValue
+                        : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
+                            ? parentValue.identifier || null
+                            : null;
+            }
             if (currentParent !== desiredParent) {
                 await hulyClient.setParentIssue(hulyIdentifier, desiredParent);
                 console.log(`[Temporal:Huly] Updated parent for ${hulyIdentifier}: ${currentParent || 'top-level'} -> ${desiredParent || 'top-level'}`);

@@ -192,6 +192,8 @@ export async function syncTaskToHuly(input: {
   task: VibeTask;
   hulyIdentifier: string;
   context: SyncContext;
+  /** Pass the known parent identifier to avoid an extra getIssue API call */
+  knownParentIssue?: string | null;
 }): Promise<SyncActivityResult> {
   const { task, hulyIdentifier } = input;
 
@@ -209,14 +211,22 @@ export async function syncTaskToHuly(input: {
 
     const desiredParent = extractParentIdentifierFromDescription(task.description);
     if (desiredParent !== undefined) {
-      const currentIssue = await hulyClient.getIssue(hulyIdentifier);
-      const parentValue = (currentIssue as { parentIssue?: unknown } | null)?.parentIssue ?? null;
-      const currentParent =
-        typeof parentValue === 'string'
-          ? parentValue
-          : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
-            ? (parentValue as { identifier?: string }).identifier || null
-            : null;
+      let currentParent: string | null;
+
+      if (input.knownParentIssue !== undefined) {
+        // Fast path: caller already has the parent info, skip the API call
+        currentParent = input.knownParentIssue;
+      } else {
+        // Slow path: fetch from Huly API
+        const currentIssue = await hulyClient.getIssue(hulyIdentifier);
+        const parentValue = (currentIssue as { parentIssue?: unknown } | null)?.parentIssue ?? null;
+        currentParent =
+          typeof parentValue === 'string'
+            ? parentValue
+            : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
+              ? (parentValue as { identifier?: string }).identifier || null
+              : null;
+      }
 
       if (currentParent !== desiredParent) {
         await hulyClient.setParentIssue(hulyIdentifier, desiredParent);

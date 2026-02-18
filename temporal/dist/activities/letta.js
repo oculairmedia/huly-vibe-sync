@@ -10,7 +10,7 @@ exports.updateMemoryBlock = updateMemoryBlock;
 const activity_1 = require("@temporalio/activity");
 const letta_client_1 = require("@letta-ai/letta-client");
 // Configuration
-const LETTA_API_BASE = process.env.LETTA_API_URL || 'https://letta.oculair.ca';
+const LETTA_API_BASE = process.env.LETTA_API_URL || 'http://192.168.50.90:8289';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
 // Initialize Letta client
 const lettaClient = new letta_client_1.LettaClient({

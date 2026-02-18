@@ -479,6 +479,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             projectIdentifier: hulyProject.identifier,
             vibeProjectId: vibeProjectId!,
           },
+          knownParentIssue: hulyIssue.parentIssue || null,
         });
 
         if (syncResult.skipped) result.phase2.skipped++;

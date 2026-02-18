@@ -31,6 +31,14 @@ export interface PersistIssueStateResult {
         error: string;
     }>;
 }
+export interface IssueSyncTimestamps {
+    huly_modified_at: number | null;
+    vibe_modified_at: number | null;
+    beads_modified_at: number | null;
+}
+export declare function getIssueSyncTimestamps(input: {
+    identifier: string;
+}): Promise<IssueSyncTimestamps | null>;
 export declare function persistIssueSyncState(input: PersistIssueStateInput): Promise<PersistIssueStateResult>;
 export declare function persistIssueSyncStateBatch(input: PersistIssueStateBatchInput): Promise<PersistIssueStateResult>;
 export {};

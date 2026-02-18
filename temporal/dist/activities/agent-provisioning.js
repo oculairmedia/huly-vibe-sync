@@ -52,7 +52,7 @@ const activity_1 = require("@temporalio/activity");
 const letta_client_1 = require("@letta-ai/letta-client");
 const lib_1 = require("../lib");
 // Configuration
-const LETTA_API_BASE = process.env.LETTA_API_URL || 'https://letta.oculair.ca';
+const LETTA_API_BASE = process.env.LETTA_API_URL || 'http://192.168.50.90:8289';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
 const LETTA_MODEL = process.env.LETTA_MODEL || 'letta/letta-free';
 const LETTA_EMBEDDING = process.env.LETTA_EMBEDDING || 'letta/letta-free';

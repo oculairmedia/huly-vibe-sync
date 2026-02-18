@@ -48,6 +48,32 @@ function defaultHulyId(identifier: string): string | null {
   return /^[A-Z]+-\d+$/i.test(identifier) ? identifier : null;
 }
 
+export interface IssueSyncTimestamps {
+  huly_modified_at: number | null;
+  vibe_modified_at: number | null;
+  beads_modified_at: number | null;
+}
+
+export async function getIssueSyncTimestamps(input: {
+  identifier: string;
+}): Promise<IssueSyncTimestamps | null> {
+  const { createSyncDatabase } = await import('../../lib/database.js');
+  const db = createSyncDatabase(resolveDbPath()) as any;
+
+  try {
+    const issue = db.getIssue(input.identifier);
+    if (!issue) return null;
+
+    return {
+      huly_modified_at: normalizeModifiedAt(issue.huly_modified_at),
+      vibe_modified_at: normalizeModifiedAt(issue.vibe_modified_at),
+      beads_modified_at: normalizeModifiedAt(issue.beads_modified_at),
+    };
+  } finally {
+    db.close();
+  }
+}
+
 export async function persistIssueSyncState(
   input: PersistIssueStateInput
 ): Promise<PersistIssueStateResult> {

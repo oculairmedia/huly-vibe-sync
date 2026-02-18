@@ -47,7 +47,9 @@ const { getVibeProjectId } = proxyActivities<typeof orchestrationActivities>({
   },
 });
 
-const { persistIssueSyncState } = proxyActivities<typeof syncDatabaseActivities>({
+const { persistIssueSyncState, getIssueSyncTimestamps } = proxyActivities<
+  typeof syncDatabaseActivities
+>({
   startToCloseTimeout: '60 seconds',
   retry: {
     initialInterval: '1 second',
@@ -360,11 +362,43 @@ async function checkForConflicts(
     return { hasConflict: false, sourceWins: true };
   }
 
+  // DB fast-path: use stored timestamps to avoid API calls when source clearly wins.
+  // Stored timestamps are refreshed every sync cycle (~10s), so staleness risk is low.
+  const issueId = linkedIds.hulyId || issueData.id;
+  try {
+    const dbTimestamps = await getIssueSyncTimestamps({ identifier: issueId });
+    if (dbTimestamps) {
+      const otherTimestamps: { system: SourceSystem; timestamp: number }[] = [];
+      if (source !== 'huly' && dbTimestamps.huly_modified_at) {
+        otherTimestamps.push({ system: 'huly', timestamp: dbTimestamps.huly_modified_at });
+      }
+      if (source !== 'vibe' && dbTimestamps.vibe_modified_at) {
+        otherTimestamps.push({ system: 'vibe', timestamp: dbTimestamps.vibe_modified_at });
+      }
+      if (source !== 'beads' && dbTimestamps.beads_modified_at) {
+        otherTimestamps.push({ system: 'beads', timestamp: dbTimestamps.beads_modified_at });
+      }
+
+      if (otherTimestamps.length > 0) {
+        otherTimestamps.sort((a, b) => b.timestamp - a.timestamp);
+        const newest = otherTimestamps[0];
+
+        if (issueData.modifiedAt - newest.timestamp > 1000) {
+          log.info(
+            `[ConflictCheck] DB fast-path: source wins (${source} ahead by ${issueData.modifiedAt - newest.timestamp}ms)`
+          );
+          return { hasConflict: false, sourceWins: true };
+        }
+      }
+    }
+  } catch {
+    // DB read failed, fall through to API check
+  }
+
   const timestamps: { system: SourceSystem; timestamp: number }[] = [
     { system: source, timestamp: issueData.modifiedAt },
   ];
 
-  // Get timestamps from other systems
   try {
     if (source !== 'huly' && linkedIds.hulyId) {
       const hulyIssue = await getHulyIssue({ identifier: linkedIds.hulyId });
@@ -396,7 +430,6 @@ async function checkForConflicts(
       }
     }
   } catch (error) {
-    // If we can't get timestamps, proceed with sync (source wins)
     log.warn(`[ConflictCheck] Error getting timestamps, proceeding with sync`, {
       error: error instanceof Error ? error.message : String(error),
     });

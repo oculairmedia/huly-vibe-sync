@@ -60,6 +60,8 @@ export declare function syncTaskToHuly(input: {
     task: VibeTask;
     hulyIdentifier: string;
     context: SyncContext;
+    /** Pass the known parent identifier to avoid an extra getIssue API call */
+    knownParentIssue?: string | null;
 }): Promise<SyncActivityResult>;
 /**
  * Sync a Huly issue to Beads
