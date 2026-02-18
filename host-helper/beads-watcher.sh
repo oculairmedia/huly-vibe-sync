@@ -39,12 +39,11 @@ extract_project() {
     local rel="${path#$WATCH_ROOT/}"
     local project_dir="${rel%%/*}"
     
-    local db_path="$WATCH_ROOT/$project_dir/.beads/beads.db"
-    if [[ -f "$db_path" ]]; then
-        local issue_id=$(sqlite3 "$db_path" "SELECT id FROM issues LIMIT 1" 2>/dev/null || echo "")
+    local jsonl_path="$WATCH_ROOT/$project_dir/.beads/issues.jsonl"
+    if [[ -f "$jsonl_path" ]]; then
+        local issue_id=$(head -1 "$jsonl_path" 2>/dev/null | grep -oP '"id"\s*:\s*"[^"]*-' | head -1 | sed 's/"id"\s*:\s*"//;s/-$//' || echo "")
         if [[ -n "$issue_id" ]]; then
-            local prefix="${issue_id%-*}"
-            echo "${prefix^^}"
+            echo "${issue_id^^}"
             return
         fi
     fi

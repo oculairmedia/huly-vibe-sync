@@ -155,6 +155,7 @@ services:
   huly-vibe-sync-ui:
     image: node:18-alpine
     container_name: huly-vibe-sync-ui
+    init: true
     restart: unless-stopped
     working_dir: /app
     command: ['node', 'server.js']

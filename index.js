@@ -14,16 +14,9 @@
  */
 
 import 'dotenv/config';
-import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
-
-setInterval(() => {
-  try {
-    execSync('true', { stdio: 'ignore', timeout: 100 });
-  } catch (e) {}
-}, 60000);
 
 import { createHulyRestClient } from './lib/HulyRestClient.js';
 import { createVibeRestClient } from './lib/VibeRestClient.js';

@@ -5,6 +5,8 @@ Wants=docker.service
 
 [Service]
 Type=simple
+User=mcp-user
+Group=mcp-user
 ExecStart=/usr/local/bin/beads-watcher.sh
 Restart=always
 RestartSec=5
