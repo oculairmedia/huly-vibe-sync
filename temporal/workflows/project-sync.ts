@@ -328,6 +328,13 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
 
     // PHASE 1: Huly → Vibe
     if (_phase === 'phase1') {
+      hulyIssues.sort((a, b) => {
+        const aIsChild = !!a.parentIssue;
+        const bIsChild = !!b.parentIssue;
+        if (aIsChild === bIsChild) return 0;
+        return aIsChild ? 1 : -1;
+      });
+
       log.info(
         `[ProjectSync] Phase 1: ${hulyIssues.length} issues → Vibe (starting at ${_phase1Index})`
       );
@@ -357,6 +364,15 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             if (syncResult.success && syncResult.id) {
               phase1UpdatedTasks.add(syncResult.id);
 
+              tasksByHulyId.set(issue.identifier, {
+                id: syncResult.id,
+                status: existingTask?.status || issue.status || 'unknown',
+              });
+
+              const parentVibeId = issue.parentIssue
+                ? tasksByHulyId.get(issue.parentIssue)?.id || null
+                : null;
+
               await persistIssueSyncState({
                 identifier: issue.identifier,
                 projectIdentifier: hulyProject.identifier,
@@ -370,6 +386,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
                 vibeModifiedAt: Date.now(),
                 vibeStatus: existingTask?.status,
                 parentHulyId: issue.parentIssue || null,
+                parentVibeId,
               });
             }
 
@@ -469,6 +486,10 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         else result.phase2.errors++;
 
         if (syncResult.success) {
+          const parentVibeId = hulyIssue.parentIssue
+            ? tasksByHulyId.get(hulyIssue.parentIssue)?.id || null
+            : null;
+
           await persistIssueSyncState({
             identifier: hulyIdentifier,
             projectIdentifier: hulyProject.identifier,
@@ -482,6 +503,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             vibeModifiedAt: task.description ? Date.now() : undefined,
             vibeStatus: task.status,
             parentHulyId: hulyIssue.parentIssue || null,
+            parentVibeId,
           });
         }
 

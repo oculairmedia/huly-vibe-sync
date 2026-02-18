@@ -212,6 +212,13 @@ async function ProjectSyncWorkflow(input) {
         }
         // PHASE 1: Huly → Vibe
         if (_phase === 'phase1') {
+            hulyIssues.sort((a, b) => {
+                const aIsChild = !!a.parentIssue;
+                const bIsChild = !!b.parentIssue;
+                if (aIsChild === bIsChild)
+                    return 0;
+                return aIsChild ? 1 : -1;
+            });
             workflow_1.log.info(`[ProjectSync] Phase 1: ${hulyIssues.length} issues → Vibe (starting at ${_phase1Index})`);
             for (let i = _phase1Index; i < hulyIssues.length; i += effectiveBatchSize) {
                 const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
@@ -232,6 +239,13 @@ async function ProjectSyncWorkflow(input) {
                     });
                     if (syncResult.success && syncResult.id) {
                         phase1UpdatedTasks.add(syncResult.id);
+                        tasksByHulyId.set(issue.identifier, {
+                            id: syncResult.id,
+                            status: existingTask?.status || issue.status || 'unknown',
+                        });
+                        const parentVibeId = issue.parentIssue
+                            ? tasksByHulyId.get(issue.parentIssue)?.id || null
+                            : null;
                         await persistIssueSyncState({
                             identifier: issue.identifier,
                             projectIdentifier: hulyProject.identifier,
@@ -245,6 +259,7 @@ async function ProjectSyncWorkflow(input) {
                             vibeModifiedAt: Date.now(),
                             vibeStatus: existingTask?.status,
                             parentHulyId: issue.parentIssue || null,
+                            parentVibeId,
                         });
                     }
                     return syncResult;
@@ -329,6 +344,9 @@ async function ProjectSyncWorkflow(input) {
                 else
                     result.phase2.errors++;
                 if (syncResult.success) {
+                    const parentVibeId = hulyIssue.parentIssue
+                        ? tasksByHulyId.get(hulyIssue.parentIssue)?.id || null
+                        : null;
                     await persistIssueSyncState({
                         identifier: hulyIdentifier,
                         projectIdentifier: hulyProject.identifier,
@@ -342,6 +360,7 @@ async function ProjectSyncWorkflow(input) {
                         vibeModifiedAt: task.description ? Date.now() : undefined,
                         vibeStatus: task.status,
                         parentHulyId: hulyIssue.parentIssue || null,
+                        parentVibeId,
                     });
                 }
                 issuesProcessedThisRun++;

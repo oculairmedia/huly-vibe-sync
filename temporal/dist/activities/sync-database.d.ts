@@ -15,6 +15,8 @@ export interface PersistIssueStateInput {
     vibeStatus?: string;
     beadsStatus?: string;
     parentHulyId?: string | null;
+    parentVibeId?: string | null;
+    parentBeadsId?: string | null;
     subIssueCount?: number;
 }
 export interface PersistIssueStateBatchInput {

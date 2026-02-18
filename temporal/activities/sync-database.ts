@@ -18,6 +18,8 @@ export interface PersistIssueStateInput {
   vibeStatus?: string;
   beadsStatus?: string;
   parentHulyId?: string | null;
+  parentVibeId?: string | null;
+  parentBeadsId?: string | null;
   subIssueCount?: number;
 }
 
@@ -98,6 +100,8 @@ export async function persistIssueSyncStateBatch(
           vibe_status: issue.vibeStatus || existing?.vibe_status || null,
           beads_status: issue.beadsStatus || existing?.beads_status || null,
           parent_huly_id: issue.parentHulyId ?? existing?.parent_huly_id ?? null,
+          parent_vibe_id: issue.parentVibeId ?? existing?.parent_vibe_id ?? null,
+          parent_beads_id: issue.parentBeadsId ?? existing?.parent_beads_id ?? null,
           sub_issue_count: issue.subIssueCount ?? existing?.sub_issue_count ?? 0,
         });
 
