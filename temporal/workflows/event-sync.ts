@@ -5,28 +5,16 @@
  * These are durable replacements for in-memory event callbacks.
  */
 
-import {
-  proxyActivities,
-  log,
-  sleep,
-  executeChild,
-} from '@temporalio/workflow';
+import { proxyActivities, log, sleep, executeChild } from '@temporalio/workflow';
 
 import type * as syncActivities from '../activities/bidirectional';
 import type * as orchestrationActivities from '../activities/orchestration';
 
-import {
-  SyncFromVibeWorkflow,
-  SyncFromHulyWorkflow,
-} from './bidirectional-sync';
+import { BidirectionalSyncWorkflow, SyncFromHulyWorkflow } from './bidirectional-sync';
 
 import type { SyncContext } from './bidirectional-sync';
 
-const {
-  syncBeadsToHuly,
-  getVibeTask,
-  getBeadsIssue,
-} = proxyActivities<typeof syncActivities>({
+const { syncBeadsToHuly, getVibeTask, getBeadsIssue } = proxyActivities<typeof syncActivities>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
@@ -256,10 +244,8 @@ export async function VibeSSEChangeWorkflow(
     vibeProjectId,
   };
 
-  // Process each changed task
   for (const taskId of changedTaskIds) {
     try {
-      // Get the task details from Vibe
       const vibeTask = await getVibeTask({ taskId });
 
       if (!vibeTask) {
@@ -274,20 +260,29 @@ export async function VibeSSEChangeWorkflow(
         status: vibeTask.status,
       });
 
-      // Use SyncFromVibeWorkflow as child to handle the sync properly
-      const syncResult = await executeChild(SyncFromVibeWorkflow, {
+      const syncResult = await executeChild(BidirectionalSyncWorkflow, {
         args: [
           {
-            vibeTaskId: taskId,
+            source: 'vibe' as const,
+            issueData: {
+              id: vibeTask.id,
+              title: vibeTask.title,
+              description: vibeTask.description,
+              status: vibeTask.status,
+              modifiedAt: vibeTask.updated_at
+                ? new Date(vibeTask.updated_at).getTime()
+                : Date.now(),
+            },
             context,
+            linkedIds: { vibeId: vibeTask.id },
           },
         ],
-        workflowId: `vibe-sse-sync-${vibeProjectId}-${taskId}-${Date.now()}`,
+        workflowId: `vibe-sse-sync-${vibeProjectId}-${taskId}`,
       });
 
       if (syncResult.success) {
         result.tasksSynced++;
-        log.info('[VibeSSEChange] Task synced via SyncFromVibeWorkflow', {
+        log.info('[VibeSSEChange] Task synced', {
           taskId: vibeTask.id,
           hulyResult: syncResult.results.huly,
           beadsResult: syncResult.results.beads,
@@ -302,7 +297,6 @@ export async function VibeSSEChangeWorkflow(
         }
       }
 
-      // Small delay between tasks to avoid overwhelming APIs
       await sleep('200ms');
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -448,12 +442,12 @@ export async function HulyWebhookChangeWorkflow(
             hulyIdentifier: issueId,
             context: {
               projectIdentifier,
-              vibeProjectId: '', // Will be looked up by the workflow
+              vibeProjectId: '',
               gitRepoPath,
             },
           },
         ],
-        workflowId: `huly-webhook-sync-${issueId}-${Date.now()}`,
+        workflowId: `huly-webhook-sync-${issueId}`,
       });
 
       if (syncResult.success) {

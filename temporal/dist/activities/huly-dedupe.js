@@ -41,6 +41,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.normalizeTitle = normalizeTitle;
 exports.findMappedIssueByBeadsId = findMappedIssueByBeadsId;
 exports.getBeadsStatusForHulyIssue = getBeadsStatusForHulyIssue;
 exports.findMappedIssueByTitle = findMappedIssueByTitle;
@@ -69,10 +70,10 @@ function normalizeTitle(title) {
 function getHulyIdentifier(row) {
     return (row.identifier || row.huly_id || null) ?? null;
 }
-async function getProjectIssues(projectIdentifier) {
+async function getProjectIssueIndex(projectIdentifier) {
     const cached = projectIssuesCache.get(projectIdentifier);
     if (cached && cached.expiresAt > Date.now()) {
-        return cached.rows;
+        return cached;
     }
     const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
@@ -80,11 +81,31 @@ async function getProjectIssues(projectIdentifier) {
     try {
         const dbAny = db;
         const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []);
-        projectIssuesCache.set(projectIdentifier, {
+        const byBeadsId = new Map();
+        const byNormalizedTitle = new Map();
+        const byHulyIdentifier = new Map();
+        for (const row of rows) {
+            if (row.beads_issue_id) {
+                byBeadsId.set(row.beads_issue_id, row);
+            }
+            const nt = normalizeTitle(row.title || '');
+            if (nt) {
+                byNormalizedTitle.set(nt, row);
+            }
+            const hid = getHulyIdentifier(row);
+            if (hid) {
+                byHulyIdentifier.set(hid, row);
+            }
+        }
+        const index = {
             rows,
+            byBeadsId,
+            byNormalizedTitle,
+            byHulyIdentifier,
             expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
-        });
-        return rows;
+        };
+        projectIssuesCache.set(projectIdentifier, index);
+        return index;
     }
     finally {
         db.close();
@@ -93,15 +114,15 @@ async function getProjectIssues(projectIdentifier) {
 async function findMappedIssueByBeadsId(projectIdentifier, beadsIssueId) {
     if (!projectIdentifier || !beadsIssueId)
         return null;
-    const rows = await getProjectIssues(projectIdentifier);
-    const match = rows.find(r => r.beads_issue_id === beadsIssueId);
+    const index = await getProjectIssueIndex(projectIdentifier);
+    const match = index.byBeadsId.get(beadsIssueId);
     return match ? getHulyIdentifier(match) : null;
 }
 async function getBeadsStatusForHulyIssue(projectIdentifier, hulyIdentifier) {
     if (!projectIdentifier || !hulyIdentifier)
         return null;
-    const rows = await getProjectIssues(projectIdentifier);
-    const match = rows.find(r => getHulyIdentifier(r) === hulyIdentifier);
+    const index = await getProjectIssueIndex(projectIdentifier);
+    const match = index.byHulyIdentifier.get(hulyIdentifier);
     if (!match?.beads_status)
         return null;
     return {
@@ -115,8 +136,8 @@ async function findMappedIssueByTitle(projectIdentifier, title) {
     const target = normalizeTitle(title);
     if (!target)
         return null;
-    const rows = await getProjectIssues(projectIdentifier);
-    const match = rows.find(r => normalizeTitle(r.title || '') === target);
+    const index = await getProjectIssueIndex(projectIdentifier);
+    const match = index.byNormalizedTitle.get(target);
     return match ? getHulyIdentifier(match) : null;
 }
 //# sourceMappingURL=huly-dedupe.js.map

@@ -60,11 +60,6 @@ const huly_dedupe_1 = require("./huly-dedupe");
 function appRootModule(modulePath) {
     return path_1.default.join(process.cwd(), modulePath);
 }
-function normalizeIssueTitle(title) {
-    if (!title)
-        return '';
-    return title.trim().toLowerCase();
-}
 async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
     try {
         const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
@@ -77,8 +72,8 @@ async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
             }
             if (title) {
                 const rows = db.getProjectIssues?.(projectIdentifier) || [];
-                const normalizedTitle = normalizeIssueTitle(title);
-                const byTitle = rows.find((row) => !!row?.beads_issue_id && normalizeIssueTitle(row?.title) === normalizedTitle);
+                const normalizedTitle = (0, huly_dedupe_1.normalizeTitle)(title);
+                const byTitle = rows.find((row) => !!row?.beads_issue_id && (0, huly_dedupe_1.normalizeTitle)(row?.title || '') === normalizedTitle);
                 if (byTitle?.beads_issue_id) {
                     return String(byTitle.beads_issue_id);
                 }
@@ -205,8 +200,8 @@ async function syncIssueToBeads(input) {
         return { success: true, skipped: true, id: mappedBeadsId };
     }
     // DEDUPLICATION: Check if issue with same title already exists in Beads
-    const normalizedTitle = normalizeIssueTitle(issue.title);
-    const existingByTitle = existingBeadsIssues.find(b => normalizeIssueTitle(b.title) === normalizedTitle);
+    const normalizedTitle = (0, huly_dedupe_1.normalizeTitle)(issue.title);
+    const existingByTitle = existingBeadsIssues.find(b => (0, huly_dedupe_1.normalizeTitle)(b.title) === normalizedTitle);
     if (existingByTitle) {
         console.log(`[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`);
         return { success: true, skipped: true, id: existingByTitle.id };

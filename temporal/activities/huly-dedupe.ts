@@ -20,9 +20,18 @@ interface IssueRow {
 }
 
 const PROJECT_ISSUES_CACHE_TTL_MS = Number(process.env.TEMPORAL_DEDUPE_CACHE_TTL_MS || 15000);
-const projectIssuesCache = new Map<string, { rows: IssueRow[]; expiresAt: number }>();
 
-function normalizeTitle(title: string): string {
+interface ProjectIssueIndex {
+  rows: IssueRow[];
+  byBeadsId: Map<string, IssueRow>;
+  byNormalizedTitle: Map<string, IssueRow>;
+  byHulyIdentifier: Map<string, IssueRow>;
+  expiresAt: number;
+}
+
+const projectIssuesCache = new Map<string, ProjectIssueIndex>();
+
+export function normalizeTitle(title: string): string {
   if (!title) return '';
   return title
     .trim()
@@ -42,10 +51,10 @@ function getHulyIdentifier(row: IssueRow): string | null {
   return (row.identifier || row.huly_id || null) ?? null;
 }
 
-async function getProjectIssues(projectIdentifier: string): Promise<IssueRow[]> {
+async function getProjectIssueIndex(projectIdentifier: string): Promise<ProjectIssueIndex> {
   const cached = projectIssuesCache.get(projectIdentifier);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.rows;
+    return cached;
   }
 
   const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
@@ -55,11 +64,34 @@ async function getProjectIssues(projectIdentifier: string): Promise<IssueRow[]> 
   try {
     const dbAny = db as any;
     const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []) as IssueRow[];
-    projectIssuesCache.set(projectIdentifier, {
+
+    const byBeadsId = new Map<string, IssueRow>();
+    const byNormalizedTitle = new Map<string, IssueRow>();
+    const byHulyIdentifier = new Map<string, IssueRow>();
+
+    for (const row of rows) {
+      if (row.beads_issue_id) {
+        byBeadsId.set(row.beads_issue_id, row);
+      }
+      const nt = normalizeTitle(row.title || '');
+      if (nt) {
+        byNormalizedTitle.set(nt, row);
+      }
+      const hid = getHulyIdentifier(row);
+      if (hid) {
+        byHulyIdentifier.set(hid, row);
+      }
+    }
+
+    const index: ProjectIssueIndex = {
       rows,
+      byBeadsId,
+      byNormalizedTitle,
+      byHulyIdentifier,
       expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
-    });
-    return rows;
+    };
+    projectIssuesCache.set(projectIdentifier, index);
+    return index;
   } finally {
     db.close();
   }
@@ -71,8 +103,8 @@ export async function findMappedIssueByBeadsId(
 ): Promise<string | null> {
   if (!projectIdentifier || !beadsIssueId) return null;
 
-  const rows = await getProjectIssues(projectIdentifier);
-  const match = rows.find(r => r.beads_issue_id === beadsIssueId);
+  const index = await getProjectIssueIndex(projectIdentifier);
+  const match = index.byBeadsId.get(beadsIssueId);
   return match ? getHulyIdentifier(match) : null;
 }
 
@@ -82,8 +114,8 @@ export async function getBeadsStatusForHulyIssue(
 ): Promise<{ beadsStatus: string; beadsModifiedAt: number } | null> {
   if (!projectIdentifier || !hulyIdentifier) return null;
 
-  const rows = await getProjectIssues(projectIdentifier);
-  const match = rows.find(r => getHulyIdentifier(r) === hulyIdentifier);
+  const index = await getProjectIssueIndex(projectIdentifier);
+  const match = index.byHulyIdentifier.get(hulyIdentifier);
   if (!match?.beads_status) return null;
 
   return {
@@ -101,7 +133,7 @@ export async function findMappedIssueByTitle(
   const target = normalizeTitle(title);
   if (!target) return null;
 
-  const rows = await getProjectIssues(projectIdentifier);
-  const match = rows.find(r => normalizeTitle(r.title || '') === target);
+  const index = await getProjectIssueIndex(projectIdentifier);
+  const match = index.byNormalizedTitle.get(target);
   return match ? getHulyIdentifier(match) : null;
 }

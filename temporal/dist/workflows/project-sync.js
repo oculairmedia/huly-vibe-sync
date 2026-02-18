@@ -14,7 +14,7 @@ const agent_provisioning_1 = require("./agent-provisioning");
 // ============================================================
 // ACTIVITY PROXIES
 // ============================================================
-const { ensureVibeProject, fetchProjectData, fetchVibeTasksForHulyIssues, initializeBeads, fetchBeadsIssues, } = (0, workflow_1.proxyActivities)({
+const { ensureVibeProject, fetchProjectData, fetchAllVibeTasks, fetchVibeTasksForHulyIssues, initializeBeads, fetchBeadsIssues, } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -186,12 +186,8 @@ async function ProjectSyncWorkflow(input) {
                 workflow_1.log.info(`[ProjectSync] Using webhook-prefetched issues (${prefetchedIssues.length}) with mapped Vibe tasks (${vibeTasks.length}), batch size ${effectiveBatchSize}`);
             }
             else {
-                const projectData = await fetchProjectData({
-                    hulyProject,
-                    vibeProjectId: vibeProjectId,
-                });
-                vibeTasks = projectData.vibeTasks;
-                workflow_1.log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+                vibeTasks = await fetchAllVibeTasks({ vibeProjectId: vibeProjectId });
+                workflow_1.log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues, fetched ${vibeTasks.length} Vibe tasks`);
             }
         }
         else {

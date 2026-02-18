@@ -62,6 +62,7 @@ export {
   resolveProjectIdentifier,
   ensureVibeProject,
   fetchProjectData,
+  fetchAllVibeTasks,
   fetchVibeTasksForHulyIssues,
   fetchHulyIssuesBulk,
 } from './orchestration-projects';

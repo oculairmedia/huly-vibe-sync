@@ -339,6 +339,16 @@ export async function fetchProjectData(input: {
   }
 }
 
+export async function fetchAllVibeTasks(input: { vibeProjectId: string }): Promise<VibeTask[]> {
+  const { vibeProjectId } = input;
+  try {
+    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
+    return await vibeClient.listTasks(vibeProjectId);
+  } catch (error) {
+    throw handleOrchestratorError(error, 'fetchAllVibeTasks');
+  }
+}
+
 /**
  * Fetch only Vibe tasks that map to specific Huly identifiers via sync DB mappings.
  * Used by webhook-triggered project syncs to avoid full-table task fetches.

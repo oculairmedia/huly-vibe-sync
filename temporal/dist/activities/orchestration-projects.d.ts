@@ -32,6 +32,9 @@ export declare function fetchProjectData(input: {
     hulyIssues: HulyIssue[];
     vibeTasks: VibeTask[];
 }>;
+export declare function fetchAllVibeTasks(input: {
+    vibeProjectId: string;
+}): Promise<VibeTask[]>;
 /**
  * Fetch only Vibe tasks that map to specific Huly identifiers via sync DB mappings.
  * Used by webhook-triggered project syncs to avoid full-table task fetches.

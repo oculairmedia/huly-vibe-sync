@@ -20,15 +20,10 @@ import {
   mapBeadsStatusToVibe,
   mapBeadsStatusToHuly,
 } from '../lib';
-import { findMappedIssueByBeadsId, findMappedIssueByTitle } from './huly-dedupe';
+import { findMappedIssueByBeadsId, findMappedIssueByTitle, normalizeTitle } from './huly-dedupe';
 
 function appRootModule(modulePath: string): string {
   return path.join(process.cwd(), modulePath);
-}
-
-function normalizeIssueTitle(title?: string): string {
-  if (!title) return '';
-  return title.trim().toLowerCase();
 }
 
 async function findExistingBeadsLink(
@@ -49,10 +44,10 @@ async function findExistingBeadsLink(
 
       if (title) {
         const rows = db.getProjectIssues?.(projectIdentifier) || [];
-        const normalizedTitle = normalizeIssueTitle(title);
+        const normalizedTitle = normalizeTitle(title);
         const byTitle = rows.find(
           (row: { title?: string; beads_issue_id?: string }) =>
-            !!row?.beads_issue_id && normalizeIssueTitle(row?.title) === normalizedTitle
+            !!row?.beads_issue_id && normalizeTitle(row?.title || '') === normalizedTitle
         );
         if (byTitle?.beads_issue_id) {
           return String(byTitle.beads_issue_id);
@@ -277,9 +272,9 @@ export async function syncIssueToBeads(input: {
   }
 
   // DEDUPLICATION: Check if issue with same title already exists in Beads
-  const normalizedTitle = normalizeIssueTitle(issue.title);
+  const normalizedTitle = normalizeTitle(issue.title);
   const existingByTitle = existingBeadsIssues.find(
-    b => normalizeIssueTitle(b.title) === normalizedTitle
+    b => normalizeTitle(b.title) === normalizedTitle
   );
   if (existingByTitle) {
     console.log(

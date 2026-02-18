@@ -45,6 +45,7 @@ exports.getVibeProjectId = getVibeProjectId;
 exports.resolveProjectIdentifier = resolveProjectIdentifier;
 exports.ensureVibeProject = ensureVibeProject;
 exports.fetchProjectData = fetchProjectData;
+exports.fetchAllVibeTasks = fetchAllVibeTasks;
 exports.fetchVibeTasksForHulyIssues = fetchVibeTasksForHulyIssues;
 exports.fetchHulyIssuesBulk = fetchHulyIssuesBulk;
 const activity_1 = require("@temporalio/activity");
@@ -308,6 +309,16 @@ async function fetchProjectData(input) {
     }
     catch (error) {
         throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchProjectData');
+    }
+}
+async function fetchAllVibeTasks(input) {
+    const { vibeProjectId } = input;
+    try {
+        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
+        return await vibeClient.listTasks(vibeProjectId);
+    }
+    catch (error) {
+        throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchAllVibeTasks');
     }
 }
 /**

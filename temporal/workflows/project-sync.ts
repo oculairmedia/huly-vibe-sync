@@ -22,6 +22,7 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 const {
   ensureVibeProject,
   fetchProjectData,
+  fetchAllVibeTasks,
   fetchVibeTasksForHulyIssues,
   initializeBeads,
   fetchBeadsIssues,
@@ -301,12 +302,10 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           `[ProjectSync] Using webhook-prefetched issues (${prefetchedIssues.length}) with mapped Vibe tasks (${vibeTasks.length}), batch size ${effectiveBatchSize}`
         );
       } else {
-        const projectData = await fetchProjectData({
-          hulyProject,
-          vibeProjectId: vibeProjectId!,
-        });
-        vibeTasks = projectData.vibeTasks;
-        log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
+        vibeTasks = await fetchAllVibeTasks({ vibeProjectId: vibeProjectId! });
+        log.info(
+          `[ProjectSync] Using ${prefetchedIssues.length} prefetched issues, fetched ${vibeTasks.length} Vibe tasks`
+        );
       }
     } else {
       const projectData = await fetchProjectData({
