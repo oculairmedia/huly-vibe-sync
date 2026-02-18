@@ -197,7 +197,7 @@ class BeadsClient {
     async listIssues(includeAll = true) {
         const allFlag = includeAll ? ' --all' : '';
         try {
-            const output = this.execBeads(`list --json${allFlag}`);
+            const output = this.execBeads(`list --json --limit 0${allFlag}`);
             return this.parseBeadsOutput(output);
         }
         catch (error) {
@@ -215,7 +215,7 @@ class BeadsClient {
                             if (renameError instanceof Error) {
                                 console.warn(`[BeadsClient] Prefix migration failed for ${this.repoPath}, falling back to --allow-stale list: ${renameError.message}`);
                             }
-                            const staleOutput = this.execBeads(`list --json --allow-stale${allFlag}`);
+                            const staleOutput = this.execBeads(`list --json --limit 0 --allow-stale${allFlag}`);
                             return this.parseBeadsOutput(staleOutput);
                         }
                     }
@@ -223,7 +223,7 @@ class BeadsClient {
                         throw syncError;
                     }
                 }
-                const output = this.execBeads(`list --json${allFlag}`);
+                const output = this.execBeads(`list --json --limit 0${allFlag}`);
                 return this.parseBeadsOutput(output);
             }
             // If no issues exist, return empty array
