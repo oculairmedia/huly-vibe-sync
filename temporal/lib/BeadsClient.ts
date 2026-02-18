@@ -205,9 +205,10 @@ export class BeadsClient {
   /**
    * List all issues
    */
-  async listIssues(): Promise<BeadsIssue[]> {
+  async listIssues(includeAll = true): Promise<BeadsIssue[]> {
+    const allFlag = includeAll ? ' --all' : '';
     try {
-      const output = this.execBeads('list --json');
+      const output = this.execBeads(`list --json${allFlag}`);
       return this.parseBeadsOutput<BeadsIssue[]>(output);
     } catch (error) {
       if (error instanceof Error && error.message.includes('Database out of sync with JSONL')) {
@@ -226,7 +227,7 @@ export class BeadsClient {
                   `[BeadsClient] Prefix migration failed for ${this.repoPath}, falling back to --allow-stale list: ${renameError.message}`
                 );
               }
-              const staleOutput = this.execBeads('list --json --allow-stale');
+              const staleOutput = this.execBeads(`list --json --allow-stale${allFlag}`);
               return this.parseBeadsOutput<BeadsIssue[]>(staleOutput);
             }
           } else {
@@ -234,7 +235,7 @@ export class BeadsClient {
           }
         }
 
-        const output = this.execBeads('list --json');
+        const output = this.execBeads(`list --json${allFlag}`);
         return this.parseBeadsOutput<BeadsIssue[]>(output);
       }
 
