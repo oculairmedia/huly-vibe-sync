@@ -1598,6 +1598,74 @@ describe('SyncDatabase', () => {
         expect(issue.sub_issue_count).toBe(0);
       });
     });
+
+    describe('parent_vibe_id in upsertIssue', () => {
+      it('should store parent_vibe_id when provided', () => {
+        db.upsertIssue({
+          identifier: 'PC-5',
+          project_identifier: 'PC',
+          title: 'Issue With Vibe Parent',
+          parent_vibe_id: 'vibe-parent-abc',
+        });
+
+        const issue = db.getIssue('PC-5');
+        expect(issue.parent_vibe_id).toBe('vibe-parent-abc');
+      });
+
+      it('should preserve parent_vibe_id on update when not provided', () => {
+        db.upsertIssue({
+          identifier: 'PC-6',
+          project_identifier: 'PC',
+          title: 'Issue With Vibe Parent',
+          parent_vibe_id: 'vibe-parent-1',
+        });
+
+        db.upsertIssue({
+          identifier: 'PC-6',
+          project_identifier: 'PC',
+          title: 'Issue With Vibe Parent Updated',
+          parent_vibe_id: null,
+        });
+
+        const issue = db.getIssue('PC-6');
+        expect(issue.parent_vibe_id).toBe('vibe-parent-1');
+      });
+
+      it('should allow clearing parent_vibe_id', () => {
+        db.upsertIssue({
+          identifier: 'PC-7',
+          project_identifier: 'PC',
+          title: 'Issue With Vibe Parent',
+          parent_vibe_id: 'vibe-parent-1',
+        });
+
+        db.upsertIssue({
+          identifier: 'PC-7',
+          project_identifier: 'PC',
+          title: 'Issue With Vibe Parent',
+          parent_vibe_id: null,
+        });
+
+        const issue = db.getIssue('PC-7');
+        expect(issue.parent_vibe_id).toBe('vibe-parent-1');
+      });
+
+      it('should store all three parent IDs together', () => {
+        db.upsertIssue({
+          identifier: 'PC-8',
+          project_identifier: 'PC',
+          title: 'Issue With All Parents',
+          parent_huly_id: 'PC-1',
+          parent_vibe_id: 'vibe-parent-xyz',
+          parent_beads_id: 'beads-parent-xyz',
+        });
+
+        const issue = db.getIssue('PC-8');
+        expect(issue.parent_huly_id).toBe('PC-1');
+        expect(issue.parent_vibe_id).toBe('vibe-parent-xyz');
+        expect(issue.parent_beads_id).toBe('beads-parent-xyz');
+      });
+    });
   });
 
   describe('file tracking operations', () => {
