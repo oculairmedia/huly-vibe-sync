@@ -84,6 +84,27 @@ class BeadsClient {
         return fs.existsSync(beadsDir);
     }
     /**
+     * Check that critical .beads files are readable by the current process.
+     * Logs warnings for permission issues (common when bd daemon runs as wrong user).
+     */
+    checkFilePermissions() {
+        const beadsDir = path.join(this.repoPath, '.beads');
+        const criticalFiles = ['beads.db', 'issues.jsonl', 'beads.db-shm', 'beads.db-wal'];
+        for (const file of criticalFiles) {
+            const filePath = path.join(beadsDir, file);
+            if (fs.existsSync(filePath)) {
+                try {
+                    fs.accessSync(filePath, fs.constants.R_OK);
+                }
+                catch {
+                    console.error(`[BeadsClient] Permission denied: ${filePath} is not readable. ` +
+                        `Ensure the beads daemon runs as the same user as this process (UID ${process.getuid?.() ?? 'unknown'}). ` +
+                        `Fix: chown ${process.getuid?.() ?? 1000} ${filePath}`);
+                }
+            }
+        }
+    }
+    /**
      * Initialize Beads in the repository
      */
     async initialize() {
@@ -196,6 +217,7 @@ class BeadsClient {
      */
     async listIssues(includeAll = true) {
         const allFlag = includeAll ? ' --all' : '';
+        this.checkFilePermissions();
         try {
             const output = this.execBeads(`list --json --limit 0${allFlag}`);
             return this.parseBeadsOutput(output);

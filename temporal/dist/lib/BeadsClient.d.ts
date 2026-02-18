@@ -39,6 +39,11 @@ export declare class BeadsClient {
      */
     isInitialized(): boolean;
     /**
+     * Check that critical .beads files are readable by the current process.
+     * Logs warnings for permission issues (common when bd daemon runs as wrong user).
+     */
+    checkFilePermissions(): void;
+    /**
      * Initialize Beads in the repository
      */
     initialize(): Promise<void>;
