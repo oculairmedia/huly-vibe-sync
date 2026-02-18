@@ -14,6 +14,8 @@ interface IssueRow {
   identifier?: string;
   huly_id?: string;
   beads_issue_id?: string;
+  beads_status?: string;
+  beads_modified_at?: number;
   title?: string;
 }
 
@@ -72,6 +74,22 @@ export async function findMappedIssueByBeadsId(
   const rows = await getProjectIssues(projectIdentifier);
   const match = rows.find(r => r.beads_issue_id === beadsIssueId);
   return match ? getHulyIdentifier(match) : null;
+}
+
+export async function getBeadsStatusForHulyIssue(
+  projectIdentifier: string,
+  hulyIdentifier: string
+): Promise<{ beadsStatus: string; beadsModifiedAt: number } | null> {
+  if (!projectIdentifier || !hulyIdentifier) return null;
+
+  const rows = await getProjectIssues(projectIdentifier);
+  const match = rows.find(r => getHulyIdentifier(r) === hulyIdentifier);
+  if (!match?.beads_status) return null;
+
+  return {
+    beadsStatus: match.beads_status,
+    beadsModifiedAt: match.beads_modified_at ?? 0,
+  };
 }
 
 export async function findMappedIssueByTitle(

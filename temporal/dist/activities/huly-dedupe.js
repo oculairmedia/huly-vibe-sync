@@ -42,6 +42,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findMappedIssueByBeadsId = findMappedIssueByBeadsId;
+exports.getBeadsStatusForHulyIssue = getBeadsStatusForHulyIssue;
 exports.findMappedIssueByTitle = findMappedIssueByTitle;
 const path_1 = __importDefault(require("path"));
 function appRootModule(modulePath) {
@@ -95,6 +96,18 @@ async function findMappedIssueByBeadsId(projectIdentifier, beadsIssueId) {
     const rows = await getProjectIssues(projectIdentifier);
     const match = rows.find(r => r.beads_issue_id === beadsIssueId);
     return match ? getHulyIdentifier(match) : null;
+}
+async function getBeadsStatusForHulyIssue(projectIdentifier, hulyIdentifier) {
+    if (!projectIdentifier || !hulyIdentifier)
+        return null;
+    const rows = await getProjectIssues(projectIdentifier);
+    const match = rows.find(r => getHulyIdentifier(r) === hulyIdentifier);
+    if (!match?.beads_status)
+        return null;
+    return {
+        beadsStatus: match.beads_status,
+        beadsModifiedAt: match.beads_modified_at ?? 0,
+    };
 }
 async function findMappedIssueByTitle(projectIdentifier, title) {
     if (!projectIdentifier || !title)

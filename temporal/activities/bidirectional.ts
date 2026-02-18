@@ -17,6 +17,7 @@ import {
   mapBeadsStatusToHuly,
   mapBeadsStatusToVibe,
 } from '../lib';
+import { getBeadsStatusForHulyIssue } from './huly-dedupe';
 
 // ============================================================
 // TYPES
@@ -109,14 +110,28 @@ export async function syncVibeToHuly(input: {
   hulyIdentifier: string;
   context: SyncContext;
 }): Promise<SyncResult> {
-  const { vibeTask, hulyIdentifier } = input;
+  const { vibeTask, hulyIdentifier, context } = input;
 
   console.log(`[Sync] Vibe → Huly: ${vibeTask.id} → ${hulyIdentifier}`);
 
   try {
-    const client = createHulyClient(process.env.HULY_API_URL);
     const hulyStatus = mapVibeStatusToHuly(vibeTask.status);
 
+    // Conflict resolution: beads "closed" wins over stale Vibe status.
+    // When Phase 3b sets Huly to Done (from beads closed), Vibe SSE fires
+    // and tries to revert Huly back to the stale Vibe status. Block that.
+    const beadsState = await getBeadsStatusForHulyIssue(context.projectIdentifier, hulyIdentifier);
+    if (beadsState) {
+      const beadsHulyStatus = mapBeadsStatusToHuly(beadsState.beadsStatus);
+      if (beadsHulyStatus === 'Done' && hulyStatus !== 'Done') {
+        console.log(
+          `[Sync] Vibe → Huly: Skipped ${hulyIdentifier} — beads says closed, Vibe says ${vibeTask.status}. Beads wins.`
+        );
+        return { success: true, id: hulyIdentifier, skipped: true };
+      }
+    }
+
+    const client = createHulyClient(process.env.HULY_API_URL);
     await client.updateIssue(hulyIdentifier, 'status', hulyStatus);
 
     console.log(`[Sync] Vibe → Huly: Updated ${hulyIdentifier} to ${hulyStatus}`);

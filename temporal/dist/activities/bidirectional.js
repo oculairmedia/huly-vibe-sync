@@ -18,6 +18,7 @@ exports.syncBeadsToVibe = syncBeadsToVibe;
 exports.commitBeadsChanges = commitBeadsChanges;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
+const huly_dedupe_1 = require("./huly-dedupe");
 // ============================================================
 // GET ISSUE ACTIVITIES (for conflict resolution)
 // ============================================================
@@ -55,11 +56,22 @@ async function getBeadsIssue(input) {
  * Sync Vibe task to Huly
  */
 async function syncVibeToHuly(input) {
-    const { vibeTask, hulyIdentifier } = input;
+    const { vibeTask, hulyIdentifier, context } = input;
     console.log(`[Sync] Vibe → Huly: ${vibeTask.id} → ${hulyIdentifier}`);
     try {
-        const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
         const hulyStatus = (0, lib_1.mapVibeStatusToHuly)(vibeTask.status);
+        // Conflict resolution: beads "closed" wins over stale Vibe status.
+        // When Phase 3b sets Huly to Done (from beads closed), Vibe SSE fires
+        // and tries to revert Huly back to the stale Vibe status. Block that.
+        const beadsState = await (0, huly_dedupe_1.getBeadsStatusForHulyIssue)(context.projectIdentifier, hulyIdentifier);
+        if (beadsState) {
+            const beadsHulyStatus = (0, lib_1.mapBeadsStatusToHuly)(beadsState.beadsStatus);
+            if (beadsHulyStatus === 'Done' && hulyStatus !== 'Done') {
+                console.log(`[Sync] Vibe → Huly: Skipped ${hulyIdentifier} — beads says closed, Vibe says ${vibeTask.status}. Beads wins.`);
+                return { success: true, id: hulyIdentifier, skipped: true };
+            }
+        }
+        const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
         await client.updateIssue(hulyIdentifier, 'status', hulyStatus);
         console.log(`[Sync] Vibe → Huly: Updated ${hulyIdentifier} to ${hulyStatus}`);
         return { success: true, id: hulyIdentifier, updated: true };
