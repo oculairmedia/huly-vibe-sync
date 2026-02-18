@@ -38,6 +38,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fetchAgentsToProvision = fetchAgentsToProvision;
 exports.provisionSingleAgent = provisionSingleAgent;
@@ -50,7 +53,11 @@ exports.checkAgentExists = checkAgentExists;
 exports.updateProjectAgent = updateProjectAgent;
 const activity_1 = require("@temporalio/activity");
 const letta_client_1 = require("@letta-ai/letta-client");
+const path_1 = __importDefault(require("path"));
 const lib_1 = require("../lib");
+function appRootModule(modulePath) {
+    return path_1.default.join(process.cwd(), modulePath);
+}
 // Configuration
 const LETTA_API_BASE = process.env.LETTA_API_URL || 'http://192.168.50.90:8289';
 const LETTA_PASSWORD = process.env.LETTA_PASSWORD || '';
@@ -446,9 +453,8 @@ async function updateProjectAgentsMd(input) {
             console.log(`[Activity:UpdateAgentsMd] No filesystem path for ${projectIdentifier}, skipping`);
             return { success: true, error: 'no_project_path' };
         }
-        const { agentsMdGenerator } = await Promise.resolve().then(() => __importStar(require('../../lib/AgentsMdGenerator.js')));
-        const path = await Promise.resolve().then(() => __importStar(require('path')));
-        const agentsMdPath = path.join(projectPath, 'AGENTS.md');
+        const { agentsMdGenerator } = await Promise.resolve(`${appRootModule('lib/AgentsMdGenerator.js')}`).then(s => __importStar(require(s)));
+        const agentsMdPath = path_1.default.join(projectPath, 'AGENTS.md');
         const agentName = `Huly - ${projectName}`;
         const vars = {
             identifier: projectIdentifier,
@@ -492,7 +498,7 @@ async function checkAgentExists(input) {
     console.log(`[Activity:CheckAgent] Checking if agent exists for ${projectIdentifier}...`);
     try {
         // First check the sync database
-        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {
@@ -543,7 +549,7 @@ async function updateProjectAgent(input) {
     const { projectIdentifier, agentId } = input;
     console.log(`[Activity:UpdateAgent] Updating database for ${projectIdentifier} with agent ${agentId}...`);
     try {
-        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {

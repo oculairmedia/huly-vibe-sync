@@ -7,7 +7,12 @@
 
 import { ApplicationFailure } from '@temporalio/activity';
 import { LettaClient } from '@letta-ai/letta-client';
+import path from 'path';
 import { createHulyClient } from '../lib';
+
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
 
 // Configuration
 const LETTA_API_BASE = process.env.LETTA_API_URL || 'http://192.168.50.90:8289';
@@ -567,8 +572,7 @@ export async function updateProjectAgentsMd(
       return { success: true, error: 'no_project_path' };
     }
 
-    const { agentsMdGenerator } = await import('../../lib/AgentsMdGenerator.js');
-    const path = await import('path');
+    const { agentsMdGenerator } = await import(appRootModule('lib/AgentsMdGenerator.js'));
     const agentsMdPath = path.join(projectPath, 'AGENTS.md');
     const agentName = `Huly - ${projectName}`;
 
@@ -643,7 +647,7 @@ export async function checkAgentExists(
 
   try {
     // First check the sync database
-    const { createSyncDatabase } = await import('../../lib/database.js');
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
 
@@ -716,7 +720,7 @@ export async function updateProjectAgent(
   );
 
   try {
-    const { createSyncDatabase } = await import('../../lib/database.js');
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
 

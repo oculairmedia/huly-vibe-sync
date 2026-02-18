@@ -37,9 +37,16 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.findMappedIssueByBeadsId = findMappedIssueByBeadsId;
 exports.findMappedIssueByTitle = findMappedIssueByTitle;
+const path_1 = __importDefault(require("path"));
+function appRootModule(modulePath) {
+    return path_1.default.join(process.cwd(), modulePath);
+}
 const PROJECT_ISSUES_CACHE_TTL_MS = Number(process.env.TEMPORAL_DEDUPE_CACHE_TTL_MS || 15000);
 const projectIssuesCache = new Map();
 function normalizeTitle(title) {
@@ -66,7 +73,7 @@ async function getProjectIssues(projectIdentifier) {
     if (cached && cached.expiresAt > Date.now()) {
         return cached.rows;
     }
-    const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+    const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
     try {

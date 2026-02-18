@@ -40,6 +40,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncIssueToVibe = syncIssueToVibe;
 exports.syncTaskToHuly = syncTaskToHuly;
@@ -51,8 +54,12 @@ exports.createBeadsIssueInVibe = createBeadsIssueInVibe;
 exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
+const path_1 = __importDefault(require("path"));
 const lib_1 = require("../lib");
 const huly_dedupe_1 = require("./huly-dedupe");
+function appRootModule(modulePath) {
+    return path_1.default.join(process.cwd(), modulePath);
+}
 function normalizeIssueTitle(title) {
     if (!title)
         return '';
@@ -60,7 +67,7 @@ function normalizeIssueTitle(title) {
 }
 async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
     try {
-        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {

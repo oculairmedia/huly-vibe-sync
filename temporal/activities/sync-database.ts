@@ -2,6 +2,10 @@ import path from 'path';
 
 type NullableNumber = number | null | undefined;
 
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
+
 export interface PersistIssueStateInput {
   identifier: string;
   projectIdentifier: string;
@@ -57,7 +61,7 @@ export interface IssueSyncTimestamps {
 export async function getIssueSyncTimestamps(input: {
   identifier: string;
 }): Promise<IssueSyncTimestamps | null> {
-  const { createSyncDatabase } = await import('../../lib/database.js');
+  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
   const db = createSyncDatabase(resolveDbPath()) as any;
 
   try {
@@ -88,7 +92,7 @@ export async function persistIssueSyncStateBatch(
     return { success: true, updated: 0, failed: 0, errors: [] };
   }
 
-  const { createSyncDatabase } = await import('../../lib/database.js');
+  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
   const db = createSyncDatabase(resolveDbPath()) as any;
 
   let updated = 0;

@@ -69,7 +69,7 @@ export declare class BeadsClient {
     /**
      * List all issues
      */
-    listIssues(): Promise<BeadsIssue[]>;
+    listIssues(includeAll?: boolean): Promise<BeadsIssue[]>;
     /**
      * Get a specific issue by ID
      */

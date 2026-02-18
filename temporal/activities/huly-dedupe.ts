@@ -4,6 +4,12 @@
  * Uses local sync DB mappings first to avoid expensive Huly API title scans.
  */
 
+import path from 'path';
+
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
+
 interface IssueRow {
   identifier?: string;
   huly_id?: string;
@@ -40,7 +46,7 @@ async function getProjectIssues(projectIdentifier: string): Promise<IssueRow[]> 
     return cached.rows;
   }
 
-  const { createSyncDatabase } = await import('../../lib/database.js');
+  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
   const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
   const db = createSyncDatabase(dbPath);
 

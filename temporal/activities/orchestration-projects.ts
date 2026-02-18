@@ -11,6 +11,10 @@ import * as path from 'path';
 import { handleOrchestratorError } from './orchestration-letta';
 import type { HulyProject, VibeProject, HulyIssue, VibeTask } from './orchestration';
 
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
+
 const PROJECT_CACHE_TTL_MS = Number(process.env.TEMPORAL_PROJECT_CACHE_TTL_MS || 30000);
 
 let hulyProjectsCache: { value: HulyProject[]; expiresAt: number } | null = null;
@@ -358,7 +362,7 @@ export async function fetchVibeTasksForHulyIssues(input: {
   const vibeTaskIds = new Set<string>();
 
   try {
-    const { createSyncDatabase } = await import('../../lib/database.js');
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
 

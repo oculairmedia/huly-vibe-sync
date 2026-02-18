@@ -40,6 +40,9 @@ exports.getIssueSyncTimestamps = getIssueSyncTimestamps;
 exports.persistIssueSyncState = persistIssueSyncState;
 exports.persistIssueSyncStateBatch = persistIssueSyncStateBatch;
 const path_1 = __importDefault(require("path"));
+function appRootModule(modulePath) {
+    return path_1.default.join(process.cwd(), modulePath);
+}
 function resolveDbPath() {
     return process.env.DB_PATH || path_1.default.join(process.cwd(), 'logs', 'sync-state.db');
 }
@@ -54,7 +57,7 @@ function defaultHulyId(identifier) {
     return /^[A-Z]+-\d+$/i.test(identifier) ? identifier : null;
 }
 async function getIssueSyncTimestamps(input) {
-    const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+    const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
     const db = createSyncDatabase(resolveDbPath());
     try {
         const issue = db.getIssue(input.identifier);
@@ -78,7 +81,7 @@ async function persistIssueSyncStateBatch(input) {
     if (issues.length === 0) {
         return { success: true, updated: 0, failed: 0, errors: [] };
     }
-    const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+    const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
     const db = createSyncDatabase(resolveDbPath());
     let updated = 0;
     let failed = 0;

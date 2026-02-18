@@ -8,6 +8,7 @@
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
+import path from 'path';
 import {
   createVibeClient,
   createHulyClient,
@@ -21,6 +22,10 @@ import {
 } from '../lib';
 import { findMappedIssueByBeadsId, findMappedIssueByTitle } from './huly-dedupe';
 
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
+
 function normalizeIssueTitle(title?: string): string {
   if (!title) return '';
   return title.trim().toLowerCase();
@@ -32,7 +37,7 @@ async function findExistingBeadsLink(
   title?: string
 ): Promise<string | null> {
   try {
-    const { createSyncDatabase } = await import('../../lib/database.js');
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
     const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath) as any;
 

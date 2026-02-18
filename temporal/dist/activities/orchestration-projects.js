@@ -52,6 +52,9 @@ const lib_1 = require("../lib");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const orchestration_letta_1 = require("./orchestration-letta");
+function appRootModule(modulePath) {
+    return path.join(process.cwd(), modulePath);
+}
 const PROJECT_CACHE_TTL_MS = Number(process.env.TEMPORAL_PROJECT_CACHE_TTL_MS || 30000);
 let hulyProjectsCache = null;
 let vibeProjectsCache = null;
@@ -320,7 +323,7 @@ async function fetchVibeTasksForHulyIssues(input) {
     console.log(`[Temporal:Orchestration] Fetching mapped Vibe tasks for ${uniqueHulyIds.length} prefetched Huly issues in ${projectIdentifier}`);
     const vibeTaskIds = new Set();
     try {
-        const { createSyncDatabase } = await Promise.resolve().then(() => __importStar(require('../../lib/database.js')));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {
