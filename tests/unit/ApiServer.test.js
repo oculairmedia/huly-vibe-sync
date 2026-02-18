@@ -1251,7 +1251,6 @@ describe('createApiServer - HTTP Routes', () => {
   let mockOnSyncTrigger;
   let mockOnConfigUpdate;
   let mockDb;
-  let mockLettaCodeService;
   let mockWebhookHandler;
   let mockTemporalClient;
   let mockGetTemporalClient;
@@ -1291,21 +1290,6 @@ describe('createApiServer - HTTP Routes', () => {
     mockOnSyncTrigger = vi.fn().mockResolvedValue(undefined);
     mockOnConfigUpdate = vi.fn();
 
-    mockLettaCodeService = {
-      listSessions: vi.fn(() => [{ agentId: 'agent-1', projectDir: '/test' }]),
-      getSession: vi.fn(id =>
-        id === 'agent-1' ? { agentId: 'agent-1', projectDir: '/test' } : null
-      ),
-      linkTools: vi.fn().mockResolvedValue({ success: true, message: 'Linked' }),
-      runTask: vi.fn().mockResolvedValue({ success: true, result: 'Done' }),
-      configureForProject: vi
-        .fn()
-        .mockResolvedValue({ success: true, session: { projectDir: '/test' } }),
-      removeSession: vi.fn(id => id === 'agent-1'),
-      checkLettaCodeAvailable: vi.fn().mockResolvedValue(true),
-      projectRoot: '/opt/stacks',
-    };
-
     mockWebhookHandler = {
       handleWebhook: vi
         .fn()
@@ -1332,7 +1316,6 @@ describe('createApiServer - HTTP Routes', () => {
       db: mockDb,
       onSyncTrigger: mockOnSyncTrigger,
       onConfigUpdate: mockOnConfigUpdate,
-      lettaCodeService: mockLettaCodeService,
       webhookHandler: mockWebhookHandler,
       getTemporalClient: mockGetTemporalClient,
       codePerceptionWatcher: mockCodePerceptionWatcher,
@@ -1731,142 +1714,7 @@ describe('createApiServer - HTTP Routes', () => {
   });
 
   // --------------------------------------------------------
-  // 21. GET /api/letta-code/sessions
-  // --------------------------------------------------------
-  describe('GET /api/letta-code/sessions', () => {
-    it('should list sessions', async () => {
-      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.total).toBe(1);
-      expect(res.body.sessions).toHaveLength(1);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 22. GET /api/letta-code/sessions/:id
-  // --------------------------------------------------------
-  describe('GET /api/letta-code/sessions/:id', () => {
-    it('should return session for known agent', async () => {
-      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/agent-1');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.agentId).toBe('agent-1');
-    });
-
-    it('should return 404 for unknown agent', async () => {
-      const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/unknown');
-      expect(res.statusCode).toBe(404);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 23. POST /api/letta-code/link
-  // --------------------------------------------------------
-  describe('POST /api/letta-code/link', () => {
-    it('should link agent to project', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/link', {
-        agentId: 'agent-1',
-        projectDir: '/test',
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should return 400 if agentId missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/link', { projectDir: '/test' });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.error).toBe('agentId is required');
-    });
-
-    it('should return 400 if projectDir missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/link', { agentId: 'agent-1' });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.error).toBe('projectDir is required');
-    });
-  });
-
-  // --------------------------------------------------------
-  // 24. POST /api/letta-code/task
-  // --------------------------------------------------------
-  describe('POST /api/letta-code/task', () => {
-    it('should run a headless task', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/task', {
-        agentId: 'agent-1',
-        prompt: 'do something',
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should return 400 if agentId missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/task', { prompt: 'test' });
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('should return 400 if prompt missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/task', { agentId: 'agent-1' });
-      expect(res.statusCode).toBe(400);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 25. POST /api/letta-code/configure-project
-  // --------------------------------------------------------
-  describe('POST /api/letta-code/configure-project', () => {
-    it('should configure project for agent', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
-        agentId: 'agent-1',
-        hulyProject: { identifier: 'TEST' },
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should return 400 if agentId missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
-        hulyProject: { identifier: 'TEST' },
-      });
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('should return 400 if hulyProject missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
-        agentId: 'agent-1',
-      });
-      expect(res.statusCode).toBe(400);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 26. DELETE /api/letta-code/sessions/:id
-  // --------------------------------------------------------
-  describe('DELETE /api/letta-code/sessions/:id', () => {
-    it('should remove known session', async () => {
-      const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/agent-1');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should return 404 for unknown session', async () => {
-      const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/unknown');
-      expect(res.statusCode).toBe(404);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 27. GET /api/letta-code/status
-  // --------------------------------------------------------
-  describe('GET /api/letta-code/status', () => {
-    it('should return availability status', async () => {
-      const res = await makeRequest(port, 'GET', '/api/letta-code/status');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.available).toBe(true);
-      expect(res.body.sessions).toBeDefined();
-      expect(res.body.projectRoot).toBe('/opt/stacks');
-    });
-  });
-
-  // --------------------------------------------------------
-  // 28. POST /webhook
+  // 21. POST /webhook
   // --------------------------------------------------------
   describe('POST /webhook', () => {
     it('should process webhook with handler', async () => {
@@ -2142,51 +1990,6 @@ describe('createApiServer - No dependencies', () => {
     const res = await makeRequest(port, 'POST', '/api/sync/trigger', {});
     expect(res.statusCode).toBe(503);
     expect(res.body.error).toBe('Sync trigger not available');
-  });
-
-  it('GET /api/letta-code/sessions should return 503 without service', async () => {
-    const res = await makeRequest(port, 'GET', '/api/letta-code/sessions');
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('GET /api/letta-code/sessions/:id should return 503 without service', async () => {
-    const res = await makeRequest(port, 'GET', '/api/letta-code/sessions/agent-1');
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('POST /api/letta-code/link should return 503 without service', async () => {
-    const res = await makeRequest(port, 'POST', '/api/letta-code/link', {
-      agentId: 'a',
-      projectDir: '/b',
-    });
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('POST /api/letta-code/task should return 503 without service', async () => {
-    const res = await makeRequest(port, 'POST', '/api/letta-code/task', {
-      agentId: 'a',
-      prompt: 'test',
-    });
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('POST /api/letta-code/configure-project should return 503 without service', async () => {
-    const res = await makeRequest(port, 'POST', '/api/letta-code/configure-project', {
-      agentId: 'a',
-      hulyProject: { identifier: 'T' },
-    });
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('DELETE /api/letta-code/sessions/:id should return 503 without service', async () => {
-    const res = await makeRequest(port, 'DELETE', '/api/letta-code/sessions/agent-1');
-    expect(res.statusCode).toBe(503);
-  });
-
-  it('GET /api/letta-code/status should return available: false without service', async () => {
-    const res = await makeRequest(port, 'GET', '/api/letta-code/status');
-    expect(res.statusCode).toBe(200);
-    expect(res.body.available).toBe(false);
   });
 
   it('POST /webhook should acknowledge without handler', async () => {

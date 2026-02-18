@@ -26,7 +26,6 @@ import { initializeHealthStats } from './lib/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';
 import { createWebhookHandler } from './lib/HulyWebhookHandler.js';
 import { createLettaService } from './lib/LettaService.js';
-import { createLettaCodeService } from './lib/LettaCodeService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
@@ -155,23 +154,6 @@ if (isLettaEnabled(config)) {
   }
 } else {
   logger.info('Letta PM agent integration disabled (credentials not set)');
-}
-
-// Initialize Letta Code service
-let lettaCodeService = null;
-try {
-  lettaCodeService = createLettaCodeService({
-    lettaBaseUrl: config.letta.baseURL,
-    lettaApiKey: config.letta.password,
-    projectRoot: config.stacks.baseDir || '/opt/stacks',
-    stateDir: path.join(__dirname, '.letta-code'),
-  });
-  logger.info('Letta Code service initialized successfully');
-} catch (lettaCodeError) {
-  logger.warn(
-    { err: lettaCodeError },
-    'Failed to initialize Letta Code service, filesystem mode disabled'
-  );
 }
 
 // Initialize BookStack service (if enabled)
@@ -313,7 +295,9 @@ async function main() {
     astMemorySync,
     getTemporalOrchestration,
     getSyncTimer: () => syncTimer,
-    setSyncTimer: t => { syncTimer = t; },
+    setSyncTimer: t => {
+      syncTimer = t;
+    },
   });
 
   // Create EventHandlers
@@ -395,7 +379,6 @@ async function main() {
     db,
     onSyncTrigger: syncController.handleSyncTrigger,
     onConfigUpdate: syncController.handleConfigUpdate,
-    lettaCodeService,
     webhookHandler,
     getTemporalClient: getTemporalOrchestration,
     codePerceptionWatcher,
@@ -410,7 +393,9 @@ async function main() {
     subscribed,
     getTemporalOrchestration,
     runSyncWithTimeout: syncController.runSyncWithTimeout,
-    setSyncTimer: t => { syncTimer = t; },
+    setSyncTimer: t => {
+      syncTimer = t;
+    },
   });
 }
 
