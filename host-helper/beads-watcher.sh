@@ -1,7 +1,7 @@
 #!/bin/bash
 set -uo pipefail
 
-SYNC_API="${BEADS_SYNC_API:-http://localhost:3099/api/sync/trigger}"
+SYNC_API="${BEADS_SYNC_API:-http://localhost:3099/api/beads/sync}"
 WATCH_ROOT="${BEADS_WATCH_ROOT:-/opt/stacks}"
 DEBOUNCE_MS="${BEADS_DEBOUNCE_MS:-2000}"
 LOG_FILE="${BEADS_LOG_FILE:-/var/log/beads-watcher.log}"
@@ -25,7 +25,7 @@ trigger_sync() {
     unset "PENDING_SYNCS[$project]" 2>/dev/null || true
     
     log "Triggering sync for $project"
-    curl -s -X POST "$SYNC_API" -H "Content-Type: application/json" -d '{}' -o /dev/null &
+    curl -s -X POST "$SYNC_API" -H "Content-Type: application/json" -d "{\"projectId\":\"$project\"}" -o /dev/null &
 }
 
 process_pending() {

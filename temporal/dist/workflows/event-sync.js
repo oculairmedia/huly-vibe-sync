@@ -30,13 +30,23 @@ const { fetchBeadsIssues, resolveGitRepoPath } = (0, workflow_1.proxyActivities)
         maximumAttempts: 3,
     },
 });
-const { hasBeadsIssueChanged } = (0, workflow_1.proxyActivities)({
+const { hasBeadsIssueChanged, persistIssueSyncState, getIssueSyncState } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '30 seconds',
     retry: {
         initialInterval: '1 second',
         backoffCoefficient: 2,
         maximumInterval: '10 seconds',
         maximumAttempts: 2,
+    },
+});
+const { createBeadsIssueInHuly } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '120 seconds',
+    retry: {
+        initialInterval: '2 seconds',
+        backoffCoefficient: 2,
+        maximumInterval: '60 seconds',
+        maximumAttempts: 5,
+        nonRetryableErrorTypes: ['HulyValidationError'],
     },
 });
 /**
@@ -75,10 +85,67 @@ async function BeadsFileChangeWorkflow(input) {
                 // Extract Huly identifier from labels (format: huly:PROJ-123)
                 const hulyLabel = beadsIssue.labels?.find(l => l.startsWith('huly:'));
                 if (!hulyLabel) {
-                    workflow_1.log.info('[BeadsFileChange] Skipping issue without huly label', {
+                    workflow_1.log.info('[BeadsFileChange] Creating Huly issue for unlinked beads issue', {
                         issueId: beadsIssue.id,
+                        title: beadsIssue.title,
                     });
-                    result.issuesSynced++;
+                    const createResult = await createBeadsIssueInHuly({
+                        beadsIssue: {
+                            id: beadsIssue.id,
+                            title: beadsIssue.title,
+                            status: beadsIssue.status,
+                            priority: beadsIssue.priority,
+                            description: beadsIssue.description,
+                            labels: beadsIssue.labels,
+                        },
+                        context: {
+                            projectIdentifier,
+                            vibeProjectId: input.vibeProjectId,
+                            gitRepoPath,
+                        },
+                    });
+                    if (createResult.created) {
+                        workflow_1.log.info('[BeadsFileChange] Created Huly issue from beads', {
+                            beadsId: beadsIssue.id,
+                            hulyId: createResult.hulyIdentifier,
+                        });
+                        result.issuesSynced++;
+                        if (createResult.hulyIdentifier) {
+                            await persistIssueSyncState({
+                                identifier: createResult.hulyIdentifier,
+                                projectIdentifier,
+                                title: beadsIssue.title,
+                                description: beadsIssue.description,
+                                status: beadsIssue.status,
+                                beadsIssueId: beadsIssue.id,
+                                beadsStatus: beadsIssue.status,
+                                beadsModifiedAt: Date.now(),
+                            });
+                        }
+                    }
+                    else if (createResult.hulyIdentifier) {
+                        workflow_1.log.info('[BeadsFileChange] Linked beads to existing Huly issue', {
+                            beadsId: beadsIssue.id,
+                            hulyId: createResult.hulyIdentifier,
+                        });
+                        result.issuesSynced++;
+                        await persistIssueSyncState({
+                            identifier: createResult.hulyIdentifier,
+                            projectIdentifier,
+                            title: beadsIssue.title,
+                            description: beadsIssue.description,
+                            status: beadsIssue.status,
+                            beadsIssueId: beadsIssue.id,
+                            beadsStatus: beadsIssue.status,
+                            beadsModifiedAt: Date.now(),
+                        });
+                    }
+                    else {
+                        workflow_1.log.warn('[BeadsFileChange] Failed to create Huly issue', {
+                            beadsId: beadsIssue.id,
+                        });
+                    }
+                    await (0, workflow_1.sleep)('200ms');
                     continue;
                 }
                 const hulyIdentifier = hulyLabel.replace('huly:', '');
@@ -100,6 +167,20 @@ async function BeadsFileChangeWorkflow(input) {
                     workflow_1.log.info('[BeadsFileChange] Skipping unchanged issue', {
                         issueId: beadsIssue.id,
                         hulyId: hulyIdentifier,
+                    });
+                    result.issuesSynced++;
+                    continue;
+                }
+                const TERMINAL_BEADS_STATUSES = ['closed'];
+                const syncedState = await getIssueSyncState({ hulyIdentifier });
+                if (syncedState?.status &&
+                    ['Done', 'Cancelled', 'Canceled'].includes(syncedState.status) &&
+                    !TERMINAL_BEADS_STATUSES.includes(fullIssue.status)) {
+                    workflow_1.log.info('[BeadsFileChange] Skipping: would regress terminal Huly status', {
+                        issueId: beadsIssue.id,
+                        hulyId: hulyIdentifier,
+                        hulyStatus: syncedState.status,
+                        beadsStatus: fullIssue.status,
                     });
                     result.issuesSynced++;
                     continue;

@@ -112,6 +112,21 @@ export async function hasBeadsIssueChanged(input: {
   }
 }
 
+export async function getIssueSyncState(input: {
+  hulyIdentifier: string;
+}): Promise<{ status?: string; beadsStatus?: string } | null> {
+  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
+  const db = createSyncDatabase(resolveDbPath()) as any;
+
+  try {
+    const issue = db.getIssue(input.hulyIdentifier);
+    if (!issue) return null;
+    return { status: issue.status, beadsStatus: issue.beads_status };
+  } finally {
+    db.close();
+  }
+}
+
 export async function persistIssueSyncState(
   input: PersistIssueStateInput
 ): Promise<PersistIssueStateResult> {
