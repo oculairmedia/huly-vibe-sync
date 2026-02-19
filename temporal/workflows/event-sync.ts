@@ -9,6 +9,7 @@ import { proxyActivities, log, sleep, executeChild } from '@temporalio/workflow'
 
 import type * as syncActivities from '../activities/bidirectional';
 import type * as orchestrationActivities from '../activities/orchestration';
+import type * as dbActivities from '../activities/sync-database';
 
 import { BidirectionalSyncWorkflow, SyncFromHulyWorkflow } from './bidirectional-sync';
 
@@ -32,6 +33,16 @@ const { fetchBeadsIssues, resolveGitRepoPath } = proxyActivities<typeof orchestr
     backoffCoefficient: 2,
     maximumInterval: '60 seconds',
     maximumAttempts: 3,
+  },
+});
+
+const { hasBeadsIssueChanged } = proxyActivities<typeof dbActivities>({
+  startToCloseTimeout: '30 seconds',
+  retry: {
+    initialInterval: '1 second',
+    backoffCoefficient: 2,
+    maximumInterval: '10 seconds',
+    maximumAttempts: 2,
   },
 });
 
@@ -108,7 +119,6 @@ export async function BeadsFileChangeWorkflow(
 
         const hulyIdentifier = hulyLabel.replace('huly:', '');
 
-        // Get full issue details
         const fullIssue = await getBeadsIssue({
           issueId: beadsIssue.id,
           gitRepoPath,
@@ -116,6 +126,22 @@ export async function BeadsFileChangeWorkflow(
 
         if (!fullIssue) {
           log.warn('[BeadsFileChange] Issue not found', { issueId: beadsIssue.id });
+          continue;
+        }
+
+        const changed = await hasBeadsIssueChanged({
+          hulyIdentifier,
+          title: fullIssue.title,
+          description: fullIssue.description,
+          status: fullIssue.status,
+        });
+
+        if (!changed) {
+          log.info('[BeadsFileChange] Skipping unchanged issue', {
+            issueId: beadsIssue.id,
+            hulyId: hulyIdentifier,
+          });
+          result.issuesSynced++;
           continue;
         }
 

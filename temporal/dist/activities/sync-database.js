@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getIssueSyncTimestamps = getIssueSyncTimestamps;
+exports.hasBeadsIssueChanged = hasBeadsIssueChanged;
 exports.persistIssueSyncState = persistIssueSyncState;
 exports.persistIssueSyncStateBatch = persistIssueSyncStateBatch;
 const path_1 = __importDefault(require("path"));
@@ -71,6 +72,34 @@ async function getIssueSyncTimestamps(input) {
     }
     finally {
         db.close();
+    }
+}
+async function hasBeadsIssueChanged(input) {
+    try {
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const { computeIssueContentHash } = await Promise.resolve(`${appRootModule('lib/database/utils.js')}`).then(s => __importStar(require(s)));
+        const db = createSyncDatabase(resolveDbPath());
+        try {
+            const existing = db.getIssue(input.hulyIdentifier);
+            if (!existing)
+                return true;
+            const storedHash = existing.content_hash;
+            if (!storedHash)
+                return true;
+            const newHash = computeIssueContentHash({
+                title: input.title,
+                description: input.description || '',
+                status: input.status,
+                priority: '',
+            });
+            return newHash !== storedHash;
+        }
+        finally {
+            db.close();
+        }
+    }
+    catch {
+        return true;
     }
 }
 async function persistIssueSyncState(input) {

@@ -30,6 +30,15 @@ const { fetchBeadsIssues, resolveGitRepoPath } = (0, workflow_1.proxyActivities)
         maximumAttempts: 3,
     },
 });
+const { hasBeadsIssueChanged } = (0, workflow_1.proxyActivities)({
+    startToCloseTimeout: '30 seconds',
+    retry: {
+        initialInterval: '1 second',
+        backoffCoefficient: 2,
+        maximumInterval: '10 seconds',
+        maximumAttempts: 2,
+    },
+});
 /**
  * BeadsFileChangeWorkflow - Triggered when .beads files change
  *
@@ -73,13 +82,26 @@ async function BeadsFileChangeWorkflow(input) {
                     continue;
                 }
                 const hulyIdentifier = hulyLabel.replace('huly:', '');
-                // Get full issue details
                 const fullIssue = await getBeadsIssue({
                     issueId: beadsIssue.id,
                     gitRepoPath,
                 });
                 if (!fullIssue) {
                     workflow_1.log.warn('[BeadsFileChange] Issue not found', { issueId: beadsIssue.id });
+                    continue;
+                }
+                const changed = await hasBeadsIssueChanged({
+                    hulyIdentifier,
+                    title: fullIssue.title,
+                    description: fullIssue.description,
+                    status: fullIssue.status,
+                });
+                if (!changed) {
+                    workflow_1.log.info('[BeadsFileChange] Skipping unchanged issue', {
+                        issueId: beadsIssue.id,
+                        hulyId: hulyIdentifier,
+                    });
+                    result.issuesSynced++;
                     continue;
                 }
                 workflow_1.log.info('[BeadsFileChange] Syncing Beads→Huly', {

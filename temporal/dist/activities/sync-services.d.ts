@@ -75,7 +75,10 @@ export declare function syncIssueToBeads(input: {
  * Sync Beads changes back to Huly
  */
 export declare function syncBeadsToHuly(input: {
-    beadsIssue: BeadsIssue;
+    beadsIssue: BeadsIssue & {
+        description?: string;
+        modifiedAt?: number;
+    };
     hulyIdentifier: string;
     context: SyncContext;
 }): Promise<SyncActivityResult>;
@@ -84,6 +87,8 @@ export declare function syncBeadsToHulyBatch(input: {
         beadsId: string;
         hulyIdentifier: string;
         status: string;
+        title?: string;
+        description?: string;
     }>;
     context: SyncContext;
 }): Promise<{

@@ -223,10 +223,16 @@ async function syncBeadsToHuly(input) {
     console.log(`[Sync] Beads → Huly: ${beadsIssue.id} → ${hulyIdentifier}`);
     try {
         const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        // Map Beads status to Huly (simplified, no label support here)
         const hulyStatus = (0, lib_1.mapBeadsStatusToHuly)(beadsIssue.status);
-        await client.updateIssue(hulyIdentifier, 'status', hulyStatus);
-        console.log(`[Sync] Beads → Huly: Updated ${hulyIdentifier} to ${hulyStatus}`);
+        const patch = { status: hulyStatus };
+        if (beadsIssue.title) {
+            patch.title = beadsIssue.title;
+        }
+        if (beadsIssue.description !== undefined) {
+            patch.description = beadsIssue.description;
+        }
+        await client.patchIssue(hulyIdentifier, patch);
+        console.log(`[Sync] Beads → Huly: Patched ${hulyIdentifier} (status=${hulyStatus}, fields=${Object.keys(patch).join(',')})`);
         return { success: true, id: hulyIdentifier, updated: true };
     }
     catch (error) {

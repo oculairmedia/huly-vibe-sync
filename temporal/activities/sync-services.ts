@@ -336,7 +336,7 @@ export async function syncIssueToBeads(input: {
  * Sync Beads changes back to Huly
  */
 export async function syncBeadsToHuly(input: {
-  beadsIssue: BeadsIssue;
+  beadsIssue: BeadsIssue & { description?: string; modifiedAt?: number };
   hulyIdentifier: string;
   context: SyncContext;
 }): Promise<SyncActivityResult> {
@@ -347,8 +347,6 @@ export async function syncBeadsToHuly(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
-    // Map Beads status to Huly status
-    // Note: We'd need labels from the Beads issue for accurate mapping
     const hulyStatus =
       beadsIssue.status === 'closed'
         ? 'Done'
@@ -356,13 +354,20 @@ export async function syncBeadsToHuly(input: {
           ? 'In Progress'
           : 'Backlog';
 
-    const result = await hulyClient.syncStatusFromVibe(hulyIdentifier, hulyStatus);
+    const patch: Record<string, string | undefined> = { status: hulyStatus };
 
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to update Huly issue');
+    if (beadsIssue.title) {
+      patch.title = beadsIssue.title;
+    }
+    if (beadsIssue.description !== undefined) {
+      patch.description = beadsIssue.description;
     }
 
-    console.log(`[Temporal:Beads→Huly] Updated ${hulyIdentifier} from Beads`);
+    await hulyClient.patchIssue(hulyIdentifier, patch);
+
+    console.log(
+      `[Temporal:Beads→Huly] Patched ${hulyIdentifier} (fields=${Object.keys(patch).join(',')})`
+    );
     return { success: true, id: hulyIdentifier, updated: true };
   } catch (error) {
     return handleSyncError(error, 'Beads→Huly');
@@ -374,6 +379,8 @@ export async function syncBeadsToHulyBatch(input: {
     beadsId: string;
     hulyIdentifier: string;
     status: string;
+    title?: string;
+    description?: string;
   }>;
   context: SyncContext;
 }): Promise<{
@@ -393,10 +400,16 @@ export async function syncBeadsToHulyBatch(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
-    const updates = beadsIssues.map(issue => ({
-      identifier: issue.hulyIdentifier,
-      changes: { status: mapBeadsStatusToHuly(issue.status) },
-    }));
+    const updates = beadsIssues.map(issue => {
+      const changes: Record<string, string> = { status: mapBeadsStatusToHuly(issue.status) };
+      if (issue.title) {
+        changes.title = issue.title;
+      }
+      if (issue.description !== undefined) {
+        changes.description = issue.description;
+      }
+      return { identifier: issue.hulyIdentifier, changes };
+    });
 
     console.log(`[Temporal:Beads→Huly] Syncing ${updates.length} issues in batches of 25`);
 

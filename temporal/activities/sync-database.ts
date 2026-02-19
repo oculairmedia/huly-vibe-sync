@@ -78,6 +78,40 @@ export async function getIssueSyncTimestamps(input: {
   }
 }
 
+export async function hasBeadsIssueChanged(input: {
+  hulyIdentifier: string;
+  title: string;
+  description?: string;
+  status: string;
+}): Promise<boolean> {
+  try {
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
+    const { computeIssueContentHash } = await import(appRootModule('lib/database/utils.js'));
+    const db = createSyncDatabase(resolveDbPath()) as any;
+
+    try {
+      const existing = db.getIssue(input.hulyIdentifier);
+      if (!existing) return true;
+
+      const storedHash = existing.content_hash;
+      if (!storedHash) return true;
+
+      const newHash = computeIssueContentHash({
+        title: input.title,
+        description: input.description || '',
+        status: input.status,
+        priority: '',
+      });
+
+      return newHash !== storedHash;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return true;
+  }
+}
+
 export async function persistIssueSyncState(
   input: PersistIssueStateInput
 ): Promise<PersistIssueStateResult> {

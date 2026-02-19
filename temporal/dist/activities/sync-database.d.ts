@@ -39,6 +39,12 @@ export interface IssueSyncTimestamps {
 export declare function getIssueSyncTimestamps(input: {
     identifier: string;
 }): Promise<IssueSyncTimestamps | null>;
+export declare function hasBeadsIssueChanged(input: {
+    hulyIdentifier: string;
+    title: string;
+    description?: string;
+    status: string;
+}): Promise<boolean>;
 export declare function persistIssueSyncState(input: PersistIssueStateInput): Promise<PersistIssueStateResult>;
 export declare function persistIssueSyncStateBatch(input: PersistIssueStateBatchInput): Promise<PersistIssueStateResult>;
 export {};

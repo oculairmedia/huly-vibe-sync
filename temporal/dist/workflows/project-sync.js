@@ -526,6 +526,8 @@ async function ProjectSyncWorkflow(input) {
                                 beadsId: beadsIssue.id,
                                 hulyIdentifier: label.replace('huly:', ''),
                                 status: beadsIssue.status,
+                                title: beadsIssue.title,
+                                description: beadsIssue.description,
                             });
                         }
                     }

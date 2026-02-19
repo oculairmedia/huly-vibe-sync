@@ -696,7 +696,13 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       if (dryRun) {
         beadsSkipped = beadsIssues.length;
       } else {
-        const toSync: Array<{ beadsId: string; hulyIdentifier: string; status: string }> = [];
+        const toSync: Array<{
+          beadsId: string;
+          hulyIdentifier: string;
+          status: string;
+          title?: string;
+          description?: string;
+        }> = [];
         const toCreate: typeof beadsIssues = [];
 
         for (const beadsIssue of beadsIssues) {
@@ -707,6 +713,8 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
                 beadsId: beadsIssue.id,
                 hulyIdentifier: label.replace('huly:', ''),
                 status: beadsIssue.status,
+                title: beadsIssue.title,
+                description: beadsIssue.description,
               });
             }
           } else {
