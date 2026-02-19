@@ -25,7 +25,7 @@ trigger_sync() {
     unset "PENDING_SYNCS[$project]" 2>/dev/null || true
     
     log "Triggering sync for $project"
-    curl -s -X POST "$SYNC_API" -H "Content-Type: application/json" -d "{\"projectId\":\"$project\"}" -o /dev/null &
+    curl -s -X POST "$SYNC_API" -H "Content-Type: application/json" -d '{}' -o /dev/null &
 }
 
 process_pending() {
@@ -37,17 +37,7 @@ process_pending() {
 extract_project() {
     local path="$1"
     local rel="${path#$WATCH_ROOT/}"
-    local project_dir="${rel%%/*}"
-    
-    local jsonl_path="$WATCH_ROOT/$project_dir/.beads/issues.jsonl"
-    if [[ -f "$jsonl_path" ]]; then
-        local issue_id=$(head -1 "$jsonl_path" 2>/dev/null | grep -oP '"id"\s*:\s*"[^"]*-' | head -1 | sed 's/"id"\s*:\s*"//;s/-$//' || echo "")
-        if [[ -n "$issue_id" ]]; then
-            echo "${issue_id^^}"
-            return
-        fi
-    fi
-    echo "$project_dir"
+    echo "${rel%%/*}"
 }
 
 main() {
