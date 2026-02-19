@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Huly → Vibe Kanban Sync Service
+ * Huly ↔ Beads Sync Service
  *
- * Syncs projects and issues from Huly to Vibe Kanban
- * Uses Huly REST API and Vibe Kanban MCP servers
+ * Bidirectional sync between Huly and Beads (git-backed issue tracker)
+ * Uses Huly REST API
  *
  * Delegates to:
  * - lib/MCPClient.js — MCP protocol client
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
 import { createHulyRestClient } from './lib/HulyRestClient.js';
-import { createVibeRestClient } from './lib/VibeRestClient.js';
+
 import { createSyncDatabase, migrateFromJSON } from './lib/database.js';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
 import { initializeHealthStats } from './lib/HealthService.js';
@@ -32,7 +32,7 @@ import { createAstMemorySync } from './lib/AstMemorySync.js';
 import { logger } from './lib/logger.js';
 import { createBeadsWatcher } from './lib/BeadsWatcher.js';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
-import { createVibeEventWatcher } from './lib/VibeEventWatcher.js';
+
 import { MCPClient } from './lib/MCPClient.js';
 import { createSyncController } from './lib/SyncController.js';
 import { createEventHandlers } from './lib/EventHandlers.js';
@@ -87,14 +87,9 @@ async function getTemporalOrchestration() {
 
 // Temporal workflow triggers for bidirectional sync (CommonJS module)
 const require = createRequire(import.meta.url);
-let triggerSyncFromVibe,
-  triggerSyncFromHuly,
-  triggerSyncFromBeads,
-  triggerBidirectionalSync,
-  isTemporalAvailable;
+let triggerSyncFromHuly, triggerSyncFromBeads, triggerBidirectionalSync, isTemporalAvailable;
 try {
   const temporalTrigger = require('./temporal/dist/trigger.js');
-  triggerSyncFromVibe = temporalTrigger.triggerSyncFromVibe;
   triggerSyncFromHuly = temporalTrigger.triggerSyncFromHuly;
   triggerSyncFromBeads = temporalTrigger.triggerSyncFromBeads;
   triggerBidirectionalSync = temporalTrigger.triggerBidirectionalSync;
@@ -102,9 +97,6 @@ try {
 } catch (err) {
   console.warn('[Temporal] Failed to load trigger module:', err.message);
   isTemporalAvailable = async () => false;
-  triggerSyncFromVibe = async () => {
-    throw new Error('Temporal not available');
-  };
   triggerSyncFromHuly = async () => {
     throw new Error('Temporal not available');
   };
@@ -255,13 +247,9 @@ async function main() {
     hulyClient = new MCPClient(config.huly.apiUrl, 'Huly');
   }
 
-  // Initialize Vibe Kanban REST client
-  logger.info({ apiUrl: config.vibeKanban.apiUrl }, 'Using Vibe Kanban REST API client');
-  const vibeClient = createVibeRestClient(config.vibeKanban.apiUrl, { name: 'Vibe REST' });
-
-  // Initialize both clients
+  // Initialize Huly client
   try {
-    await Promise.all([hulyClient.initialize(), vibeClient.initialize()]);
+    await hulyClient.initialize();
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize clients, exiting');
     process.exit(1);
@@ -305,7 +293,6 @@ async function main() {
     db,
     temporalEnabled,
     triggerSyncFromHuly,
-    triggerSyncFromVibe,
     triggerSyncFromBeads,
     runSyncWithTimeout: syncController.runSyncWithTimeout,
     bookstackService,
@@ -357,19 +344,6 @@ async function main() {
         '✓ BookStack file watcher active for real-time local→BookStack import'
       );
     }
-  }
-
-  // Initialize Vibe SSE event watcher
-  const vibeEventWatcher = createVibeEventWatcher({
-    db,
-    onTaskChange: eventHandlers.handleVibeChange,
-  });
-
-  const vibeConnected = await vibeEventWatcher.start();
-  if (vibeConnected) {
-    logger.info('✓ Vibe SSE watcher active for real-time Vibe→Huly sync');
-  } else {
-    logger.warn('✗ Failed to connect to Vibe SSE stream, Vibe changes may not sync in real-time');
   }
 
   // Start API server

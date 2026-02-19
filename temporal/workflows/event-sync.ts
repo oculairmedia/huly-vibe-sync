@@ -122,7 +122,7 @@ function beadsStatusToHuly(beadsStatus: string, labels: string[] = []): string {
 export interface BeadsFileChangeInput {
   projectIdentifier: string;
   gitRepoPath: string;
-  vibeProjectId: string;
+  vibeProjectId?: string; // Deprecated — kept for backwards compatibility
   beadsIssues?: Array<{
     id: string;
     title: string;
@@ -206,7 +206,7 @@ export async function BeadsFileChangeWorkflow(
             },
             context: {
               projectIdentifier,
-              vibeProjectId: input.vibeProjectId,
+              vibeProjectId: input.vibeProjectId || '',
               gitRepoPath,
             },
           });
