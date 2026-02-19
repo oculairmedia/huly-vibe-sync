@@ -7,7 +7,7 @@
 export interface BeadsFileChangeInput {
     projectIdentifier: string;
     gitRepoPath: string;
-    vibeProjectId: string;
+    vibeProjectId?: string;
     beadsIssues?: Array<{
         id: string;
         title: string;
@@ -50,12 +50,7 @@ export interface VibeSSEChangeResult {
         error: string;
     }>;
 }
-/**
- * VibeSSEChangeWorkflow - Triggered by Vibe SSE events
- *
- * This workflow is the durable replacement for VibeEventWatcher callbacks.
- * It processes batch task changes from the SSE stream and syncs each to Huly.
- */
+/** @deprecated VibeKanban removed */
 export declare function VibeSSEChangeWorkflow(input: VibeSSEChangeInput): Promise<VibeSSEChangeResult>;
 export interface HulyWebhookChangeInput {
     type: 'task.changed' | 'project.changed';

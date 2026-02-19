@@ -4,30 +4,19 @@
  * Activities for fetching and managing Huly/Vibe projects.
  */
 
-import { ApplicationFailure } from '@temporalio/activity';
-import { createVibeClient, createHulyClient } from '../lib';
-import * as fs from 'fs';
-import * as path from 'path';
+import { createHulyClient } from '../lib';
 import { handleOrchestratorError } from './orchestration-letta';
 import type { HulyProject, VibeProject, HulyIssue, VibeTask } from './orchestration';
-
-function appRootModule(modulePath: string): string {
-  return path.join(process.cwd(), modulePath);
-}
 
 const PROJECT_CACHE_TTL_MS = Number(process.env.TEMPORAL_PROJECT_CACHE_TTL_MS || 30000);
 
 let hulyProjectsCache: { value: HulyProject[]; expiresAt: number } | null = null;
-let vibeProjectsCache: { value: VibeProject[]; expiresAt: number } | null = null;
-const vibeProjectIdCache = new Map<string, { value: string | null; expiresAt: number }>();
 
 /**
  * Test-only helper to reset module-level caches between test runs.
  */
 export function clearProjectCaches(): void {
   hulyProjectsCache = null;
-  vibeProjectsCache = null;
-  vibeProjectIdCache.clear();
 }
 
 function isFresh(expiresAt: number): boolean {
@@ -42,20 +31,6 @@ async function getCachedHulyProjects(): Promise<HulyProject[]> {
   const hulyClient = createHulyClient(process.env.HULY_API_URL);
   const projects = await hulyClient.listProjects();
   hulyProjectsCache = {
-    value: projects,
-    expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
-  };
-  return projects;
-}
-
-async function getCachedVibeProjects(): Promise<VibeProject[]> {
-  if (vibeProjectsCache && isFresh(vibeProjectsCache.expiresAt)) {
-    return vibeProjectsCache.value;
-  }
-
-  const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-  const projects = await vibeClient.listProjects();
-  vibeProjectsCache = {
     value: projects,
     expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
   };
@@ -83,67 +58,17 @@ export async function fetchHulyProjects(): Promise<HulyProject[]> {
 }
 
 /**
- * Fetch all Vibe projects
+ * @deprecated VibeKanban removed — returns empty array for backwards compatibility
  */
 export async function fetchVibeProjects(): Promise<VibeProject[]> {
-  console.log('[Temporal:Orchestration] Fetching Vibe projects');
-
-  try {
-    const projects = await getCachedVibeProjects();
-
-    console.log(`[Temporal:Orchestration] Found ${projects.length} Vibe projects`);
-    return projects;
-  } catch (error) {
-    throw handleOrchestratorError(error, 'fetchVibeProjects');
-  }
+  return [];
 }
 
+/**
+ * @deprecated VibeKanban removed — always returns null
+ */
 export async function getVibeProjectId(hulyProjectIdentifier: string): Promise<string | null> {
-  console.log(`[Temporal:Orchestration] Looking up Vibe project for: ${hulyProjectIdentifier}`);
-
-  try {
-    const cached = vibeProjectIdCache.get(hulyProjectIdentifier);
-    if (cached && isFresh(cached.expiresAt)) {
-      return cached.value;
-    }
-
-    const hulyProjects = await getCachedHulyProjects();
-    const hulyProject = hulyProjects.find(p => p.identifier === hulyProjectIdentifier);
-
-    if (!hulyProject) {
-      console.log(`[Temporal:Orchestration] Huly project not found: ${hulyProjectIdentifier}`);
-      vibeProjectIdCache.set(hulyProjectIdentifier, {
-        value: null,
-        expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
-      });
-      return null;
-    }
-
-    const vibeProjects = await getCachedVibeProjects();
-    const normalizedName = hulyProject.name.toLowerCase().trim();
-    const match = vibeProjects.find(p => p.name.toLowerCase().trim() === normalizedName);
-
-    if (match) {
-      console.log(
-        `[Temporal:Orchestration] Found Vibe project: ${match.id} for ${hulyProjectIdentifier}`
-      );
-      vibeProjectIdCache.set(hulyProjectIdentifier, {
-        value: match.id,
-        expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
-      });
-      return match.id;
-    }
-
-    console.log(`[Temporal:Orchestration] No Vibe project found for: ${hulyProject.name}`);
-    vibeProjectIdCache.set(hulyProjectIdentifier, {
-      value: null,
-      expiresAt: Date.now() + PROJECT_CACHE_TTL_MS,
-    });
-    return null;
-  } catch (error) {
-    console.warn(`[Temporal:Orchestration] Vibe project lookup failed: ${error}`);
-    return null;
-  }
+  return null;
 }
 
 export async function resolveProjectIdentifier(projectIdOrFolder: string): Promise<string | null> {
@@ -215,211 +140,54 @@ export async function resolveProjectIdentifier(projectIdOrFolder: string): Promi
   }
 }
 
-function extractFilesystemPath(description?: string): string | null {
-  if (!description) return null;
-  const match = description.match(/(?:Path|Filesystem|Directory|Location):\s*([^\n\r]+)/i);
-  if (match) {
-    return match[1]
-      .trim()
-      .replace(/[,;.]$/, '')
-      .trim();
-  }
-  return null;
-}
-
-function determineGitRepoPath(hulyProject: HulyProject): string {
-  const filesystemPath = extractFilesystemPath(hulyProject.description);
-  if (filesystemPath) {
-    return filesystemPath;
-  }
-  return `/opt/stacks/huly-sync-placeholders/${hulyProject.identifier}`;
-}
-
-function validateGitRepoPath(repoPath: string): { valid: boolean; reason?: string } {
-  if (!repoPath || typeof repoPath !== 'string') {
-    return { valid: false, reason: 'path is null or not a string' };
-  }
-  if (!path.isAbsolute(repoPath)) {
-    return { valid: false, reason: `path is not absolute: ${repoPath}` };
-  }
-  if (!fs.existsSync(repoPath)) {
-    return { valid: false, reason: `path does not exist on disk: ${repoPath}` };
-  }
-  try {
-    const stat = fs.statSync(repoPath);
-    if (!stat.isDirectory()) {
-      return { valid: false, reason: `path is not a directory: ${repoPath}` };
-    }
-  } catch {
-    return { valid: false, reason: `cannot stat path: ${repoPath}` };
-  }
-  const gitDir = path.join(repoPath, '.git');
-  if (!fs.existsSync(gitDir)) {
-    return { valid: false, reason: `not a git repository (no .git): ${repoPath}` };
-  }
-  return { valid: true };
-}
-
+/**
+ * @deprecated VibeKanban removed — returns dummy project for backwards compatibility
+ */
 export async function ensureVibeProject(input: {
   hulyProject: HulyProject;
   existingVibeProjects: VibeProject[];
 }): Promise<VibeProject> {
-  const { hulyProject, existingVibeProjects } = input;
-
-  console.log(`[Temporal:Orchestration] Ensuring Vibe project for ${hulyProject.identifier}`);
-
-  try {
-    const existing = existingVibeProjects.find(
-      vp => vp.name.toLowerCase() === hulyProject.name.toLowerCase()
-    );
-
-    if (existing) {
-      console.log(`[Temporal:Orchestration] Found existing Vibe project: ${existing.id}`);
-      return existing;
-    }
-
-    const gitRepoPath = determineGitRepoPath(hulyProject);
-
-    const validation = validateGitRepoPath(gitRepoPath);
-    if (!validation.valid) {
-      console.warn(
-        `[Temporal:Orchestration] ⚠ Skipping project ${hulyProject.identifier}: invalid repo path — ${validation.reason}`
-      );
-      throw ApplicationFailure.nonRetryable(
-        `Invalid repo path for ${hulyProject.identifier}: ${validation.reason}`,
-        'INVALID_REPO_PATH'
-      );
-    }
-
-    const displayName = gitRepoPath.split('/').pop() || hulyProject.name;
-
-    console.log(`[Temporal:Orchestration] Creating Vibe project with repo: ${gitRepoPath}`);
-
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-    const created = await vibeClient.createProject({
-      name: hulyProject.name,
-      repositories: [{ display_name: displayName, git_repo_path: gitRepoPath }],
-    });
-
-    console.log(`[Temporal:Orchestration] Created Vibe project: ${created.id}`);
-    return created;
-  } catch (error) {
-    throw handleOrchestratorError(error, 'ensureVibeProject');
-  }
+  return { id: 'vk-disabled', name: input.hulyProject.name };
 }
 
-/**
- * Fetch project data (issues and tasks) for sync
- */
 export async function fetchProjectData(input: {
   hulyProject: HulyProject;
   vibeProjectId: string;
 }): Promise<{ hulyIssues: HulyIssue[]; vibeTasks: VibeTask[] }> {
-  const { hulyProject, vibeProjectId } = input;
+  const { hulyProject } = input;
 
   console.log(`[Temporal:Orchestration] Fetching data for ${hulyProject.identifier}`);
 
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-
-    // Fetch in parallel
-    const [hulyIssues, vibeTasks] = await Promise.all([
-      hulyClient.listIssues(hulyProject.identifier),
-      vibeClient.listTasks(vibeProjectId),
-    ]);
+    const hulyIssues = await hulyClient.listIssues(hulyProject.identifier);
 
     console.log(
-      `[Temporal:Orchestration] Fetched ${hulyIssues.length} issues, ${vibeTasks.length} tasks`
+      `[Temporal:Orchestration] Fetched ${hulyIssues.length} issues, 0 tasks (VK disabled)`
     );
 
-    return { hulyIssues, vibeTasks };
+    return { hulyIssues, vibeTasks: [] };
   } catch (error) {
     throw handleOrchestratorError(error, 'fetchProjectData');
   }
 }
 
+/**
+ * @deprecated VibeKanban removed — returns empty array
+ */
 export async function fetchAllVibeTasks(input: { vibeProjectId: string }): Promise<VibeTask[]> {
-  const { vibeProjectId } = input;
-  try {
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-    return await vibeClient.listTasks(vibeProjectId);
-  } catch (error) {
-    throw handleOrchestratorError(error, 'fetchAllVibeTasks');
-  }
+  return [];
 }
 
 /**
- * Fetch only Vibe tasks that map to specific Huly identifiers via sync DB mappings.
- * Used by webhook-triggered project syncs to avoid full-table task fetches.
+ * @deprecated VibeKanban removed — returns empty array
  */
 export async function fetchVibeTasksForHulyIssues(input: {
   projectIdentifier: string;
   vibeProjectId: string;
   hulyIssueIdentifiers: string[];
 }): Promise<VibeTask[]> {
-  const { projectIdentifier, vibeProjectId, hulyIssueIdentifiers } = input;
-
-  const uniqueHulyIds = Array.from(new Set(hulyIssueIdentifiers.filter(Boolean)));
-  if (uniqueHulyIds.length === 0) {
-    return [];
-  }
-
-  console.log(
-    `[Temporal:Orchestration] Fetching mapped Vibe tasks for ${uniqueHulyIds.length} prefetched Huly issues in ${projectIdentifier}`
-  );
-
-  const vibeTaskIds = new Set<string>();
-
-  try {
-    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
-    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
-    const db = createSyncDatabase(dbPath);
-
-    try {
-      const dbAny = db as any;
-      for (const hulyIdentifier of uniqueHulyIds) {
-        const issue = dbAny.getIssue?.(hulyIdentifier);
-        if (issue?.vibe_task_id) {
-          vibeTaskIds.add(String(issue.vibe_task_id));
-        }
-      }
-    } finally {
-      db.close();
-    }
-  } catch (error) {
-    throw handleOrchestratorError(error, 'fetchVibeTasksForHulyIssues');
-  }
-
-  if (vibeTaskIds.size === 0) {
-    console.log(
-      `[Temporal:Orchestration] No mapped Vibe tasks found for prefetched issues in ${projectIdentifier}`
-    );
-    return [];
-  }
-
-  try {
-    const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-
-    const settled = await Promise.allSettled(
-      Array.from(vibeTaskIds).map(taskId => vibeClient.getTask(taskId))
-    );
-
-    const vibeTasks: VibeTask[] = [];
-    for (const item of settled) {
-      if (item.status === 'fulfilled' && item.value) {
-        vibeTasks.push(item.value as unknown as VibeTask);
-      }
-    }
-
-    console.log(
-      `[Temporal:Orchestration] Fetched ${vibeTasks.length}/${vibeTaskIds.size} mapped Vibe tasks for ${projectIdentifier}`
-    );
-
-    return vibeTasks;
-  } catch (error) {
-    throw handleOrchestratorError(error, 'fetchVibeTasksForHulyIssues');
-  }
+  return [];
 }
 
 /**

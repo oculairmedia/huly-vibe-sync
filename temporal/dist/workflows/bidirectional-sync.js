@@ -326,29 +326,14 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
 // ============================================================
 // CONVENIENCE WORKFLOWS
 // ============================================================
-/**
- * SyncFromVibeWorkflow - Triggered when Vibe task changes
- */
+/** @deprecated VibeKanban removed — returns no-op result */
 async function SyncFromVibeWorkflow(input) {
-    const vibeTask = await getVibeTask({ taskId: input.vibeTaskId });
-    if (!vibeTask) {
-        throw workflow_1.ApplicationFailure.nonRetryable(`Vibe task not found: ${input.vibeTaskId}`, 'NotFoundError');
-    }
-    return BidirectionalSyncWorkflow({
+    workflow_1.log.warn(`[SyncFromVibe] VK disabled, skipping task ${input.vibeTaskId}`);
+    return {
+        success: true,
         source: 'vibe',
-        issueData: {
-            id: vibeTask.id,
-            title: vibeTask.title,
-            description: vibeTask.description,
-            status: vibeTask.status,
-            modifiedAt: vibeTask.updated_at ? new Date(vibeTask.updated_at).getTime() : Date.now(),
-        },
-        context: input.context,
-        linkedIds: {
-            vibeId: vibeTask.id,
-            ...input.linkedIds,
-        },
-    });
+        results: {},
+    };
 }
 async function SyncFromHulyWorkflow(input) {
     const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });

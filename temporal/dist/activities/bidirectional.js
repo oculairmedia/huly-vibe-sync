@@ -18,18 +18,12 @@ exports.syncBeadsToVibe = syncBeadsToVibe;
 exports.commitBeadsChanges = commitBeadsChanges;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
-const huly_dedupe_1 = require("./huly-dedupe");
 // ============================================================
 // GET ISSUE ACTIVITIES (for conflict resolution)
 // ============================================================
+/** @deprecated VibeKanban removed */
 async function getVibeTask(input) {
-    try {
-        const client = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        return await client.getTask(input.taskId);
-    }
-    catch {
-        return null;
-    }
+    return null;
 }
 async function getHulyIssue(input) {
     try {
@@ -52,117 +46,20 @@ async function getBeadsIssue(input) {
 // ============================================================
 // VIBE → OTHER SYSTEMS
 // ============================================================
-/**
- * Sync Vibe task to Huly
- */
+/** @deprecated VibeKanban removed */
 async function syncVibeToHuly(input) {
-    const { vibeTask, hulyIdentifier, context } = input;
-    console.log(`[Sync] Vibe → Huly: ${vibeTask.id} → ${hulyIdentifier}`);
-    try {
-        const hulyStatus = (0, lib_1.mapVibeStatusToHuly)(vibeTask.status);
-        // Conflict resolution: beads "closed" wins over stale Vibe status.
-        // When Phase 3b sets Huly to Done (from beads closed), Vibe SSE fires
-        // and tries to revert Huly back to the stale Vibe status. Block that.
-        const beadsState = await (0, huly_dedupe_1.getBeadsStatusForHulyIssue)(context.projectIdentifier, hulyIdentifier);
-        if (beadsState) {
-            const beadsHulyStatus = (0, lib_1.mapBeadsStatusToHuly)(beadsState.beadsStatus);
-            if (beadsHulyStatus === 'Done' && hulyStatus !== 'Done') {
-                console.log(`[Sync] Vibe → Huly: Skipped ${hulyIdentifier} — beads says closed, Vibe says ${vibeTask.status}. Beads wins.`);
-                return { success: true, id: hulyIdentifier, skipped: true };
-            }
-        }
-        const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        await client.updateIssue(hulyIdentifier, 'status', hulyStatus);
-        console.log(`[Sync] Vibe → Huly: Updated ${hulyIdentifier} to ${hulyStatus}`);
-        return { success: true, id: hulyIdentifier, updated: true };
-    }
-    catch (error) {
-        return handleError(error, 'Vibe→Huly');
-    }
+    return { success: true, skipped: true };
 }
-/**
- * Sync Vibe task to Beads
- */
+/** @deprecated VibeKanban removed */
 async function syncVibeToBeads(input) {
-    const { vibeTask, existingBeadsId, context } = input;
-    if (!context.gitRepoPath) {
-        return { success: true, skipped: true };
-    }
-    console.log(`[Sync] Vibe → Beads: ${vibeTask.id}`);
-    try {
-        const client = (0, lib_1.createBeadsClient)(context.gitRepoPath);
-        // Map Vibe status to Beads status
-        const beadsStatus = vibeTask.status === 'done' || vibeTask.status === 'cancelled'
-            ? 'closed'
-            : vibeTask.status === 'inprogress' || vibeTask.status === 'inreview'
-                ? 'in_progress'
-                : 'open';
-        if (existingBeadsId) {
-            const updated = await client.updateStatus(existingBeadsId, beadsStatus);
-            console.log(`[Sync] Vibe → Beads: Updated ${existingBeadsId}`);
-            return { success: true, id: updated.id, updated: true };
-        }
-        // Create new Beads issue
-        const issue = await client.createIssue({
-            title: vibeTask.title,
-            description: vibeTask.description
-                ? `${vibeTask.description}\n\n---\nVibe Task: ${vibeTask.id}`
-                : `Synced from Vibe: ${vibeTask.id}`,
-            status: beadsStatus,
-            labels: [`vibe:${vibeTask.id}`],
-        });
-        console.log(`[Sync] Vibe → Beads: Created ${issue.id}`);
-        return { success: true, id: issue.id, created: true };
-    }
-    catch (error) {
-        // Beads errors non-fatal
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.warn(`[Sync] Vibe → Beads: Non-fatal error: ${errorMsg}`);
-        return { success: true, skipped: true, error: errorMsg };
-    }
+    return { success: true, skipped: true };
 }
 // ============================================================
 // HULY → OTHER SYSTEMS
 // ============================================================
-/**
- * Sync Huly issue to Vibe
- */
+/** @deprecated VibeKanban removed */
 async function syncHulyToVibe(input) {
-    const { hulyIssue, existingVibeId, context } = input;
-    if (!context.vibeProjectId) {
-        console.log(`[Sync] Huly → Vibe: Skipping ${hulyIssue.id} - no Vibe project`);
-        return { success: true, skipped: true };
-    }
-    console.log(`[Sync] Huly → Vibe: ${hulyIssue.id}`);
-    try {
-        const client = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        const vibeStatus = (0, lib_1.mapHulyStatusToVibe)(hulyIssue.status);
-        if (existingVibeId) {
-            await client.updateTask(existingVibeId, 'status', vibeStatus);
-            console.log(`[Sync] Huly → Vibe: Updated ${existingVibeId} to ${vibeStatus}`);
-            return { success: true, id: existingVibeId, updated: true };
-        }
-        // Check for existing task by Huly ID
-        const existing = await client.findTaskByHulyId(context.vibeProjectId, hulyIssue.id);
-        if (existing) {
-            await client.updateTask(existing.id, 'status', vibeStatus);
-            console.log(`[Sync] Huly → Vibe: Found and updated ${existing.id}`);
-            return { success: true, id: existing.id, updated: true };
-        }
-        // Create new task
-        const task = await client.createTask(context.vibeProjectId, {
-            title: hulyIssue.title,
-            description: hulyIssue.description
-                ? `${hulyIssue.description}\n\n---\nHuly Issue: ${hulyIssue.id}`
-                : `Synced from Huly: ${hulyIssue.id}`,
-            status: vibeStatus,
-        });
-        console.log(`[Sync] Huly → Vibe: Created ${task.id}`);
-        return { success: true, id: task.id, created: true };
-    }
-    catch (error) {
-        return handleError(error, 'Huly→Vibe');
-    }
+    return { success: true, skipped: true };
 }
 /**
  * Sync Huly issue to Beads
@@ -247,23 +144,9 @@ async function syncBeadsToHuly(input) {
         return handleError(error, 'Beads→Huly');
     }
 }
-/**
- * Sync Beads issue to Vibe
- */
+/** @deprecated VibeKanban removed */
 async function syncBeadsToVibe(input) {
-    const { beadsIssue, vibeTaskId } = input;
-    console.log(`[Sync] Beads → Vibe: ${beadsIssue.id} → ${vibeTaskId}`);
-    try {
-        const client = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        // Map Beads status to Vibe
-        const vibeStatus = (0, lib_1.mapBeadsStatusToVibe)(beadsIssue.status);
-        await client.updateTask(vibeTaskId, 'status', vibeStatus);
-        console.log(`[Sync] Beads → Vibe: Updated ${vibeTaskId} to ${vibeStatus}`);
-        return { success: true, id: vibeTaskId, updated: true };
-    }
-    catch (error) {
-        return handleError(error, 'Beads→Vibe');
-    }
+    return { success: true, skipped: true };
 }
 // ============================================================
 // UTILITY ACTIVITIES

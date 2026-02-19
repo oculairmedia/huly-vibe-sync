@@ -25,6 +25,7 @@ interface SyncResult {
     updated?: boolean;
     error?: string;
 }
+/** @deprecated VibeKanban removed */
 export declare function getVibeTask(input: {
     taskId: string;
 }): Promise<{
@@ -55,25 +56,19 @@ export declare function getBeadsIssue(input: {
     priority?: number;
     updated_at?: string;
 } | null>;
-/**
- * Sync Vibe task to Huly
- */
+/** @deprecated VibeKanban removed */
 export declare function syncVibeToHuly(input: {
     vibeTask: IssueData;
     hulyIdentifier: string;
     context: SyncContext;
 }): Promise<SyncResult>;
-/**
- * Sync Vibe task to Beads
- */
+/** @deprecated VibeKanban removed */
 export declare function syncVibeToBeads(input: {
     vibeTask: IssueData;
     existingBeadsId?: string;
     context: SyncContext;
 }): Promise<SyncResult>;
-/**
- * Sync Huly issue to Vibe
- */
+/** @deprecated VibeKanban removed */
 export declare function syncHulyToVibe(input: {
     hulyIssue: IssueData;
     existingVibeId?: string;
@@ -95,9 +90,7 @@ export declare function syncBeadsToHuly(input: {
     hulyIdentifier: string;
     context: SyncContext;
 }): Promise<SyncResult>;
-/**
- * Sync Beads issue to Vibe
- */
+/** @deprecated VibeKanban removed */
 export declare function syncBeadsToVibe(input: {
     beadsIssue: IssueData;
     vibeTaskId: string;

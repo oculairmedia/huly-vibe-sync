@@ -70,9 +70,7 @@ export interface BidirectionalSyncResult {
  * Uses "most recent wins" for conflict resolution.
  */
 export declare function BidirectionalSyncWorkflow(input: BidirectionalSyncInput): Promise<BidirectionalSyncResult>;
-/**
- * SyncFromVibeWorkflow - Triggered when Vibe task changes
- */
+/** @deprecated VibeKanban removed — returns no-op result */
 export declare function SyncFromVibeWorkflow(input: {
     vibeTaskId: string;
     context: SyncContext;

@@ -44,9 +44,7 @@ export interface SyncActivityResult {
     created?: boolean;
     updated?: boolean;
 }
-/**
- * Create or update a Vibe task from a Huly issue
- */
+/** @deprecated VibeKanban removed */
 export declare function syncIssueToVibe(input: {
     issue: HulyIssue;
     context: SyncContext;
@@ -106,6 +104,7 @@ export declare function createBeadsIssueInHuly(input: {
 }): Promise<SyncActivityResult & {
     hulyIdentifier?: string;
 }>;
+/** @deprecated VibeKanban removed */
 export declare function createBeadsIssueInVibe(input: {
     beadsIssue: BeadsIssue;
     context: SyncContext;
@@ -128,10 +127,7 @@ export interface BatchSyncResult {
         skipped: boolean;
     }>;
 }
-/**
- * Batch sync beads issues to Vibe - O(1) lookups after single prefetch.
- * Replaces N individual createBeadsIssueInVibe calls with a single batch operation.
- */
+/** @deprecated VibeKanban removed */
 export declare function syncBeadsToVibeBatch(input: {
     beadsIssues: BeadsIssue[];
     context: SyncContext;

@@ -11,7 +11,7 @@ exports.VibeSSEChangeWorkflow = VibeSSEChangeWorkflow;
 exports.HulyWebhookChangeWorkflow = HulyWebhookChangeWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 const bidirectional_sync_1 = require("./bidirectional-sync");
-const { syncBeadsToHuly, getVibeTask, getBeadsIssue } = (0, workflow_1.proxyActivities)({
+const { syncBeadsToHuly, getBeadsIssue } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -158,7 +158,7 @@ async function BeadsFileChangeWorkflow(input) {
                         },
                         context: {
                             projectIdentifier,
-                            vibeProjectId: input.vibeProjectId,
+                            vibeProjectId: input.vibeProjectId || '',
                             gitRepoPath,
                         },
                     });
@@ -311,103 +311,15 @@ async function BeadsFileChangeWorkflow(input) {
         return result;
     }
 }
-/**
- * VibeSSEChangeWorkflow - Triggered by Vibe SSE events
- *
- * This workflow is the durable replacement for VibeEventWatcher callbacks.
- * It processes batch task changes from the SSE stream and syncs each to Huly.
- */
+/** @deprecated VibeKanban removed */
 async function VibeSSEChangeWorkflow(input) {
-    const { vibeProjectId, hulyProjectIdentifier, changedTaskIds } = input;
-    workflow_1.log.info('[VibeSSEChange] Starting workflow', {
-        vibeProject: vibeProjectId,
-        hulyProject: hulyProjectIdentifier,
-        taskCount: changedTaskIds.length,
-    });
-    const result = {
-        success: false,
+    workflow_1.log.warn('[VibeSSEChange] VK disabled, skipping');
+    return {
+        success: true,
         tasksProcessed: 0,
         tasksSynced: 0,
         errors: [],
     };
-    if (changedTaskIds.length === 0) {
-        workflow_1.log.info('[VibeSSEChange] No tasks to process');
-        result.success = true;
-        return result;
-    }
-    result.tasksProcessed = changedTaskIds.length;
-    // Build sync context
-    const context = {
-        projectIdentifier: hulyProjectIdentifier || '',
-        vibeProjectId,
-    };
-    for (const taskId of changedTaskIds) {
-        try {
-            const vibeTask = await getVibeTask({ taskId });
-            if (!vibeTask) {
-                workflow_1.log.warn('[VibeSSEChange] Task not found', { taskId });
-                result.errors.push({ taskId, error: 'Task not found' });
-                continue;
-            }
-            workflow_1.log.info('[VibeSSEChange] Processing task', {
-                taskId: vibeTask.id,
-                title: vibeTask.title,
-                status: vibeTask.status,
-            });
-            const syncResult = await (0, workflow_1.executeChild)(bidirectional_sync_1.BidirectionalSyncWorkflow, {
-                args: [
-                    {
-                        source: 'vibe',
-                        issueData: {
-                            id: vibeTask.id,
-                            title: vibeTask.title,
-                            description: vibeTask.description,
-                            status: vibeTask.status,
-                            modifiedAt: vibeTask.updated_at
-                                ? new Date(vibeTask.updated_at).getTime()
-                                : Date.now(),
-                        },
-                        context,
-                        linkedIds: { vibeId: vibeTask.id },
-                    },
-                ],
-                workflowId: `vibe-sse-sync-${vibeProjectId}-${taskId}`,
-            });
-            if (syncResult.success) {
-                result.tasksSynced++;
-                workflow_1.log.info('[VibeSSEChange] Task synced', {
-                    taskId: vibeTask.id,
-                    hulyResult: syncResult.results.huly,
-                    beadsResult: syncResult.results.beads,
-                });
-            }
-            else {
-                workflow_1.log.warn('[VibeSSEChange] Task sync failed', {
-                    taskId: vibeTask.id,
-                    error: syncResult.error,
-                });
-                if (syncResult.error) {
-                    result.errors.push({ taskId, error: syncResult.error });
-                }
-            }
-            await (0, workflow_1.sleep)('200ms');
-        }
-        catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            workflow_1.log.error('[VibeSSEChange] Failed to process task', {
-                taskId,
-                error: errorMsg,
-            });
-            result.errors.push({ taskId, error: errorMsg });
-        }
-    }
-    result.success = result.errors.length === 0;
-    workflow_1.log.info('[VibeSSEChange] Workflow complete', {
-        processed: result.tasksProcessed,
-        synced: result.tasksSynced,
-        errors: result.errors.length,
-    });
-    return result;
 }
 /**
  * HulyWebhookChangeWorkflow - Triggered by Huly webhook events

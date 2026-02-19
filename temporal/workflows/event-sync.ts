@@ -12,11 +12,9 @@ import type * as orchestrationActivities from '../activities/orchestration';
 import type * as dbActivities from '../activities/sync-database';
 import type * as syncServiceActivities from '../activities/sync-services';
 
-import { BidirectionalSyncWorkflow, SyncFromHulyWorkflow } from './bidirectional-sync';
+import { SyncFromHulyWorkflow } from './bidirectional-sync';
 
-import type { SyncContext } from './bidirectional-sync';
-
-const { syncBeadsToHuly, getVibeTask, getBeadsIssue } = proxyActivities<typeof syncActivities>({
+const { syncBeadsToHuly, getBeadsIssue } = proxyActivities<typeof syncActivities>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
@@ -391,117 +389,17 @@ export interface VibeSSEChangeResult {
   errors: Array<{ taskId: string; error: string }>;
 }
 
-/**
- * VibeSSEChangeWorkflow - Triggered by Vibe SSE events
- *
- * This workflow is the durable replacement for VibeEventWatcher callbacks.
- * It processes batch task changes from the SSE stream and syncs each to Huly.
- */
+/** @deprecated VibeKanban removed */
 export async function VibeSSEChangeWorkflow(
   input: VibeSSEChangeInput
 ): Promise<VibeSSEChangeResult> {
-  const { vibeProjectId, hulyProjectIdentifier, changedTaskIds } = input;
-
-  log.info('[VibeSSEChange] Starting workflow', {
-    vibeProject: vibeProjectId,
-    hulyProject: hulyProjectIdentifier,
-    taskCount: changedTaskIds.length,
-  });
-
-  const result: VibeSSEChangeResult = {
-    success: false,
+  log.warn('[VibeSSEChange] VK disabled, skipping');
+  return {
+    success: true,
     tasksProcessed: 0,
     tasksSynced: 0,
     errors: [],
   };
-
-  if (changedTaskIds.length === 0) {
-    log.info('[VibeSSEChange] No tasks to process');
-    result.success = true;
-    return result;
-  }
-
-  result.tasksProcessed = changedTaskIds.length;
-
-  // Build sync context
-  const context: SyncContext = {
-    projectIdentifier: hulyProjectIdentifier || '',
-    vibeProjectId,
-  };
-
-  for (const taskId of changedTaskIds) {
-    try {
-      const vibeTask = await getVibeTask({ taskId });
-
-      if (!vibeTask) {
-        log.warn('[VibeSSEChange] Task not found', { taskId });
-        result.errors.push({ taskId, error: 'Task not found' });
-        continue;
-      }
-
-      log.info('[VibeSSEChange] Processing task', {
-        taskId: vibeTask.id,
-        title: vibeTask.title,
-        status: vibeTask.status,
-      });
-
-      const syncResult = await executeChild(BidirectionalSyncWorkflow, {
-        args: [
-          {
-            source: 'vibe' as const,
-            issueData: {
-              id: vibeTask.id,
-              title: vibeTask.title,
-              description: vibeTask.description,
-              status: vibeTask.status,
-              modifiedAt: vibeTask.updated_at
-                ? new Date(vibeTask.updated_at).getTime()
-                : Date.now(),
-            },
-            context,
-            linkedIds: { vibeId: vibeTask.id },
-          },
-        ],
-        workflowId: `vibe-sse-sync-${vibeProjectId}-${taskId}`,
-      });
-
-      if (syncResult.success) {
-        result.tasksSynced++;
-        log.info('[VibeSSEChange] Task synced', {
-          taskId: vibeTask.id,
-          hulyResult: syncResult.results.huly,
-          beadsResult: syncResult.results.beads,
-        });
-      } else {
-        log.warn('[VibeSSEChange] Task sync failed', {
-          taskId: vibeTask.id,
-          error: syncResult.error,
-        });
-        if (syncResult.error) {
-          result.errors.push({ taskId, error: syncResult.error });
-        }
-      }
-
-      await sleep('200ms');
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      log.error('[VibeSSEChange] Failed to process task', {
-        taskId,
-        error: errorMsg,
-      });
-      result.errors.push({ taskId, error: errorMsg });
-    }
-  }
-
-  result.success = result.errors.length === 0;
-
-  log.info('[VibeSSEChange] Workflow complete', {
-    processed: result.tasksProcessed,
-    synced: result.tasksSynced,
-    errors: result.errors.length,
-  });
-
-  return result;
 }
 
 // ============================================================

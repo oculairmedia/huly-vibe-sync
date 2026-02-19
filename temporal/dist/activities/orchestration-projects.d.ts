@@ -13,18 +13,21 @@ export declare function clearProjectCaches(): void;
  */
 export declare function fetchHulyProjects(): Promise<HulyProject[]>;
 /**
- * Fetch all Vibe projects
+ * @deprecated VibeKanban removed — returns empty array for backwards compatibility
  */
 export declare function fetchVibeProjects(): Promise<VibeProject[]>;
+/**
+ * @deprecated VibeKanban removed — always returns null
+ */
 export declare function getVibeProjectId(hulyProjectIdentifier: string): Promise<string | null>;
 export declare function resolveProjectIdentifier(projectIdOrFolder: string): Promise<string | null>;
+/**
+ * @deprecated VibeKanban removed — returns dummy project for backwards compatibility
+ */
 export declare function ensureVibeProject(input: {
     hulyProject: HulyProject;
     existingVibeProjects: VibeProject[];
 }): Promise<VibeProject>;
-/**
- * Fetch project data (issues and tasks) for sync
- */
 export declare function fetchProjectData(input: {
     hulyProject: HulyProject;
     vibeProjectId: string;
@@ -32,12 +35,14 @@ export declare function fetchProjectData(input: {
     hulyIssues: HulyIssue[];
     vibeTasks: VibeTask[];
 }>;
+/**
+ * @deprecated VibeKanban removed — returns empty array
+ */
 export declare function fetchAllVibeTasks(input: {
     vibeProjectId: string;
 }): Promise<VibeTask[]>;
 /**
- * Fetch only Vibe tasks that map to specific Huly identifiers via sync DB mappings.
- * Used by webhook-triggered project syncs to avoid full-table task fetches.
+ * @deprecated VibeKanban removed — returns empty array
  */
 export declare function fetchVibeTasksForHulyIssues(input: {
     projectIdentifier: string;

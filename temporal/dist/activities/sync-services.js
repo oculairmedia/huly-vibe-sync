@@ -103,39 +103,9 @@ function extractParentIdentifierFromDescription(description) {
 // ============================================================
 // VIBE SYNC ACTIVITIES
 // ============================================================
-/**
- * Create or update a Vibe task from a Huly issue
- */
+/** @deprecated VibeKanban removed */
 async function syncIssueToVibe(input) {
-    const { issue, context, existingTaskId, operation } = input;
-    console.log(`[Temporal:Vibe] ${operation} task for ${issue.identifier}`);
-    try {
-        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        const vibeStatus = (0, lib_1.mapHulyStatusToVibe)(issue.status);
-        const result = await vibeClient.syncFromHuly(context.vibeProjectId, {
-            identifier: issue.identifier,
-            title: issue.title,
-            description: issue.description,
-            status: issue.status,
-            parentIssue: issue.parentIssue,
-        }, vibeStatus, existingTaskId);
-        if (result.skipped) {
-            console.log(`[Temporal:Vibe] Skipped ${issue.identifier} - already exists`);
-            return { success: true, skipped: true, id: result.task?.id };
-        }
-        if (result.created) {
-            console.log(`[Temporal:Vibe] Created task for ${issue.identifier}: ${result.task?.id}`);
-            return { success: true, created: true, id: result.task?.id };
-        }
-        if (result.updated) {
-            console.log(`[Temporal:Vibe] Updated task for ${issue.identifier}: ${result.task?.id}`);
-            return { success: true, updated: true, id: result.task?.id };
-        }
-        return { success: true, id: result.task?.id };
-    }
-    catch (error) {
-        return handleSyncError(error, 'Vibe');
-    }
+    return { success: true, skipped: true };
 }
 // ============================================================
 // HULY SYNC ACTIVITIES
@@ -421,113 +391,22 @@ async function createBeadsIssueInHuly(input) {
         return handleSyncError(error, 'Beads→Huly Create');
     }
 }
+/** @deprecated VibeKanban removed */
 async function createBeadsIssueInVibe(input) {
-    const { beadsIssue, context } = input;
-    if (beadsIssue.labels?.some(l => l.startsWith('vibe:'))) {
-        console.log(`[Temporal:Beads→Vibe] Skipping ${beadsIssue.id} - already has vibe label`);
-        return { success: true, skipped: true };
-    }
-    console.log(`[Temporal:Beads→Vibe] Creating Vibe task for ${beadsIssue.id}`);
-    try {
-        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        const vibeStatus = (0, lib_1.mapBeadsStatusToVibe)(beadsIssue.status);
-        const result = await vibeClient.syncFromBeads(context.vibeProjectId, {
-            id: beadsIssue.id,
-            title: beadsIssue.title,
-            description: beadsIssue.description,
-            status: beadsIssue.status,
-        }, vibeStatus);
-        if (result.skipped) {
-            console.log(`[Temporal:Beads→Vibe] Skipped ${beadsIssue.id} - already exists`);
-            return { success: true, skipped: true, id: result.task?.id, vibeTaskId: result.task?.id };
-        }
-        if (result.created && result.task) {
-            console.log(`[Temporal:Beads→Vibe] Created task ${result.task.id} from ${beadsIssue.id}`);
-            if (context.gitRepoPath) {
-                try {
-                    const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
-                    await beadsClient.addLabel(beadsIssue.id, `vibe:${result.task.id}`);
-                    console.log(`[Temporal:Beads→Vibe] Added vibe:${result.task.id} label to ${beadsIssue.id}`);
-                }
-                catch (labelError) {
-                    console.warn(`[Temporal:Beads→Vibe] Failed to add label: ${labelError}`);
-                }
-            }
-            return { success: true, created: true, id: result.task.id, vibeTaskId: result.task.id };
-        }
-        if (result.updated && result.task) {
-            console.log(`[Temporal:Beads→Vibe] Updated task ${result.task.id} from ${beadsIssue.id}`);
-            return { success: true, updated: true, id: result.task.id, vibeTaskId: result.task.id };
-        }
-        return { success: true, skipped: true };
-    }
-    catch (error) {
-        return handleSyncError(error, 'Beads→Vibe Create');
-    }
+    return { success: true, skipped: true };
 }
-/**
- * Batch sync beads issues to Vibe - O(1) lookups after single prefetch.
- * Replaces N individual createBeadsIssueInVibe calls with a single batch operation.
- */
+/** @deprecated VibeKanban removed */
 async function syncBeadsToVibeBatch(input) {
-    const { beadsIssues, context } = input;
-    const issuesToSync = beadsIssues.filter(issue => !issue.labels?.some(l => l.startsWith('vibe:')));
-    if (issuesToSync.length === 0) {
-        console.log(`[Temporal:Beads→Vibe] All ${beadsIssues.length} issues already synced`);
-        return {
-            success: true,
-            stats: { total: beadsIssues.length, created: 0, updated: 0, skipped: beadsIssues.length },
-            results: beadsIssues.map(i => ({
-                beadsId: i.id,
-                created: false,
-                updated: false,
-                skipped: true,
-            })),
-        };
-    }
-    console.log(`[Temporal:Beads→Vibe] Batch syncing ${issuesToSync.length} issues to Vibe`);
-    try {
-        const vibeClient = (0, lib_1.createVibeClient)(process.env.VIBE_API_URL);
-        const batchInput = issuesToSync.map(issue => ({
-            id: issue.id,
-            title: issue.title,
-            description: issue.description,
-            status: issue.status,
-            vibeStatus: (0, lib_1.mapBeadsStatusToVibe)(issue.status),
-        }));
-        const { results: batchResults, stats } = await vibeClient.syncFromBeadsBatch(context.vibeProjectId, batchInput);
-        const results = batchResults.map(r => ({
-            beadsId: r.beadsId,
-            vibeTaskId: r.task?.id,
-            created: r.created,
-            updated: r.updated,
-            skipped: r.skipped,
-        }));
-        if (context.gitRepoPath) {
-            const beadsClient = (0, lib_1.createBeadsClient)(context.gitRepoPath);
-            for (const r of results) {
-                if (r.created && r.vibeTaskId) {
-                    try {
-                        await beadsClient.addLabel(r.beadsId, `vibe:${r.vibeTaskId}`);
-                    }
-                    catch (labelError) {
-                        console.warn(`[Temporal:Beads→Vibe] Failed to add label to ${r.beadsId}: ${labelError}`);
-                    }
-                }
-            }
-        }
-        console.log(`[Temporal:Beads→Vibe] Batch complete: ${stats.created} created, ${stats.updated} updated, ${stats.skipped} skipped`);
-        return { success: true, stats, results };
-    }
-    catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        console.error(`[Temporal:Beads→Vibe] Batch sync failed: ${msg}`);
-        return {
-            success: false,
-            stats: { total: issuesToSync.length, created: 0, updated: 0, skipped: 0 },
-            results: [],
-        };
-    }
+    return {
+        success: true,
+        stats: {
+            total: input.beadsIssues.length,
+            created: 0,
+            updated: 0,
+            skipped: input.beadsIssues.length,
+        },
+        results: [],
+    };
 }
 async function commitBeadsToGit(input) {
     const { context, message } = input;

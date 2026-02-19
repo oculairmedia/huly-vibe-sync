@@ -19,14 +19,9 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 // ACTIVITY PROXIES
 // ============================================================
 
-const {
-  ensureVibeProject,
-  fetchProjectData,
-  fetchAllVibeTasks,
-  fetchVibeTasksForHulyIssues,
-  initializeBeads,
-  fetchBeadsIssues,
-} = proxyActivities<typeof orchestrationActivities>({
+const { ensureVibeProject, fetchProjectData, initializeBeads, fetchBeadsIssues } = proxyActivities<
+  typeof orchestrationActivities
+>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
@@ -36,26 +31,17 @@ const {
   },
 });
 
-const {
-  syncIssueToVibe,
-  syncTaskToHuly,
-  syncIssueToBeads,
-  syncBeadsToHuly,
-  syncBeadsToHulyBatch,
-  createBeadsIssueInHuly,
-  createBeadsIssueInVibe,
-  syncBeadsToVibeBatch,
-  commitBeadsToGit,
-} = proxyActivities<typeof syncActivities>({
-  startToCloseTimeout: '120 seconds',
-  retry: {
-    initialInterval: '2 seconds',
-    backoffCoefficient: 2,
-    maximumInterval: '60 seconds',
-    maximumAttempts: 5,
-    nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
-  },
-});
+const { syncIssueToBeads, syncBeadsToHulyBatch, createBeadsIssueInHuly, commitBeadsToGit } =
+  proxyActivities<typeof syncActivities>({
+    startToCloseTimeout: '120 seconds',
+    retry: {
+      initialInterval: '2 seconds',
+      backoffCoefficient: 2,
+      maximumInterval: '60 seconds',
+      maximumAttempts: 5,
+      nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
+    },
+  });
 
 const { persistIssueSyncState, persistIssueSyncStateBatch, getIssueSyncStateBatch } =
   proxyActivities<typeof syncDatabaseActivities>({
@@ -315,7 +301,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       });
     }
 
-    // Fetch project data (use prefetched issues if available, else fetch)
     let hulyIssues: Array<{
       identifier: string;
       title: string;
@@ -325,141 +310,23 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       parentIssue?: string;
       description?: string;
     }>;
-    let vibeTasks: Array<{ id: string; title: string; status: string; description?: string }>;
 
     if (prefetchedIssues && prefetchedIssues.length > 0) {
       hulyIssues = prefetchedIssues;
-
-      if (isWebhookPrefetch) {
-        vibeTasks = await fetchVibeTasksForHulyIssues({
-          projectIdentifier: hulyProject.identifier,
-          vibeProjectId: vibeProjectId!,
-          hulyIssueIdentifiers: prefetchedIssues.map(issue => issue.identifier),
-        });
-        log.info(
-          `[ProjectSync] Using webhook-prefetched issues (${prefetchedIssues.length}) with mapped Vibe tasks (${vibeTasks.length}), batch size ${effectiveBatchSize}`
-        );
-      } else {
-        vibeTasks = await fetchAllVibeTasks({ vibeProjectId: vibeProjectId! });
-        log.info(
-          `[ProjectSync] Using ${prefetchedIssues.length} prefetched issues, fetched ${vibeTasks.length} Vibe tasks`
-        );
-      }
+      log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
     } else {
       const projectData = await fetchProjectData({
         hulyProject,
         vibeProjectId: vibeProjectId!,
       });
       hulyIssues = projectData.hulyIssues;
-      vibeTasks = projectData.vibeTasks;
     }
 
-    // Build lookup maps
-    const tasksByHulyId = new Map<string, { id: string; status: string }>();
-    for (const task of vibeTasks) {
-      const match = task.description?.match(/Huly Issue:\s*([A-Z]+-\d+)/i);
-      if (match) {
-        tasksByHulyId.set(match[1], { id: task.id, status: task.status });
-      }
-    }
-
-    // PHASE 1: Huly → Vibe
+    // PHASE 1: Huly → Vibe (SKIPPED — VibeKanban removed)
     if (_phase === 'phase1') {
-      hulyIssues.sort((a, b) => {
-        const aIsChild = !!a.parentIssue;
-        const bIsChild = !!b.parentIssue;
-        if (aIsChild === bIsChild) return 0;
-        return aIsChild ? 1 : -1;
-      });
+      log.info(`[ProjectSync] Phase 1: Skipped (VK disabled) — ${hulyIssues.length} issues`);
+      result.phase1.skipped = hulyIssues.length;
 
-      log.info(
-        `[ProjectSync] Phase 1: ${hulyIssues.length} issues → Vibe (starting at ${_phase1Index})`
-      );
-
-      for (let i = _phase1Index; i < hulyIssues.length; i += effectiveBatchSize) {
-        const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
-
-        const batchResults = await Promise.all(
-          batch.map(async issue => {
-            const existingTask = tasksByHulyId.get(issue.identifier);
-
-            if (dryRun) {
-              return { success: true, skipped: true };
-            }
-
-            const syncResult = await syncIssueToVibe({
-              issue,
-              context: {
-                projectIdentifier: hulyProject.identifier,
-                vibeProjectId: vibeProjectId!,
-                gitRepoPath: gitRepoPath || undefined,
-              },
-              existingTaskId: existingTask?.id,
-              operation: existingTask ? 'update' : 'create',
-            });
-
-            if (syncResult.success && syncResult.id) {
-              phase1UpdatedTasks.add(syncResult.id);
-
-              tasksByHulyId.set(issue.identifier, {
-                id: syncResult.id,
-                status: existingTask?.status || issue.status || 'unknown',
-              });
-
-              const parentVibeId = issue.parentIssue
-                ? tasksByHulyId.get(issue.parentIssue)?.id || null
-                : null;
-
-              await persistIssueSyncState({
-                identifier: issue.identifier,
-                projectIdentifier: hulyProject.identifier,
-                title: issue.title,
-                description: issue.description,
-                status: issue.status,
-                priority: issue.priority,
-                hulyId: issue.identifier,
-                vibeTaskId: syncResult.id,
-                hulyModifiedAt: issue.modifiedOn,
-                vibeModifiedAt: Date.now(),
-                vibeStatus: existingTask?.status,
-                parentHulyId: issue.parentIssue || null,
-                parentVibeId,
-              });
-            }
-
-            return syncResult;
-          })
-        );
-
-        for (const r of batchResults) {
-          if (r.skipped) result.phase1.skipped++;
-          else if (r.success) result.phase1.synced++;
-          else result.phase1.errors++;
-        }
-
-        issuesProcessedThisRun += batch.length;
-
-        // Check if we need to continue as new
-        const nextIndex = i + effectiveBatchSize;
-        if (
-          issuesProcessedThisRun >= MAX_ISSUES_PER_CONTINUATION &&
-          nextIndex < hulyIssues.length
-        ) {
-          log.info(`[ProjectSync] Phase 1 continuing as new at index ${nextIndex}`);
-          return await continueAsNew<typeof ProjectSyncWorkflow>({
-            ...input,
-            _phase: 'phase1',
-            _phase1Index: nextIndex,
-            _vibeProjectId: vibeProjectId,
-            _gitRepoPath: gitRepoPath,
-            _beadsInitialized: beadsInitialized,
-            _accumulatedResult: result,
-            _phase1UpdatedTasks: Array.from(phase1UpdatedTasks),
-          });
-        }
-      }
-
-      // Phase 1 complete, move to phase 2
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'phase2',
@@ -472,104 +339,15 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       });
     }
 
-    // PHASE 2: Vibe → Huly (skip tasks updated in Phase 1)
+    // PHASE 2: Vibe → Huly (SKIPPED — VibeKanban removed, vibeTasks always empty)
     if (_phase === 'phase2') {
-      log.info(
-        `[ProjectSync] Phase 2: ${vibeTasks.length} tasks → Huly (starting at ${_phase2Index})`
-      );
+      log.info(`[ProjectSync] Phase 2: Skipped (VK disabled)`);
 
-      const issuesByIdentifier = new Map(hulyIssues.map(i => [i.identifier, i]));
-
-      for (let i = _phase2Index; i < vibeTasks.length; i++) {
-        const task = vibeTasks[i];
-
-        // Skip if updated in Phase 1
-        if (phase1UpdatedTasks.has(task.id)) {
-          result.phase2.skipped++;
-          continue;
-        }
-
-        // Extract Huly identifier
-        const match = task.description?.match(/Huly Issue:\s*([A-Z]+-\d+)/i);
-        if (!match) {
-          result.phase2.skipped++;
-          continue;
-        }
-
-        const hulyIdentifier = match[1];
-        const hulyIssue = issuesByIdentifier.get(hulyIdentifier);
-
-        if (!hulyIssue) {
-          result.phase2.skipped++;
-          continue;
-        }
-
-        if (dryRun) {
-          result.phase2.skipped++;
-          continue;
-        }
-
-        const syncResult = await syncTaskToHuly({
-          task,
-          hulyIdentifier,
-          context: {
-            projectIdentifier: hulyProject.identifier,
-            vibeProjectId: vibeProjectId!,
-          },
-          knownParentIssue: hulyIssue.parentIssue || null,
-        });
-
-        if (syncResult.skipped) result.phase2.skipped++;
-        else if (syncResult.success) result.phase2.synced++;
-        else result.phase2.errors++;
-
-        if (syncResult.success) {
-          const parentVibeId = hulyIssue.parentIssue
-            ? tasksByHulyId.get(hulyIssue.parentIssue)?.id || null
-            : null;
-
-          await persistIssueSyncState({
-            identifier: hulyIdentifier,
-            projectIdentifier: hulyProject.identifier,
-            title: hulyIssue.title,
-            description: hulyIssue.description,
-            status: hulyIssue.status,
-            priority: hulyIssue.priority,
-            hulyId: hulyIdentifier,
-            vibeTaskId: task.id,
-            hulyModifiedAt: hulyIssue.modifiedOn,
-            vibeModifiedAt: task.description ? Date.now() : undefined,
-            vibeStatus: task.status,
-            parentHulyId: hulyIssue.parentIssue || null,
-            parentVibeId,
-          });
-        }
-
-        issuesProcessedThisRun++;
-
-        // Check if we need to continue as new
-        const nextIndex = i + 1;
-        if (issuesProcessedThisRun >= MAX_ISSUES_PER_CONTINUATION && nextIndex < vibeTasks.length) {
-          log.info(`[ProjectSync] Phase 2 continuing as new at index ${nextIndex}`);
-          return await continueAsNew<typeof ProjectSyncWorkflow>({
-            ...input,
-            _phase: 'phase2',
-            _phase2Index: nextIndex,
-            _vibeProjectId: vibeProjectId,
-            _gitRepoPath: gitRepoPath,
-            _beadsInitialized: beadsInitialized,
-            _accumulatedResult: result,
-            _phase1UpdatedTasks: Array.from(phase1UpdatedTasks),
-          });
-        }
-      }
-
-      // Phase 2 complete, move to phase 3 or done
       if (enableBeads && beadsInitialized && gitRepoPath) {
         return await continueAsNew<typeof ProjectSyncWorkflow>({
           ...input,
           _phase: 'phase3',
-          _phase2Index: vibeTasks.length,
+          _phase2Index: 0,
           _vibeProjectId: vibeProjectId,
           _gitRepoPath: gitRepoPath,
           _beadsInitialized: beadsInitialized,
@@ -577,7 +355,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           _phase1UpdatedTasks: Array.from(phase1UpdatedTasks),
         });
       } else {
-        // Skip to done
         return await continueAsNew<typeof ProjectSyncWorkflow>({
           ...input,
           _phase: 'done',
@@ -898,43 +675,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     }
 
     if (_phase === 'phase3c') {
-      log.info(`[ProjectSync] Phase 3c: Beads→Vibe sync (batch)`);
-
-      const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
-
-      let vibeCreated = 0;
-      let vibeSkipped = 0;
-
-      if (dryRun) {
-        vibeSkipped = beadsIssues.length;
-      } else if (beadsIssues.length > 0) {
-        const batchResult = await syncBeadsToVibeBatch({
-          beadsIssues: beadsIssues.map(issue => ({
-            id: issue.id,
-            title: issue.title,
-            status: issue.status,
-            priority: issue.priority,
-            description: issue.description,
-            labels: issue.labels,
-          })),
-          context: {
-            projectIdentifier: hulyProject.identifier,
-            vibeProjectId: vibeProjectId!,
-            gitRepoPath: gitRepoPath!,
-          },
-        });
-
-        vibeCreated = batchResult.stats.created;
-        vibeSkipped = batchResult.stats.skipped + batchResult.stats.updated;
-
-        for (const r of batchResult.results) {
-          if (r.created) {
-            log.info(`[ProjectSync] Created Vibe task ${r.vibeTaskId} from ${r.beadsId}`);
-          }
-        }
-      }
-
-      log.info(`[ProjectSync] Phase 3c complete`, { created: vibeCreated, skipped: vibeSkipped });
+      log.info(`[ProjectSync] Phase 3c: Skipped (VK disabled)`);
 
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
