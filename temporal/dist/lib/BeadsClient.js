@@ -330,7 +330,7 @@ class BeadsClient {
         }
         catch (apiError) {
             console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
-            this.execBeads(`label add ${issueId} "${label}"`);
+            this.execBeads(`label add ${issueId} "${label}" --no-auto-flush`);
         }
     }
     async removeLabel(issueId, label) {
@@ -352,7 +352,7 @@ class BeadsClient {
         }
         catch (apiError) {
             console.warn(`[BeadsClient] API call failed, falling back to CLI: ${apiError}`);
-            this.execBeads(`label remove ${issueId} "${label}"`);
+            this.execBeads(`label remove ${issueId} "${label}" --no-auto-flush`);
         }
     }
     // ============================================================
