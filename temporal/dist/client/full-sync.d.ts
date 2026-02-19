@@ -26,30 +26,9 @@ export declare function scheduleProjectSync(input: {
     issues: SyncIssueInput[];
     context: {
         projectIdentifier: string;
-        vibeProjectId: string;
         gitRepoPath?: string;
     };
     batchSize?: number;
-}): Promise<{
-    workflowId: string;
-    runId: string;
-}>;
-/**
- * Schedule Vibe→Huly sync (Phase 2)
- */
-export declare function scheduleVibeToHulySync(input: {
-    task: {
-        id: string;
-        title: string;
-        description?: string;
-        status: string;
-        updated_at?: string;
-    };
-    hulyIdentifier: string;
-    context: {
-        projectIdentifier: string;
-        vibeProjectId: string;
-    };
 }): Promise<{
     workflowId: string;
     runId: string;

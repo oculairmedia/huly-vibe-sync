@@ -5,7 +5,7 @@
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
-import type { HulyProject, HulyIssue, VibeProject, VibeTask } from './orchestration';
+import type { HulyProject, HulyIssue } from './orchestration';
 
 // ============================================================
 // LETTA MEMORY ACTIVITIES
@@ -17,12 +17,10 @@ import type { HulyProject, HulyIssue, VibeProject, VibeTask } from './orchestrat
 export async function updateLettaMemory(input: {
   agentId: string;
   hulyProject: HulyProject;
-  vibeProject: VibeProject;
   hulyIssues: HulyIssue[];
-  vibeTasks: VibeTask[];
   gitRepoPath?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { agentId, hulyProject, hulyIssues, vibeTasks } = input;
+  const { agentId, hulyProject, hulyIssues } = input;
 
   console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId}`);
 
@@ -36,7 +34,7 @@ export async function updateLettaMemory(input: {
     }
 
     // Build memory blocks
-    const boardMetrics = buildBoardMetrics(hulyIssues, vibeTasks);
+    const boardMetrics = buildBoardMetrics(hulyIssues);
     const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
 
     // Update memory blocks via Letta API
@@ -97,7 +95,7 @@ export async function recordSyncMetrics(input: {
 // HELPER FUNCTIONS
 // ============================================================
 
-export function buildBoardMetrics(hulyIssues: HulyIssue[], vibeTasks: VibeTask[]): string {
+export function buildBoardMetrics(hulyIssues: HulyIssue[]): string {
   const statusCounts: Record<string, number> = {};
 
   for (const issue of hulyIssues) {
@@ -107,7 +105,6 @@ export function buildBoardMetrics(hulyIssues: HulyIssue[], vibeTasks: VibeTask[]
 
   return JSON.stringify({
     totalIssues: hulyIssues.length,
-    totalTasks: vibeTasks.length,
     byStatus: statusCounts,
     lastUpdated: new Date().toISOString(),
   });

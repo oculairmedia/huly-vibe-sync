@@ -1,13 +1,11 @@
 /**
  * Full Orchestration Workflow
  *
- * Top-level workflow that replaces the SyncOrchestrator.syncHulyToVibe() function.
- * Coordinates the complete bidirectional sync across all projects.
+ * Top-level workflow that coordinates the complete bidirectional sync across all projects.
  *
  * Features:
- * - Fetches all Huly and Vibe projects
- * - Creates Vibe projects if needed
- * - Runs Phase 1 (Huly→Vibe), Phase 2 (Vibe→Huly), Phase 3 (Beads) for each project
+ * - Fetches all Huly projects
+ * - Runs Phase 3 (Beads) for each project
  * - Updates Letta agent memory
  * - Records metrics
  * - Durable execution with automatic retry

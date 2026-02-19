@@ -20,7 +20,6 @@ import {
 
 interface SyncContext {
   projectIdentifier: string;
-  vibeProjectId: string;
   gitRepoPath?: string;
 }
 
@@ -45,17 +44,6 @@ interface SyncResult {
 // ============================================================
 // GET ISSUE ACTIVITIES (for conflict resolution)
 // ============================================================
-
-/** @deprecated VibeKanban removed */
-export async function getVibeTask(input: { taskId: string }): Promise<{
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  updated_at?: string;
-} | null> {
-  return null;
-}
 
 export async function getHulyIssue(input: { identifier: string }): Promise<{
   identifier: string;
@@ -90,43 +78,9 @@ export async function getBeadsIssue(input: { issueId: string; gitRepoPath: strin
 }
 
 // ============================================================
-// VIBE → OTHER SYSTEMS
+// HULY → BEADS
 // ============================================================
 
-/** @deprecated VibeKanban removed */
-export async function syncVibeToHuly(input: {
-  vibeTask: IssueData;
-  hulyIdentifier: string;
-  context: SyncContext;
-}): Promise<SyncResult> {
-  return { success: true, skipped: true };
-}
-
-/** @deprecated VibeKanban removed */
-export async function syncVibeToBeads(input: {
-  vibeTask: IssueData;
-  existingBeadsId?: string;
-  context: SyncContext;
-}): Promise<SyncResult> {
-  return { success: true, skipped: true };
-}
-
-// ============================================================
-// HULY → OTHER SYSTEMS
-// ============================================================
-
-/** @deprecated VibeKanban removed */
-export async function syncHulyToVibe(input: {
-  hulyIssue: IssueData;
-  existingVibeId?: string;
-  context: SyncContext;
-}): Promise<SyncResult> {
-  return { success: true, skipped: true };
-}
-
-/**
- * Sync Huly issue to Beads
- */
 export async function syncHulyToBeads(input: {
   hulyIssue: IssueData;
   existingBeadsId?: string;
@@ -231,15 +185,6 @@ export async function syncBeadsToHuly(input: {
   } catch (error) {
     return handleError(error, 'Beads→Huly');
   }
-}
-
-/** @deprecated VibeKanban removed */
-export async function syncBeadsToVibe(input: {
-  beadsIssue: IssueData;
-  vibeTaskId: string;
-  context: SyncContext;
-}): Promise<SyncResult> {
-  return { success: true, skipped: true };
 }
 
 // ============================================================

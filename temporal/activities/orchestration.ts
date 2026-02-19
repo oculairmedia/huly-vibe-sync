@@ -17,12 +17,6 @@ export interface HulyProject {
   description?: string;
 }
 
-export interface VibeProject {
-  id: string;
-  name: string;
-  slug?: string;
-}
-
 export interface HulyIssue {
   identifier: string;
   title: string;
@@ -34,20 +28,10 @@ export interface HulyIssue {
   subIssues?: string[];
 }
 
-export interface VibeTask {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  updated_at?: string;
-}
-
 export interface ProjectSyncContext {
   hulyProject: HulyProject;
-  vibeProject: VibeProject;
   gitRepoPath?: string;
   hulyIssues: HulyIssue[];
-  vibeTasks: VibeTask[];
 }
 
 // ============================================================
@@ -56,14 +40,9 @@ export interface ProjectSyncContext {
 
 export {
   fetchHulyProjects,
-  fetchVibeProjects,
-  getVibeProjectId,
   clearProjectCaches,
   resolveProjectIdentifier,
-  ensureVibeProject,
   fetchProjectData,
-  fetchAllVibeTasks,
-  fetchVibeTasksForHulyIssues,
   fetchHulyIssuesBulk,
 } from './orchestration-projects';
 

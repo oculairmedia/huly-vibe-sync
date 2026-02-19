@@ -29,22 +29,21 @@ async function main() {
     const result = await client.workflow.execute('SyncSingleIssueWorkflow', {
       taskQueue: TASK_QUEUE,
       workflowId,
-      args: [{
-        issue: {
-          identifier: 'TEST-999',
-          title: 'Test Issue for Temporal Sync',
-          description: 'Testing the SyncSingleIssueWorkflow',
-          status: 'Todo',
-          priority: 'Medium',
+      args: [
+        {
+          issue: {
+            identifier: 'TEST-999',
+            title: 'Test Issue for Temporal Sync',
+            description: 'Testing the SyncSingleIssueWorkflow',
+            status: 'Todo',
+            priority: 'Medium',
+          },
+          context: {
+            projectIdentifier: 'TEST',
+          },
+          syncToBeads: false,
         },
-        context: {
-          projectIdentifier: 'TEST',
-          vibeProjectId: 'test-project-id',
-          // No gitRepoPath = skip Beads sync
-        },
-        syncToVibe: true,
-        syncToBeads: false,
-      }],
+      ],
     });
 
     console.log('\n=== Workflow Result ===');
@@ -55,7 +54,6 @@ async function main() {
     } else {
       console.log('\n❌ FAILED:', result.error);
     }
-
   } catch (error: any) {
     // Expected to fail if Vibe API is not available
     console.log('\n=== Workflow Failed (Expected in test env) ===');
@@ -68,16 +66,18 @@ async function main() {
     }
 
     // Check if it's an expected error (connection, validation with test data) vs a code bug
-    const isConnectionError = error.message?.includes('ECONNREFUSED') ||
-                              error.message?.includes('network') ||
-                              error.cause?.message?.includes('ECONNREFUSED');
+    const isConnectionError =
+      error.message?.includes('ECONNREFUSED') ||
+      error.message?.includes('network') ||
+      error.cause?.message?.includes('ECONNREFUSED');
 
     // Validation errors are expected when using test data with invalid UUIDs
-    const isValidationError = error.message?.includes('422') ||
-                              error.message?.includes('validation') ||
-                              error.cause?.message?.includes('422') ||
-                              error.cause?.message?.includes('UUID') ||
-                              error.cause?.message?.includes('deserialize');
+    const isValidationError =
+      error.message?.includes('422') ||
+      error.message?.includes('validation') ||
+      error.cause?.message?.includes('422') ||
+      error.cause?.message?.includes('UUID') ||
+      error.cause?.message?.includes('deserialize');
 
     // Non-retryable failures for validation are expected with test data
     const isNonRetryable = error.cause?.retryState === 'NON_RETRYABLE_FAILURE';

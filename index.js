@@ -30,7 +30,6 @@ import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
 import { logger } from './lib/logger.js';
-import { createBeadsWatcher } from './lib/BeadsWatcher.js';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
 
 import { MCPClient } from './lib/MCPClient.js';
@@ -310,21 +309,6 @@ async function main() {
     logger.info('✓ Polling disabled - using webhook-based change detection');
   } else {
     logger.warn('✗ Failed to subscribe to change watcher, will rely on polling');
-  }
-
-  // Initialize Beads file watcher
-  const beadsWatcher = createBeadsWatcher({
-    db,
-    onBeadsChange: eventHandlers.handleBeadsChange,
-    debounceDelay: 2000,
-  });
-
-  const beadsWatchResult = await beadsWatcher.syncWithDatabase();
-  if (beadsWatchResult.watching > 0) {
-    logger.info(
-      { watching: beadsWatchResult.watching, available: beadsWatchResult.available },
-      '✓ Beads file watcher active for real-time Beads→Huly sync'
-    );
   }
 
   // Initialize BookStack file watcher

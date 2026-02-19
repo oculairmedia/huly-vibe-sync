@@ -44,14 +44,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncIssueToVibe = syncIssueToVibe;
-exports.syncTaskToHuly = syncTaskToHuly;
 exports.syncIssueToBeads = syncIssueToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
 exports.syncBeadsToHulyBatch = syncBeadsToHulyBatch;
 exports.createBeadsIssueInHuly = createBeadsIssueInHuly;
-exports.createBeadsIssueInVibe = createBeadsIssueInVibe;
-exports.syncBeadsToVibeBatch = syncBeadsToVibeBatch;
 exports.commitBeadsToGit = commitBeadsToGit;
 const activity_1 = require("@temporalio/activity");
 const path_1 = __importDefault(require("path"));
@@ -87,71 +83,6 @@ async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
         // Non-fatal - fallback to in-memory dedupe only
     }
     return null;
-}
-function extractParentIdentifierFromDescription(description) {
-    if (!description)
-        return undefined;
-    const match = description.match(/(?:Huly Parent(?: Issue)?|Parent Huly Issue):\s*([A-Z]+-\d+|none|null|top-?level)/i);
-    if (!match)
-        return undefined;
-    const value = match[1].trim();
-    if (/^(none|null|top-?level)$/i.test(value)) {
-        return null;
-    }
-    return value.toUpperCase();
-}
-// ============================================================
-// VIBE SYNC ACTIVITIES
-// ============================================================
-/** @deprecated VibeKanban removed */
-async function syncIssueToVibe(input) {
-    return { success: true, skipped: true };
-}
-// ============================================================
-// HULY SYNC ACTIVITIES
-// ============================================================
-/**
- * Update a Huly issue from Vibe task changes
- */
-async function syncTaskToHuly(input) {
-    const { task, hulyIdentifier } = input;
-    console.log(`[Temporal:Huly] Updating ${hulyIdentifier} from Vibe task ${task.id}`);
-    try {
-        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const hulyStatus = (0, lib_1.mapVibeStatusToHuly)(task.status);
-        const result = await hulyClient.syncStatusFromVibe(hulyIdentifier, hulyStatus);
-        if (!result.success) {
-            throw new Error(result.error || 'Failed to update Huly issue');
-        }
-        const desiredParent = extractParentIdentifierFromDescription(task.description);
-        if (desiredParent !== undefined) {
-            let currentParent;
-            if (input.knownParentIssue !== undefined) {
-                // Fast path: caller already has the parent info, skip the API call
-                currentParent = input.knownParentIssue;
-            }
-            else {
-                // Slow path: fetch from Huly API
-                const currentIssue = await hulyClient.getIssue(hulyIdentifier);
-                const parentValue = currentIssue?.parentIssue ?? null;
-                currentParent =
-                    typeof parentValue === 'string'
-                        ? parentValue
-                        : parentValue && typeof parentValue === 'object' && 'identifier' in parentValue
-                            ? parentValue.identifier || null
-                            : null;
-            }
-            if (currentParent !== desiredParent) {
-                await hulyClient.setParentIssue(hulyIdentifier, desiredParent);
-                console.log(`[Temporal:Huly] Updated parent for ${hulyIdentifier}: ${currentParent || 'top-level'} -> ${desiredParent || 'top-level'}`);
-            }
-        }
-        console.log(`[Temporal:Huly] Updated ${hulyIdentifier} status to ${hulyStatus}`);
-        return { success: true, id: hulyIdentifier, updated: true };
-    }
-    catch (error) {
-        return handleSyncError(error, 'Huly');
-    }
 }
 // ============================================================
 // BEADS SYNC ACTIVITIES
@@ -390,23 +321,6 @@ async function createBeadsIssueInHuly(input) {
     catch (error) {
         return handleSyncError(error, 'Beads→Huly Create');
     }
-}
-/** @deprecated VibeKanban removed */
-async function createBeadsIssueInVibe(input) {
-    return { success: true, skipped: true };
-}
-/** @deprecated VibeKanban removed */
-async function syncBeadsToVibeBatch(input) {
-    return {
-        success: true,
-        stats: {
-            total: input.beadsIssues.length,
-            created: 0,
-            updated: 0,
-            skipped: input.beadsIssues.length,
-        },
-        results: [],
-    };
 }
 async function commitBeadsToGit(input) {
     const { context, message } = input;

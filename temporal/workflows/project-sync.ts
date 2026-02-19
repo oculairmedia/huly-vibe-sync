@@ -19,7 +19,7 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 // ACTIVITY PROXIES
 // ============================================================
 
-const { ensureVibeProject, fetchProjectData, initializeBeads, fetchBeadsIssues } = proxyActivities<
+const { fetchProjectData, initializeBeads, fetchBeadsIssues } = proxyActivities<
   typeof orchestrationActivities
 >({
   startToCloseTimeout: '120 seconds',
@@ -144,7 +144,6 @@ export interface ProjectSyncResult {
 
 export interface ProjectSyncInput {
   hulyProject: { identifier: string; name: string; description?: string };
-  vibeProjects: Array<{ id: string; name: string }>;
   batchSize: number;
   enableBeads: boolean;
   enableLetta: boolean;
@@ -165,7 +164,6 @@ export interface ProjectSyncInput {
   _phase2Index?: number;
   _phase3Index?: number;
   _accumulatedResult?: ProjectSyncResult;
-  _vibeProjectId?: string;
   _gitRepoPath?: string | null;
   _beadsInitialized?: boolean;
   _phase1UpdatedTasks?: string[];
@@ -183,7 +181,6 @@ const MAX_ISSUES_PER_CONTINUATION = 100;
 export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<ProjectSyncResult> {
   const {
     hulyProject,
-    vibeProjects,
     batchSize,
     enableBeads,
     enableLetta,
@@ -196,7 +193,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     _phase2Index = 0,
     _phase3Index = 0,
     _accumulatedResult,
-    _vibeProjectId,
     _gitRepoPath,
     _beadsInitialized = false,
     _phase1UpdatedTasks = [],
@@ -219,7 +215,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     lettaUpdated: false,
   };
 
-  let vibeProjectId = _vibeProjectId;
   let gitRepoPath = _gitRepoPath;
   let beadsInitialized = _beadsInitialized;
   const phase1UpdatedTasks = new Set(_phase1UpdatedTasks);
@@ -230,13 +225,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
   try {
     // INIT PHASE: Setup project and fetch data
     if (_phase === 'init') {
-      // Ensure Vibe project exists
-      const vibeProject = await ensureVibeProject({
-        hulyProject,
-        existingVibeProjects: vibeProjects,
-      });
-      vibeProjectId = vibeProject.id;
-
       // Extract git repo path for Beads
       gitRepoPath = extractGitRepoPath(hulyProject.description);
 
@@ -294,7 +282,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'phase1',
-        _vibeProjectId: vibeProjectId,
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
@@ -317,7 +304,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     } else {
       const projectData = await fetchProjectData({
         hulyProject,
-        vibeProjectId: vibeProjectId!,
       });
       hulyIssues = projectData.hulyIssues;
     }
@@ -331,7 +317,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         ...input,
         _phase: 'phase2',
         _phase1Index: hulyIssues.length,
-        _vibeProjectId: vibeProjectId,
+
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
@@ -348,7 +334,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           ...input,
           _phase: 'phase3',
           _phase2Index: 0,
-          _vibeProjectId: vibeProjectId,
+
           _gitRepoPath: gitRepoPath,
           _beadsInitialized: beadsInitialized,
           _accumulatedResult: result,
@@ -358,7 +344,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         return await continueAsNew<typeof ProjectSyncWorkflow>({
           ...input,
           _phase: 'done',
-          _vibeProjectId: vibeProjectId,
+
           _gitRepoPath: gitRepoPath,
           _beadsInitialized: beadsInitialized,
           _accumulatedResult: result,
@@ -412,7 +398,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             issue,
             context: {
               projectIdentifier: hulyProject.identifier,
-              vibeProjectId: vibeProjectId!,
+
               gitRepoPath: gitRepoPath!,
             },
             existingBeadsIssues: beadsIssues,
@@ -469,7 +455,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
             ...input,
             _phase: 'phase3',
             _phase3Index: nextIndex,
-            _vibeProjectId: vibeProjectId,
+
             _gitRepoPath: gitRepoPath,
             _beadsInitialized: beadsInitialized,
             _accumulatedResult: result,
@@ -482,7 +468,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         await commitBeadsToGit({
           context: {
             projectIdentifier: hulyProject.identifier,
-            vibeProjectId: vibeProjectId!,
             gitRepoPath: gitRepoPath!,
           },
           message: `Sync from VibeSync: ${result.phase3!.synced} issues`,
@@ -492,7 +477,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'phase3b',
-        _vibeProjectId: vibeProjectId,
+
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
@@ -562,7 +547,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
               beadsIssues: safeToSync,
               context: {
                 projectIdentifier: hulyProject.identifier,
-                vibeProjectId: vibeProjectId!,
+
                 gitRepoPath: gitRepoPath!,
               },
             });
@@ -609,7 +594,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
               },
               context: {
                 projectIdentifier: hulyProject.identifier,
-                vibeProjectId: vibeProjectId!,
+
                 gitRepoPath: gitRepoPath!,
               },
             });
@@ -667,7 +652,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'phase3c',
-        _vibeProjectId: vibeProjectId,
+
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
@@ -680,7 +665,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'done',
-        _vibeProjectId: vibeProjectId,
+
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,

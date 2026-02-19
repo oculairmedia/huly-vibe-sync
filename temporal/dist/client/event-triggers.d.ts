@@ -1,27 +1,13 @@
 /**
  * Event Trigger Client Functions
  *
- * Schedule and manage Vibe SSE and Huly webhook change workflows.
+ * Schedule and manage Huly webhook change workflows.
  */
-import type { VibeSSEChangeInput, VibeSSEChangeResult, HulyWebhookChangeInput, HulyWebhookChangeResult } from '../workflows/bidirectional-sync';
-/**
- * Schedule a Vibe SSE change workflow
- *
- * This is the main entry point for VibeEventWatcher to trigger durable syncs.
- * When Vibe SSE events indicate task changes, call this to sync to Huly.
- */
-export declare function scheduleVibeSSEChange(input: VibeSSEChangeInput): Promise<{
-    workflowId: string;
-    runId: string;
-}>;
-/**
- * Execute a Vibe SSE change workflow and wait for result
- */
-export declare function executeVibeSSEChange(input: VibeSSEChangeInput): Promise<VibeSSEChangeResult>;
+import type { HulyWebhookChangeInput, HulyWebhookChangeResult } from '../workflows/bidirectional-sync';
 /**
  * Schedule a Huly webhook change workflow (fire and forget)
  *
- * Processes Huly webhook change events and syncs to Vibe/Beads.
+ * Processes Huly webhook change events and syncs to Beads.
  * Returns immediately after scheduling.
  */
 export declare function scheduleHulyWebhookChange(input: HulyWebhookChangeInput): Promise<{

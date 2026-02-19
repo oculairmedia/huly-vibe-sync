@@ -34,10 +34,6 @@ export interface ProjectSyncInput {
         name: string;
         description?: string;
     };
-    vibeProjects: Array<{
-        id: string;
-        name: string;
-    }>;
     batchSize: number;
     enableBeads: boolean;
     enableLetta: boolean;
@@ -56,7 +52,6 @@ export interface ProjectSyncInput {
     _phase2Index?: number;
     _phase3Index?: number;
     _accumulatedResult?: ProjectSyncResult;
-    _vibeProjectId?: string;
     _gitRepoPath?: string | null;
     _beadsInitialized?: boolean;
     _phase1UpdatedTasks?: string[];

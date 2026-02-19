@@ -5,9 +5,6 @@
  */
 
 // Clients
-export { VibeClient, createVibeClient } from './VibeClient';
-export type { VibeProject, VibeTask, CreateTaskInput, VibeClientOptions } from './VibeClient';
-
 export { HulyClient, createHulyClient } from './HulyClient';
 export type { HulyProject, HulyIssue, CreateIssueInput, HulyClientOptions } from './HulyClient';
 
@@ -16,16 +13,12 @@ export type { BeadsIssue, CreateBeadsIssueInput, BeadsClientOptions } from './Be
 
 // Status mapping
 export {
-  mapHulyStatusToVibe,
-  mapVibeStatusToHuly,
   mapHulyStatusToBeads,
   mapHulyStatusToBeadsSimple,
   mapBeadsStatusToHuly,
-  mapBeadsStatusToVibe,
   mapHulyPriorityToBeads,
   mapBeadsPriorityToHuly,
   normalizeStatus,
-  areStatusesEquivalent,
   getHulyStatusLabels,
 } from './statusMapper';
-export type { VibeStatus, BeadsStatus, BeadsStatusWithLabel } from './statusMapper';
+export type { BeadsStatus, BeadsStatusWithLabel } from './statusMapper';

@@ -76,7 +76,7 @@ async function run() {
         activities,
     });
     console.log(`[Worker] Started on task queue: ${TASK_QUEUE}`);
-    console.log(`[Worker] Registered workflows: MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow, IssueSyncWorkflow, BatchIssueSyncWorkflow, SyncSingleIssueWorkflow, SyncProjectWorkflow, SyncVibeToHulyWorkflow, BidirectionalSyncWorkflow, SyncFromVibeWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, BeadsFileChangeWorkflow, VibeSSEChangeWorkflow, HulyWebhookChangeWorkflow, FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow, DataReconciliationWorkflow, ScheduledReconciliationWorkflow, ProvisionAgentsWorkflow, ProvisionSingleAgentWorkflow, CleanupFailedProvisionsWorkflow`);
+    console.log(`[Worker] Registered workflows: MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow, IssueSyncWorkflow, BatchIssueSyncWorkflow, SyncSingleIssueWorkflow, SyncProjectWorkflow, BidirectionalSyncWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, BeadsFileChangeWorkflow, HulyWebhookChangeWorkflow, FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow, DataReconciliationWorkflow, ScheduledReconciliationWorkflow, ProvisionAgentsWorkflow, ProvisionSingleAgentWorkflow, CleanupFailedProvisionsWorkflow`);
     console.log(`[Worker] Registered activities: ${Object.keys(activities).join(', ')}`);
     // Run until interrupted
     await worker.run();

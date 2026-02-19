@@ -2,7 +2,7 @@
  * Temporal Workflow Triggers
  *
  * Helper functions for external services to trigger bidirectional sync workflows.
- * Used by: VibeEventWatcher, BeadsWatcher, HulyWebhookHandler
+ * Used by: BeadsWatcher, HulyWebhookHandler
  */
 
 import { Client, Connection } from '@temporalio/client';
@@ -45,42 +45,12 @@ export async function isTemporalAvailable(): Promise<boolean> {
 
 export interface SyncContext {
   projectIdentifier: string;
-  vibeProjectId: string;
   gitRepoPath?: string;
 }
 
 export interface LinkedIds {
   hulyId?: string;
-  vibeId?: string;
   beadsId?: string;
-}
-
-/**
- * Trigger sync when Vibe task changes
- */
-export async function triggerSyncFromVibe(
-  vibeTaskId: string,
-  context: SyncContext,
-  linkedIds?: LinkedIds
-): Promise<{ workflowId: string }> {
-  const temporal = await getClient();
-  const workflowId = `sync-vibe-${vibeTaskId}-${Date.now()}`;
-
-  await temporal.workflow.start('SyncFromVibeWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    workflowExecutionTimeout: '5 minutes',
-    args: [
-      {
-        vibeTaskId,
-        context,
-        linkedIds,
-      },
-    ],
-  });
-
-  console.log(`[Temporal] Started SyncFromVibeWorkflow: ${workflowId}`);
-  return { workflowId };
 }
 
 /**
@@ -143,7 +113,7 @@ export async function triggerSyncFromBeads(
  * Trigger generic bidirectional sync
  */
 export async function triggerBidirectionalSync(
-  source: 'vibe' | 'huly' | 'beads',
+  source: 'huly' | 'beads',
   issueData: {
     id: string;
     title: string;

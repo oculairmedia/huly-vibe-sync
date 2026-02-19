@@ -6,25 +6,16 @@
  * Each activity handles one direction of sync.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getVibeTask = getVibeTask;
 exports.getHulyIssue = getHulyIssue;
 exports.getBeadsIssue = getBeadsIssue;
-exports.syncVibeToHuly = syncVibeToHuly;
-exports.syncVibeToBeads = syncVibeToBeads;
-exports.syncHulyToVibe = syncHulyToVibe;
 exports.syncHulyToBeads = syncHulyToBeads;
 exports.syncBeadsToHuly = syncBeadsToHuly;
-exports.syncBeadsToVibe = syncBeadsToVibe;
 exports.commitBeadsChanges = commitBeadsChanges;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
 // ============================================================
 // GET ISSUE ACTIVITIES (for conflict resolution)
 // ============================================================
-/** @deprecated VibeKanban removed */
-async function getVibeTask(input) {
-    return null;
-}
 async function getHulyIssue(input) {
     try {
         const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
@@ -44,26 +35,8 @@ async function getBeadsIssue(input) {
     }
 }
 // ============================================================
-// VIBE → OTHER SYSTEMS
+// HULY → BEADS
 // ============================================================
-/** @deprecated VibeKanban removed */
-async function syncVibeToHuly(input) {
-    return { success: true, skipped: true };
-}
-/** @deprecated VibeKanban removed */
-async function syncVibeToBeads(input) {
-    return { success: true, skipped: true };
-}
-// ============================================================
-// HULY → OTHER SYSTEMS
-// ============================================================
-/** @deprecated VibeKanban removed */
-async function syncHulyToVibe(input) {
-    return { success: true, skipped: true };
-}
-/**
- * Sync Huly issue to Beads
- */
 async function syncHulyToBeads(input) {
     const { hulyIssue, existingBeadsId, context } = input;
     if (!context.gitRepoPath) {
@@ -143,10 +116,6 @@ async function syncBeadsToHuly(input) {
     catch (error) {
         return handleError(error, 'Beads→Huly');
     }
-}
-/** @deprecated VibeKanban removed */
-async function syncBeadsToVibe(input) {
-    return { success: true, skipped: true };
 }
 // ============================================================
 // UTILITY ACTIVITIES

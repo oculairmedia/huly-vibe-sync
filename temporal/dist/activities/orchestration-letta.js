@@ -18,7 +18,7 @@ const activity_1 = require("@temporalio/activity");
  * Update Letta agent memory with project state
  */
 async function updateLettaMemory(input) {
-    const { agentId, hulyProject, hulyIssues, vibeTasks } = input;
+    const { agentId, hulyProject, hulyIssues } = input;
     console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId}`);
     try {
         const lettaUrl = process.env.LETTA_BASE_URL || process.env.LETTA_API_URL;
@@ -28,7 +28,7 @@ async function updateLettaMemory(input) {
             return { success: true };
         }
         // Build memory blocks
-        const boardMetrics = buildBoardMetrics(hulyIssues, vibeTasks);
+        const boardMetrics = buildBoardMetrics(hulyIssues);
         const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
         // Update memory blocks via Letta API
         const response = await fetch(`${lettaUrl}/v1/agents/${agentId}/memory`, {
@@ -76,7 +76,7 @@ async function recordSyncMetrics(input) {
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
-function buildBoardMetrics(hulyIssues, vibeTasks) {
+function buildBoardMetrics(hulyIssues) {
     const statusCounts = {};
     for (const issue of hulyIssues) {
         const status = issue.status || 'Unknown';
@@ -84,7 +84,6 @@ function buildBoardMetrics(hulyIssues, vibeTasks) {
     }
     return JSON.stringify({
         totalIssues: hulyIssues.length,
-        totalTasks: vibeTasks.length,
         byStatus: statusCounts,
         lastUpdated: new Date().toISOString(),
     });

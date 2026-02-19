@@ -2,13 +2,11 @@
 /**
  * Full Orchestration Workflow
  *
- * Top-level workflow that replaces the SyncOrchestrator.syncHulyToVibe() function.
- * Coordinates the complete bidirectional sync across all projects.
+ * Top-level workflow that coordinates the complete bidirectional sync across all projects.
  *
  * Features:
- * - Fetches all Huly and Vibe projects
- * - Creates Vibe projects if needed
- * - Runs Phase 1 (Huly→Vibe), Phase 2 (Vibe→Huly), Phase 3 (Beads) for each project
+ * - Fetches all Huly projects
+ * - Runs Phase 3 (Beads) for each project
  * - Updates Letta agent memory
  * - Records metrics
  * - Durable execution with automatic retry
@@ -22,7 +20,7 @@ const project_sync_1 = require("./project-sync");
 // ============================================================
 // ACTIVITY PROXIES
 // ============================================================
-const { fetchHulyProjects, fetchVibeProjects, fetchHulyIssuesBulk, recordSyncMetrics, } = (0, workflow_1.proxyActivities)({
+const { fetchHulyProjects, fetchHulyIssuesBulk, recordSyncMetrics } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -101,13 +99,9 @@ async function FullOrchestrationWorkflow(input = {}) {
         });
         // Phase 0: Fetch all projects
         progress.status = 'fetching';
-        const [hulyProjects, vibeProjects] = await Promise.all([
-            fetchHulyProjects(),
-            fetchVibeProjects(),
-        ]);
+        const hulyProjects = await fetchHulyProjects();
         workflow_1.log.info('[FullOrchestration] Fetched projects', {
             huly: hulyProjects.length,
-            vibe: vibeProjects.length,
         });
         // Filter to specific project if requested
         let projectsToSync = hulyProjects;
@@ -180,7 +174,6 @@ async function FullOrchestrationWorkflow(input = {}) {
                 args: [
                     {
                         hulyProject,
-                        vibeProjects,
                         batchSize,
                         enableBeads,
                         enableLetta,

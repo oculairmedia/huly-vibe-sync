@@ -9,9 +9,6 @@ import { Client, Connection } from '@temporalio/client';
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = 'vibesync-queue';
 
-// Real Vibe project ID: "Huly-Vibe Sync Service"
-const REAL_VIBE_PROJECT_ID = '38682d7a-ddd8-4832-925a-a4ee389b0c1a';
-
 async function main() {
   console.log(`Connecting to Temporal at ${TEMPORAL_ADDRESS}...`);
 
@@ -22,7 +19,6 @@ async function main() {
   const client = new Client({ connection });
 
   console.log('Connected. Starting SyncSingleIssueWorkflow with REAL project...');
-  console.log(`Using Vibe project: ${REAL_VIBE_PROJECT_ID}`);
 
   const workflowId = `test-real-sync-${Date.now()}`;
 
@@ -30,22 +26,21 @@ async function main() {
     const result = await client.workflow.execute('SyncSingleIssueWorkflow', {
       taskQueue: TASK_QUEUE,
       workflowId,
-      args: [{
-        issue: {
-          identifier: 'VIBESYNC-TEST',
-          title: 'Temporal Integration Test',
-          description: 'Testing the SyncSingleIssueWorkflow with real Vibe API',
-          status: 'Todo',
-          priority: 'Medium',
+      args: [
+        {
+          issue: {
+            identifier: 'VIBESYNC-TEST',
+            title: 'Temporal Integration Test',
+            description: 'Testing the SyncSingleIssueWorkflow with real Vibe API',
+            status: 'Todo',
+            priority: 'Medium',
+          },
+          context: {
+            projectIdentifier: 'VIBESYNC',
+          },
+          syncToBeads: false,
         },
-        context: {
-          projectIdentifier: 'VIBESYNC',
-          vibeProjectId: REAL_VIBE_PROJECT_ID,
-          // No gitRepoPath = skip Beads sync
-        },
-        syncToVibe: true,
-        syncToBeads: false,
-      }],
+      ],
     });
 
     console.log('\n=== Workflow Result ===');
@@ -65,7 +60,6 @@ async function main() {
     } else {
       console.log('\n❌ FAILED:', result.error);
     }
-
   } catch (error: any) {
     console.log('\n=== Workflow Failed ===');
     console.log('Error:', error.message);

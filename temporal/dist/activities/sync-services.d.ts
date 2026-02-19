@@ -16,13 +16,6 @@ export interface HulyIssue {
     parentIssue?: string;
     subIssues?: string[];
 }
-export interface VibeTask {
-    id: string;
-    title: string;
-    description?: string;
-    status: string;
-    updated_at?: string;
-}
 export interface BeadsIssue {
     id: string;
     title: string;
@@ -33,7 +26,6 @@ export interface BeadsIssue {
 }
 export interface SyncContext {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
 }
 export interface SyncActivityResult {
@@ -44,23 +36,6 @@ export interface SyncActivityResult {
     created?: boolean;
     updated?: boolean;
 }
-/** @deprecated VibeKanban removed */
-export declare function syncIssueToVibe(input: {
-    issue: HulyIssue;
-    context: SyncContext;
-    existingTaskId?: string;
-    operation: 'create' | 'update';
-}): Promise<SyncActivityResult>;
-/**
- * Update a Huly issue from Vibe task changes
- */
-export declare function syncTaskToHuly(input: {
-    task: VibeTask;
-    hulyIdentifier: string;
-    context: SyncContext;
-    /** Pass the known parent identifier to avoid an extra getIssue API call */
-    knownParentIssue?: string | null;
-}): Promise<SyncActivityResult>;
 /**
  * Sync a Huly issue to Beads
  */
@@ -104,34 +79,6 @@ export declare function createBeadsIssueInHuly(input: {
 }): Promise<SyncActivityResult & {
     hulyIdentifier?: string;
 }>;
-/** @deprecated VibeKanban removed */
-export declare function createBeadsIssueInVibe(input: {
-    beadsIssue: BeadsIssue;
-    context: SyncContext;
-}): Promise<SyncActivityResult & {
-    vibeTaskId?: string;
-}>;
-export interface BatchSyncResult {
-    success: boolean;
-    stats: {
-        total: number;
-        created: number;
-        updated: number;
-        skipped: number;
-    };
-    results: Array<{
-        beadsId: string;
-        vibeTaskId?: string;
-        created: boolean;
-        updated: boolean;
-        skipped: boolean;
-    }>;
-}
-/** @deprecated VibeKanban removed */
-export declare function syncBeadsToVibeBatch(input: {
-    beadsIssues: BeadsIssue[];
-    context: SyncContext;
-}): Promise<BatchSyncResult>;
 export declare function commitBeadsToGit(input: {
     context: SyncContext;
     message?: string;

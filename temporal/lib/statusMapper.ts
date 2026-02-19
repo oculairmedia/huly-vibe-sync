@@ -1,59 +1,9 @@
 /**
  * Status Mapping Utilities (TypeScript)
  *
- * Maps status and priority values between Huly, Vibe Kanban, and Beads.
+ * Maps status and priority values between Huly and Beads.
  * Used by Temporal activities for consistent status translation.
  */
-
-// ============================================================
-// VIBE STATUS MAPPING
-// ============================================================
-
-export type VibeStatus = 'todo' | 'inprogress' | 'inreview' | 'done' | 'cancelled';
-
-/**
- * Map Huly status to Vibe Kanban status
- */
-export function mapHulyStatusToVibe(hulyStatus: string): VibeStatus {
-  if (!hulyStatus) {
-    return 'todo';
-  }
-
-  const status = hulyStatus.toLowerCase();
-
-  if (status.includes('backlog') || status.includes('todo')) {
-    return 'todo';
-  }
-  if (status.includes('progress')) {
-    return 'inprogress';
-  }
-  if (status.includes('review')) {
-    return 'inreview';
-  }
-  if (status.includes('done') || status.includes('completed')) {
-    return 'done';
-  }
-  if (status.includes('cancel')) {
-    return 'cancelled';
-  }
-
-  return 'todo';
-}
-
-/**
- * Map Vibe Kanban status to Huly status
- */
-export function mapVibeStatusToHuly(vibeStatus: string): string {
-  const statusMap: Record<string, string> = {
-    todo: 'Backlog',
-    inprogress: 'In Progress',
-    inreview: 'In Review',
-    done: 'Done',
-    cancelled: 'Canceled', // Huly uses one 'l'
-  };
-
-  return statusMap[vibeStatus] || 'Backlog';
-}
 
 // ============================================================
 // BEADS STATUS MAPPING
@@ -130,28 +80,6 @@ export function mapBeadsStatusToHuly(beadsStatus: string, labels: string[] = [])
   }
 }
 
-/**
- * Map Beads status to Vibe Kanban status
- */
-export function mapBeadsStatusToVibe(beadsStatus: string, labels: string[] = []): VibeStatus {
-  const hasLabel = (label: string) => labels.includes(label);
-
-  switch (beadsStatus) {
-    case 'open':
-      return 'todo';
-    case 'in_progress':
-      return hasLabel('huly:In Review') ? 'inreview' : 'inprogress';
-    case 'blocked':
-      return 'inprogress';
-    case 'deferred':
-      return 'todo';
-    case 'closed':
-      return hasLabel('huly:Canceled') ? 'cancelled' : 'done';
-    default:
-      return 'todo';
-  }
-}
-
 // ============================================================
 // PRIORITY MAPPING
 // ============================================================
@@ -181,8 +109,13 @@ export function mapHulyPriorityToBeads(hulyPriority: string | undefined): number
   if (priority.includes('low')) {
     return 3;
   }
-  if (priority === 'no' || priority === 'none' || priority === 'nopriority' ||
-      priority.includes('no priority') || priority.includes('minimal')) {
+  if (
+    priority === 'no' ||
+    priority === 'none' ||
+    priority === 'nopriority' ||
+    priority.includes('no priority') ||
+    priority.includes('minimal')
+  ) {
     return 4;
   }
 
@@ -214,15 +147,6 @@ export function mapBeadsPriorityToHuly(beadsPriority: number): string {
 export function normalizeStatus(status: string): string {
   if (!status) return '';
   return status.toLowerCase().trim();
-}
-
-/**
- * Check if two statuses are equivalent after mapping
- */
-export function areStatusesEquivalent(hulyStatus: string, vibeStatus: string): boolean {
-  const hulyMapped = normalizeStatus(mapHulyStatusToVibe(hulyStatus));
-  const vibeNormalized = normalizeStatus(vibeStatus);
-  return hulyMapped === vibeNormalized;
 }
 
 /**

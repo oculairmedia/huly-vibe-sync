@@ -1,13 +1,11 @@
 /**
  * Full Orchestration Workflow
  *
- * Top-level workflow that replaces the SyncOrchestrator.syncHulyToVibe() function.
- * Coordinates the complete bidirectional sync across all projects.
+ * Top-level workflow that coordinates the complete bidirectional sync across all projects.
  *
  * Features:
- * - Fetches all Huly and Vibe projects
- * - Creates Vibe projects if needed
- * - Runs Phase 1 (Huly→Vibe), Phase 2 (Vibe→Huly), Phase 3 (Beads) for each project
+ * - Fetches all Huly projects
+ * - Runs Phase 3 (Beads) for each project
  * - Updates Letta agent memory
  * - Records metrics
  * - Durable execution with automatic retry
@@ -34,12 +32,9 @@ import type { ProjectSyncResult, ProjectSyncInput } from './project-sync';
 // ACTIVITY PROXIES
 // ============================================================
 
-const {
-  fetchHulyProjects,
-  fetchVibeProjects,
-  fetchHulyIssuesBulk,
-  recordSyncMetrics,
-} = proxyActivities<typeof orchestrationActivities>({
+const { fetchHulyProjects, fetchHulyIssuesBulk, recordSyncMetrics } = proxyActivities<
+  typeof orchestrationActivities
+>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
@@ -49,9 +44,7 @@ const {
   },
 });
 
-const { checkAgentExists } = proxyActivities<
-  typeof agentProvisioningActivities
->({
+const { checkAgentExists } = proxyActivities<typeof agentProvisioningActivities>({
   startToCloseTimeout: '60 seconds',
   retry: {
     initialInterval: '2 seconds',
@@ -202,14 +195,10 @@ export async function FullOrchestrationWorkflow(
     // Phase 0: Fetch all projects
     progress.status = 'fetching';
 
-    const [hulyProjects, vibeProjects] = await Promise.all([
-      fetchHulyProjects(),
-      fetchVibeProjects(),
-    ]);
+    const hulyProjects = await fetchHulyProjects();
 
     log.info('[FullOrchestration] Fetched projects', {
       huly: hulyProjects.length,
-      vibe: vibeProjects.length,
     });
 
     // Filter to specific project if requested
@@ -311,7 +300,6 @@ export async function FullOrchestrationWorkflow(
         args: [
           {
             hulyProject,
-            vibeProjects,
             batchSize,
             enableBeads,
             enableLetta,

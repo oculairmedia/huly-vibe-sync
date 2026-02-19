@@ -8,21 +8,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SyncSingleIssueWorkflow = SyncSingleIssueWorkflow;
 exports.SyncProjectWorkflow = SyncProjectWorkflow;
-exports.SyncVibeToHulyWorkflow = SyncVibeToHulyWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 // Proxy activities with appropriate retry policies
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } = (0, workflow_1.proxyActivities)({
+const { syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
         backoffCoefficient: 2,
         maximumInterval: '60 seconds',
         maximumAttempts: 5,
-        nonRetryableErrorTypes: [
-            'HulyValidationError',
-            'VibeValidationError',
-            'BeadsValidationError',
-        ],
+        nonRetryableErrorTypes: ['HulyValidationError', 'BeadsValidationError'],
     },
 });
 /**
@@ -32,41 +27,23 @@ const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, comm
  * Use this for real-time sync on issue changes.
  */
 async function SyncSingleIssueWorkflow(input) {
-    const { issue, context, existingVibeTaskId, existingBeadsIssues = [] } = input;
-    const syncToVibe = input.syncToVibe !== false;
+    const { issue, context, existingBeadsIssues = [] } = input;
     const syncToBeads = input.syncToBeads !== false;
     workflow_1.log.info(`[SyncSingleIssue] Starting: ${issue.identifier}`, {
         project: context.projectIdentifier,
-        toVibe: syncToVibe,
         toBeads: syncToBeads,
     });
     const result = { success: false };
     try {
-        // Step 1: Sync to Vibe
-        if (syncToVibe) {
-            const operation = existingVibeTaskId ? 'update' : 'create';
-            result.vibeResult = await syncIssueToVibe({
-                issue,
-                context,
-                existingTaskId: existingVibeTaskId,
-                operation,
-            });
-            if (!result.vibeResult.success) {
-                throw new Error(`Vibe sync failed: ${result.vibeResult.error}`);
-            }
-        }
-        // Step 2: Sync to Beads (if git repo exists)
         if (syncToBeads && context.gitRepoPath) {
             result.beadsResult = await syncIssueToBeads({
                 issue,
                 context,
                 existingBeadsIssues,
             });
-            // Beads failures are non-fatal, don't throw
         }
         result.success = true;
         workflow_1.log.info(`[SyncSingleIssue] Complete: ${issue.identifier}`, {
-            vibe: result.vibeResult?.success,
             beads: result.beadsResult?.success,
         });
         return result;
@@ -140,31 +117,5 @@ async function SyncProjectWorkflow(input) {
         failed,
         results,
     };
-}
-/**
- * SyncVibeToHulyWorkflow
- *
- * Syncs Vibe task changes back to Huly (Phase 2).
- */
-async function SyncVibeToHulyWorkflow(input) {
-    const { task, hulyIdentifier, context } = input;
-    workflow_1.log.info(`[SyncVibeToHuly] Starting: ${task.id} → ${hulyIdentifier}`);
-    try {
-        const result = await syncTaskToHuly({
-            task,
-            hulyIdentifier,
-            context,
-        });
-        if (!result.success) {
-            throw new Error(result.error || 'Unknown error');
-        }
-        workflow_1.log.info(`[SyncVibeToHuly] Complete: ${hulyIdentifier}`);
-        return { success: true };
-    }
-    catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        workflow_1.log.error(`[SyncVibeToHuly] Failed: ${hulyIdentifier}`, { error: errorMsg });
-        throw error;
-    }
 }
 //# sourceMappingURL=full-sync.js.map

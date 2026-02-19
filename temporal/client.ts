@@ -27,7 +27,6 @@ export {
   scheduleSingleIssueSync,
   executeSingleIssueSync,
   scheduleProjectSync,
-  scheduleVibeToHulySync,
   scheduleFullSync,
   executeFullSync,
   getFullSyncProgress,
@@ -58,8 +57,6 @@ export {
   scheduleBeadsFileChange,
   executeBeadsFileChange,
   // Event triggers
-  scheduleVibeSSEChange,
-  executeVibeSSEChange,
   scheduleHulyWebhookChange,
   executeHulyWebhookChange,
 } from './client/index';

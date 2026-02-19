@@ -1,13 +1,13 @@
 /**
  * Data Reconciliation Activities
  *
- * Detects stale Vibe/Beads references in the sync database and
+ * Detects stale Beads references in the sync database and
  * optionally marks or deletes stale records.
  */
 
 import path from 'path';
 import { ApplicationFailure } from '@temporalio/activity';
-import { createBeadsClient, createVibeClient } from '../lib';
+import { createBeadsClient } from '../lib';
 
 const { createSyncDatabase } = require(path.join(process.cwd(), 'lib', 'database.js'));
 
@@ -24,11 +24,9 @@ export interface ReconciliationResult {
   action: ReconciliationAction;
   dryRun: boolean;
   projectsProcessed: number;
-  projectsWithVibeChecked: number;
   projectsWithBeadsChecked: number;
-  staleVibe: Array<{ identifier: string; projectIdentifier: string; vibeTaskId: string }>;
   staleBeads: Array<{ identifier: string; projectIdentifier: string; beadsIssueId: string }>;
-  updated: { markedVibe: number; markedBeads: number; deleted: number };
+  updated: { markedBeads: number; deleted: number };
   errors: string[];
 }
 
@@ -49,9 +47,6 @@ function handleReconciliationError(error: unknown, context: string): never {
   );
 }
 
-/**
- * Reconcile stale references in the sync database.
- */
 export async function reconcileSyncData(
   input: ReconciliationInput = {}
 ): Promise<ReconciliationResult> {
@@ -64,11 +59,9 @@ export async function reconcileSyncData(
     action,
     dryRun,
     projectsProcessed: 0,
-    projectsWithVibeChecked: 0,
     projectsWithBeadsChecked: 0,
-    staleVibe: [],
     staleBeads: [],
-    updated: { markedVibe: 0, markedBeads: 0, deleted: 0 },
+    updated: { markedBeads: 0, deleted: 0 },
     errors: [],
   };
 
@@ -84,41 +77,6 @@ export async function reconcileSyncData(
 
     for (const project of projects) {
       const projectId = project.identifier;
-
-      if (project.vibe_id) {
-        try {
-          const vibeClient = createVibeClient(process.env.VIBE_API_URL);
-          const tasks = await vibeClient.listTasks(project.vibe_id);
-          const vibeTaskIds = new Set(tasks.map(task => normalizeId(task.id)));
-
-          const dbIssues = db.getIssuesWithVibeTaskId(projectId);
-          for (const issue of dbIssues) {
-            const vibeTaskId = normalizeId(issue.vibe_task_id);
-            if (!vibeTaskId || vibeTaskIds.has(vibeTaskId)) continue;
-
-            result.staleVibe.push({
-              identifier: issue.identifier,
-              projectIdentifier: projectId,
-              vibeTaskId,
-            });
-
-            if (!dryRun) {
-              if (action === 'hard_delete') {
-                db.deleteIssue(issue.identifier);
-                result.updated.deleted++;
-              } else {
-                db.markDeletedFromVibe(issue.identifier);
-                result.updated.markedVibe++;
-              }
-            }
-          }
-
-          result.projectsWithVibeChecked++;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          result.errors.push(`[${projectId}] Vibe reconcile failed: ${message}`);
-        }
-      }
 
       if (project.filesystem_path) {
         try {
@@ -160,9 +118,7 @@ export async function reconcileSyncData(
 
     console.log('[Reconcile] Summary', {
       projectsProcessed: result.projectsProcessed,
-      projectsWithVibeChecked: result.projectsWithVibeChecked,
       projectsWithBeadsChecked: result.projectsWithBeadsChecked,
-      staleVibe: result.staleVibe.length,
       staleBeads: result.staleBeads.length,
       action: result.action,
       dryRun: result.dryRun,

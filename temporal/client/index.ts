@@ -26,7 +26,6 @@ export {
   scheduleSingleIssueSync,
   executeSingleIssueSync,
   scheduleProjectSync,
-  scheduleVibeToHulySync,
   scheduleFullSync,
   executeFullSync,
   getFullSyncProgress,
@@ -44,7 +43,11 @@ export {
 } from './schedule';
 
 // Reconciliation
-export type { ReconciliationAction, DataReconciliationInput, DataReconciliationResult } from './reconciliation';
+export type {
+  ReconciliationAction,
+  DataReconciliationInput,
+  DataReconciliationResult,
+} from './reconciliation';
 export {
   executeDataReconciliation,
   startScheduledReconciliation,
@@ -53,7 +56,11 @@ export {
 } from './reconciliation';
 
 // Agent provisioning
-export type { ProvisioningInput, ProvisioningResult, ProvisioningProgress } from './agent-provisioning';
+export type {
+  ProvisioningInput,
+  ProvisioningResult,
+  ProvisioningProgress,
+} from './agent-provisioning';
 export {
   startAgentProvisioning,
   executeAgentProvisioning,
@@ -74,9 +81,4 @@ export {
 } from './beads-sync';
 
 // Event triggers
-export {
-  scheduleVibeSSEChange,
-  executeVibeSSEChange,
-  scheduleHulyWebhookChange,
-  executeHulyWebhookChange,
-} from './event-triggers';
+export { scheduleHulyWebhookChange, executeHulyWebhookChange } from './event-triggers';

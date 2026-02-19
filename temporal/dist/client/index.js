@@ -5,7 +5,7 @@
  * Re-exports all client functions from sub-modules.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.executeHulyWebhookChange = exports.scheduleHulyWebhookChange = exports.executeVibeSSEChange = exports.scheduleVibeSSEChange = exports.executeBeadsFileChange = exports.scheduleBeadsFileChange = exports.scheduleBatchBeadsSync = exports.executeBeadsSync = exports.scheduleBeadsSync = exports.cleanupFailedProvisions = exports.provisionSingleAgent = exports.cancelProvisioning = exports.getProvisioningProgress = exports.executeAgentProvisioning = exports.startAgentProvisioning = exports.stopScheduledReconciliation = exports.getActiveScheduledReconciliation = exports.startScheduledReconciliation = exports.executeDataReconciliation = exports.isScheduledSyncActive = exports.restartScheduledSync = exports.stopScheduledSync = exports.getActiveScheduledSync = exports.startScheduledSync = exports.listSyncWorkflows = exports.cancelFullSync = exports.getFullSyncProgress = exports.executeFullSync = exports.scheduleFullSync = exports.scheduleVibeToHulySync = exports.scheduleProjectSync = exports.executeSingleIssueSync = exports.scheduleSingleIssueSync = exports.scheduleBatchIssueSync = exports.executeIssueSync = exports.scheduleIssueSync = exports.getFailedWorkflows = exports.listRecentWorkflows = exports.cancelWorkflow = exports.getWorkflowStatus = exports.executeMemoryUpdate = exports.scheduleBatchMemoryUpdate = exports.scheduleMemoryUpdate = exports.TASK_QUEUE = exports.isTemporalAvailable = exports.isTemporalEnabled = exports.getClient = void 0;
+exports.executeHulyWebhookChange = exports.scheduleHulyWebhookChange = exports.executeBeadsFileChange = exports.scheduleBeadsFileChange = exports.scheduleBatchBeadsSync = exports.executeBeadsSync = exports.scheduleBeadsSync = exports.cleanupFailedProvisions = exports.provisionSingleAgent = exports.cancelProvisioning = exports.getProvisioningProgress = exports.executeAgentProvisioning = exports.startAgentProvisioning = exports.stopScheduledReconciliation = exports.getActiveScheduledReconciliation = exports.startScheduledReconciliation = exports.executeDataReconciliation = exports.isScheduledSyncActive = exports.restartScheduledSync = exports.stopScheduledSync = exports.getActiveScheduledSync = exports.startScheduledSync = exports.listSyncWorkflows = exports.cancelFullSync = exports.getFullSyncProgress = exports.executeFullSync = exports.scheduleFullSync = exports.scheduleProjectSync = exports.executeSingleIssueSync = exports.scheduleSingleIssueSync = exports.scheduleBatchIssueSync = exports.executeIssueSync = exports.scheduleIssueSync = exports.getFailedWorkflows = exports.listRecentWorkflows = exports.cancelWorkflow = exports.getWorkflowStatus = exports.executeMemoryUpdate = exports.scheduleBatchMemoryUpdate = exports.scheduleMemoryUpdate = exports.TASK_QUEUE = exports.isTemporalAvailable = exports.isTemporalEnabled = exports.getClient = void 0;
 // Connection & utilities
 var connection_1 = require("./connection");
 Object.defineProperty(exports, "getClient", { enumerable: true, get: function () { return connection_1.getClient; } });
@@ -31,7 +31,6 @@ var full_sync_1 = require("./full-sync");
 Object.defineProperty(exports, "scheduleSingleIssueSync", { enumerable: true, get: function () { return full_sync_1.scheduleSingleIssueSync; } });
 Object.defineProperty(exports, "executeSingleIssueSync", { enumerable: true, get: function () { return full_sync_1.executeSingleIssueSync; } });
 Object.defineProperty(exports, "scheduleProjectSync", { enumerable: true, get: function () { return full_sync_1.scheduleProjectSync; } });
-Object.defineProperty(exports, "scheduleVibeToHulySync", { enumerable: true, get: function () { return full_sync_1.scheduleVibeToHulySync; } });
 Object.defineProperty(exports, "scheduleFullSync", { enumerable: true, get: function () { return full_sync_1.scheduleFullSync; } });
 Object.defineProperty(exports, "executeFullSync", { enumerable: true, get: function () { return full_sync_1.executeFullSync; } });
 Object.defineProperty(exports, "getFullSyncProgress", { enumerable: true, get: function () { return full_sync_1.getFullSyncProgress; } });
@@ -64,8 +63,6 @@ Object.defineProperty(exports, "scheduleBeadsFileChange", { enumerable: true, ge
 Object.defineProperty(exports, "executeBeadsFileChange", { enumerable: true, get: function () { return beads_sync_1.executeBeadsFileChange; } });
 // Event triggers
 var event_triggers_1 = require("./event-triggers");
-Object.defineProperty(exports, "scheduleVibeSSEChange", { enumerable: true, get: function () { return event_triggers_1.scheduleVibeSSEChange; } });
-Object.defineProperty(exports, "executeVibeSSEChange", { enumerable: true, get: function () { return event_triggers_1.executeVibeSSEChange; } });
 Object.defineProperty(exports, "scheduleHulyWebhookChange", { enumerable: true, get: function () { return event_triggers_1.scheduleHulyWebhookChange; } });
 Object.defineProperty(exports, "executeHulyWebhookChange", { enumerable: true, get: function () { return event_triggers_1.executeHulyWebhookChange; } });
 //# sourceMappingURL=index.js.map

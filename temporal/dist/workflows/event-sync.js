@@ -7,7 +7,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BeadsFileChangeWorkflow = BeadsFileChangeWorkflow;
-exports.VibeSSEChangeWorkflow = VibeSSEChangeWorkflow;
 exports.HulyWebhookChangeWorkflow = HulyWebhookChangeWorkflow;
 const workflow_1 = require("@temporalio/workflow");
 const bidirectional_sync_1 = require("./bidirectional-sync");
@@ -158,7 +157,6 @@ async function BeadsFileChangeWorkflow(input) {
                         },
                         context: {
                             projectIdentifier,
-                            vibeProjectId: input.vibeProjectId || '',
                             gitRepoPath,
                         },
                     });
@@ -264,7 +262,6 @@ async function BeadsFileChangeWorkflow(input) {
                     hulyIdentifier,
                     context: {
                         projectIdentifier,
-                        vibeProjectId: '',
                         gitRepoPath,
                     },
                 });
@@ -310,16 +307,6 @@ async function BeadsFileChangeWorkflow(input) {
         result.errors.push({ issueId: 'workflow', error: errorMsg });
         return result;
     }
-}
-/** @deprecated VibeKanban removed */
-async function VibeSSEChangeWorkflow(input) {
-    workflow_1.log.warn('[VibeSSEChange] VK disabled, skipping');
-    return {
-        success: true,
-        tasksProcessed: 0,
-        tasksSynced: 0,
-        errors: [],
-    };
 }
 /**
  * HulyWebhookChangeWorkflow - Triggered by Huly webhook events
@@ -402,7 +389,6 @@ async function HulyWebhookChangeWorkflow(input) {
                         hulyIdentifier: issueId,
                         context: {
                             projectIdentifier,
-                            vibeProjectId: '',
                             gitRepoPath,
                         },
                     },
@@ -413,7 +399,6 @@ async function HulyWebhookChangeWorkflow(input) {
                 result.issuesSynced++;
                 workflow_1.log.info('[HulyWebhookChange] Issue synced via SyncFromHulyWorkflow', {
                     identifier: issueId,
-                    vibeResult: syncResult.results.vibe,
                     beadsResult: syncResult.results.beads,
                 });
             }

@@ -120,7 +120,6 @@ function beadsStatusToHuly(beadsStatus: string, labels: string[] = []): string {
 export interface BeadsFileChangeInput {
   projectIdentifier: string;
   gitRepoPath: string;
-  vibeProjectId?: string; // Deprecated — kept for backwards compatibility
   beadsIssues?: Array<{
     id: string;
     title: string;
@@ -204,7 +203,6 @@ export async function BeadsFileChangeWorkflow(
             },
             context: {
               projectIdentifier,
-              vibeProjectId: input.vibeProjectId || '',
               gitRepoPath,
             },
           });
@@ -321,7 +319,6 @@ export async function BeadsFileChangeWorkflow(
           hulyIdentifier,
           context: {
             projectIdentifier,
-            vibeProjectId: '',
             gitRepoPath,
           },
         });
@@ -369,37 +366,6 @@ export async function BeadsFileChangeWorkflow(
     result.errors.push({ issueId: 'workflow', error: errorMsg });
     return result;
   }
-}
-
-// ============================================================
-// VIBE SSE EVENT WORKFLOW
-// ============================================================
-
-export interface VibeSSEChangeInput {
-  vibeProjectId: string;
-  hulyProjectIdentifier?: string;
-  changedTaskIds: string[];
-  timestamp: string;
-}
-
-export interface VibeSSEChangeResult {
-  success: boolean;
-  tasksProcessed: number;
-  tasksSynced: number;
-  errors: Array<{ taskId: string; error: string }>;
-}
-
-/** @deprecated VibeKanban removed */
-export async function VibeSSEChangeWorkflow(
-  input: VibeSSEChangeInput
-): Promise<VibeSSEChangeResult> {
-  log.warn('[VibeSSEChange] VK disabled, skipping');
-  return {
-    success: true,
-    tasksProcessed: 0,
-    tasksSynced: 0,
-    errors: [],
-  };
 }
 
 // ============================================================
@@ -525,7 +491,6 @@ export async function HulyWebhookChangeWorkflow(
             hulyIdentifier: issueId,
             context: {
               projectIdentifier,
-              vibeProjectId: '',
               gitRepoPath,
             },
           },
@@ -537,7 +502,6 @@ export async function HulyWebhookChangeWorkflow(
         result.issuesSynced++;
         log.info('[HulyWebhookChange] Issue synced via SyncFromHulyWorkflow', {
           identifier: issueId,
-          vibeResult: syncResult.results.vibe,
           beadsResult: syncResult.results.beads,
         });
       } else {

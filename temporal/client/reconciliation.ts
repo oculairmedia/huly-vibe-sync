@@ -23,11 +23,9 @@ export interface DataReconciliationResult {
   action: ReconciliationAction;
   dryRun: boolean;
   projectsProcessed: number;
-  projectsWithVibeChecked: number;
   projectsWithBeadsChecked: number;
-  staleVibe: Array<{ identifier: string; projectIdentifier: string; vibeTaskId: string }>;
   staleBeads: Array<{ identifier: string; projectIdentifier: string; beadsIssueId: string }>;
-  updated: { markedVibe: number; markedBeads: number; deleted: number };
+  updated: { markedBeads: number; deleted: number };
   errors: string[];
 }
 

@@ -3,11 +3,10 @@
  * Temporal Workflow Triggers
  *
  * Helper functions for external services to trigger bidirectional sync workflows.
- * Used by: VibeEventWatcher, BeadsWatcher, HulyWebhookHandler
+ * Used by: BeadsWatcher, HulyWebhookHandler
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTemporalAvailable = isTemporalAvailable;
-exports.triggerSyncFromVibe = triggerSyncFromVibe;
 exports.triggerSyncFromHuly = triggerSyncFromHuly;
 exports.triggerSyncFromBeads = triggerSyncFromBeads;
 exports.triggerBidirectionalSync = triggerBidirectionalSync;
@@ -40,27 +39,6 @@ async function isTemporalAvailable() {
     catch {
         return false;
     }
-}
-/**
- * Trigger sync when Vibe task changes
- */
-async function triggerSyncFromVibe(vibeTaskId, context, linkedIds) {
-    const temporal = await getClient();
-    const workflowId = `sync-vibe-${vibeTaskId}-${Date.now()}`;
-    await temporal.workflow.start('SyncFromVibeWorkflow', {
-        taskQueue: TASK_QUEUE,
-        workflowId,
-        workflowExecutionTimeout: '5 minutes',
-        args: [
-            {
-                vibeTaskId,
-                context,
-                linkedIds,
-            },
-        ],
-    });
-    console.log(`[Temporal] Started SyncFromVibeWorkflow: ${workflowId}`);
-    return { workflowId };
 }
 /**
  * Trigger sync when Huly issue changes

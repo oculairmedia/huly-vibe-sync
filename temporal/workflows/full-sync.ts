@@ -9,21 +9,18 @@ import { proxyActivities, log } from '@temporalio/workflow';
 import type * as syncActivities from '../activities/sync-services';
 
 // Proxy activities with appropriate retry policies
-const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } =
-  proxyActivities<typeof syncActivities>({
-    startToCloseTimeout: '120 seconds',
-    retry: {
-      initialInterval: '2 seconds',
-      backoffCoefficient: 2,
-      maximumInterval: '60 seconds',
-      maximumAttempts: 5,
-      nonRetryableErrorTypes: [
-        'HulyValidationError',
-        'VibeValidationError',
-        'BeadsValidationError',
-      ],
-    },
-  });
+const { syncIssueToBeads, syncBeadsToHuly, commitBeadsToGit } = proxyActivities<
+  typeof syncActivities
+>({
+  startToCloseTimeout: '120 seconds',
+  retry: {
+    initialInterval: '2 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '60 seconds',
+    maximumAttempts: 5,
+    nonRetryableErrorTypes: ['HulyValidationError', 'BeadsValidationError'],
+  },
+});
 
 // Types
 export interface SyncIssueInput {
@@ -37,18 +34,14 @@ export interface SyncIssueInput {
   };
   context: {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
   };
-  existingVibeTaskId?: string;
   existingBeadsIssues?: Array<{ id: string; title: string; status: string }>;
-  syncToVibe?: boolean;
   syncToBeads?: boolean;
 }
 
 export interface SyncIssueResult {
   success: boolean;
-  vibeResult?: { success: boolean; id?: string; skipped?: boolean; error?: string };
   beadsResult?: { success: boolean; id?: string; skipped?: boolean; error?: string };
   error?: string;
 }
@@ -60,48 +53,28 @@ export interface SyncIssueResult {
  * Use this for real-time sync on issue changes.
  */
 export async function SyncSingleIssueWorkflow(input: SyncIssueInput): Promise<SyncIssueResult> {
-  const { issue, context, existingVibeTaskId, existingBeadsIssues = [] } = input;
-  const syncToVibe = input.syncToVibe !== false;
+  const { issue, context, existingBeadsIssues = [] } = input;
   const syncToBeads = input.syncToBeads !== false;
 
   log.info(`[SyncSingleIssue] Starting: ${issue.identifier}`, {
     project: context.projectIdentifier,
-    toVibe: syncToVibe,
     toBeads: syncToBeads,
   });
 
   const result: SyncIssueResult = { success: false };
 
   try {
-    // Step 1: Sync to Vibe
-    if (syncToVibe) {
-      const operation = existingVibeTaskId ? 'update' : 'create';
-      result.vibeResult = await syncIssueToVibe({
-        issue,
-        context,
-        existingTaskId: existingVibeTaskId,
-        operation,
-      });
-
-      if (!result.vibeResult.success) {
-        throw new Error(`Vibe sync failed: ${result.vibeResult.error}`);
-      }
-    }
-
-    // Step 2: Sync to Beads (if git repo exists)
     if (syncToBeads && context.gitRepoPath) {
       result.beadsResult = await syncIssueToBeads({
         issue,
         context,
         existingBeadsIssues,
       });
-      // Beads failures are non-fatal, don't throw
     }
 
     result.success = true;
 
     log.info(`[SyncSingleIssue] Complete: ${issue.identifier}`, {
-      vibe: result.vibeResult?.success,
       beads: result.beadsResult?.success,
     });
 
@@ -128,7 +101,6 @@ export async function SyncProjectWorkflow(input: {
   issues: SyncIssueInput[];
   context: {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
   };
   batchSize?: number;
@@ -204,47 +176,4 @@ export async function SyncProjectWorkflow(input: {
     failed,
     results,
   };
-}
-
-/**
- * SyncVibeToHulyWorkflow
- *
- * Syncs Vibe task changes back to Huly (Phase 2).
- */
-export async function SyncVibeToHulyWorkflow(input: {
-  task: {
-    id: string;
-    title: string;
-    description?: string;
-    status: string;
-    updated_at?: string;
-  };
-  hulyIdentifier: string;
-  context: {
-    projectIdentifier: string;
-    vibeProjectId: string;
-  };
-}): Promise<{ success: boolean; error?: string }> {
-  const { task, hulyIdentifier, context } = input;
-
-  log.info(`[SyncVibeToHuly] Starting: ${task.id} → ${hulyIdentifier}`);
-
-  try {
-    const result = await syncTaskToHuly({
-      task,
-      hulyIdentifier,
-      context,
-    });
-
-    if (!result.success) {
-      throw new Error(result.error || 'Unknown error');
-    }
-
-    log.info(`[SyncVibeToHuly] Complete: ${hulyIdentifier}`);
-    return { success: true };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    log.error(`[SyncVibeToHuly] Failed: ${hulyIdentifier}`, { error: errorMsg });
-    throw error;
-  }
 }

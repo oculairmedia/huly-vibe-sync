@@ -6,7 +6,6 @@
  */
 interface SyncContext {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
 }
 interface IssueData {
@@ -25,16 +24,6 @@ interface SyncResult {
     updated?: boolean;
     error?: string;
 }
-/** @deprecated VibeKanban removed */
-export declare function getVibeTask(input: {
-    taskId: string;
-}): Promise<{
-    id: string;
-    title: string;
-    description?: string;
-    status: string;
-    updated_at?: string;
-} | null>;
 export declare function getHulyIssue(input: {
     identifier: string;
 }): Promise<{
@@ -56,27 +45,6 @@ export declare function getBeadsIssue(input: {
     priority?: number;
     updated_at?: string;
 } | null>;
-/** @deprecated VibeKanban removed */
-export declare function syncVibeToHuly(input: {
-    vibeTask: IssueData;
-    hulyIdentifier: string;
-    context: SyncContext;
-}): Promise<SyncResult>;
-/** @deprecated VibeKanban removed */
-export declare function syncVibeToBeads(input: {
-    vibeTask: IssueData;
-    existingBeadsId?: string;
-    context: SyncContext;
-}): Promise<SyncResult>;
-/** @deprecated VibeKanban removed */
-export declare function syncHulyToVibe(input: {
-    hulyIssue: IssueData;
-    existingVibeId?: string;
-    context: SyncContext;
-}): Promise<SyncResult>;
-/**
- * Sync Huly issue to Beads
- */
 export declare function syncHulyToBeads(input: {
     hulyIssue: IssueData;
     existingBeadsId?: string;
@@ -88,12 +56,6 @@ export declare function syncHulyToBeads(input: {
 export declare function syncBeadsToHuly(input: {
     beadsIssue: IssueData;
     hulyIdentifier: string;
-    context: SyncContext;
-}): Promise<SyncResult>;
-/** @deprecated VibeKanban removed */
-export declare function syncBeadsToVibe(input: {
-    beadsIssue: IssueData;
-    vibeTaskId: string;
     context: SyncContext;
 }): Promise<SyncResult>;
 /**

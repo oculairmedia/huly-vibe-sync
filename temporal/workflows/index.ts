@@ -11,16 +11,14 @@ export { MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow } from './memory-update
 export { IssueSyncWorkflow, BatchIssueSyncWorkflow } from './issue-sync';
 
 // Full sync workflows (using existing services)
-export { SyncSingleIssueWorkflow, SyncProjectWorkflow, SyncVibeToHulyWorkflow } from './full-sync';
+export { SyncSingleIssueWorkflow, SyncProjectWorkflow } from './full-sync';
 
-// Bidirectional sync workflows (Huly <-> Vibe <-> Beads)
+// Bidirectional sync workflows (Huly <-> Beads)
 export {
   BidirectionalSyncWorkflow,
-  SyncFromVibeWorkflow,
   SyncFromHulyWorkflow,
   SyncFromBeadsWorkflow,
   BeadsFileChangeWorkflow,
-  VibeSSEChangeWorkflow,
   HulyWebhookChangeWorkflow,
 } from './bidirectional-sync';
 

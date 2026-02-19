@@ -2,22 +2,16 @@
 /**
  * Bidirectional Sync Workflows
  *
- * Full bidirectional sync between Huly, Vibe, and Beads.
+ * Bidirectional sync between Huly and Beads.
  * "Most recent change wins" conflict resolution.
- *
- * When any system updates:
- * - Vibe updates → sync to Huly + Beads
- * - Beads updates → sync to Huly + Vibe
- * - Huly updates → sync to Vibe + Beads
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.HulyWebhookChangeWorkflow = exports.VibeSSEChangeWorkflow = exports.BeadsFileChangeWorkflow = void 0;
+exports.HulyWebhookChangeWorkflow = exports.BeadsFileChangeWorkflow = void 0;
 exports.BidirectionalSyncWorkflow = BidirectionalSyncWorkflow;
-exports.SyncFromVibeWorkflow = SyncFromVibeWorkflow;
 exports.SyncFromHulyWorkflow = SyncFromHulyWorkflow;
 exports.SyncFromBeadsWorkflow = SyncFromBeadsWorkflow;
 const workflow_1 = require("@temporalio/workflow");
-const { syncVibeToHuly, syncVibeToBeads, syncBeadsToHuly, syncBeadsToVibe, syncHulyToVibe, syncHulyToBeads, getVibeTask, getHulyIssue, getBeadsIssue, commitBeadsChanges, } = (0, workflow_1.proxyActivities)({
+const { syncBeadsToHuly, syncHulyToBeads, getHulyIssue, getBeadsIssue, commitBeadsChanges } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '120 seconds',
     retry: {
         initialInterval: '2 seconds',
@@ -25,15 +19,6 @@ const { syncVibeToHuly, syncVibeToBeads, syncBeadsToHuly, syncBeadsToVibe, syncH
         maximumInterval: '60 seconds',
         maximumAttempts: 5,
         nonRetryableErrorTypes: ['ValidationError', 'NotFoundError', 'ConflictError'],
-    },
-});
-const { getVibeProjectId } = (0, workflow_1.proxyActivities)({
-    startToCloseTimeout: '120 seconds',
-    retry: {
-        initialInterval: '2 seconds',
-        backoffCoefficient: 2,
-        maximumInterval: '60 seconds',
-        maximumAttempts: 3,
     },
 });
 const { persistIssueSyncState, getIssueSyncTimestamps } = (0, workflow_1.proxyActivities)({
@@ -45,12 +30,6 @@ const { persistIssueSyncState, getIssueSyncTimestamps } = (0, workflow_1.proxyAc
         maximumAttempts: 3,
     },
 });
-function extractHulyIdentifierFromDescription(description) {
-    if (!description)
-        return null;
-    const match = description.match(/(?:Synced from Huly|Huly Issue):\s*([A-Z]+-\d+)/i);
-    return match ? match[1] : null;
-}
 // ============================================================
 // MAIN BIDIRECTIONAL SYNC WORKFLOW
 // ============================================================
@@ -89,11 +68,8 @@ async function BidirectionalSyncWorkflow(input) {
             };
             return result;
         }
-        // Sync to other systems based on source
+        // Sync to other system based on source
         switch (source) {
-            case 'vibe':
-                result.results = await syncFromVibe(issueData, context, linkedIds);
-                break;
             case 'huly':
                 result.results = await syncFromHuly(issueData, context, linkedIds);
                 break;
@@ -115,12 +91,6 @@ async function BidirectionalSyncWorkflow(input) {
         else if (source === 'beads') {
             persistenceIdentifier = linkedIds?.hulyId || result.results.huly?.id || null;
         }
-        else if (source === 'vibe') {
-            persistenceIdentifier =
-                linkedIds?.hulyId ||
-                    result.results.huly?.id ||
-                    extractHulyIdentifierFromDescription(issueData.description);
-        }
         if (persistenceIdentifier) {
             await persistIssueSyncState({
                 identifier: persistenceIdentifier,
@@ -129,19 +99,15 @@ async function BidirectionalSyncWorkflow(input) {
                 description: issueData.description,
                 status: issueData.status,
                 hulyId: source === 'huly' ? issueData.id : undefined,
-                vibeTaskId: source === 'vibe' ? issueData.id : result.results.vibe?.id || linkedIds?.vibeId,
                 beadsIssueId: source === 'beads' ? issueData.id : result.results.beads?.id || linkedIds?.beadsId,
                 hulyModifiedAt: source === 'huly' ? issueData.modifiedAt : undefined,
-                vibeModifiedAt: source === 'vibe' ? issueData.modifiedAt : undefined,
                 beadsModifiedAt: source === 'beads' ? issueData.modifiedAt : undefined,
-                vibeStatus: source === 'vibe' ? issueData.status : undefined,
                 beadsStatus: source === 'beads' ? issueData.status : undefined,
             });
         }
         result.success = true;
         workflow_1.log.info(`[BidirectionalSync] Complete: ${source} → others`, {
             huly: result.results.huly?.success,
-            vibe: result.results.vibe?.success,
             beads: result.results.beads?.success,
         });
         return result;
@@ -155,48 +121,8 @@ async function BidirectionalSyncWorkflow(input) {
 // ============================================================
 // SYNC FROM EACH SOURCE
 // ============================================================
-async function syncFromVibe(issueData, context, linkedIds) {
-    const results = {};
-    // Determine Huly ID - either from linkedIds or extract from task description
-    let hulyId = linkedIds?.hulyId;
-    if (!hulyId && issueData.description) {
-        // Extract from description: "Synced from Huly: PROJ-123" or "Huly Issue: PROJ-123"
-        const hulyIdMatch = issueData.description.match(/(?:Synced from Huly|Huly Issue):\s*([A-Z]+-\d+)/i);
-        if (hulyIdMatch) {
-            hulyId = hulyIdMatch[1];
-            workflow_1.log.info(`[syncFromVibe] Extracted hulyId from description: ${hulyId}`);
-        }
-    }
-    // Vibe → Huly
-    if (hulyId) {
-        results.huly = await syncVibeToHuly({
-            vibeTask: issueData,
-            hulyIdentifier: hulyId,
-            context,
-        });
-    }
-    else {
-        workflow_1.log.warn(`[syncFromVibe] No hulyId found for Vibe task ${issueData.id}, skipping Huly sync`);
-    }
-    // Vibe → Beads
-    if (context.gitRepoPath) {
-        results.beads = await syncVibeToBeads({
-            vibeTask: issueData,
-            existingBeadsId: linkedIds?.beadsId,
-            context,
-        });
-    }
-    return results;
-}
 async function syncFromHuly(issueData, context, linkedIds) {
     const results = {};
-    // Huly → Vibe
-    results.vibe = await syncHulyToVibe({
-        hulyIssue: issueData,
-        existingVibeId: linkedIds?.vibeId,
-        context,
-    });
-    // Huly → Beads
     if (context.gitRepoPath) {
         results.beads = await syncHulyToBeads({
             hulyIssue: issueData,
@@ -208,19 +134,10 @@ async function syncFromHuly(issueData, context, linkedIds) {
 }
 async function syncFromBeads(issueData, context, linkedIds) {
     const results = {};
-    // Beads → Huly
     if (linkedIds?.hulyId) {
         results.huly = await syncBeadsToHuly({
             beadsIssue: issueData,
             hulyIdentifier: linkedIds.hulyId,
-            context,
-        });
-    }
-    // Beads → Vibe
-    if (linkedIds?.vibeId) {
-        results.vibe = await syncBeadsToVibe({
-            beadsIssue: issueData,
-            vibeTaskId: linkedIds.vibeId,
             context,
         });
     }
@@ -231,7 +148,6 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
         return { hasConflict: false, sourceWins: true };
     }
     const hasComparableTargets = (source !== 'huly' && !!linkedIds.hulyId) ||
-        (source !== 'vibe' && !!linkedIds.vibeId) ||
         (source !== 'beads' && !!linkedIds.beadsId && !!context.gitRepoPath);
     // Fast-path: if no comparable linked target exists, avoid extra reads.
     if (!hasComparableTargets) {
@@ -246,9 +162,6 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
             const otherTimestamps = [];
             if (source !== 'huly' && dbTimestamps.huly_modified_at) {
                 otherTimestamps.push({ system: 'huly', timestamp: dbTimestamps.huly_modified_at });
-            }
-            if (source !== 'vibe' && dbTimestamps.vibe_modified_at) {
-                otherTimestamps.push({ system: 'vibe', timestamp: dbTimestamps.vibe_modified_at });
             }
             if (source !== 'beads' && dbTimestamps.beads_modified_at) {
                 otherTimestamps.push({ system: 'beads', timestamp: dbTimestamps.beads_modified_at });
@@ -274,15 +187,6 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
             const hulyIssue = await getHulyIssue({ identifier: linkedIds.hulyId });
             if (hulyIssue?.modifiedOn) {
                 timestamps.push({ system: 'huly', timestamp: hulyIssue.modifiedOn });
-            }
-        }
-        if (source !== 'vibe' && linkedIds.vibeId) {
-            const vibeTask = await getVibeTask({ taskId: linkedIds.vibeId });
-            if (vibeTask?.updated_at) {
-                timestamps.push({
-                    system: 'vibe',
-                    timestamp: new Date(vibeTask.updated_at).getTime(),
-                });
             }
         }
         if (source !== 'beads' && linkedIds.beadsId && context.gitRepoPath) {
@@ -326,28 +230,10 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
 // ============================================================
 // CONVENIENCE WORKFLOWS
 // ============================================================
-/** @deprecated VibeKanban removed — returns no-op result */
-async function SyncFromVibeWorkflow(input) {
-    workflow_1.log.warn(`[SyncFromVibe] VK disabled, skipping task ${input.vibeTaskId}`);
-    return {
-        success: true,
-        source: 'vibe',
-        results: {},
-    };
-}
 async function SyncFromHulyWorkflow(input) {
     const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
     if (!hulyIssue) {
         throw workflow_1.ApplicationFailure.nonRetryable(`Huly issue not found: ${input.hulyIdentifier}`, 'NotFoundError');
-    }
-    let vibeProjectId = input.context.vibeProjectId;
-    if (!vibeProjectId) {
-        vibeProjectId = (await getVibeProjectId(input.context.projectIdentifier)) || '';
-        if (!vibeProjectId) {
-            workflow_1.log.warn('[SyncFromHuly] No Vibe project found, skipping Vibe sync', {
-                hulyProject: input.context.projectIdentifier,
-            });
-        }
     }
     return BidirectionalSyncWorkflow({
         source: 'huly',
@@ -359,10 +245,7 @@ async function SyncFromHulyWorkflow(input) {
             priority: hulyIssue.priority,
             modifiedAt: hulyIssue.modifiedOn || Date.now(),
         },
-        context: {
-            ...input.context,
-            vibeProjectId,
-        },
+        context: input.context,
         linkedIds: {
             hulyId: hulyIssue.identifier,
             ...input.linkedIds,
@@ -405,6 +288,5 @@ async function SyncFromBeadsWorkflow(input) {
 // ============================================================
 var event_sync_1 = require("./event-sync");
 Object.defineProperty(exports, "BeadsFileChangeWorkflow", { enumerable: true, get: function () { return event_sync_1.BeadsFileChangeWorkflow; } });
-Object.defineProperty(exports, "VibeSSEChangeWorkflow", { enumerable: true, get: function () { return event_sync_1.VibeSSEChangeWorkflow; } });
 Object.defineProperty(exports, "HulyWebhookChangeWorkflow", { enumerable: true, get: function () { return event_sync_1.HulyWebhookChangeWorkflow; } });
 //# sourceMappingURL=bidirectional-sync.js.map

@@ -8,7 +8,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.scheduleSingleIssueSync = scheduleSingleIssueSync;
 exports.executeSingleIssueSync = executeSingleIssueSync;
 exports.scheduleProjectSync = scheduleProjectSync;
-exports.scheduleVibeToHulySync = scheduleVibeToHulySync;
 exports.scheduleFullSync = scheduleFullSync;
 exports.executeFullSync = executeFullSync;
 exports.getFullSyncProgress = getFullSyncProgress;
@@ -59,22 +58,6 @@ async function scheduleProjectSync(input) {
         args: [input],
     });
     console.log(`[Temporal] Scheduled project sync: ${workflowId} (${input.issues.length} issues)`);
-    return {
-        workflowId: handle.workflowId,
-        runId: handle.firstExecutionRunId,
-    };
-}
-/**
- * Schedule Vibe→Huly sync (Phase 2)
- */
-async function scheduleVibeToHulySync(input) {
-    const client = await (0, connection_1.getClient)();
-    const workflowId = `sync-vibe-huly-${input.hulyIdentifier}-${Date.now()}`;
-    const handle = await client.workflow.start('SyncVibeToHulyWorkflow', {
-        taskQueue: connection_1.TASK_QUEUE,
-        workflowId,
-        args: [input],
-    });
     return {
         workflowId: handle.workflowId,
         runId: handle.firstExecutionRunId,

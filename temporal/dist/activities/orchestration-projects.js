@@ -7,13 +7,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearProjectCaches = clearProjectCaches;
 exports.fetchHulyProjects = fetchHulyProjects;
-exports.fetchVibeProjects = fetchVibeProjects;
-exports.getVibeProjectId = getVibeProjectId;
 exports.resolveProjectIdentifier = resolveProjectIdentifier;
-exports.ensureVibeProject = ensureVibeProject;
 exports.fetchProjectData = fetchProjectData;
-exports.fetchAllVibeTasks = fetchAllVibeTasks;
-exports.fetchVibeTasksForHulyIssues = fetchVibeTasksForHulyIssues;
 exports.fetchHulyIssuesBulk = fetchHulyIssuesBulk;
 const lib_1 = require("../lib");
 const orchestration_letta_1 = require("./orchestration-letta");
@@ -56,18 +51,6 @@ async function fetchHulyProjects() {
     catch (error) {
         throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchHulyProjects');
     }
-}
-/**
- * @deprecated VibeKanban removed — returns empty array for backwards compatibility
- */
-async function fetchVibeProjects() {
-    return [];
-}
-/**
- * @deprecated VibeKanban removed — always returns null
- */
-async function getVibeProjectId(hulyProjectIdentifier) {
-    return null;
 }
 async function resolveProjectIdentifier(projectIdOrFolder) {
     if (!projectIdOrFolder)
@@ -120,36 +103,18 @@ async function resolveProjectIdentifier(projectIdOrFolder) {
         throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'resolveProjectIdentifier');
     }
 }
-/**
- * @deprecated VibeKanban removed — returns dummy project for backwards compatibility
- */
-async function ensureVibeProject(input) {
-    return { id: 'vk-disabled', name: input.hulyProject.name };
-}
 async function fetchProjectData(input) {
     const { hulyProject } = input;
     console.log(`[Temporal:Orchestration] Fetching data for ${hulyProject.identifier}`);
     try {
         const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
         const hulyIssues = await hulyClient.listIssues(hulyProject.identifier);
-        console.log(`[Temporal:Orchestration] Fetched ${hulyIssues.length} issues, 0 tasks (VK disabled)`);
-        return { hulyIssues, vibeTasks: [] };
+        console.log(`[Temporal:Orchestration] Fetched ${hulyIssues.length} issues`);
+        return { hulyIssues };
     }
     catch (error) {
         throw (0, orchestration_letta_1.handleOrchestratorError)(error, 'fetchProjectData');
     }
-}
-/**
- * @deprecated VibeKanban removed — returns empty array
- */
-async function fetchAllVibeTasks(input) {
-    return [];
-}
-/**
- * @deprecated VibeKanban removed — returns empty array
- */
-async function fetchVibeTasksForHulyIssues(input) {
-    return [];
 }
 /**
  * Bulk fetch issues from multiple Huly projects in a single API call.

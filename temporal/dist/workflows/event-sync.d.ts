@@ -7,7 +7,6 @@
 export interface BeadsFileChangeInput {
     projectIdentifier: string;
     gitRepoPath: string;
-    vibeProjectId?: string;
     beadsIssues?: Array<{
         id: string;
         title: string;
@@ -35,23 +34,6 @@ export interface BeadsFileChangeResult {
  * It fetches all Beads issues and syncs each one to Huly and Vibe.
  */
 export declare function BeadsFileChangeWorkflow(input: BeadsFileChangeInput): Promise<BeadsFileChangeResult>;
-export interface VibeSSEChangeInput {
-    vibeProjectId: string;
-    hulyProjectIdentifier?: string;
-    changedTaskIds: string[];
-    timestamp: string;
-}
-export interface VibeSSEChangeResult {
-    success: boolean;
-    tasksProcessed: number;
-    tasksSynced: number;
-    errors: Array<{
-        taskId: string;
-        error: string;
-    }>;
-}
-/** @deprecated VibeKanban removed */
-export declare function VibeSSEChangeWorkflow(input: VibeSSEChangeInput): Promise<VibeSSEChangeResult>;
 export interface HulyWebhookChangeInput {
     type: 'task.changed' | 'project.changed';
     changes: Array<{

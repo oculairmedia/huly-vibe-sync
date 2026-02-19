@@ -58,7 +58,6 @@ export async function scheduleProjectSync(input: {
   issues: SyncIssueInput[];
   context: {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
   };
   batchSize?: number;
@@ -74,39 +73,6 @@ export async function scheduleProjectSync(input: {
   });
 
   console.log(`[Temporal] Scheduled project sync: ${workflowId} (${input.issues.length} issues)`);
-
-  return {
-    workflowId: handle.workflowId,
-    runId: handle.firstExecutionRunId,
-  };
-}
-
-/**
- * Schedule Vibe→Huly sync (Phase 2)
- */
-export async function scheduleVibeToHulySync(input: {
-  task: {
-    id: string;
-    title: string;
-    description?: string;
-    status: string;
-    updated_at?: string;
-  };
-  hulyIdentifier: string;
-  context: {
-    projectIdentifier: string;
-    vibeProjectId: string;
-  };
-}): Promise<{ workflowId: string; runId: string }> {
-  const client = await getClient();
-
-  const workflowId = `sync-vibe-huly-${input.hulyIdentifier}-${Date.now()}`;
-
-  const handle = await client.workflow.start('SyncVibeToHulyWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    args: [input],
-  });
 
   return {
     workflowId: handle.workflowId,

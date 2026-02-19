@@ -1,18 +1,12 @@
 /**
  * Bidirectional Sync Workflows
  *
- * Full bidirectional sync between Huly, Vibe, and Beads.
+ * Bidirectional sync between Huly and Beads.
  * "Most recent change wins" conflict resolution.
- *
- * When any system updates:
- * - Vibe updates → sync to Huly + Beads
- * - Beads updates → sync to Huly + Vibe
- * - Huly updates → sync to Vibe + Beads
  */
-export type SourceSystem = 'vibe' | 'huly' | 'beads';
+export type SourceSystem = 'huly' | 'beads';
 export interface SyncContext {
     projectIdentifier: string;
-    vibeProjectId: string;
     gitRepoPath?: string;
 }
 export interface IssueData {
@@ -29,7 +23,6 @@ export interface BidirectionalSyncInput {
     context: SyncContext;
     linkedIds?: {
         hulyId?: string;
-        vibeId?: string;
         beadsId?: string;
     };
 }
@@ -38,12 +31,6 @@ export interface BidirectionalSyncResult {
     source: SourceSystem;
     results: {
         huly?: {
-            success: boolean;
-            id?: string;
-            skipped?: boolean;
-            error?: string;
-        };
-        vibe?: {
             success: boolean;
             id?: string;
             skipped?: boolean;
@@ -70,20 +57,10 @@ export interface BidirectionalSyncResult {
  * Uses "most recent wins" for conflict resolution.
  */
 export declare function BidirectionalSyncWorkflow(input: BidirectionalSyncInput): Promise<BidirectionalSyncResult>;
-/** @deprecated VibeKanban removed — returns no-op result */
-export declare function SyncFromVibeWorkflow(input: {
-    vibeTaskId: string;
-    context: SyncContext;
-    linkedIds?: {
-        hulyId?: string;
-        beadsId?: string;
-    };
-}): Promise<BidirectionalSyncResult>;
 export declare function SyncFromHulyWorkflow(input: {
     hulyIdentifier: string;
     context: SyncContext;
     linkedIds?: {
-        vibeId?: string;
         beadsId?: string;
     };
 }): Promise<BidirectionalSyncResult>;
@@ -95,9 +72,8 @@ export declare function SyncFromBeadsWorkflow(input: {
     context: SyncContext;
     linkedIds?: {
         hulyId?: string;
-        vibeId?: string;
     };
 }): Promise<BidirectionalSyncResult>;
-export { BeadsFileChangeWorkflow, VibeSSEChangeWorkflow, HulyWebhookChangeWorkflow, } from './event-sync';
-export type { BeadsFileChangeInput, BeadsFileChangeResult, VibeSSEChangeInput, VibeSSEChangeResult, HulyWebhookChangeInput, HulyWebhookChangeResult, } from './event-sync';
+export { BeadsFileChangeWorkflow, HulyWebhookChangeWorkflow } from './event-sync';
+export type { BeadsFileChangeInput, BeadsFileChangeResult, HulyWebhookChangeInput, HulyWebhookChangeResult, } from './event-sync';
 //# sourceMappingURL=bidirectional-sync.d.ts.map
