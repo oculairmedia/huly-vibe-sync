@@ -223,16 +223,24 @@ async function syncBeadsToHuly(input) {
     console.log(`[Sync] Beads → Huly: ${beadsIssue.id} → ${hulyIdentifier}`);
     try {
         const client = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const hulyStatus = (0, lib_1.mapBeadsStatusToHuly)(beadsIssue.status);
-        const patch = { status: hulyStatus };
+        const patch = {};
+        // Only sync status for intentional state changes, never for 'open' (default)
+        const FORWARD_STATUSES = ['in_progress', 'closed', 'blocked', 'deferred'];
+        if (FORWARD_STATUSES.includes(beadsIssue.status)) {
+            patch.status = (0, lib_1.mapBeadsStatusToHuly)(beadsIssue.status);
+        }
         if (beadsIssue.title) {
             patch.title = beadsIssue.title;
         }
         if (beadsIssue.description !== undefined) {
             patch.description = beadsIssue.description;
         }
+        if (Object.keys(patch).length === 0) {
+            console.log(`[Sync] Beads → Huly: Skipping ${hulyIdentifier} (no actionable changes)`);
+            return { success: true, id: hulyIdentifier, updated: false };
+        }
         await client.patchIssue(hulyIdentifier, patch);
-        console.log(`[Sync] Beads → Huly: Patched ${hulyIdentifier} (status=${hulyStatus}, fields=${Object.keys(patch).join(',')})`);
+        console.log(`[Sync] Beads → Huly: Patched ${hulyIdentifier} (fields=${Object.keys(patch).join(',')})`);
         return { success: true, id: hulyIdentifier, updated: true };
     }
     catch (error) {

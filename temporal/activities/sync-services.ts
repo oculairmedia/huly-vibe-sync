@@ -347,20 +347,22 @@ export async function syncBeadsToHuly(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
-    const hulyStatus =
-      beadsIssue.status === 'closed'
-        ? 'Done'
-        : beadsIssue.status === 'in_progress'
-          ? 'In Progress'
-          : 'Backlog';
+    const patch: Record<string, string | undefined> = {};
 
-    const patch: Record<string, string | undefined> = { status: hulyStatus };
+    const FORWARD_STATUSES = ['in_progress', 'closed', 'blocked', 'deferred'];
+    if (FORWARD_STATUSES.includes(beadsIssue.status)) {
+      patch.status = mapBeadsStatusToHuly(beadsIssue.status);
+    }
 
     if (beadsIssue.title) {
       patch.title = beadsIssue.title;
     }
     if (beadsIssue.description !== undefined) {
       patch.description = beadsIssue.description;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return { success: true, id: hulyIdentifier, updated: false };
     }
 
     await hulyClient.patchIssue(hulyIdentifier, patch);
@@ -400,16 +402,22 @@ export async function syncBeadsToHulyBatch(input: {
   try {
     const hulyClient = createHulyClient(process.env.HULY_API_URL);
 
-    const updates = beadsIssues.map(issue => {
-      const changes: Record<string, string> = { status: mapBeadsStatusToHuly(issue.status) };
-      if (issue.title) {
-        changes.title = issue.title;
-      }
-      if (issue.description !== undefined) {
-        changes.description = issue.description;
-      }
-      return { identifier: issue.hulyIdentifier, changes };
-    });
+    const FORWARD_STATUSES = ['in_progress', 'closed', 'blocked', 'deferred'];
+    const updates = beadsIssues
+      .map(issue => {
+        const changes: Record<string, string> = {};
+        if (FORWARD_STATUSES.includes(issue.status)) {
+          changes.status = mapBeadsStatusToHuly(issue.status);
+        }
+        if (issue.title) {
+          changes.title = issue.title;
+        }
+        if (issue.description !== undefined) {
+          changes.description = issue.description;
+        }
+        return { identifier: issue.hulyIdentifier, changes };
+      })
+      .filter(u => Object.keys(u.changes).length > 0);
 
     console.log(`[Temporal:Beads→Huly] Syncing ${updates.length} issues in batches of 25`);
 
