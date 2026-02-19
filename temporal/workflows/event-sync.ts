@@ -259,87 +259,84 @@ export async function BeadsFileChangeWorkflow(
 
         const hulyIdentifier = hulyLabel.replace('huly:', '');
 
-        const fullIssue = await getBeadsIssue({
-          issueId: beadsIssue.id,
-          gitRepoPath,
-        });
+        const syncedState = await getIssueSyncState({ hulyIdentifier });
 
-        if (!fullIssue) {
-          log.warn('[BeadsFileChange] Issue not found', { issueId: beadsIssue.id });
-          continue;
-        }
-
-        const changed = await hasBeadsIssueChanged({
-          hulyIdentifier,
-          title: fullIssue.title,
-          description: fullIssue.description,
-          status: fullIssue.status,
-        });
-
-        if (!changed) {
-          log.info('[BeadsFileChange] Skipping unchanged issue', {
-            issueId: beadsIssue.id,
-            hulyId: hulyIdentifier,
+        if (!syncedState) {
+          // First time seeing this issue — record baseline, don't sync
+          await persistIssueSyncState({
+            identifier: hulyIdentifier,
+            projectIdentifier,
+            title: beadsIssue.title,
+            description: beadsIssue.description,
+            status: beadsStatusToHuly(beadsIssue.status, beadsIssue.labels || []),
+            beadsIssueId: beadsIssue.id,
+            beadsStatus: beadsIssue.status,
+            beadsModifiedAt: Date.now(),
           });
           result.issuesSynced++;
           continue;
         }
 
-        // Status hierarchy guard: never regress Huly status to a lower rank
-        const syncedState = await getIssueSyncState({ hulyIdentifier });
-        if (syncedState?.status) {
-          const targetHulyStatus = beadsStatusToHuly(fullIssue.status, beadsIssue.labels || []);
-          const currentRank = getStatusRank(syncedState.status);
-          const targetRank = getStatusRank(targetHulyStatus);
+        const changed = await hasBeadsIssueChanged({
+          hulyIdentifier,
+          title: beadsIssue.title,
+          description: beadsIssue.description,
+          status: beadsIssue.status,
+        });
 
-          if (currentRank >= 0 && targetRank < currentRank) {
-            log.info('[BeadsFileChange] Skipping: would regress Huly status', {
-              issueId: beadsIssue.id,
-              hulyId: hulyIdentifier,
-              currentStatus: syncedState.status,
-              currentRank,
-              targetStatus: targetHulyStatus,
-              targetRank,
-              beadsStatus: fullIssue.status,
-            });
-            result.issuesSynced++;
-            continue;
-          }
+        if (!changed) {
+          result.issuesSynced++;
+          continue;
+        }
+
+        // Status hierarchy guard: never regress Huly status to a lower rank
+        const targetHulyStatus = beadsStatusToHuly(beadsIssue.status, beadsIssue.labels || []);
+        const currentRank = getStatusRank(syncedState.status);
+        const targetRank = getStatusRank(targetHulyStatus);
+
+        if (currentRank >= 0 && targetRank < currentRank) {
+          log.info('[BeadsFileChange] Skipping: would regress Huly status', {
+            issueId: beadsIssue.id,
+            hulyId: hulyIdentifier,
+            currentStatus: syncedState.status,
+            targetStatus: targetHulyStatus,
+            beadsStatus: beadsIssue.status,
+          });
+          result.issuesSynced++;
+          continue;
         }
 
         log.info('[BeadsFileChange] Syncing Beads→Huly', {
-          beadsId: fullIssue.id,
+          beadsId: beadsIssue.id,
           hulyId: hulyIdentifier,
-          beadsStatus: fullIssue.status,
+          beadsStatus: beadsIssue.status,
         });
 
         const syncResult = await syncBeadsToHuly({
           beadsIssue: {
-            id: fullIssue.id,
-            title: fullIssue.title,
-            description: fullIssue.description,
-            status: fullIssue.status,
-            modifiedAt: fullIssue.updated_at
-              ? new Date(fullIssue.updated_at).getTime()
-              : Date.now(),
+            id: beadsIssue.id,
+            title: beadsIssue.title,
+            description: beadsIssue.description,
+            status: beadsIssue.status,
+            modifiedAt: Date.now(),
           },
           hulyIdentifier,
           context: {
             projectIdentifier,
-            vibeProjectId: '', // Not needed for Beads→Huly
+            vibeProjectId: '',
             gitRepoPath,
           },
         });
 
         if (syncResult.success) {
           log.info('[BeadsFileChange] Synced to Huly', {
-            beadsId: fullIssue.id,
+            beadsId: beadsIssue.id,
             hulyId: hulyIdentifier,
           });
           result.issuesSynced++;
         } else {
           log.warn('[BeadsFileChange] Sync to Huly failed', {
-            beadsId: fullIssue.id,
+            beadsId: beadsIssue.id,
             error: syncResult.error,
           });
           if (syncResult.error) {
