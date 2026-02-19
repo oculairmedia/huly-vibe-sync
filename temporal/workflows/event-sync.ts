@@ -123,6 +123,14 @@ export interface BeadsFileChangeInput {
   projectIdentifier: string;
   gitRepoPath: string;
   vibeProjectId: string;
+  beadsIssues?: Array<{
+    id: string;
+    title: string;
+    status: string;
+    priority?: number;
+    description?: string;
+    labels?: string[];
+  }>;
   changedFiles: string[];
   timestamp: string;
 }
@@ -148,6 +156,7 @@ export async function BeadsFileChangeWorkflow(
   log.info('[BeadsFileChange] Starting workflow', {
     project: projectIdentifier,
     fileCount: changedFiles.length,
+    prefetchedIssues: input.beadsIssues?.length ?? 0,
   });
 
   const result: BeadsFileChangeResult = {
@@ -158,8 +167,9 @@ export async function BeadsFileChangeWorkflow(
   };
 
   try {
-    // Fetch all Beads issues from the repository
-    const beadsIssues = await fetchBeadsIssues({ gitRepoPath });
+    const beadsIssues = input.beadsIssues?.length
+      ? input.beadsIssues
+      : await fetchBeadsIssues({ gitRepoPath });
 
     if (beadsIssues.length === 0) {
       log.info('[BeadsFileChange] No Beads issues found');

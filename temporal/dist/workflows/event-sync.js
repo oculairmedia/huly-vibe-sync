@@ -116,6 +116,7 @@ async function BeadsFileChangeWorkflow(input) {
     workflow_1.log.info('[BeadsFileChange] Starting workflow', {
         project: projectIdentifier,
         fileCount: changedFiles.length,
+        prefetchedIssues: input.beadsIssues?.length ?? 0,
     });
     const result = {
         success: false,
@@ -124,8 +125,9 @@ async function BeadsFileChangeWorkflow(input) {
         errors: [],
     };
     try {
-        // Fetch all Beads issues from the repository
-        const beadsIssues = await fetchBeadsIssues({ gitRepoPath });
+        const beadsIssues = input.beadsIssues?.length
+            ? input.beadsIssues
+            : await fetchBeadsIssues({ gitRepoPath });
         if (beadsIssues.length === 0) {
             workflow_1.log.info('[BeadsFileChange] No Beads issues found');
             result.success = true;

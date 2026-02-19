@@ -8,6 +8,14 @@ export interface BeadsFileChangeInput {
     projectIdentifier: string;
     gitRepoPath: string;
     vibeProjectId: string;
+    beadsIssues?: Array<{
+        id: string;
+        title: string;
+        status: string;
+        priority?: number;
+        description?: string;
+        labels?: string[];
+    }>;
     changedFiles: string[];
     timestamp: string;
 }
