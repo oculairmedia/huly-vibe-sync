@@ -49,6 +49,62 @@ const { createBeadsIssueInHuly } = (0, workflow_1.proxyActivities)({
         nonRetryableErrorTypes: ['HulyValidationError'],
     },
 });
+// ============================================================
+// BEADS FILE CHANGE WORKFLOW
+// ============================================================
+/**
+ * Status hierarchy — higher rank = more advanced workflow state.
+ * Beads→Huly sync must NEVER regress rank (e.g. In Progress → Backlog).
+ * Handles both Huly and Beads status formats since the sync state DB
+ * may store either depending on which path last wrote it.
+ */
+function getStatusRank(status) {
+    switch (status) {
+        // Huly statuses
+        case 'Backlog':
+            return 0;
+        case 'Todo':
+            return 1;
+        case 'In Progress':
+            return 2;
+        case 'In Review':
+            return 3;
+        case 'Done':
+        case 'Cancelled':
+        case 'Canceled':
+            return 4;
+        // Beads statuses (stored when beads path last wrote sync state)
+        case 'open':
+            return 0;
+        case 'in_progress':
+            return 2;
+        case 'closed':
+            return 4;
+        default:
+            return -1; // Unknown — allow sync
+    }
+}
+/**
+ * Pure mapping of beads status → Huly status (duplicated from statusMapper
+ * for Temporal workflow determinism — workflows can't import activity code).
+ */
+function beadsStatusToHuly(beadsStatus, labels = []) {
+    const hasLabel = (label) => labels.includes(label);
+    switch (beadsStatus) {
+        case 'open':
+            return hasLabel('huly:Todo') ? 'Todo' : 'Backlog';
+        case 'in_progress':
+            return hasLabel('huly:In Review') ? 'In Review' : 'In Progress';
+        case 'blocked':
+            return 'In Progress';
+        case 'deferred':
+            return 'Backlog';
+        case 'closed':
+            return hasLabel('huly:Canceled') ? 'Canceled' : 'Done';
+        default:
+            return 'Backlog';
+    }
+}
 /**
  * BeadsFileChangeWorkflow - Triggered when .beads files change
  *
@@ -171,19 +227,25 @@ async function BeadsFileChangeWorkflow(input) {
                     result.issuesSynced++;
                     continue;
                 }
-                const TERMINAL_BEADS_STATUSES = ['closed'];
+                // Status hierarchy guard: never regress Huly status to a lower rank
                 const syncedState = await getIssueSyncState({ hulyIdentifier });
-                if (syncedState?.status &&
-                    ['Done', 'Cancelled', 'Canceled'].includes(syncedState.status) &&
-                    !TERMINAL_BEADS_STATUSES.includes(fullIssue.status)) {
-                    workflow_1.log.info('[BeadsFileChange] Skipping: would regress terminal Huly status', {
-                        issueId: beadsIssue.id,
-                        hulyId: hulyIdentifier,
-                        hulyStatus: syncedState.status,
-                        beadsStatus: fullIssue.status,
-                    });
-                    result.issuesSynced++;
-                    continue;
+                if (syncedState?.status) {
+                    const targetHulyStatus = beadsStatusToHuly(fullIssue.status, beadsIssue.labels || []);
+                    const currentRank = getStatusRank(syncedState.status);
+                    const targetRank = getStatusRank(targetHulyStatus);
+                    if (currentRank >= 0 && targetRank < currentRank) {
+                        workflow_1.log.info('[BeadsFileChange] Skipping: would regress Huly status', {
+                            issueId: beadsIssue.id,
+                            hulyId: hulyIdentifier,
+                            currentStatus: syncedState.status,
+                            currentRank,
+                            targetStatus: targetHulyStatus,
+                            targetRank,
+                            beadsStatus: fullIssue.status,
+                        });
+                        result.issuesSynced++;
+                        continue;
+                    }
                 }
                 workflow_1.log.info('[BeadsFileChange] Syncing Beads→Huly', {
                     beadsId: fullIssue.id,

@@ -127,6 +127,26 @@ export async function getIssueSyncState(input: {
   }
 }
 
+export async function getIssueSyncStateBatch(input: {
+  hulyIdentifiers: string[];
+}): Promise<Record<string, { status?: string; beadsStatus?: string }>> {
+  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
+  const db = createSyncDatabase(resolveDbPath()) as any;
+
+  try {
+    const result: Record<string, { status?: string; beadsStatus?: string }> = {};
+    for (const id of input.hulyIdentifiers) {
+      const issue = db.getIssue(id);
+      if (issue) {
+        result[id] = { status: issue.status, beadsStatus: issue.beads_status };
+      }
+    }
+    return result;
+  } finally {
+    db.close();
+  }
+}
+
 export async function persistIssueSyncState(
   input: PersistIssueStateInput
 ): Promise<PersistIssueStateResult> {

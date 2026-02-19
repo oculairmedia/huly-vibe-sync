@@ -33,7 +33,7 @@ const { syncIssueToVibe, syncTaskToHuly, syncIssueToBeads, syncBeadsToHuly, sync
         nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
     },
 });
-const { persistIssueSyncState, persistIssueSyncStateBatch } = (0, workflow_1.proxyActivities)({
+const { persistIssueSyncState, persistIssueSyncStateBatch, getIssueSyncStateBatch } = (0, workflow_1.proxyActivities)({
     startToCloseTimeout: '60 seconds',
     retry: {
         initialInterval: '1 second',
@@ -51,7 +51,44 @@ const { checkAgentExists, updateProjectAgent } = (0, workflow_1.proxyActivities)
         maximumAttempts: 3,
     },
 });
-// Helper function to extract git repo path (pure function, can run in workflow)
+function getStatusRank(status) {
+    switch (status) {
+        case 'Backlog':
+        case 'open':
+            return 0;
+        case 'Todo':
+            return 1;
+        case 'In Progress':
+        case 'in_progress':
+            return 2;
+        case 'In Review':
+            return 3;
+        case 'Done':
+        case 'Cancelled':
+        case 'Canceled':
+        case 'closed':
+            return 4;
+        default:
+            return -1;
+    }
+}
+function beadsStatusToHuly(beadsStatus, labels = []) {
+    const hasLabel = (label) => labels.includes(label);
+    switch (beadsStatus) {
+        case 'open':
+            return hasLabel('huly:Todo') ? 'Todo' : 'Backlog';
+        case 'in_progress':
+            return hasLabel('huly:In Review') ? 'In Review' : 'In Progress';
+        case 'blocked':
+            return 'In Progress';
+        case 'deferred':
+            return 'Backlog';
+        case 'closed':
+            return hasLabel('huly:Canceled') ? 'Canceled' : 'Done';
+        default:
+            return 'Backlog';
+    }
+}
 function extractGitRepoPath(description) {
     if (!description)
         return null;
@@ -536,10 +573,26 @@ async function ProjectSyncWorkflow(input) {
                     }
                 }
                 if (toSync.length > 0) {
-                    workflow_1.log.info(`[ProjectSync] Phase 3b: Batch syncing ${toSync.length} issues to Huly`);
+                    // Status hierarchy guard: filter out issues that would regress Huly status
+                    const syncStateMap = await getIssueSyncStateBatch({
+                        hulyIdentifiers: toSync.map(i => i.hulyIdentifier),
+                    });
+                    const safeToSync = toSync.filter(item => {
+                        const current = syncStateMap[item.hulyIdentifier];
+                        if (!current?.status)
+                            return true;
+                        const targetRank = getStatusRank(beadsStatusToHuly(item.status));
+                        const currentRank = getStatusRank(current.status);
+                        if (currentRank >= 0 && targetRank < currentRank) {
+                            beadsSkipped++;
+                            return false;
+                        }
+                        return true;
+                    });
+                    workflow_1.log.info(`[ProjectSync] Phase 3b: Batch syncing ${safeToSync.length} issues to Huly (${toSync.length - safeToSync.length} skipped as regressions)`);
                     try {
                         const batchResult = await syncBeadsToHulyBatch({
-                            beadsIssues: toSync,
+                            beadsIssues: safeToSync,
                             context: {
                                 projectIdentifier: hulyProject.identifier,
                                 vibeProjectId: vibeProjectId,

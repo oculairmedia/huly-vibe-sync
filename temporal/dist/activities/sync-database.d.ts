@@ -51,6 +51,12 @@ export declare function getIssueSyncState(input: {
     status?: string;
     beadsStatus?: string;
 } | null>;
+export declare function getIssueSyncStateBatch(input: {
+    hulyIdentifiers: string[];
+}): Promise<Record<string, {
+    status?: string;
+    beadsStatus?: string;
+}>>;
 export declare function persistIssueSyncState(input: PersistIssueStateInput): Promise<PersistIssueStateResult>;
 export declare function persistIssueSyncStateBatch(input: PersistIssueStateBatchInput): Promise<PersistIssueStateResult>;
 export {};
