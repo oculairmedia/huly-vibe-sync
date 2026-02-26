@@ -28,13 +28,11 @@ const mockIssue = {
 
 const mockContext = {
   projectIdentifier: 'TEST',
-  vibeProjectId: 'vibe-project-1',
   gitRepoPath: '/opt/stacks/test-repo',
 };
 
 const mockContextNoGit = {
   projectIdentifier: 'TEST',
-  vibeProjectId: 'vibe-project-1',
   gitRepoPath: '',
 };
 
@@ -43,8 +41,6 @@ const mockContextNoGit = {
 // ============================================================
 
 const createMockActivities = () => ({
-  syncIssueToVibe: vi.fn().mockResolvedValue({ success: true, id: 'task-new', created: true }),
-  syncTaskToHuly: vi.fn().mockResolvedValue({ success: true, updated: true }),
   syncIssueToBeads: vi.fn().mockResolvedValue({ success: true, id: 'beads-new', created: true }),
   syncBeadsToHuly: vi.fn().mockResolvedValue({ success: true }),
   commitBeadsToGit: vi.fn().mockResolvedValue({ success: true }),
@@ -132,33 +128,6 @@ async function runProjectWorkflow(
   );
 }
 
-async function runVibeToHulyWorkflow(
-  input: {
-    task: { id: string; title: string; description?: string; status: string; updated_at?: string };
-    hulyIdentifier: string;
-    context: { projectIdentifier: string; vibeProjectId: string };
-  },
-  mockActivities: ReturnType<typeof createMockActivities>
-): Promise<{ success: boolean; error?: string }> {
-  const taskQueue = `test-queue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const worker = await Worker.create({
-    connection: testEnv.nativeConnection,
-    taskQueue,
-    workflowsPath: path.resolve(__dirname, '../../../temporal/dist/workflows/full-sync.js'),
-    activities: mockActivities,
-  });
-
-  return await worker.runUntil(
-    testEnv.client.workflow.execute('SyncVibeToHulyWorkflow', {
-      taskQueue,
-      workflowId: `test-vibe-huly-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      args: [input],
-      retry: { maximumAttempts: 1 },
-      workflowExecutionTimeout: '10s',
-    })
-  );
-}
-
 // ============================================================
 // TEST SUITE: SyncSingleIssueWorkflow
 // ============================================================
@@ -174,7 +143,7 @@ describe('SyncSingleIssueWorkflow', () => {
   // Success Cases
   // ============================================================
   describe('Success Cases', () => {
-    it('should sync issue to both Vibe and Beads successfully', async () => {
+    it('should sync issue to Beads successfully', async () => {
       const input: SyncIssueInput = {
         issue: mockIssue,
         context: mockContext,
@@ -183,63 +152,9 @@ describe('SyncSingleIssueWorkflow', () => {
       const result = await runSingleIssueWorkflow(input, mockActivities);
 
       expect(result.success).toBe(true);
-      expect(result.vibeResult?.success).toBe(true);
-      expect(result.vibeResult?.id).toBe('task-new');
       expect(result.beadsResult?.success).toBe(true);
       expect(result.beadsResult?.id).toBe('beads-new');
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalledWith(
-        expect.objectContaining({
-          issue: mockIssue,
-          context: mockContext,
-          operation: 'create',
-        })
-      );
       expect(mockActivities.syncIssueToBeads).toHaveBeenCalled();
-    }, 30000);
-
-    it('should update existing Vibe task when existingVibeTaskId provided', async () => {
-      const input: SyncIssueInput = {
-        issue: mockIssue,
-        context: mockContext,
-        existingVibeTaskId: 'existing-task-123',
-      };
-
-      mockActivities.syncIssueToVibe.mockResolvedValue({
-        success: true,
-        id: 'existing-task-123',
-        updated: true,
-      });
-
-      const result = await runSingleIssueWorkflow(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalledWith(
-        expect.objectContaining({
-          existingTaskId: 'existing-task-123',
-          operation: 'update',
-        })
-      );
-    }, 30000);
-  });
-
-  // ============================================================
-  // Vibe Sync Failure
-  // ============================================================
-  describe('Vibe Sync Failure', () => {
-    it('should throw error when Vibe sync fails', async () => {
-      mockActivities.syncIssueToVibe.mockResolvedValue({
-        success: false,
-        error: 'Vibe API error',
-      });
-
-      const input: SyncIssueInput = {
-        issue: mockIssue,
-        context: mockContext,
-      };
-
-      await expect(runSingleIssueWorkflow(input, mockActivities)).rejects.toThrow();
-      // Beads should not be called if Vibe fails
-      expect(mockActivities.syncIssueToBeads).not.toHaveBeenCalled();
     }, 30000);
   });
 
@@ -262,7 +177,6 @@ describe('SyncSingleIssueWorkflow', () => {
 
       // Workflow should still succeed - Beads failures are non-fatal
       expect(result.success).toBe(true);
-      expect(result.vibeResult?.success).toBe(true);
       expect(result.beadsResult?.success).toBe(false);
     }, 30000);
   });
@@ -271,20 +185,6 @@ describe('SyncSingleIssueWorkflow', () => {
   // Skip Conditions
   // ============================================================
   describe('Skip Conditions', () => {
-    it('should skip Vibe sync when syncToVibe=false', async () => {
-      const input: SyncIssueInput = {
-        issue: mockIssue,
-        context: mockContext,
-        syncToVibe: false,
-      };
-
-      const result = await runSingleIssueWorkflow(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(mockActivities.syncIssueToVibe).not.toHaveBeenCalled();
-      expect(mockActivities.syncIssueToBeads).toHaveBeenCalled();
-    }, 30000);
-
     it('should skip Beads sync when syncToBeads=false', async () => {
       const input: SyncIssueInput = {
         issue: mockIssue,
@@ -295,7 +195,6 @@ describe('SyncSingleIssueWorkflow', () => {
       const result = await runSingleIssueWorkflow(input, mockActivities);
 
       expect(result.success).toBe(true);
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalled();
       expect(mockActivities.syncIssueToBeads).not.toHaveBeenCalled();
     }, 30000);
 
@@ -308,22 +207,6 @@ describe('SyncSingleIssueWorkflow', () => {
       const result = await runSingleIssueWorkflow(input, mockActivities);
 
       expect(result.success).toBe(true);
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalled();
-      expect(mockActivities.syncIssueToBeads).not.toHaveBeenCalled();
-    }, 30000);
-
-    it('should skip both syncs when both flags are false', async () => {
-      const input: SyncIssueInput = {
-        issue: mockIssue,
-        context: mockContext,
-        syncToVibe: false,
-        syncToBeads: false,
-      };
-
-      const result = await runSingleIssueWorkflow(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(mockActivities.syncIssueToVibe).not.toHaveBeenCalled();
       expect(mockActivities.syncIssueToBeads).not.toHaveBeenCalled();
     }, 30000);
   });
@@ -383,7 +266,7 @@ describe('SyncProjectWorkflow', () => {
       expect(result.synced).toBe(7);
       expect(result.failed).toBe(0);
       // 7 issues with batch size 3 = 3 batches (3 + 3 + 1)
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalledTimes(7);
+      expect(mockActivities.syncIssueToBeads).toHaveBeenCalledTimes(7);
     }, 60000);
 
     it('should use default batch size of 5', async () => {
@@ -406,7 +289,7 @@ describe('SyncProjectWorkflow', () => {
   describe('Parallel Processing', () => {
     it('should process issues within a batch in parallel', async () => {
       const callOrder: string[] = [];
-      mockActivities.syncIssueToVibe.mockImplementation(async (input: any) => {
+      mockActivities.syncIssueToBeads.mockImplementation(async (input: any) => {
         callOrder.push(`start-${input.issue.identifier}`);
         // Simulate varying processing times
         await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
@@ -498,7 +381,7 @@ describe('SyncProjectWorkflow', () => {
   // ============================================================
   describe('Error Counting', () => {
     it('should count synced and failed issues correctly', async () => {
-      mockActivities.syncIssueToVibe.mockImplementation(async ({ issue }) => {
+      mockActivities.syncIssueToBeads.mockImplementation(async ({ issue }) => {
         if (issue.identifier.endsWith('2') || issue.identifier.endsWith('4')) {
           throw new Error('Simulated failure');
         }
@@ -537,7 +420,7 @@ describe('SyncProjectWorkflow', () => {
       expect(result.total).toBe(0);
       expect(result.synced).toBe(0);
       expect(result.failed).toBe(0);
-      expect(mockActivities.syncIssueToVibe).not.toHaveBeenCalled();
+      expect(mockActivities.syncIssueToBeads).not.toHaveBeenCalled();
     }, 30000);
   });
 
@@ -557,97 +440,6 @@ describe('SyncProjectWorkflow', () => {
       result.results.forEach(r => {
         expect(r.success).toBe(true);
       });
-    }, 30000);
-  });
-});
-
-// ============================================================
-// TEST SUITE: SyncVibeToHulyWorkflow
-// ============================================================
-
-describe('SyncVibeToHulyWorkflow', () => {
-  let mockActivities: ReturnType<typeof createMockActivities>;
-
-  beforeEach(() => {
-    mockActivities = createMockActivities();
-  });
-
-  // ============================================================
-  // Success Cases
-  // ============================================================
-  describe('Success Cases', () => {
-    it('should sync Vibe task to Huly successfully', async () => {
-      const input = {
-        task: {
-          id: 'vibe-task-1',
-          title: 'Test Task',
-          description: 'Synced from Huly Issue: TEST-1',
-          status: 'done',
-          updated_at: new Date().toISOString(),
-        },
-        hulyIdentifier: 'TEST-1',
-        context: {
-          projectIdentifier: 'TEST',
-          vibeProjectId: 'vibe-project-1',
-        },
-      };
-
-      const result = await runVibeToHulyWorkflow(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(mockActivities.syncTaskToHuly).toHaveBeenCalledWith(
-        expect.objectContaining({
-          task: input.task,
-          hulyIdentifier: 'TEST-1',
-          context: input.context,
-        })
-      );
-    }, 30000);
-  });
-
-  // ============================================================
-  // Error Handling
-  // ============================================================
-  describe('Error Handling', () => {
-    it('should throw error when syncTaskToHuly fails', async () => {
-      mockActivities.syncTaskToHuly.mockResolvedValue({
-        success: false,
-        error: 'Huly API error',
-      });
-
-      const input = {
-        task: {
-          id: 'vibe-task-1',
-          title: 'Test Task',
-          status: 'done',
-        },
-        hulyIdentifier: 'TEST-1',
-        context: {
-          projectIdentifier: 'TEST',
-          vibeProjectId: 'vibe-project-1',
-        },
-      };
-
-      await expect(runVibeToHulyWorkflow(input, mockActivities)).rejects.toThrow();
-    }, 30000);
-
-    it('should re-throw activity errors', async () => {
-      mockActivities.syncTaskToHuly.mockRejectedValue(new Error('Network error'));
-
-      const input = {
-        task: {
-          id: 'vibe-task-1',
-          title: 'Test Task',
-          status: 'todo',
-        },
-        hulyIdentifier: 'TEST-1',
-        context: {
-          projectIdentifier: 'TEST',
-          vibeProjectId: 'vibe-project-1',
-        },
-      };
-
-      await expect(runVibeToHulyWorkflow(input, mockActivities)).rejects.toThrow();
     }, 30000);
   });
 });

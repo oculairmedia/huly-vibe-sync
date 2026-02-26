@@ -102,6 +102,12 @@ async function closeDb(): Promise<void> {
   }
 }
 
+/** Reset DB singleton — for testing only */
+export async function resetDb(): Promise<void> {
+  await closeDb();
+  dbInitPromise = null;
+}
+
 process.on('exit', () => {
   if (dbInstance && !isDbClosed) {
     try {

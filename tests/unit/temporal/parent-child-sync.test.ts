@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { persistIssueSyncState } from '../../../temporal/activities/sync-database';
+import { persistIssueSyncState, resetDb } from '../../../temporal/activities/sync-database';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -17,7 +17,8 @@ describe('persistIssueSyncState activity', () => {
     process.env.DB_PATH = tempDbPath;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await resetDb();
     process.env.DB_PATH = originalDbPath;
     for (const suffix of ['', '-wal', '-shm']) {
       const file = tempDbPath + suffix;

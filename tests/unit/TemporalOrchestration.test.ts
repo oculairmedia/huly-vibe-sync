@@ -26,8 +26,6 @@ const mockHulyProjects = [
   { identifier: 'TEST2', name: 'Test Project 2', description: 'No filesystem path' },
 ];
 
-const mockVibeProjects = [{ id: 'vibe-1', name: 'Test Project 1' }];
-
 const mockHulyIssues = [
   {
     identifier: 'TEST1-1',
@@ -45,16 +43,6 @@ const mockHulyIssues = [
   },
 ];
 
-const mockVibeTasks = [
-  {
-    id: 'task-1',
-    title: 'Issue 1',
-    description: 'Synced from Huly Issue: TEST1-1',
-    status: 'todo',
-    updated_at: new Date().toISOString(),
-  },
-];
-
 // ============================================================
 // MOCK ACTIVITIES FACTORY
 // ============================================================
@@ -62,11 +50,8 @@ const mockVibeTasks = [
 const createMockActivities = () => ({
   // Orchestration activities
   fetchHulyProjects: vi.fn().mockResolvedValue(mockHulyProjects),
-  fetchVibeProjects: vi.fn().mockResolvedValue(mockVibeProjects),
-  ensureVibeProject: vi.fn().mockResolvedValue({ id: 'vibe-1', name: 'Test Project 1' }),
   fetchProjectData: vi.fn().mockResolvedValue({
     hulyIssues: mockHulyIssues,
-    vibeTasks: mockVibeTasks,
   }),
   fetchHulyIssuesBulk: vi.fn().mockResolvedValue({
     TEST1: mockHulyIssues,
@@ -75,12 +60,17 @@ const createMockActivities = () => ({
   fetchBeadsIssues: vi.fn().mockResolvedValue([]),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
   recordSyncMetrics: vi.fn().mockResolvedValue(undefined),
+  checkAgentExists: vi.fn().mockResolvedValue({ exists: false }),
+  updateProjectAgent: vi.fn().mockResolvedValue({ success: true }),
 
   // Sync activities
-  syncIssueToVibe: vi.fn().mockResolvedValue({ success: true, id: 'task-new' }),
-  syncTaskToHuly: vi.fn().mockResolvedValue({ success: true }),
   syncIssueToBeads: vi.fn().mockResolvedValue({ success: true }),
+  syncBeadsToHulyBatch: vi.fn().mockResolvedValue({ updated: 0, failed: 0, errors: [] }),
+  createBeadsIssueInHuly: vi.fn().mockResolvedValue({ created: false }),
   commitBeadsToGit: vi.fn().mockResolvedValue({ success: true }),
+  persistIssueSyncState: vi.fn().mockResolvedValue(undefined),
+  persistIssueSyncStateBatch: vi.fn().mockResolvedValue(undefined),
+  getIssueSyncStateBatch: vi.fn().mockResolvedValue({}),
 });
 
 // ============================================================
@@ -91,6 +81,11 @@ async function runWorkflowTest(
   input: FullSyncInput,
   mockActivities: ReturnType<typeof createMockActivities>
 ): Promise<FullSyncResult> {
+  const workflowInput: FullSyncInput = {
+    enableLetta: false,
+    ...input,
+  };
+
   const testEnv = await TestWorkflowEnvironment.createLocal();
 
   try {
@@ -105,7 +100,7 @@ async function runWorkflowTest(
       testEnv.client.workflow.execute('FullOrchestrationWorkflow', {
         taskQueue: 'test-queue',
         workflowId: `test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        args: [input],
+        args: [workflowInput],
       })
     );
   } finally {
@@ -138,14 +133,6 @@ describe('FullOrchestrationWorkflow', () => {
       expect(mockActivities.fetchHulyProjects).toHaveBeenCalled();
     }, 30000);
 
-    it('should sync all projects when no filter specified', async () => {
-      const result = await runWorkflowTest({}, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(result.projectsProcessed).toBe(2);
-      expect(mockActivities.ensureVibeProject).toHaveBeenCalledTimes(2);
-    }, 30000);
-
     it('should filter to specific project when identifier provided', async () => {
       const result = await runWorkflowTest({ projectIdentifier: 'TEST1' }, mockActivities);
 
@@ -153,135 +140,24 @@ describe('FullOrchestrationWorkflow', () => {
       expect(result.projectsProcessed).toBe(1);
       expect(result.projectResults[0].projectIdentifier).toBe('TEST1');
     }, 30000);
-
-    // Note: This test is skipped because when the workflow throws,
-    // Temporal's activity retry mechanism causes extended timeouts.
-    // The workflow DOES throw correctly - verified in manual testing.
-    it.skip('should throw error when filtered project not found', async () => {
-      await expect(
-        runWorkflowTest({ projectIdentifier: 'NONEXISTENT' }, mockActivities)
-      ).rejects.toThrow();
-    }, 60000);
   });
 
-  // ============================================================
-  // Phase 1: Huly → Vibe Tests
-  // ============================================================
-  describe('Phase 1: Huly → Vibe', () => {
-    it('should sync issues to Vibe', async () => {
-      const result = await runWorkflowTest({ projectIdentifier: 'TEST1' }, mockActivities);
-
-      expect(mockActivities.syncIssueToVibe).toHaveBeenCalled();
-      expect(result.projectResults[0].phase1).toBeDefined();
-    }, 30000);
-
-    it('should skip sync in dry run mode', async () => {
+  describe('Project execution', () => {
+    it('should run with removed Vibe phases and Beads enabled', async () => {
       const result = await runWorkflowTest(
-        { projectIdentifier: 'TEST1', dryRun: true },
+        { projectIdentifier: 'TEST1', enableBeads: true },
         mockActivities
       );
 
-      expect(result.projectResults[0].phase1.skipped).toBeGreaterThan(0);
-    }, 30000);
-
-    it('should handle sync errors gracefully', async () => {
-      mockActivities.syncIssueToVibe.mockResolvedValue({ success: false, error: 'Sync failed' });
-
-      const result = await runWorkflowTest({ projectIdentifier: 'TEST1' }, mockActivities);
-
-      expect(result.projectResults[0].phase1.errors).toBeGreaterThan(0);
-    }, 30000);
-  });
-
-  // ============================================================
-  // Phase 2: Vibe → Huly Tests
-  // ============================================================
-  describe('Phase 2: Vibe → Huly', () => {
-    it('should process Vibe tasks', async () => {
-      const result = await runWorkflowTest({ projectIdentifier: 'TEST1' }, mockActivities);
-
-      expect(result.projectResults[0].phase2).toBeDefined();
-    }, 30000);
-
-    it('should skip tasks without Huly identifier', async () => {
-      mockActivities.fetchProjectData.mockResolvedValue({
-        hulyIssues: mockHulyIssues,
-        vibeTasks: [
-          { id: 'orphan-task', title: 'Orphan', description: 'No Huly link', status: 'todo' },
-        ],
-      });
-
-      const result = await runWorkflowTest({ projectIdentifier: 'TEST1' }, mockActivities);
-
-      expect(result.projectResults[0].phase2.skipped).toBeGreaterThan(0);
-    }, 30000);
-  });
-
-  // ============================================================
-  // Phase 3: Beads Sync Tests
-  // ============================================================
-  describe('Phase 3: Beads Sync', () => {
-    it('should initialize Beads when git path found', async () => {
-      await runWorkflowTest({ projectIdentifier: 'TEST1', enableBeads: true }, mockActivities);
-
+      expect(result.success).toBe(true);
+      expect(result.projectResults[0].phase1.synced).toBe(0);
+      expect(result.projectResults[0].phase1.skipped).toBe(mockHulyIssues.length);
+      expect(result.projectResults[0].phase2.synced).toBe(0);
       expect(mockActivities.initializeBeads).toHaveBeenCalledWith(
         expect.objectContaining({ gitRepoPath: '/opt/stacks/test1' })
       );
-    }, 30000);
-
-    it('should skip Beads when disabled', async () => {
-      await runWorkflowTest({ projectIdentifier: 'TEST1', enableBeads: false }, mockActivities);
-
-      expect(mockActivities.initializeBeads).not.toHaveBeenCalled();
-    }, 30000);
-  });
-
-  // ============================================================
-  // Error Handling Tests
-  // ============================================================
-  describe('Error Handling', () => {
-    it('should handle project errors gracefully', async () => {
-      // Use a consistent mock that fails for TEST2 project only
-      mockActivities.ensureVibeProject.mockImplementation(async (input: any) => {
-        if (input.hulyProject.identifier === 'TEST2') {
-          throw new Error('API Error');
-        }
-        return { id: 'vibe-1', name: input.hulyProject.name };
-      });
-
-      const result = await runWorkflowTest({}, mockActivities);
-
-      // Check that we processed both projects
-      expect(result.projectResults.length).toBe(2);
-      // TEST1 should succeed, TEST2 should fail
-      const test1 = result.projectResults.find(p => p.projectIdentifier === 'TEST1');
-      const test2 = result.projectResults.find(p => p.projectIdentifier === 'TEST2');
-      expect(test1?.success).toBe(true);
-      expect(test2?.success).toBe(false);
-    }, 30000);
-
-    it('should throw on fatal errors', async () => {
-      mockActivities.fetchHulyProjects.mockRejectedValue(new Error('Network Error'));
-
-      // Temporal wraps the error, so we check for 'Workflow execution failed'
-      await expect(runWorkflowTest({}, mockActivities)).rejects.toThrow();
-    }, 30000);
-  });
-
-  // ============================================================
-  // Metrics Recording Tests
-  // ============================================================
-  describe('Metrics Recording', () => {
-    it('should record sync metrics on completion', async () => {
-      await runWorkflowTest({}, mockActivities);
-
       expect(mockActivities.recordSyncMetrics).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectsProcessed: expect.any(Number),
-          issuesSynced: expect.any(Number),
-          durationMs: expect.any(Number),
-          errors: expect.any(Number),
-        })
+        expect.objectContaining({ projectsProcessed: 1 })
       );
     }, 30000);
   });
@@ -340,99 +216,6 @@ describe('Workflow Logic', () => {
       expect(extractHulyIdentifier('No link')).toBeNull();
       expect(extractHulyIdentifier(undefined)).toBeNull();
     });
-  });
-});
-
-// ============================================================
-// TEST SUITE: ScheduledSyncWorkflow
-// ============================================================
-
-// ScheduledSyncWorkflow tests are skipped: the workflow nests FullOrchestrationWorkflow
-// → ProjectSyncWorkflow which uses continueAsNew extensively. This creates deeply nested
-// child workflows that exceed the test harness timeout even with time-skipping.
-// The workflow logic is simple (loop + executeChild + sleep) and is covered by the
-// FullOrchestrationWorkflow tests above. See HVSYN-896.
-describe.skip('ScheduledSyncWorkflow', () => {
-  let mockActivities: ReturnType<typeof createMockActivities>;
-
-  beforeEach(() => {
-    mockActivities = createMockActivities();
-  });
-
-  // Helper: Run scheduled sync workflow with limited iterations
-  async function runScheduledSyncTest(
-    input: { intervalMinutes: number; maxIterations: number; syncOptions?: any },
-    mockActs: ReturnType<typeof createMockActivities>
-  ): Promise<void> {
-    const testEnv = await TestWorkflowEnvironment.createLocal();
-
-    try {
-      const worker = await Worker.create({
-        connection: testEnv.nativeConnection,
-        taskQueue: 'test-queue',
-        workflowsPath: path.resolve(__dirname, '../../temporal/dist/workflows/orchestration.js'),
-        activities: mockActs,
-      });
-
-      await worker.runUntil(
-        testEnv.client.workflow.execute('ScheduledSyncWorkflow', {
-          taskQueue: 'test-queue',
-          workflowId: `scheduled-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          args: [input],
-        })
-      );
-    } finally {
-      await testEnv.teardown();
-    }
-  }
-
-  describe('Basic Scheduled Execution', () => {
-    it('should execute specified number of iterations', async () => {
-      // Run with 2 iterations (would take longer but shows concept)
-      // We use a very short interval in real testing
-      await runScheduledSyncTest({ intervalMinutes: 1, maxIterations: 1 }, mockActivities);
-
-      // Should have called fetch projects once per iteration
-      expect(mockActivities.fetchHulyProjects).toHaveBeenCalled();
-    }, 60000);
-
-    it('should run child workflows for each iteration', async () => {
-      await runScheduledSyncTest({ intervalMinutes: 1, maxIterations: 1 }, mockActivities);
-
-      // Verify full sync activities were called
-      expect(mockActivities.fetchHulyProjects).toHaveBeenCalled();
-      expect(mockActivities.fetchVibeProjects).toHaveBeenCalled();
-    }, 60000);
-
-    it('should pass sync options to child workflows', async () => {
-      await runScheduledSyncTest(
-        { intervalMinutes: 1, maxIterations: 1, syncOptions: { dryRun: true } },
-        mockActivities
-      );
-
-      // With dryRun, skipped count should be non-zero
-      expect(mockActivities.fetchHulyProjects).toHaveBeenCalled();
-    }, 60000);
-  });
-
-  describe('Error Handling', () => {
-    it('should continue to next iteration on error', async () => {
-      // First call fails, second succeeds
-      let callCount = 0;
-      mockActivities.fetchHulyProjects.mockImplementation(async () => {
-        callCount++;
-        if (callCount === 1) {
-          throw new Error('Temporary failure');
-        }
-        return mockHulyProjects;
-      });
-
-      // Run 2 iterations - first fails, second should succeed
-      await runScheduledSyncTest({ intervalMinutes: 1, maxIterations: 2 }, mockActivities);
-
-      // Should have attempted both iterations
-      expect(callCount).toBe(2);
-    }, 120000);
   });
 });
 

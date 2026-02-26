@@ -71,7 +71,6 @@ vi.mock('../../lib/statusMapper.js', () => ({
     return map[priority] || 'Medium';
   }),
   mapBeadsTypeToHuly: vi.fn(() => 'Task'),
-  mapBeadsStatusToVibe: vi.fn(() => 'todo'),
 }));
 
 vi.mock('../../lib/HulyService.js', () => ({
@@ -81,12 +80,7 @@ vi.mock('../../lib/HulyService.js', () => ({
   createHulyIssue: vi.fn(async () => ({ identifier: 'NEW-1', id: 'new-huly-id' })),
 }));
 
-vi.mock('../../lib/VibeService.js', () => ({
-  updateVibeTaskStatus: vi.fn(async () => true),
-}));
-
 vi.mock('../../lib/textParsers.js', () => ({
-  extractHulyIdentifier: vi.fn(() => null),
   validateGitRepoPath: vi.fn(() => ({ valid: true })),
 }));
 
@@ -153,9 +147,7 @@ import {
   createHulyIssue,
 } from '../../lib/HulyService.js';
 
-import { updateVibeTaskStatus } from '../../lib/VibeService.js';
-import { extractHulyIdentifier, validateGitRepoPath } from '../../lib/textParsers.js';
-import { mapBeadsStatusToVibe } from '../../lib/statusMapper.js';
+import { validateGitRepoPath } from '../../lib/textParsers.js';
 import {
   findHulyIdentifier,
   buildIssueLookups,
@@ -845,7 +837,12 @@ describe('BeadsSyncService', () => {
         {}
       );
 
-      expect(updateHulyIssueStatus).toHaveBeenCalledWith(expect.anything(), 'TEST-1', 'In Review', {});
+      expect(updateHulyIssueStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        'TEST-1',
+        'In Review',
+        {}
+      );
     });
 
     it('maps closed beads issues to Done even when metadata has old status', async () => {
@@ -1014,48 +1011,6 @@ describe('BeadsSyncService', () => {
       await syncBeadsIssueToHuly(client, '/proj', beadsIssue, [], 'TEST', db, {});
 
       expect(db.markDeletedFromHuly).toHaveBeenCalledWith('TEST-ERR');
-    });
-
-    it('cascades to Vibe when vibeContext provided', async () => {
-      const beadsIssue = createMockBeadsIssue({
-        id: 'beads-1',
-        title: 'Same Title',
-        status: 'in_progress',
-        priority: 2,
-      });
-      const hulyIssue = {
-        identifier: 'TEST-1',
-        title: 'Same Title',
-        status: 'Backlog',
-        priority: 'Medium',
-        modifiedOn: Date.now(),
-      };
-      const dbRecord = createMockBeadsDbRecord({
-        identifier: 'TEST-1',
-        beads_issue_id: 'beads-1',
-      });
-      const db = createMockDb([dbRecord]);
-
-      extractHulyIdentifier.mockReturnValueOnce('TEST-1');
-      mapBeadsStatusToVibe.mockReturnValueOnce('inprogress');
-      const vibeContext = {
-        vibeClient: {},
-        vibeTasks: [{ id: 'vibe-1', description: 'Huly Issue: TEST-1', status: 'todo' }],
-      };
-
-      await syncBeadsIssueToHuly(
-        makeHulyClient(),
-        '/proj',
-        beadsIssue,
-        [hulyIssue],
-        'TEST',
-        db,
-        {},
-        new Set(),
-        vibeContext
-      );
-
-      expect(updateVibeTaskStatus).toHaveBeenCalled();
     });
 
     it('handles reparenting detection', async () => {
@@ -1501,7 +1456,15 @@ describe('BeadsSyncService', () => {
       });
       const db = createMockDb([]);
       const beadsIssue = createMockBeadsIssue({ id: 'b-1', title: 'Issue 1' });
-      const result = await batchSyncBeadsToHuly(makeHulyClient(), '/proj', [beadsIssue], [], 'TEST', db, {});
+      const result = await batchSyncBeadsToHuly(
+        makeHulyClient(),
+        '/proj',
+        [beadsIssue],
+        [],
+        'TEST',
+        db,
+        {}
+      );
 
       expect(result.synced).toBe(0);
       expect(result.skipped).toBe(1);

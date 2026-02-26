@@ -128,10 +128,6 @@ describe('HealthService', () => {
       expect(() => recordApiLatency('huly', 'fetchProjects', 150)).not.toThrow();
     });
 
-    it('should record Vibe API latency', () => {
-      expect(() => recordApiLatency('vibe', 'listTasks', 200)).not.toThrow();
-    });
-
     it('should handle unknown service gracefully', () => {
       expect(() => recordApiLatency('unknown', 'operation', 100)).not.toThrow();
     });
@@ -139,7 +135,7 @@ describe('HealthService', () => {
     it('should handle various operations', () => {
       expect(() => recordApiLatency('huly', 'fetchIssues', 100)).not.toThrow();
       expect(() => recordApiLatency('huly', 'updateIssue', 50)).not.toThrow();
-      expect(() => recordApiLatency('vibe', 'createProject', 300)).not.toThrow();
+      expect(() => recordApiLatency('unknown', 'createProject', 300)).not.toThrow();
     });
 
     it('should convert milliseconds to seconds for Prometheus', () => {
@@ -342,13 +338,11 @@ describe('HealthService', () => {
 
     it('should track API latency', async () => {
       recordApiLatency('huly', 'fetchProjects', 150);
-      recordApiLatency('vibe', 'listTasks', 200);
 
       const registry = getMetricsRegistry();
       const metricsOutput = await registry.metrics();
 
       expect(metricsOutput).toContain('huly_api_latency');
-      expect(metricsOutput).toContain('vibe_api_latency');
     });
 
     it('should track memory usage', async () => {

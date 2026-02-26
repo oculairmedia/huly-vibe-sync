@@ -10,7 +10,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Mock external dependencies before importing activities
 vi.mock('../../temporal/lib', () => ({
   createHulyClient: vi.fn(),
-  createVibeClient: vi.fn(),
   createBeadsClient: vi.fn(),
 }));
 
@@ -39,8 +38,6 @@ vi.mock('fs', async () => {
 // Import after mocking
 import {
   fetchHulyProjects,
-  fetchVibeProjects,
-  ensureVibeProject,
   fetchProjectData,
   extractGitRepoPath,
   resolveGitRepoPath,
@@ -52,7 +49,7 @@ import {
   recordSyncMetrics,
 } from '../../temporal/activities/orchestration';
 
-import { createHulyClient, createVibeClient, createBeadsClient } from '../../temporal/lib';
+import { createHulyClient, createBeadsClient } from '../../temporal/lib';
 
 // ============================================================
 // MOCK SETUP
@@ -61,12 +58,6 @@ import { createHulyClient, createVibeClient, createBeadsClient } from '../../tem
 const mockHulyClient = {
   listProjects: vi.fn(),
   listIssues: vi.fn(),
-};
-
-const mockVibeClient = {
-  listProjects: vi.fn(),
-  listTasks: vi.fn(),
-  createProject: vi.fn(),
 };
 
 const mockBeadsClient = {
@@ -87,7 +78,6 @@ describe('Orchestration Activities', () => {
 
     // Configure mocks
     (createHulyClient as any).mockReturnValue(mockHulyClient);
-    (createVibeClient as any).mockReturnValue(mockVibeClient);
     (createBeadsClient as any).mockReturnValue(mockBeadsClient);
   });
 
@@ -126,113 +116,28 @@ describe('Orchestration Activities', () => {
   });
 
   // ============================================================
-  // fetchVibeProjects Tests
-  // ============================================================
-  describe('fetchVibeProjects', () => {
-    it('should return list of Vibe projects', async () => {
-      const projects = [
-        { id: 'uuid-1', name: 'Project 1' },
-        { id: 'uuid-2', name: 'Project 2' },
-      ];
-      mockVibeClient.listProjects.mockResolvedValue(projects);
-
-      const result = await fetchVibeProjects();
-
-      expect(result).toEqual(projects);
-      expect(mockVibeClient.listProjects).toHaveBeenCalled();
-    });
-
-    it('should throw on API error', async () => {
-      mockVibeClient.listProjects.mockRejectedValue(new Error('API Error'));
-
-      await expect(fetchVibeProjects()).rejects.toThrow('fetchVibeProjects failed');
-    });
-  });
-
-  // ============================================================
-  // ensureVibeProject Tests
-  // ============================================================
-  describe('ensureVibeProject', () => {
-    it('should return existing project if found', async () => {
-      const existing = { id: 'vibe-1', name: 'Test Project' };
-
-      const result = await ensureVibeProject({
-        hulyProject: { identifier: 'TEST', name: 'Test Project' },
-        existingVibeProjects: [existing],
-      });
-
-      expect(result).toEqual(existing);
-      expect(mockVibeClient.createProject).not.toHaveBeenCalled();
-    });
-
-    it('should match project names case-insensitively', async () => {
-      const existing = { id: 'vibe-1', name: 'test project' };
-
-      const result = await ensureVibeProject({
-        hulyProject: { identifier: 'TEST', name: 'Test Project' },
-        existingVibeProjects: [existing],
-      });
-
-      expect(result).toEqual(existing);
-    });
-
-    it('should create new project if not found', async () => {
-      const created = { id: 'vibe-new', name: 'New Project' };
-      mockVibeClient.createProject.mockResolvedValue(created);
-
-      const result = await ensureVibeProject({
-        hulyProject: { identifier: 'NEW', name: 'New Project' },
-        existingVibeProjects: [],
-      });
-
-      expect(result).toEqual(created);
-      expect(mockVibeClient.createProject).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'New Project' })
-      );
-    });
-
-    it('should throw on create failure', async () => {
-      mockVibeClient.createProject.mockRejectedValue(new Error('Create failed'));
-
-      await expect(
-        ensureVibeProject({
-          hulyProject: { identifier: 'FAIL', name: 'Fail Project' },
-          existingVibeProjects: [],
-        })
-      ).rejects.toThrow('ensureVibeProject failed');
-    });
-  });
-
-  // ============================================================
   // fetchProjectData Tests
   // ============================================================
   describe('fetchProjectData', () => {
-    it('should fetch issues and tasks in parallel', async () => {
+    it('should fetch Huly issues', async () => {
       const issues = [{ identifier: 'T-1', title: 'Issue', status: 'Backlog' }];
-      const tasks = [{ id: 'task-1', title: 'Task', status: 'todo' }];
 
       mockHulyClient.listIssues.mockResolvedValue(issues);
-      mockVibeClient.listTasks.mockResolvedValue(tasks);
 
       const result = await fetchProjectData({
         hulyProject: { identifier: 'TEST', name: 'Test' },
-        vibeProjectId: 'vibe-1',
       });
 
       expect(result.hulyIssues).toEqual(issues);
-      expect(result.vibeTasks).toEqual(tasks);
       expect(mockHulyClient.listIssues).toHaveBeenCalledWith('TEST');
-      expect(mockVibeClient.listTasks).toHaveBeenCalledWith('vibe-1');
     });
 
     it('should throw if issues fetch fails', async () => {
       mockHulyClient.listIssues.mockRejectedValue(new Error('API Error'));
-      mockVibeClient.listTasks.mockResolvedValue([]);
 
       await expect(
         fetchProjectData({
           hulyProject: { identifier: 'TEST', name: 'Test' },
-          vibeProjectId: 'vibe-1',
         })
       ).rejects.toThrow('fetchProjectData failed');
     });
@@ -462,9 +367,7 @@ describe('Orchestration Activities', () => {
       const result = await updateLettaMemory({
         agentId: 'agent-1',
         hulyProject: { identifier: 'TEST', name: 'Test' },
-        vibeProject: { id: 'vibe-1', name: 'Test' },
         hulyIssues: [],
-        vibeTasks: [],
       });
 
       expect(result.success).toBe(true);
@@ -483,9 +386,7 @@ describe('Orchestration Activities', () => {
       const result = await updateLettaMemory({
         agentId: 'agent-1',
         hulyProject: { identifier: 'TEST', name: 'Test' },
-        vibeProject: { id: 'vibe-1', name: 'Test' },
         hulyIssues: [{ identifier: 'T-1', title: 'Issue', status: 'Backlog' }],
-        vibeTasks: [{ id: 'task-1', title: 'Task', status: 'todo' }],
       });
 
       expect(result.success).toBe(true);
@@ -513,9 +414,7 @@ describe('Orchestration Activities', () => {
       const result = await updateLettaMemory({
         agentId: 'agent-1',
         hulyProject: { identifier: 'TEST', name: 'Test' },
-        vibeProject: { id: 'vibe-1', name: 'Test' },
         hulyIssues: [],
-        vibeTasks: [],
       });
 
       expect(result.success).toBe(false);

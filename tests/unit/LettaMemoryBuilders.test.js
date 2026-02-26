@@ -28,29 +28,21 @@ describe('Letta Memory Block Builders', () => {
         name: 'Test Project',
         description: 'A test project',
       };
-      const vibeProject = { id: 'vibe-456' };
 
-      const result = buildProjectMeta(
-        hulyProject,
-        vibeProject,
-        '/path/to/repo',
-        'https://github.com/test/repo'
-      );
+      const result = buildProjectMeta(hulyProject, '/path/to/repo', 'https://github.com/test/repo');
 
       expect(result.name).toBe('Test Project');
       expect(result.identifier).toBe('TEST');
       expect(result.description).toBe('A test project');
       expect(result.huly.id).toBe('huly-123');
-      expect(result.vibe.id).toBe('vibe-456');
       expect(result.repository.filesystem_path).toBe('/path/to/repo');
       expect(result.repository.git_url).toBe('https://github.com/test/repo');
     });
 
     it('should handle missing optional fields', () => {
       const hulyProject = { name: 'Minimal Project' };
-      const vibeProject = { id: 'vibe-1' };
 
-      const result = buildProjectMeta(hulyProject, vibeProject, null, null);
+      const result = buildProjectMeta(hulyProject, null, null);
 
       expect(result.name).toBe('Minimal Project');
       expect(result.identifier).toBe('Minimal Project'); // Falls back to name
@@ -66,9 +58,9 @@ describe('Letta Memory Block Builders', () => {
     it('should return static board configuration', () => {
       const result = buildBoardConfig();
 
-      expect(result.status_mapping.huly_to_vibe.Backlog).toBe('todo');
-      expect(result.status_mapping.huly_to_vibe.Done).toBe('done');
-      expect(result.status_mapping.vibe_to_huly.done).toBe('Done');
+      expect(result.status_mapping.huly_to_beads.Backlog).toBe('open');
+      expect(result.status_mapping.huly_to_beads.Done).toBe('closed');
+      expect(result.status_mapping.beads_to_huly.closed).toBe('Done');
       expect(result.workflow.sync_direction).toBe('bidirectional');
       expect(result.definitions_of_done.done).toBeDefined();
     });
@@ -79,28 +71,27 @@ describe('Letta Memory Block Builders', () => {
   // ============================================================
   describe('buildBoardMetrics', () => {
     it('should calculate metrics from tasks', () => {
-      const hulyIssues = [];
-      const vibeTasks = [
-        { status: 'todo' },
-        { status: 'todo' },
-        { status: 'inprogress' },
-        { status: 'done' },
-        { status: 'done' },
+      const hulyIssues = [
+        { status: 'Todo' },
+        { status: 'Todo' },
+        { status: 'In Progress' },
+        { status: 'Done' },
+        { status: 'Done' },
       ];
 
-      const result = buildBoardMetrics(hulyIssues, vibeTasks);
+      const result = buildBoardMetrics(hulyIssues);
 
       expect(result.total_tasks).toBe(5);
-      expect(result.by_status.todo).toBe(2);
-      expect(result.by_status.inprogress).toBe(1);
-      expect(result.by_status.done).toBe(2);
+      expect(result.by_status.Todo).toBe(2);
+      expect(result.by_status['In Progress']).toBe(1);
+      expect(result.by_status.Done).toBe(2);
       expect(result.wip_count).toBe(1); // inprogress + inreview
       expect(result.completion_rate).toBe('40.0%');
       expect(result.active_tasks).toBe(3); // todo + inprogress + inreview
     });
 
     it('should handle empty task list', () => {
-      const result = buildBoardMetrics([], []);
+      const result = buildBoardMetrics([]);
 
       expect(result.total_tasks).toBe(0);
       expect(result.completion_rate).toBe('0%');
@@ -112,13 +103,18 @@ describe('Letta Memory Block Builders', () => {
   // ============================================================
   describe('buildHotspots', () => {
     it('should identify blocked items by keywords', () => {
-      const vibeTasks = [
-        { id: '1', title: 'Normal task', status: 'todo' },
-        { id: '2', title: 'Blocked by API', status: 'inprogress' },
-        { id: '3', title: 'Waiting on review', description: '', status: 'inprogress' },
+      const hulyIssues = [
+        { identifier: 'TEST-1', title: 'Normal task', status: 'Todo' },
+        { identifier: 'TEST-2', title: 'Blocked by API', status: 'In Progress' },
+        {
+          identifier: 'TEST-3',
+          title: 'Waiting on review',
+          description: '',
+          status: 'In Progress',
+        },
       ];
 
-      const result = buildHotspots([], vibeTasks);
+      const result = buildHotspots(hulyIssues);
 
       expect(result.blocked_items).toHaveLength(2);
       expect(result.blocked_items[0].title).toBe('Blocked by API');
@@ -127,26 +123,26 @@ describe('Letta Memory Block Builders', () => {
 
     it('should identify ageing WIP items', () => {
       const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
-      const vibeTasks = [
-        { id: '1', title: 'Old task', status: 'inprogress', updated_at: tenDaysAgo },
+      const hulyIssues = [
+        { identifier: 'TEST-1', title: 'Old task', status: 'In Progress', modifiedOn: tenDaysAgo },
       ];
 
-      const result = buildHotspots([], vibeTasks);
+      const result = buildHotspots(hulyIssues);
 
       expect(result.ageing_wip).toHaveLength(1);
       expect(result.ageing_wip[0].age_days).toBeGreaterThanOrEqual(10);
     });
 
     it('should identify high priority todos', () => {
-      const vibeTasks = [
-        { id: '1', title: 'Urgent fix', status: 'todo', priority: 'urgent' },
-        { id: '2', title: 'Normal task', status: 'todo', priority: 'medium' },
+      const hulyIssues = [
+        { identifier: 'TEST-1', title: 'Urgent fix', status: 'Todo', priority: 'Urgent' },
+        { identifier: 'TEST-2', title: 'Normal task', status: 'Todo', priority: 'Medium' },
       ];
 
-      const result = buildHotspots([], vibeTasks);
+      const result = buildHotspots(hulyIssues);
 
       expect(result.high_priority_todo).toHaveLength(1);
-      expect(result.high_priority_todo[0].priority).toBe('urgent');
+      expect(result.high_priority_todo[0].priority).toBe('Urgent');
     });
   });
 
@@ -155,31 +151,31 @@ describe('Letta Memory Block Builders', () => {
   // ============================================================
   describe('buildBacklogSummary', () => {
     it('should summarize backlog by priority', () => {
-      const vibeTasks = [
-        { id: '1', title: 'Urgent', status: 'todo', priority: 'urgent' },
-        { id: '2', title: 'High', status: 'todo', priority: 'high' },
-        { id: '3', title: 'Medium', status: 'todo', priority: 'medium' },
-        { id: '4', title: 'Done', status: 'done', priority: 'high' },
+      const hulyIssues = [
+        { identifier: 'TEST-1', title: 'Urgent', status: 'Todo', priority: 'Urgent' },
+        { identifier: 'TEST-2', title: 'High', status: 'Backlog', priority: 'High' },
+        { identifier: 'TEST-3', title: 'Medium', status: 'Todo', priority: 'Medium' },
+        { identifier: 'TEST-4', title: 'Done', status: 'Done', priority: 'High' },
       ];
 
-      const result = buildBacklogSummary([], vibeTasks);
+      const result = buildBacklogSummary(hulyIssues);
 
       expect(result.total_backlog).toBe(3); // Only todo items
       expect(result.priority_breakdown.urgent).toBe(1);
       expect(result.priority_breakdown.high).toBe(1);
       expect(result.priority_breakdown.medium).toBe(1);
       expect(result.top_items).toHaveLength(3);
-      expect(result.top_items[0].priority).toBe('urgent'); // Sorted by priority
+      expect(result.top_items[0].priority).toBe('Urgent'); // Sorted by priority
     });
 
     it('should limit to top 15 items', () => {
-      const vibeTasks = Array.from({ length: 20 }, (_, i) => ({
-        id: `${i}`,
+      const hulyIssues = Array.from({ length: 20 }, (_, i) => ({
+        identifier: `TEST-${i}`,
         title: `Task ${i}`,
-        status: 'todo',
+        status: 'Backlog',
       }));
 
-      const result = buildBacklogSummary([], vibeTasks);
+      const result = buildBacklogSummary(hulyIssues);
 
       expect(result.top_items).toHaveLength(15);
       expect(result.total_backlog).toBe(20);

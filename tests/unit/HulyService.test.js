@@ -20,7 +20,6 @@ import {
   updateHulyIssueTitle,
   updateHulyIssueParent,
   createHulyIssue,
-  syncVibeTaskToHuly,
   createHulyService,
 } from '../../lib/HulyService.js';
 
@@ -279,12 +278,8 @@ describe('HulyService', () => {
         mockDb
       );
 
-      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledTimes(3);
-      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ1'], {
-        limit: 1000,
-        modifiedSince: '2025-01-22T00:00:00Z',
-      });
-      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ2'], {
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledTimes(2);
+      expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(['PROJ1', 'PROJ2'], {
         limit: 1000,
         modifiedSince: '2025-01-20T00:00:00Z',
       });
@@ -292,9 +287,7 @@ describe('HulyService', () => {
         limit: 1000,
       });
 
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('split by')
-      );
+      expect(consoleSpy.log).toHaveBeenCalledWith(expect.stringContaining('split by'));
     });
 
     it('should use a single incremental bulk call when all cursors match', async () => {
@@ -309,7 +302,12 @@ describe('HulyService', () => {
         projectCount: 2,
       });
 
-      await fetchHulyIssuesBulk(mockRestClient, projectIds, { sync: { incremental: true } }, mockDb);
+      await fetchHulyIssuesBulk(
+        mockRestClient,
+        projectIds,
+        { sync: { incremental: true } },
+        mockDb
+      );
 
       expect(mockRestClient.listIssuesBulk).toHaveBeenCalledTimes(1);
       expect(mockRestClient.listIssuesBulk).toHaveBeenCalledWith(projectIds, {
@@ -744,112 +742,6 @@ describe('HulyService', () => {
   });
 
   // ============================================================
-  // syncVibeTaskToHuly Tests
-  // ============================================================
-  describe('syncVibeTaskToHuly', () => {
-    it('should skip task updated in Phase 1', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test Task',
-        description: 'Description\n\n---\nSynced from Huly: TEST-1',
-        status: 'in_progress',
-      };
-      const phase1UpdatedTasks = new Set(['task-1']);
-
-      await syncVibeTaskToHuly(mockRestClient, vibeTask, [], 'TEST', {}, phase1UpdatedTasks);
-
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining('was just updated in Phase 1')
-      );
-    });
-
-    it('should skip task without Huly identifier', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test Task',
-        description: 'No Huly link',
-        status: 'todo',
-      };
-
-      await syncVibeTaskToHuly(mockRestClient, vibeTask, [], 'TEST', {});
-
-      expect(mockRestClient.updateIssue).not.toHaveBeenCalled();
-    });
-
-    it('should update status when Vibe status differs from Huly', async () => {
-      const vibeTask = {
-        id: 'task-1',
-        title: 'Test Task',
-        description: 'Description\n\n---\nSynced from Huly: TEST-1',
-        status: 'done',
-      };
-      const hulyIssues = [
-        {
-          identifier: 'TEST-1',
-          status: 'In Progress',
-          description: 'Description',
-        },
-      ];
-      mockRestClient.updateIssue.mockResolvedValue({ success: true });
-
-      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
-
-      expect(mockRestClient.updateIssue).toHaveBeenCalledWith(
-        'TEST-1',
-        'status',
-        expect.any(String)
-      );
-    });
-
-    it('should reparent Huly issue when Vibe parent metadata changes', async () => {
-      const vibeTask = {
-        id: 'task-2',
-        title: 'Child Task',
-        description: 'Description\n\n---\nHuly Issue: TEST-2\nHuly Parent: TEST-99',
-        status: 'todo',
-      };
-      const hulyIssues = [
-        {
-          identifier: 'TEST-2',
-          status: 'Backlog',
-          description: 'Description',
-          parentIssue: { identifier: 'TEST-1' },
-        },
-      ];
-
-      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-2', parentIssue: 'TEST-99' });
-
-      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
-
-      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-2', 'TEST-99');
-    });
-
-    it('should move issue to top-level when parent metadata is none', async () => {
-      const vibeTask = {
-        id: 'task-3',
-        title: 'Child Task',
-        description: 'Description\n\n---\nHuly Issue: TEST-3\nHuly Parent: none',
-        status: 'todo',
-      };
-      const hulyIssues = [
-        {
-          identifier: 'TEST-3',
-          status: 'Backlog',
-          description: 'Description',
-          parentIssue: { identifier: 'TEST-1' },
-        },
-      ];
-
-      mockRestClient.moveIssue.mockResolvedValue({ moved: 'TEST-3', parentIssue: null });
-
-      await syncVibeTaskToHuly(mockRestClient, vibeTask, hulyIssues, 'TEST', {});
-
-      expect(mockRestClient.moveIssue).toHaveBeenCalledWith('TEST-3', null);
-    });
-  });
-
-  // ============================================================
   // createHulyService Factory Tests
   // ============================================================
   describe('createHulyService', () => {
@@ -862,7 +754,6 @@ describe('HulyService', () => {
       expect(service).toHaveProperty('updateIssueStatus');
       expect(service).toHaveProperty('updateIssueDescription');
       expect(service).toHaveProperty('updateIssueParent');
-      expect(service).toHaveProperty('syncVibeTaskToHuly');
     });
 
     it('should pass config to methods', async () => {
