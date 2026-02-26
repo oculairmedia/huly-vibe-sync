@@ -28,29 +28,22 @@ async function findExistingBeadsLink(
   title?: string
 ): Promise<string | null> {
   try {
-    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
-    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
-    const db = createSyncDatabase(dbPath) as any;
+    const { getDb } = await import('./sync-database');
+    const db = await getDb();
 
-    try {
-      const mapped = db.getIssue?.(hulyIdentifier);
-      if (mapped?.beads_issue_id) {
-        return String(mapped.beads_issue_id);
-      }
+    const mapped = db.getIssue?.(hulyIdentifier);
+    if (mapped?.beads_issue_id) {
+      return String(mapped.beads_issue_id);
+    }
 
-      if (title) {
-        const rows = db.getProjectIssues?.(projectIdentifier) || [];
-        const normalizedTitle = normalizeTitle(title);
-        const byTitle = rows.find(
-          (row: { title?: string; beads_issue_id?: string }) =>
-            !!row?.beads_issue_id && normalizeTitle(row?.title || '') === normalizedTitle
-        );
-        if (byTitle?.beads_issue_id) {
-          return String(byTitle.beads_issue_id);
+    if (title) {
+      const rows = db.getProjectIssues?.(projectIdentifier) || [];
+      const normalizedTitle = normalizeTitle(title);
+      for (const row of rows) {
+        if (row?.beads_issue_id && normalizeTitle(row?.title || '') === normalizedTitle) {
+          return String(row.beads_issue_id);
         }
       }
-    } finally {
-      db.close();
     }
   } catch {
     // Non-fatal - fallback to in-memory dedupe only
@@ -127,9 +120,10 @@ export async function syncIssueToBeads(input: {
 
   // DEDUPLICATION: Check if issue with same title already exists in Beads
   const normalizedTitle = normalizeTitle(issue.title);
-  const existingByTitle = existingBeadsIssues.find(
-    b => normalizeTitle(b.title) === normalizedTitle
-  );
+  const existingByTitle = existingBeadsIssues.find(b => {
+    if (!b.title) return false;
+    return normalizeTitle(b.title) === normalizedTitle;
+  });
   if (existingByTitle) {
     console.log(
       `[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`

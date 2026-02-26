@@ -51,6 +51,11 @@ function appRootModule(modulePath) {
 }
 const PROJECT_ISSUES_CACHE_TTL_MS = Number(process.env.TEMPORAL_DEDUPE_CACHE_TTL_MS || 15000);
 const projectIssuesCache = new Map();
+// Module-level singleton DB connection
+let createSyncDatabaseCached = null;
+let dbInstance = null;
+let isDbClosed = false;
+let dbInitPromise = null;
 function normalizeTitle(title) {
     if (!title)
         return '';
@@ -70,46 +75,102 @@ function normalizeTitle(title) {
 function getHulyIdentifier(row) {
     return (row.identifier || row.huly_id || null) ?? null;
 }
+function resolveDbPath() {
+    return process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+}
+async function getDb() {
+    if (dbInstance && !isDbClosed) {
+        return dbInstance;
+    }
+    if (dbInitPromise) {
+        return dbInitPromise;
+    }
+    dbInitPromise = (async () => {
+        if (!createSyncDatabaseCached) {
+            const databaseModule = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+            createSyncDatabaseCached = databaseModule.createSyncDatabase;
+        }
+        dbInstance = createSyncDatabaseCached(resolveDbPath());
+        isDbClosed = false;
+        return dbInstance;
+    })();
+    try {
+        return await dbInitPromise;
+    }
+    finally {
+        dbInitPromise = null;
+    }
+}
+async function closeDb() {
+    if (!dbInstance || isDbClosed) {
+        return;
+    }
+    try {
+        dbInstance.close();
+    }
+    catch {
+    }
+    finally {
+        isDbClosed = true;
+        dbInstance = null;
+    }
+}
+process.on('exit', () => {
+    if (dbInstance && !isDbClosed) {
+        try {
+            dbInstance.close();
+        }
+        catch {
+        }
+        finally {
+            isDbClosed = true;
+            dbInstance = null;
+        }
+    }
+});
+process.on('SIGTERM', () => {
+    void closeDb().finally(() => {
+        process.exit(0);
+    });
+});
+process.on('SIGINT', () => {
+    void closeDb().finally(() => {
+        process.exit(0);
+    });
+});
 async function getProjectIssueIndex(projectIdentifier) {
     const cached = projectIssuesCache.get(projectIdentifier);
     if (cached && cached.expiresAt > Date.now()) {
         return cached;
     }
-    const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
-    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
-    const db = createSyncDatabase(dbPath);
-    try {
-        const dbAny = db;
-        const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []);
-        const byBeadsId = new Map();
-        const byNormalizedTitle = new Map();
-        const byHulyIdentifier = new Map();
-        for (const row of rows) {
-            if (row.beads_issue_id) {
-                byBeadsId.set(row.beads_issue_id, row);
-            }
-            const nt = normalizeTitle(row.title || '');
-            if (nt) {
-                byNormalizedTitle.set(nt, row);
-            }
-            const hid = getHulyIdentifier(row);
-            if (hid) {
-                byHulyIdentifier.set(hid, row);
-            }
+    const db = await getDb();
+    const dbAny = db;
+    const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []);
+    const byBeadsId = new Map();
+    const byNormalizedTitle = new Map();
+    const byHulyIdentifier = new Map();
+    for (const row of rows) {
+        if (row.beads_issue_id) {
+            byBeadsId.set(row.beads_issue_id, row);
         }
-        const index = {
-            rows,
-            byBeadsId,
-            byNormalizedTitle,
-            byHulyIdentifier,
-            expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
-        };
-        projectIssuesCache.set(projectIdentifier, index);
-        return index;
+        const nt = normalizeTitle(row.title || '');
+        if (nt) {
+            byNormalizedTitle.set(nt, row);
+        }
+        const hid = getHulyIdentifier(row);
+        if (hid) {
+            byHulyIdentifier.set(hid, row);
+        }
     }
-    finally {
-        db.close();
-    }
+    const index = {
+        rows,
+        byBeadsId,
+        byNormalizedTitle,
+        byHulyIdentifier,
+        expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
+    };
+    projectIssuesCache.set(projectIdentifier, index);
+    return index;
 }
 async function findMappedIssueByBeadsId(projectIdentifier, beadsIssueId) {
     if (!projectIdentifier || !beadsIssueId)

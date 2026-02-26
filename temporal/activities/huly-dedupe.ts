@@ -31,6 +31,12 @@ interface ProjectIssueIndex {
 
 const projectIssuesCache = new Map<string, ProjectIssueIndex>();
 
+// Module-level singleton DB connection
+let createSyncDatabaseCached: any = null;
+let dbInstance: any = null;
+let isDbClosed = false;
+let dbInitPromise: Promise<any> | null = null;
+
 export function normalizeTitle(title: string): string {
   if (!title) return '';
   return title
@@ -51,50 +57,112 @@ function getHulyIdentifier(row: IssueRow): string | null {
   return (row.identifier || row.huly_id || null) ?? null;
 }
 
+function resolveDbPath(): string {
+  return process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+}
+
+async function getDb(): Promise<any> {
+  if (dbInstance && !isDbClosed) {
+    return dbInstance;
+  }
+
+  if (dbInitPromise) {
+    return dbInitPromise;
+  }
+
+  dbInitPromise = (async () => {
+    if (!createSyncDatabaseCached) {
+      const databaseModule = await import(appRootModule('lib/database.js'));
+      createSyncDatabaseCached = databaseModule.createSyncDatabase;
+    }
+
+    dbInstance = createSyncDatabaseCached!(resolveDbPath());
+    isDbClosed = false;
+    return dbInstance;
+  })();
+
+  try {
+    return await dbInitPromise;
+  } finally {
+    dbInitPromise = null;
+  }
+}
+
+async function closeDb(): Promise<void> {
+  if (!dbInstance || isDbClosed) {
+    return;
+  }
+
+  try {
+    dbInstance.close();
+  } catch {
+  } finally {
+    isDbClosed = true;
+    dbInstance = null;
+  }
+}
+
+process.on('exit', () => {
+  if (dbInstance && !isDbClosed) {
+    try {
+      dbInstance.close();
+    } catch {
+    } finally {
+      isDbClosed = true;
+      dbInstance = null;
+    }
+  }
+});
+
+process.on('SIGTERM', () => {
+  void closeDb().finally(() => {
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  void closeDb().finally(() => {
+    process.exit(0);
+  });
+});
+
 async function getProjectIssueIndex(projectIdentifier: string): Promise<ProjectIssueIndex> {
   const cached = projectIssuesCache.get(projectIdentifier);
   if (cached && cached.expiresAt > Date.now()) {
     return cached;
   }
 
-  const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
-  const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
-  const db = createSyncDatabase(dbPath);
+  const db = await getDb();
+  const dbAny = db as any;
+  const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []) as IssueRow[];
 
-  try {
-    const dbAny = db as any;
-    const rows = (dbAny.getProjectIssues?.(projectIdentifier) || []) as IssueRow[];
+  const byBeadsId = new Map<string, IssueRow>();
+  const byNormalizedTitle = new Map<string, IssueRow>();
+  const byHulyIdentifier = new Map<string, IssueRow>();
 
-    const byBeadsId = new Map<string, IssueRow>();
-    const byNormalizedTitle = new Map<string, IssueRow>();
-    const byHulyIdentifier = new Map<string, IssueRow>();
-
-    for (const row of rows) {
-      if (row.beads_issue_id) {
-        byBeadsId.set(row.beads_issue_id, row);
-      }
-      const nt = normalizeTitle(row.title || '');
-      if (nt) {
-        byNormalizedTitle.set(nt, row);
-      }
-      const hid = getHulyIdentifier(row);
-      if (hid) {
-        byHulyIdentifier.set(hid, row);
-      }
+  for (const row of rows) {
+    if (row.beads_issue_id) {
+      byBeadsId.set(row.beads_issue_id, row);
     }
-
-    const index: ProjectIssueIndex = {
-      rows,
-      byBeadsId,
-      byNormalizedTitle,
-      byHulyIdentifier,
-      expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
-    };
-    projectIssuesCache.set(projectIdentifier, index);
-    return index;
-  } finally {
-    db.close();
+    const nt = normalizeTitle(row.title || '');
+    if (nt) {
+      byNormalizedTitle.set(nt, row);
+    }
+    const hid = getHulyIdentifier(row);
+    if (hid) {
+      byHulyIdentifier.set(hid, row);
+    }
   }
+
+  const index: ProjectIssueIndex = {
+    rows,
+    byBeadsId,
+    byNormalizedTitle,
+    byHulyIdentifier,
+    expiresAt: Date.now() + PROJECT_ISSUES_CACHE_TTL_MS,
+  };
+  projectIssuesCache.set(projectIdentifier, index);
+  return index;
 }
 
 export async function findMappedIssueByBeadsId(

@@ -62,6 +62,8 @@ function execCommand(command: string, cwd: string, options: ExecSyncOptions = {}
 export class BeadsClient {
   private repoPath: string;
   private timeout: number;
+  private cachedIssuePrefix: string | null = null;
+  private permissionsChecked = false;
 
   constructor(repoPath: string, options: BeadsClientOptions = {}) {
     this.repoPath = repoPath;
@@ -81,6 +83,9 @@ export class BeadsClient {
    * Logs warnings for permission issues (common when bd daemon runs as wrong user).
    */
   checkFilePermissions(): void {
+    if (this.permissionsChecked) return;
+    this.permissionsChecked = true;
+
     const beadsDir = path.join(this.repoPath, '.beads');
     const criticalFiles = ['beads.db', 'issues.jsonl', 'beads.db-shm', 'beads.db-wal'];
     for (const file of criticalFiles) {
@@ -139,10 +144,15 @@ export class BeadsClient {
    * Get the issue prefix from config.yaml
    */
   private getIssuePrefix(): string {
+    if (this.cachedIssuePrefix !== null) {
+      return this.cachedIssuePrefix;
+    }
+
     try {
       const configuredPrefix = this.execBeads('config get issue_prefix').trim();
       if (configuredPrefix) {
-        return configuredPrefix.replace(/-$/, '');
+        this.cachedIssuePrefix = configuredPrefix.replace(/-$/, '');
+        return this.cachedIssuePrefix;
       }
     } catch {
       // Fall through to file-based fallback
@@ -152,10 +162,12 @@ export class BeadsClient {
     try {
       const content = fs.readFileSync(configPath, 'utf-8');
       const match = content.match(/issue[_-]prefix:\s*["']?([^"'\n]+)["']?/);
-      return match ? match[1].trim() : 'bd';
+      this.cachedIssuePrefix = match ? match[1].trim() : 'bd';
     } catch {
-      return 'bd';
+      this.cachedIssuePrefix = 'bd';
     }
+
+    return this.cachedIssuePrefix;
   }
 
   /**
@@ -460,7 +472,7 @@ export class BeadsClient {
   // ============================================================
 
   /**
-   * Find a Beads issue matching a Huly issue by title
+   * Find a Beads issue matching a Huly issue by title (exact normalized match only)
    */
   async findByTitle(title: string): Promise<BeadsIssue | null> {
     const issues = await this.listIssues();
@@ -469,11 +481,7 @@ export class BeadsClient {
     return (
       issues.find(issue => {
         const issueTitle = issue.title.toLowerCase().trim();
-        return (
-          issueTitle === normalizedTitle ||
-          issueTitle.includes(normalizedTitle) ||
-          normalizedTitle.includes(issueTitle)
-        );
+        return issueTitle === normalizedTitle;
       }) || null
     );
   }

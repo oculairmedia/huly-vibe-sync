@@ -58,25 +58,20 @@ function appRootModule(modulePath) {
 }
 async function findExistingBeadsLink(projectIdentifier, hulyIdentifier, title) {
     try {
-        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
-        const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
-        const db = createSyncDatabase(dbPath);
-        try {
-            const mapped = db.getIssue?.(hulyIdentifier);
-            if (mapped?.beads_issue_id) {
-                return String(mapped.beads_issue_id);
-            }
-            if (title) {
-                const rows = db.getProjectIssues?.(projectIdentifier) || [];
-                const normalizedTitle = (0, huly_dedupe_1.normalizeTitle)(title);
-                const byTitle = rows.find((row) => !!row?.beads_issue_id && (0, huly_dedupe_1.normalizeTitle)(row?.title || '') === normalizedTitle);
-                if (byTitle?.beads_issue_id) {
-                    return String(byTitle.beads_issue_id);
+        const { getDb } = await Promise.resolve().then(() => __importStar(require('./sync-database')));
+        const db = await getDb();
+        const mapped = db.getIssue?.(hulyIdentifier);
+        if (mapped?.beads_issue_id) {
+            return String(mapped.beads_issue_id);
+        }
+        if (title) {
+            const rows = db.getProjectIssues?.(projectIdentifier) || [];
+            const normalizedTitle = (0, huly_dedupe_1.normalizeTitle)(title);
+            for (const row of rows) {
+                if (row?.beads_issue_id && (0, huly_dedupe_1.normalizeTitle)(row?.title || '') === normalizedTitle) {
+                    return String(row.beads_issue_id);
                 }
             }
-        }
-        finally {
-            db.close();
         }
     }
     catch {
@@ -102,7 +97,11 @@ async function syncIssueToBeads(input) {
     }
     // DEDUPLICATION: Check if issue with same title already exists in Beads
     const normalizedTitle = (0, huly_dedupe_1.normalizeTitle)(issue.title);
-    const existingByTitle = existingBeadsIssues.find(b => (0, huly_dedupe_1.normalizeTitle)(b.title) === normalizedTitle);
+    const existingByTitle = existingBeadsIssues.find(b => {
+        if (!b.title)
+            return false;
+        return (0, huly_dedupe_1.normalizeTitle)(b.title) === normalizedTitle;
+    });
     if (existingByTitle) {
         console.log(`[Temporal:Beads] Skipped ${issue.identifier} - duplicate title exists as ${existingByTitle.id}`);
         return { success: true, skipped: true, id: existingByTitle.id };

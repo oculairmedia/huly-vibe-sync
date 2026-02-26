@@ -33,6 +33,8 @@ export interface BeadsClientOptions {
 export declare class BeadsClient {
     private repoPath;
     private timeout;
+    private cachedIssuePrefix;
+    private permissionsChecked;
     constructor(repoPath: string, options?: BeadsClientOptions);
     /**
      * Check if the repository has Beads initialized
@@ -106,7 +108,7 @@ export declare class BeadsClient {
      */
     commitChanges(message: string): Promise<boolean>;
     /**
-     * Find a Beads issue matching a Huly issue by title
+     * Find a Beads issue matching a Huly issue by title (exact normalized match only)
      */
     findByTitle(title: string): Promise<BeadsIssue | null>;
     /**

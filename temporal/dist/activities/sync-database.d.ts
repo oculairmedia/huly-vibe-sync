@@ -31,6 +31,7 @@ export interface PersistIssueStateResult {
         error: string;
     }>;
 }
+export declare function getDb(): Promise<any>;
 export interface IssueSyncTimestamps {
     huly_modified_at: number | null;
     vibe_modified_at: number | null;
