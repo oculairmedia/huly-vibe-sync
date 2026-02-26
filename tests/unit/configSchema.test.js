@@ -8,20 +8,60 @@ import { configSchema } from '../../lib/configSchema.js';
 function validConfig(overrides = {}) {
   return {
     huly: { apiUrl: 'http://huly.local/api', useRestApi: true },
-    vibeKanban: { mcpUrl: 'http://vibe.local/mcp', apiUrl: 'http://vibe.local/api', useRestApi: true },
-    beads: { enabled: true, syncInterval: 60000, operationDelay: 50, batchDelay: 200, maxConcurrent: 1 },
-    sync: { interval: 300000, dryRun: false, incremental: true, parallel: false, maxWorkers: 5, skipEmpty: false, apiDelay: 10 },
+    vibeKanban: {
+      mcpUrl: 'http://vibe.local/mcp',
+      apiUrl: 'http://vibe.local/api',
+      useRestApi: true,
+    },
+    beads: {
+      enabled: true,
+      syncInterval: 60000,
+      operationDelay: 50,
+      batchDelay: 200,
+      maxConcurrent: 1,
+    },
+    sync: {
+      interval: 300000,
+      dryRun: false,
+      incremental: true,
+      parallel: false,
+      maxWorkers: 5,
+      skipEmpty: false,
+      apiDelay: 10,
+    },
     reconciliation: { enabled: true, intervalMinutes: 1440, action: 'mark_deleted', dryRun: false },
     stacks: { baseDir: '/opt/stacks' },
     letta: { enabled: false, baseURL: undefined, password: undefined },
-    graphiti: { enabled: false, apiUrl: 'http://localhost:8003', groupIdPrefix: 'vibesync_', timeout: 30000, retries: 3 },
-    codePerception: { enabled: false, debounceMs: 2000, batchSize: 50, maxFileSizeKb: 500, excludePatterns: [] },
+    graphiti: {
+      enabled: false,
+      apiUrl: 'http://localhost:8003',
+      groupIdPrefix: 'vibesync_',
+      timeout: 30000,
+      retries: 3,
+    },
+    codePerception: {
+      enabled: false,
+      debounceMs: 2000,
+      batchSize: 50,
+      maxFileSizeKb: 500,
+      excludePatterns: [],
+    },
     bookstack: {
-      enabled: false, url: 'http://192.168.50.80:8087', tokenId: '', tokenSecret: '',
-      syncInterval: 3600000, exportFormats: ['markdown'], exportImages: true, exportAttachments: true,
-      exportMeta: true, modifyMarkdownLinks: true, docsSubdir: 'docs/bookstack',
-      projectBookMappings: [], exporterOutputPath: '/bookstack-exports',
-      importOnSync: false, bidirectionalSync: false,
+      enabled: false,
+      url: 'http://192.168.50.80:8087',
+      tokenId: '',
+      tokenSecret: '',
+      syncInterval: 3600000,
+      exportFormats: ['markdown'],
+      exportImages: true,
+      exportAttachments: true,
+      exportMeta: true,
+      modifyMarkdownLinks: true,
+      docsSubdir: 'docs/bookstack',
+      projectBookMappings: [],
+      exporterOutputPath: '/bookstack-exports',
+      importOnSync: false,
+      bidirectionalSync: false,
     },
     ...overrides,
   };
@@ -37,14 +77,6 @@ describe('configSchema', () => {
     const result = configSchema.safeParse(validConfig({ huly: { apiUrl: '', useRestApi: true } }));
     expect(result.success).toBe(false);
     expect(result.error.issues[0].message).toContain('HULY_API_URL');
-  });
-
-  it('rejects missing vibe URLs', () => {
-    const result = configSchema.safeParse(
-      validConfig({ vibeKanban: { mcpUrl: '', apiUrl: '', useRestApi: true } })
-    );
-    expect(result.success).toBe(false);
-    expect(result.error.issues[0].message).toContain('VIBE_API_URL');
   });
 
   it('rejects negative sync interval', () => {
@@ -77,7 +109,9 @@ describe('configSchema', () => {
   });
 
   it('rejects enabled Letta without password', () => {
-    const cfg = validConfig({ letta: { enabled: true, baseURL: 'http://letta.local', password: '' } });
+    const cfg = validConfig({
+      letta: { enabled: true, baseURL: 'http://letta.local', password: '' },
+    });
     const result = configSchema.safeParse(cfg);
     expect(result.success).toBe(false);
     expect(result.error.issues[0].message).toContain('LETTA_PASSWORD');

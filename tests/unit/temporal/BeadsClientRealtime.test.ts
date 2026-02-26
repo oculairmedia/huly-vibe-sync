@@ -29,11 +29,13 @@ describe('Temporal BeadsClient realtime sync helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecSync.mockReturnValue('');
-    mockExec.mockImplementation((command: string, options: any, callback?: (error: Error | null) => void) => {
-      const cb = typeof options === 'function' ? options : callback;
-      if (cb) cb(null);
-      return {} as any;
-    });
+    mockExec.mockImplementation(
+      (command: string, options: any, callback?: (error: Error | null) => void) => {
+        const cb = typeof options === 'function' ? options : callback;
+        if (cb) cb(null);
+        return {} as any;
+      }
+    );
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue('issue_prefix: bd\n');
     mockRandomBytes.mockReturnValue(Buffer.from([0x01, 0x02, 0x03]));
@@ -86,7 +88,10 @@ describe('Temporal BeadsClient realtime sync helpers', () => {
         }),
       })
     );
-    expect(mockExecSync).not.toHaveBeenCalledWith(expect.stringContaining('label add'), expect.anything());
+    expect(mockExecSync).not.toHaveBeenCalledWith(
+      expect.stringContaining('label add'),
+      expect.anything()
+    );
   });
 
   it('falls back to CLI when host helper API fails', async () => {
@@ -97,7 +102,7 @@ describe('Temporal BeadsClient realtime sync helpers', () => {
     await client.removeLabel('bd-12345', 'legacy');
 
     expect(mockExecSync).toHaveBeenCalledWith(
-      expect.stringContaining('bd label remove bd-12345 "legacy" --no-daemon'),
+      expect.stringContaining('bd label remove bd-12345 "legacy" --no-auto-flush --no-daemon'),
       expect.objectContaining({ cwd: '/repo' })
     );
   });

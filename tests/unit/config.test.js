@@ -33,7 +33,7 @@ describe('config', () => {
 
       expect(config).toBeDefined();
       expect(config.huly).toBeDefined();
-      expect(config.vibeKanban).toBeDefined();
+      expect(config.beads).toBeDefined();
       expect(config.sync).toBeDefined();
       expect(config.stacks).toBeDefined();
       expect(config.letta).toBeDefined();
@@ -41,14 +41,12 @@ describe('config', () => {
 
     it('should use environment variables when provided', () => {
       process.env.HULY_API_URL = 'http://custom-huly.local/api';
-      process.env.VIBE_API_URL = 'http://custom-vibe.local/api';
       process.env.SYNC_INTERVAL = '60000';
       process.env.MAX_WORKERS = '10';
 
       const config = loadConfig();
 
       expect(config.huly.apiUrl).toBe('http://custom-huly.local/api');
-      expect(config.vibeKanban.apiUrl).toBe('http://custom-vibe.local/api');
       expect(config.sync.interval).toBe(60000);
       expect(config.sync.maxWorkers).toBe(10);
     });
@@ -139,17 +137,6 @@ describe('config', () => {
       expect(() => validateConfig(config)).toThrow('HULY_API_URL or HULY_MCP_URL must be set');
     });
 
-    it('should reject configuration without Vibe URL', () => {
-      const config = {
-        huly: { apiUrl: 'http://huly.local' },
-        vibeKanban: { apiUrl: '', mcpUrl: '' },
-        sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
-        letta: { enabled: false },
-      };
-
-      expect(() => validateConfig(config)).toThrow('VIBE_API_URL or VIBE_MCP_URL must be set');
-    });
-
     it('should reject sync interval less than 1000ms', () => {
       const config = {
         huly: { apiUrl: 'http://huly.local' },
@@ -221,8 +208,7 @@ describe('config', () => {
 
       expect(summary).toHaveProperty('hulyApi');
       expect(summary).toHaveProperty('hulyMode');
-      expect(summary).toHaveProperty('vibeApi');
-      expect(summary).toHaveProperty('vibeMode');
+      expect(summary).toHaveProperty('beadsEnabled');
       expect(summary).toHaveProperty('syncInterval');
       expect(summary).toHaveProperty('dryRun');
     });

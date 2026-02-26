@@ -2078,19 +2078,6 @@ describe('SyncDatabase', () => {
       });
     });
 
-    describe('getProjectByVibeId', () => {
-      it('should find project by vibe_id', () => {
-        const project = db.getProjectByVibeId(999);
-        expect(project).toBeTruthy();
-        expect(project.identifier).toBe('LOOK');
-      });
-
-      it('should return undefined for non-existent vibe_id', () => {
-        const project = db.getProjectByVibeId(12345);
-        expect(project).toBeUndefined();
-      });
-    });
-
     describe('getProjectByFolderName', () => {
       it('should find project by exact filesystem path', () => {
         const id = db.getProjectByFolderName('/opt/stacks/lookup-project');

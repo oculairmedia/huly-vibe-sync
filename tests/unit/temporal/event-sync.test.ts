@@ -12,6 +12,14 @@ const createMockActivities = () => ({
   fetchBeadsIssues: vi.fn().mockResolvedValue([]),
   getBeadsIssue: vi.fn().mockResolvedValue(null),
   syncBeadsToHuly: vi.fn().mockResolvedValue({ success: true }),
+  hasBeadsIssueChanged: vi.fn().mockResolvedValue(true),
+  persistIssueSyncState: vi
+    .fn()
+    .mockResolvedValue({ success: true, updated: 1, failed: 0, errors: [] }),
+  getIssueSyncState: vi.fn().mockResolvedValue({ status: 'Backlog', beadsStatus: 'open' }),
+  createBeadsIssueInHuly: vi
+    .fn()
+    .mockResolvedValue({ success: true, created: true, hulyIdentifier: 'TEST-NEW' }),
   getVibeTask: vi.fn().mockResolvedValue(null),
   resolveGitRepoPath: vi.fn().mockResolvedValue('/opt/stacks/example'),
 });
@@ -64,21 +72,13 @@ describe('BeadsFileChangeWorkflow', () => {
 
   it('syncs labeled Beads issues to Huly (auto-sync path)', async () => {
     activities.fetchBeadsIssues.mockResolvedValue([
-      { id: 'bd-1', labels: ['huly:TEST-1'] },
+      { id: 'bd-1', title: 'Task 1', status: 'open', labels: ['huly:TEST-1'] },
     ]);
-    activities.getBeadsIssue.mockResolvedValue({
-      id: 'bd-1',
-      title: 'Task 1',
-      description: 'Desc',
-      status: 'open',
-      updated_at: new Date().toISOString(),
-    });
     activities.syncBeadsToHuly.mockResolvedValue({ success: true });
 
     const input: BeadsFileChangeInput = {
       projectIdentifier: 'TEST',
       gitRepoPath: '/repo',
-      vibeProjectId: 'vibe-1',
       changedFiles: ['.beads/issues.jsonl'],
       timestamp: new Date().toISOString(),
     };
@@ -96,13 +96,14 @@ describe('BeadsFileChangeWorkflow', () => {
     );
   }, 30000);
 
-  it('skips issues without huly labels', async () => {
-    activities.fetchBeadsIssues.mockResolvedValue([{ id: 'bd-2', labels: ['bug'] }]);
+  it('creates Huly issue for Beads issues without huly labels', async () => {
+    activities.fetchBeadsIssues.mockResolvedValue([
+      { id: 'bd-2', title: 'Unlinked issue', status: 'open', labels: ['bug'] },
+    ]);
 
     const input: BeadsFileChangeInput = {
       projectIdentifier: 'TEST',
       gitRepoPath: '/repo',
-      vibeProjectId: 'vibe-1',
       changedFiles: ['.beads/beads.db-wal'],
       timestamp: new Date().toISOString(),
     };
@@ -113,29 +114,15 @@ describe('BeadsFileChangeWorkflow', () => {
     expect(result.issuesProcessed).toBe(1);
     expect(result.issuesSynced).toBe(1);
     expect(result.errors).toHaveLength(0);
+    expect(activities.createBeadsIssueInHuly).toHaveBeenCalledTimes(1);
     expect(activities.syncBeadsToHuly).not.toHaveBeenCalled();
   }, 30000);
 
   it('records per-issue sync errors (E2E-like batch)', async () => {
     activities.fetchBeadsIssues.mockResolvedValue([
-      { id: 'bd-10', labels: ['huly:TEST-10'] },
-      { id: 'bd-11', labels: ['huly:TEST-11'] },
+      { id: 'bd-10', title: 'Task 10', status: 'open', labels: ['huly:TEST-10'] },
+      { id: 'bd-11', title: 'Task 11', status: 'open', labels: ['huly:TEST-11'] },
     ]);
-    activities.getBeadsIssue
-      .mockResolvedValueOnce({
-        id: 'bd-10',
-        title: 'Task 10',
-        description: 'Desc',
-        status: 'open',
-        updated_at: new Date().toISOString(),
-      })
-      .mockResolvedValueOnce({
-        id: 'bd-11',
-        title: 'Task 11',
-        description: 'Desc',
-        status: 'open',
-        updated_at: new Date().toISOString(),
-      });
     activities.syncBeadsToHuly
       .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: false, error: 'Huly API error' });
@@ -143,7 +130,6 @@ describe('BeadsFileChangeWorkflow', () => {
     const input: BeadsFileChangeInput = {
       projectIdentifier: 'TEST',
       gitRepoPath: '/repo',
-      vibeProjectId: 'vibe-1',
       changedFiles: ['.beads/issues.jsonl', '.beads/beads.db'],
       timestamp: new Date().toISOString(),
     };
