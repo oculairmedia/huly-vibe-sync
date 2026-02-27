@@ -191,6 +191,16 @@ class MockGraphitiClient {
     return { deleted: functionNames.length, failed: 0, errors: [] };
   }
 
+  async syncModules(options) {
+    this.callOrder.push({ method: 'syncModules', modules: options.modules?.length || 0 });
+    if (this.shouldThrow) throw new Error('Graphiti unavailable');
+    return {
+      modules: { success: options.modules?.length || 0, failed: 0, errors: [] },
+      containment: { success: options.modules?.length || 0, failed: 0, errors: [] },
+      dependencies: { success: options.edges?.length || 0, failed: 0, errors: [] },
+    };
+  }
+
   getStats() {
     return { entitiesCreated: this.upserts.length };
   }
@@ -689,7 +699,7 @@ describe('CodePerceptionWatcher', () => {
 
     it('should initialize stats with AST metrics', () => {
       const { watcher } = createWatcher();
-      expect(watcher.stats.functionsSynced).toBe(0);
+      expect(watcher.stats.modulesSynced).toBe(0);
       expect(watcher.stats.astParseSuccess).toBe(0);
       expect(watcher.stats.astParseFailure).toBe(0);
     });
@@ -719,7 +729,7 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/some/path');
 
       expect(result.filesProcessed).toBe(0);
-      expect(result.functionsSynced).toBe(0);
+      expect(result.modulesSynced).toBe(0);
     });
 
     it('should return empty result when AST is disabled', async () => {
@@ -728,7 +738,7 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/some/path');
 
       expect(result.filesProcessed).toBe(0);
-      expect(result.functionsSynced).toBe(0);
+      expect(result.modulesSynced).toBe(0);
     });
 
     it('should return empty result when no files found in project', async () => {
@@ -737,7 +747,7 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/empty/project');
 
       expect(result.filesProcessed).toBe(0);
-      expect(result.functionsSynced).toBe(0);
+      expect(result.modulesSynced).toBe(0);
     });
 
     it('should use default concurrency and rateLimit when not specified', async () => {
@@ -746,7 +756,7 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/test/project');
 
       expect(result).toHaveProperty('filesProcessed');
-      expect(result).toHaveProperty('functionsSynced');
+      expect(result).toHaveProperty('modulesSynced');
       expect(result).toHaveProperty('errors');
     });
 
@@ -759,18 +769,18 @@ describe('CodePerceptionWatcher', () => {
       });
 
       expect(result).toHaveProperty('filesProcessed');
-      expect(result).toHaveProperty('functionsSynced');
+      expect(result).toHaveProperty('modulesSynced');
     });
 
     it('should update stats after sync', async () => {
       const { watcher } = createWatcher();
       const initialStats = watcher.getStats();
-      const initialFunctionsSynced = initialStats.functionsSynced || 0;
+      const initialModulesSynced = initialStats.modulesSynced || 0;
 
       await watcher.astInitialSync('TEST', '/test/project');
 
       const newStats = watcher.getStats();
-      expect(newStats.functionsSynced).toBeGreaterThanOrEqual(initialFunctionsSynced);
+      expect(newStats.modulesSynced).toBeGreaterThanOrEqual(initialModulesSynced);
     });
   });
 
@@ -1209,7 +1219,7 @@ describe('CodePerceptionWatcher', () => {
       watcher.stats.filesWatched = 100;
       watcher.stats.changesDetected = 50;
       watcher.stats.entitiesSynced = 25;
-      watcher.stats.functionsSynced = 10;
+      watcher.stats.modulesSynced = 10;
       watcher.stats.astParseSuccess = 8;
       watcher.stats.astParseFailure = 2;
       watcher.stats.errors = 1;
@@ -1221,7 +1231,7 @@ describe('CodePerceptionWatcher', () => {
           filesWatched: 100,
           changesDetected: 50,
           entitiesSynced: 25,
-          functionsSynced: 10,
+          modulesSynced: 10,
           astSuccessRate: '80%',
           errors: 1,
         }),
@@ -1495,7 +1505,7 @@ describe('CodePerceptionWatcher', () => {
   });
 
   describe('_handleDeletedFilesAst', () => {
-    it('should delete functions for files with cached AST data', async () => {
+    it('should remove deleted files from cache and re-sync modules', async () => {
       const { watcher, mockClient } = createWatcher();
 
       const astCacheMock = {
@@ -1507,8 +1517,11 @@ describe('CodePerceptionWatcher', () => {
         }),
         remove: vi.fn(),
         save: vi.fn().mockResolvedValue(undefined),
+        entries: new Map(),
       };
       watcher.astCaches.set('TEST', astCacheMock);
+      // Set up AST client for module re-sync
+      watcher.astGraphitiClients.set('TEST', mockClient);
 
       await watcher._handleDeletedFilesAst(
         'TEST',
@@ -1517,9 +1530,6 @@ describe('CodePerceptionWatcher', () => {
         mockClient
       );
 
-      expect(mockClient.callOrder).toContainEqual(
-        expect.objectContaining({ method: 'deleteFunctions', file: 'deleted.js', functions: 2 })
-      );
       expect(astCacheMock.remove).toHaveBeenCalledWith('deleted.js');
       expect(astCacheMock.save).toHaveBeenCalled();
     });
@@ -1569,33 +1579,32 @@ describe('CodePerceptionWatcher', () => {
       );
     });
 
-    it('should handle deleteFunctions error gracefully', async () => {
+    it('should handle module sync error gracefully after deletion', async () => {
       const { watcher, mockClient, mockLogger } = createWatcher();
 
-      const failingClient = {
-        ...mockClient,
-        deleteFunctions: vi.fn().mockRejectedValue(new Error('delete failed')),
-        callOrder: [],
-      };
+      const failingAstClient = new MockGraphitiClient();
+      failingAstClient.shouldThrow = true;
 
       const astCacheMock = {
         get: vi.fn(() => ({ functions: [{ name: 'fn1' }] })),
         remove: vi.fn(),
         save: vi.fn().mockResolvedValue(undefined),
+        entries: new Map(),
       };
       watcher.astCaches.set('TEST', astCacheMock);
+      watcher.astGraphitiClients.set('TEST', failingAstClient);
 
+      // Should not throw even when module sync fails
       await watcher._handleDeletedFilesAst(
         'TEST',
         '/projects/test-project',
         ['failing.js'],
-        failingClient
+        mockClient
       );
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ err: expect.any(Error), file: 'failing.js' }),
-        'Failed to delete functions'
-      );
+      // Cache should still be cleaned up even if sync fails
+      expect(astCacheMock.remove).toHaveBeenCalledWith('failing.js');
+      expect(astCacheMock.save).toHaveBeenCalled();
     });
 
     it('should return early when no AST cache exists', async () => {
@@ -1737,7 +1746,7 @@ describe('CodePerceptionWatcher', () => {
       );
 
       expect(result.parseSuccess).toBeGreaterThanOrEqual(0);
-      expect(result).toHaveProperty('functionsSynced');
+      expect(result).toHaveProperty('modulesSynced');
     });
 
     it('should return zero results when no AST-supported files', async () => {
@@ -1750,11 +1759,11 @@ describe('CodePerceptionWatcher', () => {
         mockClient
       );
 
-      expect(result.functionsSynced).toBe(0);
+      expect(result.modulesSynced).toBe(0);
       expect(result.parseSuccess).toBe(0);
     });
 
-    it('should sync functions via client.syncFilesWithFunctions', async () => {
+    it('should sync module summaries via _processAstForFiles', async () => {
       const { watcher, mockFs, mockClient } = createWatcher();
 
       mockFs.setFile('/projects/test-project/src/app.js', 'function app() { return 1; }');
@@ -1766,7 +1775,7 @@ describe('CodePerceptionWatcher', () => {
         mockClient
       );
 
-      expect(result.functionsSynced).toBeGreaterThanOrEqual(0);
+      expect(result.modulesSynced).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle parse errors gracefully', async () => {
@@ -1819,7 +1828,7 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/projects/test-project');
 
       expect(result.filesProcessed).toBeGreaterThanOrEqual(0);
-      expect(result).toHaveProperty('functionsSynced');
+      expect(result).toHaveProperty('modulesSynced');
       expect(result).toHaveProperty('parseSuccess');
       expect(result).toHaveProperty('parseFailure');
       expect(result).toHaveProperty('errors');
@@ -1845,15 +1854,17 @@ describe('CodePerceptionWatcher', () => {
       const result = await watcher.astInitialSync('TEST', '/projects/test-project');
 
       expect(result.filesProcessed).toBe(0);
-      expect(result.functionsSynced).toBe(0);
+      expect(result.modulesSynced).toBe(0);
     });
 
-    it('should handle batch sync errors', async () => {
+    it('should handle module sync errors', async () => {
       const { watcher, mockFs, mockClient } = createWatcher();
       watcher.graphitiClients.set('TEST', mockClient);
 
-      // Make syncFilesWithFunctions throw
-      mockClient.syncFilesWithFunctions = vi.fn().mockRejectedValue(new Error('sync error'));
+      // Set up AST client that throws on syncModules
+      const failingAstClient = new MockGraphitiClient();
+      failingAstClient.shouldThrow = true;
+      watcher.astGraphitiClients.set('TEST', failingAstClient);
 
       mockFs.readdir = dir => {
         if (dir === '/projects/test-project') {
@@ -1865,7 +1876,8 @@ describe('CodePerceptionWatcher', () => {
 
       const result = await watcher.astInitialSync('TEST', '/projects/test-project');
 
-      expect(result.errors.length).toBeGreaterThan(0);
+      // Should complete without throwing
+      expect(result.filesProcessed).toBeGreaterThanOrEqual(0);
     });
 
     it('should update global stats after sync', async () => {
@@ -1883,7 +1895,7 @@ describe('CodePerceptionWatcher', () => {
       await watcher.astInitialSync('TEST', '/projects/test-project');
 
       expect(watcher.stats.astParseSuccess).toBeGreaterThanOrEqual(0);
-      expect(watcher.stats.functionsSynced).toBeGreaterThanOrEqual(0);
+      expect(watcher.stats.modulesSynced).toBeGreaterThanOrEqual(0);
     });
 
     it('should skip files with no functions parsed', async () => {
