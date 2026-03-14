@@ -7,6 +7,7 @@ import type {
   BeadsFileChangeInput,
   BeadsFileChangeResult,
 } from '../../../temporal/workflows/event-sync';
+import type { HulyWebhookChangeInput } from '../../../temporal/workflows/event-sync';
 
 const createMockActivities = () => ({
   fetchBeadsIssues: vi.fn().mockResolvedValue([]),
@@ -56,6 +57,42 @@ async function runBeadsFileChangeWorkflow(
     testEnv.client.workflow.execute('BeadsFileChangeWorkflow', {
       taskQueue,
       workflowId: `test-beads-file-change-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      args: [input],
+      retry: { maximumAttempts: 1 },
+      workflowExecutionTimeout: '10s',
+    })
+  );
+}
+
+const createMockHulyActivities = () => ({
+  resolveGitRepoPath: vi.fn().mockResolvedValue('/opt/stacks/huly-vibe-sync'),
+  getHulyIssue: vi.fn().mockResolvedValue(null),
+  syncHulyToBeads: vi.fn().mockResolvedValue({ success: true, id: 'bd-new', created: true }),
+  syncBeadsToHuly: vi.fn().mockResolvedValue({ success: true }),
+  getBeadsIssue: vi.fn().mockResolvedValue(null),
+  commitBeadsChanges: vi.fn().mockResolvedValue({ success: true }),
+  persistIssueSyncState: vi
+    .fn()
+    .mockResolvedValue({ success: true, updated: 1, failed: 0, errors: [] }),
+  getIssueSyncTimestamps: vi.fn().mockResolvedValue(null),
+});
+
+async function runHulyWebhookChangeWorkflow(
+  input: HulyWebhookChangeInput,
+  activities: ReturnType<typeof createMockHulyActivities>
+) {
+  const taskQueue = `test-queue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const worker = await Worker.create({
+    connection: testEnv.nativeConnection,
+    taskQueue,
+    workflowsPath: path.resolve(__dirname, '../../../temporal/dist/workflows/index.js'),
+    activities,
+  });
+
+  return await worker.runUntil(
+    testEnv.client.workflow.execute('HulyWebhookChangeWorkflow', {
+      taskQueue,
+      workflowId: `test-huly-webhook-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       args: [input],
       retry: { maximumAttempts: 1 },
       workflowExecutionTimeout: '10s',
@@ -141,5 +178,47 @@ describe('BeadsFileChangeWorkflow', () => {
     expect(result.issuesSynced).toBe(1);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].issueId).toBe('bd-11');
+  }, 30000);
+});
+
+describe('HulyWebhookChangeWorkflow', () => {
+  it('uses webhook issue data when Huly issue detail lookup is unavailable', async () => {
+    const activities = createMockHulyActivities();
+
+    const input: HulyWebhookChangeInput = {
+      type: 'task.changed',
+      timestamp: new Date().toISOString(),
+      changes: [
+        {
+          id: 'raw-1',
+          class: 'tracker:class:Issue',
+          modifiedOn: Date.now(),
+          data: {
+            identifier: 'HVSYN-9999',
+            title: 'Webhook-created issue',
+            status: 'tracker:status:Backlog',
+            priority: 'High',
+          },
+        },
+      ],
+    };
+
+    const result = await runHulyWebhookChangeWorkflow(input, activities);
+
+    expect(result.success).toBe(true);
+    expect(result.issuesProcessed).toBe(1);
+    expect(result.issuesSynced).toBe(1);
+    expect(result.errors).toHaveLength(0);
+    expect(activities.getHulyIssue).not.toHaveBeenCalled();
+    expect(activities.syncHulyToBeads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hulyIssue: expect.objectContaining({
+          id: 'HVSYN-9999',
+          title: 'Webhook-created issue',
+          status: 'tracker:status:Backlog',
+          priority: 'High',
+        }),
+      })
+    );
   }, 30000);
 });

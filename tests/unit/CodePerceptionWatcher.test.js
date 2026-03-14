@@ -800,9 +800,39 @@ describe('CodePerceptionWatcher', () => {
       expect(watcher.shouldIgnoreDir('.hidden')).toBe(true);
     });
 
+    it('should ignore hidden paths via shouldIgnorePath', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnorePath('/opt/stacks/graphiti/.ruff_cache/0.13.0/file')).toBe(true);
+    });
+
+    it('should ignore target build paths via shouldIgnorePath', () => {
+      const { watcher } = createWatcher();
+      expect(
+        watcher.shouldIgnorePath(
+          '/opt/stacks/letta-MCP-server/target/debug/incremental/letta/file.lock'
+        )
+      ).toBe(true);
+    });
+
+    it('should ignore configured glob paths via shouldIgnorePath', () => {
+      const { watcher } = createWatcher({
+        config: {
+          graphiti: { enabled: true, baseUrl: 'http://localhost:8003' },
+          codePerception: { excludePatterns: ['**/custom/**'] },
+        },
+      });
+
+      expect(watcher.shouldIgnorePath('/opt/stacks/project/custom/generated.js')).toBe(true);
+    });
+
     it('should not ignore regular source directories via shouldIgnoreDir', () => {
       const { watcher } = createWatcher();
       expect(watcher.shouldIgnoreDir('src')).toBe(false);
+    });
+
+    it('should not ignore regular source paths via shouldIgnorePath', () => {
+      const { watcher } = createWatcher();
+      expect(watcher.shouldIgnorePath('/opt/stacks/graphiti/server/main.py')).toBe(false);
     });
 
     it('should include vendor pattern in ignorePatterns array', () => {

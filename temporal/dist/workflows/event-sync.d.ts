@@ -43,7 +43,9 @@ export interface HulyWebhookChangeInput {
         data?: {
             identifier?: string;
             title?: string;
+            description?: string;
             status?: string;
+            priority?: string;
             space?: string;
         };
     }>;

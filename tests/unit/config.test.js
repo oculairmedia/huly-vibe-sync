@@ -75,6 +75,18 @@ describe('config', () => {
       expect(config.sync.incremental).toBe(false);
     });
 
+    it('should enable AST graphiti ingestion by default', () => {
+      delete process.env.GRAPHITI_AST_ENABLED;
+      const config = loadConfig();
+      expect(config.graphiti.astEnabled).toBe(true);
+    });
+
+    it('should allow disabling AST graphiti ingestion', () => {
+      process.env.GRAPHITI_AST_ENABLED = 'false';
+      const config = loadConfig();
+      expect(config.graphiti.astEnabled).toBe(false);
+    });
+
     it('should enable Letta when credentials are provided', () => {
       process.env.LETTA_BASE_URL = 'http://letta.local';
       process.env.LETTA_PASSWORD = 'secret123';
@@ -249,6 +261,14 @@ describe('config', () => {
       expect(summary.parallelProcessing).toBe(true);
       expect(summary.maxWorkers).toBe(10);
       expect(summary.skipEmptyProjects).toBe(true);
+    });
+
+    it('should include AST graphiti ingestion status', () => {
+      process.env.GRAPHITI_AST_ENABLED = 'false';
+      const config = loadConfig();
+      const summary = getConfigSummary(config);
+
+      expect(summary.graphitiAstEnabled).toBe(false);
     });
   });
 

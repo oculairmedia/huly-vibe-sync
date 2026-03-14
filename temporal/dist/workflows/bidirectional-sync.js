@@ -231,7 +231,7 @@ async function checkForConflicts(source, issueData, linkedIds, context) {
 // CONVENIENCE WORKFLOWS
 // ============================================================
 async function SyncFromHulyWorkflow(input) {
-    const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
+    const hulyIssue = input.hulyIssue || (await getHulyIssue({ identifier: input.hulyIdentifier }));
     if (!hulyIssue) {
         throw workflow_1.ApplicationFailure.nonRetryable(`Huly issue not found: ${input.hulyIdentifier}`, 'NotFoundError');
     }

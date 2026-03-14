@@ -9,6 +9,11 @@ exports.scheduleHulyWebhookChange = scheduleHulyWebhookChange;
 exports.executeHulyWebhookChange = executeHulyWebhookChange;
 const client_1 = require("@temporalio/client");
 const connection_1 = require("./connection");
+function buildWebhookWorkflowId(input) {
+    const timestamp = Date.parse(input.timestamp);
+    const suffix = Number.isFinite(timestamp) ? timestamp : Date.now();
+    return `huly-webhook-${input.type}-${suffix}-${Math.random().toString(36).slice(2, 8)}`;
+}
 /**
  * Schedule a Huly webhook change workflow (fire and forget)
  *
@@ -17,52 +22,29 @@ const connection_1 = require("./connection");
  */
 async function scheduleHulyWebhookChange(input) {
     const client = await (0, connection_1.getClient)();
-    const workflowId = `huly-webhook-${input.type}`;
-    try {
-        const handle = await client.workflow.start('HulyWebhookChangeWorkflow', {
-            taskQueue: connection_1.TASK_QUEUE,
-            workflowId,
-            args: [input],
-            workflowIdConflictPolicy: client_1.WorkflowIdConflictPolicy.USE_EXISTING,
-            workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-        });
-        console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
-        return {
-            workflowId: handle.workflowId,
-            runId: handle.firstExecutionRunId,
-        };
-    }
-    catch (error) {
-        if (error instanceof client_1.WorkflowExecutionAlreadyStartedError) {
-            console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
-            return { workflowId, runId: 'coalesced' };
-        }
-        throw error;
-    }
+    const workflowId = buildWebhookWorkflowId(input);
+    const handle = await client.workflow.start('HulyWebhookChangeWorkflow', {
+        taskQueue: connection_1.TASK_QUEUE,
+        workflowId,
+        args: [input],
+        workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
+    console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
+    return {
+        workflowId: handle.workflowId,
+        runId: handle.firstExecutionRunId,
+    };
 }
 /**
  * Execute a Huly webhook change workflow and wait for result
  */
 async function executeHulyWebhookChange(input) {
     const client = await (0, connection_1.getClient)();
-    const workflowId = `huly-webhook-${input.type}`;
-    try {
-        return await client.workflow.execute('HulyWebhookChangeWorkflow', {
-            taskQueue: connection_1.TASK_QUEUE,
-            workflowId,
-            args: [input],
-            workflowIdConflictPolicy: client_1.WorkflowIdConflictPolicy.USE_EXISTING,
-            workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-        });
-    }
-    catch (error) {
-        if (error instanceof client_1.WorkflowExecutionAlreadyStartedError) {
-            console.log(`[Temporal] Workflow ${workflowId} already running, coalescing`);
-            // For execute, we need to wait for the existing workflow
-            const handle = client.workflow.getHandle(workflowId);
-            return await handle.result();
-        }
-        throw error;
-    }
+    return await client.workflow.execute('HulyWebhookChangeWorkflow', {
+        taskQueue: connection_1.TASK_QUEUE,
+        workflowId: buildWebhookWorkflowId(input),
+        args: [input],
+        workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+    });
 }
 //# sourceMappingURL=event-triggers.js.map

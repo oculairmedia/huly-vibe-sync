@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GraphitiClient, createGraphitiClient } from '../../lib/GraphitiClient.js';
+import { GraphitiClient, createGraphitiClient, createAstGraphitiClient } from '../../lib/GraphitiClient.js';
 
 vi.mock('../../lib/http.js', () => ({
   fetchWithPool: vi.fn(),
@@ -976,6 +976,46 @@ describe('createGraphitiClient', () => {
     );
 
     expect(client.groupId).toBe('vibesync_TEST');
+  });
+});
+
+describe('createAstGraphitiClient', () => {
+  it('should return null when graphiti is disabled', () => {
+    const client = createAstGraphitiClient({ graphiti: { enabled: false } }, 'TEST');
+    expect(client).toBeNull();
+  });
+
+  it('should return null when AST graphiti ingestion is disabled', () => {
+    const client = createAstGraphitiClient(
+      {
+        graphiti: {
+          enabled: true,
+          astEnabled: false,
+          apiUrl: 'http://localhost:8003',
+          astGroupIdPrefix: 'ast_',
+        },
+      },
+      'TEST'
+    );
+
+    expect(client).toBeNull();
+  });
+
+  it('should create client with AST namespace when enabled', () => {
+    const client = createAstGraphitiClient(
+      {
+        graphiti: {
+          enabled: true,
+          astEnabled: true,
+          apiUrl: 'http://localhost:8003',
+          astGroupIdPrefix: 'ast_',
+        },
+      },
+      'MYPROJECT'
+    );
+
+    expect(client).toBeInstanceOf(GraphitiClient);
+    expect(client.groupId).toBe('ast_MYPROJECT');
   });
 });
 

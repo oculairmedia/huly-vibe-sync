@@ -36,6 +36,8 @@ function validConfig(overrides = {}) {
       enabled: false,
       apiUrl: 'http://localhost:8003',
       groupIdPrefix: 'vibesync_',
+      astEnabled: true,
+      astGroupIdPrefix: 'ast_',
       timeout: 30000,
       retries: 3,
     },

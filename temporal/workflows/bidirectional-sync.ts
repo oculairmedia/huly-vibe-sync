@@ -344,8 +344,16 @@ export async function SyncFromHulyWorkflow(input: {
   hulyIdentifier: string;
   context: SyncContext;
   linkedIds?: { beadsId?: string };
+  hulyIssue?: {
+    identifier: string;
+    title: string;
+    description?: string;
+    status: string;
+    priority?: string;
+    modifiedOn?: number;
+  };
 }): Promise<BidirectionalSyncResult> {
-  const hulyIssue = await getHulyIssue({ identifier: input.hulyIdentifier });
+  const hulyIssue = input.hulyIssue || (await getHulyIssue({ identifier: input.hulyIdentifier }));
 
   if (!hulyIssue) {
     throw ApplicationFailure.nonRetryable(

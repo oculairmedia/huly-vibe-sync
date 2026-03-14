@@ -13,6 +13,10 @@ vi.mock('../../temporal/lib', () => ({
   createBeadsClient: vi.fn(),
 }));
 
+vi.mock('../../temporal/activities/sync-database', () => ({
+  getDb: vi.fn(),
+}));
+
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
@@ -50,6 +54,7 @@ import {
 } from '../../temporal/activities/orchestration';
 
 import { createHulyClient, createBeadsClient } from '../../temporal/lib';
+import { getDb } from '../../temporal/activities/sync-database';
 
 // ============================================================
 // MOCK SETUP
@@ -66,6 +71,11 @@ const mockBeadsClient = {
   listIssues: vi.fn(),
 };
 
+const mockSyncDb = {
+  getProjectFilesystemPath: vi.fn(),
+  getProject: vi.fn(),
+};
+
 describe('Orchestration Activities', () => {
   beforeEach(() => {
     clearGitRepoPathCache();
@@ -79,6 +89,9 @@ describe('Orchestration Activities', () => {
     // Configure mocks
     (createHulyClient as any).mockReturnValue(mockHulyClient);
     (createBeadsClient as any).mockReturnValue(mockBeadsClient);
+    mockSyncDb.getProjectFilesystemPath.mockReturnValue(null);
+    mockSyncDb.getProject.mockReturnValue(null);
+    (getDb as any).mockResolvedValue(mockSyncDb);
   });
 
   afterEach(() => {
@@ -189,7 +202,32 @@ describe('Orchestration Activities', () => {
   // resolveGitRepoPath Tests
   // ============================================================
   describe('resolveGitRepoPath', () => {
+    it('should prefer sync DB filesystem_path before calling Huly', async () => {
+      mockSyncDb.getProjectFilesystemPath.mockReturnValue('/opt/stacks/huly-vibe-sync');
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBe('/opt/stacks/huly-vibe-sync');
+      expect(mockHulyClient.listProjects).not.toHaveBeenCalled();
+    });
+
     it('should return path when project has Filesystem in description', async () => {
+      mockHulyClient.listProjects.mockResolvedValue([
+        {
+          identifier: 'HVSYN',
+          name: 'Huly-Vibe Sync',
+          description: 'Filesystem: /opt/stacks/huly-vibe-sync',
+        },
+      ]);
+
+      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
+
+      expect(result).toBe('/opt/stacks/huly-vibe-sync');
+      expect(mockHulyClient.listProjects).toHaveBeenCalled();
+    });
+
+    it('should fall back to Huly when sync DB has no filesystem_path', async () => {
+      mockSyncDb.getProjectFilesystemPath.mockReturnValue(null);
       mockHulyClient.listProjects.mockResolvedValue([
         {
           identifier: 'HVSYN',

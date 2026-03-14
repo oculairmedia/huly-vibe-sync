@@ -79,6 +79,33 @@ describe('HulyWebhookHandler', () => {
         expect(result.processed).toBe(1);
       });
 
+      it('should process issue.created events the same as issue.updated', async () => {
+        const payload = {
+          source: 'huly-change-watcher',
+          timestamp: Date.now(),
+          events: [
+            {
+              type: 'issue.created',
+              data: {
+                id: 'issue-created-1',
+                class: 'tracker:class:Issue',
+                identifier: 'TEST-101',
+                title: 'Created Issue',
+                status: 'active:Active',
+              },
+            },
+          ],
+        };
+
+        const result = await handler.handleWebhook(payload);
+
+        expect(result.success).toBe(true);
+        expect(result.processed).toBe(1);
+        expect(mockOnChangesReceived).toHaveBeenCalled();
+        const callArg = mockOnChangesReceived.mock.calls[0][0];
+        expect(callArg.changes[0].data.identifier).toBe('TEST-101');
+      });
+
       it('should detect notify envelope payloads and process nested events', async () => {
         const payload = {
           type: 'notify',

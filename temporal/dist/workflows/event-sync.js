@@ -387,6 +387,14 @@ async function HulyWebhookChangeWorkflow(input) {
                 args: [
                     {
                         hulyIdentifier: issueId,
+                        hulyIssue: {
+                            identifier: issueId,
+                            title: change.data?.title || issueId,
+                            description: change.data?.description,
+                            status: change.data?.status || 'Backlog',
+                            priority: change.data?.priority,
+                            modifiedOn: change.modifiedOn || Date.now(),
+                        },
                         context: {
                             projectIdentifier,
                             gitRepoPath,

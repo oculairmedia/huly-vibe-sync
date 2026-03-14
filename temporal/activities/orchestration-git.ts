@@ -5,6 +5,7 @@
  */
 
 import { createBeadsClient, createHulyClient } from '../lib';
+import { getDb } from './sync-database';
 import type { HulyProject } from './orchestration';
 
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
@@ -19,6 +20,23 @@ export function clearGitRepoPathCache(): void {
 
 function isFresh(expiresAt: number): boolean {
   return expiresAt > Date.now();
+}
+
+async function getGitRepoPathFromSyncDb(projectIdentifier: string): Promise<string | null> {
+  try {
+    const db = await getDb();
+    const path =
+      db.getProjectFilesystemPath?.(projectIdentifier) ||
+      db.getProject?.(projectIdentifier)?.filesystem_path ||
+      null;
+
+    return typeof path === 'string' && path.startsWith('/') ? path : null;
+  } catch (error) {
+    console.warn(
+      `[Temporal:Orchestration] sync DB gitRepoPath lookup failed for ${projectIdentifier}: ${error}`
+    );
+    return null;
+  }
 }
 
 // ============================================================
@@ -41,6 +59,18 @@ export async function resolveGitRepoPath(input: {
     const cached = gitRepoPathCache.get(projectIdentifier);
     if (cached && isFresh(cached.expiresAt)) {
       return cached.value;
+    }
+
+    const dbPath = await getGitRepoPathFromSyncDb(projectIdentifier);
+    if (dbPath) {
+      console.log(
+        `[Temporal:Orchestration] Resolved gitRepoPath from sync DB: ${dbPath} for ${projectIdentifier}`
+      );
+      gitRepoPathCache.set(projectIdentifier, {
+        value: dbPath,
+        expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
+      });
+      return dbPath;
     }
 
     const hulyClient = createHulyClient(process.env.HULY_API_URL);

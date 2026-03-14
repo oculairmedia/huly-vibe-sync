@@ -32,6 +32,8 @@ export interface PersistIssueStateResult {
     }>;
 }
 export declare function getDb(): Promise<any>;
+/** Reset DB singleton — for testing only */
+export declare function resetDb(): Promise<void>;
 export interface IssueSyncTimestamps {
     huly_modified_at: number | null;
     vibe_modified_at: number | null;

@@ -63,6 +63,14 @@ export declare function SyncFromHulyWorkflow(input: {
     linkedIds?: {
         beadsId?: string;
     };
+    hulyIssue?: {
+        identifier: string;
+        title: string;
+        description?: string;
+        status: string;
+        priority?: string;
+        modifiedOn?: number;
+    };
 }): Promise<BidirectionalSyncResult>;
 /**
  * SyncFromBeadsWorkflow - Triggered when Beads issue changes
