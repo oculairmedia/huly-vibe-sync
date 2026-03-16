@@ -1,13 +1,15 @@
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HulyClient = void 0;
+exports.clearHulyClientCache = clearHulyClientCache;
+exports.createHulyClient = createHulyClient;
 /**
  * Huly REST API Client (TypeScript)
  *
  * Pure TypeScript client for Huly platform.
  * Used by Temporal activities for durable workflow execution.
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.HulyClient = void 0;
-exports.createHulyClient = createHulyClient;
+const httpPool_1 = require("./httpPool");
 const HULY_MIN_REQUEST_INTERVAL_MS = Number(process.env.HULY_MIN_REQUEST_INTERVAL_MS || 75);
 const HULY_MAX_RETRY_ATTEMPTS = Number(process.env.HULY_MAX_RETRY_ATTEMPTS || 4);
 const HULY_BASE_BACKOFF_MS = Number(process.env.HULY_BASE_BACKOFF_MS || 400);
@@ -36,6 +38,12 @@ function parseRetryAfterMs(response) {
         return null;
     return Math.max(0, retryDate - Date.now());
 }
+function normalizeHulyBaseUrl(baseUrl) {
+    return (baseUrl
+        .replace(/\/mcp$/, '')
+        .replace(/\/api$/, '')
+        .replace(/:\d+/, ':3458') + '/api');
+}
 /**
  * TypeScript REST client for Huly
  */
@@ -45,13 +53,10 @@ class HulyClient {
     name;
     constructor(baseUrl, options = {}) {
         // Normalize URL: ensure port 3458 and /api suffix
-        this.baseUrl =
-            baseUrl
-                .replace(/\/mcp$/, '')
-                .replace(/\/api$/, '')
-                .replace(/:\d+/, ':3458') + '/api';
+        this.baseUrl = normalizeHulyBaseUrl(baseUrl);
         this.timeout = options.timeout || 120000;
         this.name = options.name || 'Huly';
+        (0, httpPool_1.getPooledDispatcher)(this.baseUrl);
     }
     /**
      * Make an HTTP request with timeout and error handling
@@ -67,7 +72,7 @@ class HulyClient {
             const timeoutId = setTimeout(() => controller.abort(), this.timeout);
             try {
                 await throttleHulyRequestStart();
-                const response = await fetch(url, {
+                const response = await (0, httpPool_1.pooledFetch)(url, {
                     ...options,
                     headers,
                     signal: controller.signal,
@@ -115,7 +120,7 @@ class HulyClient {
      */
     async healthCheck() {
         const healthUrl = this.baseUrl.replace('/api', '/health');
-        const response = await fetch(healthUrl, {
+        const response = await (0, httpPool_1.pooledFetch)(healthUrl, {
             signal: AbortSignal.timeout(5000),
         });
         if (!response.ok) {
@@ -312,11 +317,26 @@ class HulyClient {
     }
 }
 exports.HulyClient = HulyClient;
+const hulyClientCache = new Map();
+function clearHulyClientCache() {
+    hulyClientCache.clear();
+}
 /**
  * Factory function to create Huly client
  */
 function createHulyClient(url, options) {
     const baseUrl = url || process.env.HULY_API_URL || 'http://localhost:3458';
-    return new HulyClient(baseUrl, options);
+    const normalizedBaseUrl = normalizeHulyBaseUrl(baseUrl);
+    const cacheKey = JSON.stringify({
+        baseUrl: normalizedBaseUrl,
+        timeout: options?.timeout || 120000,
+        name: options?.name || 'Huly',
+    });
+    let client = hulyClientCache.get(cacheKey);
+    if (!client) {
+        client = new HulyClient(normalizedBaseUrl, options);
+        hulyClientCache.set(cacheKey, client);
+    }
+    return client;
 }
 //# sourceMappingURL=HulyClient.js.map

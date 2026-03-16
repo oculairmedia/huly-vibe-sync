@@ -17,6 +17,10 @@ vi.mock('../../temporal/activities/sync-database', () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock('../../temporal/lib/httpPool', () => ({
+  pooledFetch: vi.fn(),
+}));
+
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
@@ -54,6 +58,7 @@ import {
 } from '../../temporal/activities/orchestration';
 
 import { createHulyClient, createBeadsClient } from '../../temporal/lib';
+import { pooledFetch } from '../../temporal/lib/httpPool';
 import { getDb } from '../../temporal/activities/sync-database';
 
 // ============================================================
@@ -386,15 +391,12 @@ describe('Orchestration Activities', () => {
   // updateLettaMemory Tests
   // ============================================================
   describe('updateLettaMemory', () => {
-    let originalFetch: typeof global.fetch;
-
     beforeEach(() => {
-      originalFetch = global.fetch;
-      global.fetch = vi.fn();
+      (pooledFetch as any).mockReset();
     });
 
     afterEach(() => {
-      global.fetch = originalFetch;
+      vi.clearAllMocks();
     });
 
     it('should skip if Letta not configured', async () => {
@@ -409,14 +411,14 @@ describe('Orchestration Activities', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(pooledFetch).not.toHaveBeenCalled();
     });
 
     it('should update memory when Letta configured', async () => {
       process.env.LETTA_BASE_URL = 'https://letta.test.com';
       process.env.LETTA_PASSWORD = 'test-password';
 
-      (global.fetch as any).mockResolvedValue({
+      (pooledFetch as any).mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({}),
       });
@@ -428,7 +430,7 @@ describe('Orchestration Activities', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(pooledFetch).toHaveBeenCalledWith(
         'https://letta.test.com/v1/agents/agent-1/memory',
         expect.objectContaining({
           method: 'POST',
@@ -443,7 +445,7 @@ describe('Orchestration Activities', () => {
       process.env.LETTA_BASE_URL = 'https://letta.test.com';
       process.env.LETTA_PASSWORD = 'test-password';
 
-      (global.fetch as any).mockResolvedValue({
+      (pooledFetch as any).mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',

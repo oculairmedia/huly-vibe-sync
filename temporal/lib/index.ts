@@ -5,7 +5,7 @@
  */
 
 // Clients
-export { HulyClient, createHulyClient } from './HulyClient';
+export { HulyClient, createHulyClient, clearHulyClientCache } from './HulyClient';
 export type { HulyProject, HulyIssue, CreateIssueInput, HulyClientOptions } from './HulyClient';
 
 export { BeadsClient, createBeadsClient } from './BeadsClient';

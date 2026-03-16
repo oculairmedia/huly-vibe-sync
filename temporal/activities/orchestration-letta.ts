@@ -5,6 +5,7 @@
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
+import { pooledFetch } from '../lib/httpPool';
 import type { HulyProject, HulyIssue } from './orchestration';
 
 // ============================================================
@@ -38,7 +39,7 @@ export async function updateLettaMemory(input: {
     const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
 
     // Update memory blocks via Letta API
-    const response = await fetch(`${lettaUrl}/v1/agents/${agentId}/memory`, {
+    const response = await pooledFetch(`${lettaUrl}/v1/agents/${agentId}/memory`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

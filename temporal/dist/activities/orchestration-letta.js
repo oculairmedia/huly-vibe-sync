@@ -11,6 +11,7 @@ exports.buildBoardMetrics = buildBoardMetrics;
 exports.buildProjectMeta = buildProjectMeta;
 exports.handleOrchestratorError = handleOrchestratorError;
 const activity_1 = require("@temporalio/activity");
+const httpPool_1 = require("../lib/httpPool");
 // ============================================================
 // LETTA MEMORY ACTIVITIES
 // ============================================================
@@ -31,7 +32,7 @@ async function updateLettaMemory(input) {
         const boardMetrics = buildBoardMetrics(hulyIssues);
         const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
         // Update memory blocks via Letta API
-        const response = await fetch(`${lettaUrl}/v1/agents/${agentId}/memory`, {
+        const response = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/agents/${agentId}/memory`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

@@ -14,11 +14,15 @@ exports.compensateHulyCreate = compensateHulyCreate;
 exports.compensateVibeCreate = compensateVibeCreate;
 exports.compensateBeadsCreate = compensateBeadsCreate;
 const activity_1 = require("@temporalio/activity");
+const lib_1 = require("../lib");
 const huly_dedupe_1 = require("./huly-dedupe");
 // Configuration from environment
 const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
 const TIMEOUT = 30000;
+function getHulyClient() {
+    return (0, lib_1.createHulyClient)(process.env.HULY_API_URL || HULY_API_URL, { timeout: TIMEOUT });
+}
 /**
  * Check if an issue with the same title already exists in the project
  * Returns the existing issue identifier if found, null otherwise
@@ -65,44 +69,17 @@ async function syncToHuly(input) {
                     return { success: true, systemId: existingId };
                 }
             }
-            const response = await fetch(`${HULY_API_URL}/tools/create_issue`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    arguments: {
-                        project: issue.projectIdentifier,
-                        title: issue.title,
-                        description: issue.description || '',
-                        status: issue.status,
-                        priority: issue.priority || 'NoPriority',
-                    },
-                }),
-                signal: AbortSignal.timeout(TIMEOUT),
+            const result = await getHulyClient().createIssue(issue.projectIdentifier || '', {
+                title: issue.title,
+                description: issue.description || '',
+                status: issue.status,
+                priority: issue.priority || 'NoPriority',
             });
-            if (!response.ok) {
-                await handleHttpError(response, 'Huly', 'create');
-            }
-            const result = (await response.json());
-            console.log(`[Huly Activity] Created issue: ${result.identifier || result.id}`);
-            return { success: true, systemId: result.identifier || result.id };
+            console.log(`[Huly Activity] Created issue: ${result.identifier}`);
+            return { success: true, systemId: result.identifier };
         }
         if (operation === 'update') {
-            // Update status
-            const statusResponse = await fetch(`${HULY_API_URL}/tools/update_issue`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    arguments: {
-                        issue: issue.identifier,
-                        field: 'status',
-                        value: issue.status,
-                    },
-                }),
-                signal: AbortSignal.timeout(TIMEOUT),
-            });
-            if (!statusResponse.ok) {
-                await handleHttpError(statusResponse, 'Huly', 'update status');
-            }
+            await getHulyClient().updateIssue(issue.identifier || '', 'status', issue.status);
             console.log(`[Huly Activity] Updated issue: ${issue.identifier}`);
             return { success: true, systemId: issue.identifier };
         }
@@ -223,21 +200,7 @@ async function compensateHulyCreate(input) {
     if (!input.hulyIdentifier)
         return { success: true, skipped: true };
     try {
-        const response = await fetch(`${HULY_API_URL}/tools/delete_issue`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                arguments: {
-                    issue: input.hulyIdentifier,
-                },
-            }),
-            signal: AbortSignal.timeout(TIMEOUT),
-        });
-        if (!response.ok) {
-            const detail = await response.text().catch(() => response.statusText);
-            console.warn(`[Compensation] Huly delete failed for ${input.hulyIdentifier}: ${response.status} ${detail}`);
-            return { success: false, error: `Huly compensation failed: ${response.status}` };
-        }
+        await getHulyClient().deleteIssue(input.hulyIdentifier);
         return { success: true };
     }
     catch (error) {

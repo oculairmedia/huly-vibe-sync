@@ -1,9 +1,3 @@
-/**
- * Huly REST API Client (TypeScript)
- *
- * Pure TypeScript client for Huly platform.
- * Used by Temporal activities for durable workflow execution.
- */
 export interface HulyProject {
     identifier: string;
     name: string;
@@ -199,6 +193,7 @@ export declare class HulyClient {
         error?: string;
     }>;
 }
+export declare function clearHulyClientCache(): void;
 /**
  * Factory function to create Huly client
  */
