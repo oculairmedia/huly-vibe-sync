@@ -163,7 +163,7 @@ describe('HealthService', () => {
       const metrics = getHealthMetrics(stats, config);
 
       expect(metrics.status).toBe('healthy');
-      expect(metrics.service).toBe('huly-vibe-sync');
+      expect(metrics.service).toBe('vibe-sync');
       expect(metrics.version).toBe('1.0.0');
       expect(metrics.uptime).toBeDefined();
       expect(metrics.sync).toBeDefined();
@@ -434,7 +434,7 @@ describe('HealthService', () => {
 
       const health = JSON.parse(response.body);
       expect(health.status).toBe('healthy');
-      expect(health.service).toBe('huly-vibe-sync');
+      expect(health.service).toBe('vibe-sync');
       expect(health.version).toBe('1.0.0');
       expect(health.uptime).toBeDefined();
       expect(health.sync).toBeDefined();
@@ -456,7 +456,7 @@ describe('HealthService', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toBe('text/plain');
-      expect(response.body).toContain('Huly-Vibe Sync Service');
+      expect(response.body).toContain('Vibe Sync Service');
       expect(response.body).toContain('Health check: /health');
       expect(response.body).toContain('Metrics: /metrics');
     });

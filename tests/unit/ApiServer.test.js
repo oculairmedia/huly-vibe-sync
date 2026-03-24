@@ -1721,33 +1721,6 @@ describe('createApiServer - HTTP Routes', () => {
   });
 
   // --------------------------------------------------------
-  // 21. POST /webhook
-  // --------------------------------------------------------
-  describe('POST /webhook', () => {
-    it('should process webhook with handler', async () => {
-      const res = await makeRequest(port, 'POST', '/webhook', {
-        type: 'issue_update',
-        changes: [{ id: 1 }],
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.processed).toBe(1);
-    });
-  });
-
-  // --------------------------------------------------------
-  // 29. GET /api/webhook/stats
-  // --------------------------------------------------------
-  describe('GET /api/webhook/stats', () => {
-    it('should return webhook stats with handler', async () => {
-      const res = await makeRequest(port, 'GET', '/api/webhook/stats');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.handler).toEqual({ total: 10, processed: 8 });
-      expect(res.body.watcher).toEqual({ running: true });
-    });
-  });
-
-  // --------------------------------------------------------
   // 30. GET /api/temporal/schedule
   // --------------------------------------------------------
   describe('GET /api/temporal/schedule', () => {
@@ -1873,7 +1846,7 @@ describe('createApiServer - HTTP Routes', () => {
       expect(res.statusCode).toBe(200);
       // body is plain text, not JSON
       expect(typeof res.body).toBe('string');
-      expect(res.body).toContain('Huly-Vibe Sync Service API');
+      expect(res.body).toContain('Vibe Sync Service API');
     });
   });
 
@@ -1997,18 +1970,6 @@ describe('createApiServer - No dependencies', () => {
     const res = await makeRequest(port, 'POST', '/api/sync/trigger', {});
     expect(res.statusCode).toBe(503);
     expect(res.body.error).toBe('Sync trigger not available');
-  });
-
-  it('POST /webhook should acknowledge without handler', async () => {
-    const res = await makeRequest(port, 'POST', '/webhook', { type: 'test' });
-    expect(res.statusCode).toBe(200);
-    expect(res.body.message).toContain('no handler configured');
-  });
-
-  it('GET /api/webhook/stats should indicate no handler', async () => {
-    const res = await makeRequest(port, 'GET', '/api/webhook/stats');
-    expect(res.statusCode).toBe(200);
-    expect(res.body.handler).toBeNull();
   });
 
   it('GET /api/temporal/schedule should indicate not configured', async () => {
