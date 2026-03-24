@@ -17,7 +17,14 @@ function getValidProjects() {
   return TEST_PROJECTS.filter(p => {
     const dbPath = path.join(p, '.beads', 'beads.db');
     const jsonlPath = path.join(p, '.beads', 'issues.jsonl');
-    return fs.existsSync(dbPath) && fs.existsSync(jsonlPath);
+    if (!fs.existsSync(dbPath) || !fs.existsSync(jsonlPath)) return false;
+    const stat = fs.statSync(dbPath);
+    if (stat.size === 0) return false;
+    try {
+      return readIssuesFromDB(p).length > 0;
+    } catch {
+      return false;
+    }
   });
 }
 
