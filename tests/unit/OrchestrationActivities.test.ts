@@ -9,7 +9,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock external dependencies before importing activities
 vi.mock('../../temporal/lib', () => ({
-  createHulyClient: vi.fn(),
   createBeadsClient: vi.fn(),
 }));
 
@@ -45,30 +44,22 @@ vi.mock('fs', async () => {
 
 // Import after mocking
 import {
-  fetchHulyProjects,
-  fetchProjectData,
   extractGitRepoPath,
   resolveGitRepoPath,
   clearGitRepoPathCache,
-  clearProjectCaches,
   initializeBeads,
   fetchBeadsIssues,
   updateLettaMemory,
   recordSyncMetrics,
 } from '../../temporal/activities/orchestration';
 
-import { createHulyClient, createBeadsClient } from '../../temporal/lib';
+import { createBeadsClient } from '../../temporal/lib';
 import { pooledFetch } from '../../temporal/lib/httpPool';
 import { getDb } from '../../temporal/activities/sync-database';
 
 // ============================================================
 // MOCK SETUP
 // ============================================================
-
-const mockHulyClient = {
-  listProjects: vi.fn(),
-  listIssues: vi.fn(),
-};
 
 const mockBeadsClient = {
   isInitialized: vi.fn(),
@@ -84,15 +75,10 @@ const mockSyncDb = {
 describe('Orchestration Activities', () => {
   beforeEach(() => {
     clearGitRepoPathCache();
-    clearProjectCaches();
     vi.clearAllMocks();
 
-    // Set up environment variables
-    process.env.HULY_API_URL = 'http://localhost:3458';
     process.env.VIBE_API_URL = 'http://localhost:3105/api';
 
-    // Configure mocks
-    (createHulyClient as any).mockReturnValue(mockHulyClient);
     (createBeadsClient as any).mockReturnValue(mockBeadsClient);
     mockSyncDb.getProjectFilesystemPath.mockReturnValue(null);
     mockSyncDb.getProject.mockReturnValue(null);
@@ -101,64 +87,6 @@ describe('Orchestration Activities', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  // ============================================================
-  // fetchHulyProjects Tests
-  // ============================================================
-  describe('fetchHulyProjects', () => {
-    it('should return list of Huly projects', async () => {
-      const projects = [
-        { identifier: 'PROJ1', name: 'Project 1' },
-        { identifier: 'PROJ2', name: 'Project 2' },
-      ];
-      mockHulyClient.listProjects.mockResolvedValue(projects);
-
-      const result = await fetchHulyProjects();
-
-      expect(result).toEqual(projects);
-      expect(mockHulyClient.listProjects).toHaveBeenCalled();
-    });
-
-    it('should throw retryable error on network failure', async () => {
-      mockHulyClient.listProjects.mockRejectedValue(new Error('Network timeout'));
-
-      await expect(fetchHulyProjects()).rejects.toThrow('fetchHulyProjects failed');
-    });
-
-    it('should throw non-retryable error on 404', async () => {
-      mockHulyClient.listProjects.mockRejectedValue(new Error('404 Not Found'));
-
-      await expect(fetchHulyProjects()).rejects.toThrow('fetchHulyProjects failed');
-    });
-  });
-
-  // ============================================================
-  // fetchProjectData Tests
-  // ============================================================
-  describe('fetchProjectData', () => {
-    it('should fetch Huly issues', async () => {
-      const issues = [{ identifier: 'T-1', title: 'Issue', status: 'Backlog' }];
-
-      mockHulyClient.listIssues.mockResolvedValue(issues);
-
-      const result = await fetchProjectData({
-        hulyProject: { identifier: 'TEST', name: 'Test' },
-      });
-
-      expect(result.hulyIssues).toEqual(issues);
-      expect(mockHulyClient.listIssues).toHaveBeenCalledWith('TEST');
-    });
-
-    it('should throw if issues fetch fails', async () => {
-      mockHulyClient.listIssues.mockRejectedValue(new Error('API Error'));
-
-      await expect(
-        fetchProjectData({
-          hulyProject: { identifier: 'TEST', name: 'Test' },
-        })
-      ).rejects.toThrow('fetchProjectData failed');
-    });
   });
 
   // ============================================================
@@ -207,102 +135,20 @@ describe('Orchestration Activities', () => {
   // resolveGitRepoPath Tests
   // ============================================================
   describe('resolveGitRepoPath', () => {
-    it('should prefer sync DB filesystem_path before calling Huly', async () => {
+    it('should prefer sync DB filesystem_path', async () => {
       mockSyncDb.getProjectFilesystemPath.mockReturnValue('/opt/stacks/huly-vibe-sync');
 
       const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
 
       expect(result).toBe('/opt/stacks/huly-vibe-sync');
-      expect(mockHulyClient.listProjects).not.toHaveBeenCalled();
     });
 
-    it('should return path when project has Filesystem in description', async () => {
-      mockHulyClient.listProjects.mockResolvedValue([
-        {
-          identifier: 'HVSYN',
-          name: 'Huly-Vibe Sync',
-          description: 'Filesystem: /opt/stacks/huly-vibe-sync',
-        },
-      ]);
-
-      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
-
-      expect(result).toBe('/opt/stacks/huly-vibe-sync');
-      expect(mockHulyClient.listProjects).toHaveBeenCalled();
-    });
-
-    it('should fall back to Huly when sync DB has no filesystem_path', async () => {
+    it('should return null when sync DB has no filesystem_path', async () => {
       mockSyncDb.getProjectFilesystemPath.mockReturnValue(null);
-      mockHulyClient.listProjects.mockResolvedValue([
-        {
-          identifier: 'HVSYN',
-          name: 'Huly-Vibe Sync',
-          description: 'Filesystem: /opt/stacks/huly-vibe-sync',
-        },
-      ]);
-
-      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
-
-      expect(result).toBe('/opt/stacks/huly-vibe-sync');
-      expect(mockHulyClient.listProjects).toHaveBeenCalled();
-    });
-
-    it('should return null when project not found', async () => {
-      mockHulyClient.listProjects.mockResolvedValue([
-        {
-          identifier: 'OTHER',
-          name: 'Other Project',
-          description: 'Filesystem: /opt/stacks/other',
-        },
-      ]);
 
       const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
 
       expect(result).toBeNull();
-    });
-
-    it('should return null when description has no filesystem path', async () => {
-      mockHulyClient.listProjects.mockResolvedValue([
-        { identifier: 'HVSYN', name: 'Huly-Vibe Sync', description: 'Just a regular description' },
-      ]);
-
-      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null when description is undefined', async () => {
-      mockHulyClient.listProjects.mockResolvedValue([
-        { identifier: 'HVSYN', name: 'Huly-Vibe Sync' },
-      ]);
-
-      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
-
-      expect(result).toBeNull();
-    });
-
-    it('should return null (not throw) when API fails', async () => {
-      mockHulyClient.listProjects.mockRejectedValue(new Error('Connection refused'));
-
-      const result = await resolveGitRepoPath({ projectIdentifier: 'HVSYN' });
-
-      expect(result).toBeNull();
-    });
-
-    it('should support Path, Directory, and Location patterns', async () => {
-      for (const [keyword, path] of [
-        ['Path: /opt/stacks/path-test', '/opt/stacks/path-test'],
-        ['Directory: /opt/stacks/dir-test', '/opt/stacks/dir-test'],
-        ['Location: /opt/stacks/loc-test', '/opt/stacks/loc-test'],
-      ]) {
-        clearGitRepoPathCache();
-        mockHulyClient.listProjects.mockResolvedValue([
-          { identifier: 'TEST', name: 'Test', description: keyword },
-        ]);
-
-        const result = await resolveGitRepoPath({ projectIdentifier: 'TEST' });
-        expect(result).toBe(path);
-      }
     });
   });
 

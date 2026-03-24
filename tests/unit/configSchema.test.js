@@ -7,7 +7,6 @@ import { configSchema } from '../../lib/configSchema.js';
 
 function validConfig(overrides = {}) {
   return {
-    huly: { apiUrl: 'http://huly.local/api', useRestApi: true },
     vibeKanban: {
       mcpUrl: 'http://vibe.local/mcp',
       apiUrl: 'http://vibe.local/api',
@@ -65,6 +64,10 @@ function validConfig(overrides = {}) {
       importOnSync: false,
       bidirectionalSync: false,
     },
+    projectMcp: {
+      enabled: true,
+      path: '/mcp',
+    },
     ...overrides,
   };
 }
@@ -73,12 +76,6 @@ describe('configSchema', () => {
   it('accepts a fully valid config', () => {
     const result = configSchema.safeParse(validConfig());
     expect(result.success).toBe(true);
-  });
-
-  it('rejects missing huly.apiUrl', () => {
-    const result = configSchema.safeParse(validConfig({ huly: { apiUrl: '', useRestApi: true } }));
-    expect(result.success).toBe(false);
-    expect(result.error.issues[0].message).toContain('HULY_API_URL');
   });
 
   it('rejects negative sync interval', () => {

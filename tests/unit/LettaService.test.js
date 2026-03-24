@@ -266,7 +266,7 @@ describe('LettaService', () => {
     it('should return cached control agent if available', async () => {
       const cachedConfig = {
         agentId: 'control-123',
-        agentName: 'Huly-PM-Control',
+        agentName: 'PM-Control',
         toolIds: ['tool-1', 'tool-2'],
         persona: 'Test persona',
       };
@@ -281,7 +281,7 @@ describe('LettaService', () => {
     it('should find existing control agent by name', async () => {
       const existingAgent = {
         id: 'control-456',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [{ label: 'persona', value: 'Test persona' }] },
       };
 
@@ -305,14 +305,14 @@ describe('LettaService', () => {
         ok: true,
         json: async () => ({
           id: 'new-control-789',
-          name: 'Huly-PM-Control',
+          name: 'PM-Control',
           memory: { blocks: [] },
         }),
       });
 
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'new-control-789',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [{ label: 'persona', value: 'Created persona' }] },
       });
       mockClient.agents.tools.list.mockResolvedValue([]);
@@ -356,7 +356,7 @@ describe('LettaService', () => {
     it('should return existing agent from Letta by name', async () => {
       const existingAgent = {
         id: 'agent-existing',
-        name: 'Huly - Test Project',
+        name: 'PM - Test Project',
         created_at: '2025-01-01T00:00:00Z',
       };
 
@@ -376,7 +376,7 @@ describe('LettaService', () => {
 
       const persistedAgent = {
         id: 'agent-persisted',
-        name: 'Huly - Test Project',
+        name: 'PM - Test Project',
       };
 
       fetchWithPool.mockResolvedValue({
@@ -399,14 +399,14 @@ describe('LettaService', () => {
           ok: true,
           json: async () => ({
             id: 'new-agent-123',
-            name: 'Huly - New Project',
+            name: 'PM - New Project',
           }),
         });
 
       mockClient.agents.list.mockResolvedValue([]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [{ label: 'persona', value: 'Control persona' }] },
       });
       mockClient.agents.tools.list.mockResolvedValue([{ id: 'tool-1' }]);
@@ -421,8 +421,8 @@ describe('LettaService', () => {
 
     it('should handle duplicate agents by using most recent', async () => {
       const duplicateAgents = [
-        { id: 'agent-old', name: 'Huly - Test Project', created_at: '2025-01-01T00:00:00Z' },
-        { id: 'agent-new', name: 'Huly - Test Project', created_at: '2025-01-20T00:00:00Z' },
+        { id: 'agent-old', name: 'PM - Test Project', created_at: '2025-01-01T00:00:00Z' },
+        { id: 'agent-new', name: 'PM - Test Project', created_at: '2025-01-20T00:00:00Z' },
       ];
 
       fetchWithPool.mockResolvedValue({
@@ -453,14 +453,14 @@ describe('LettaService', () => {
           ok: true,
           json: async () => ({
             id: 'retry-agent',
-            name: 'Huly - Retry Project',
+            name: 'PM - Retry Project',
           }),
         });
 
       mockClient.agents.list.mockResolvedValue([]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [{ label: 'persona', value: 'Control persona' }] },
       });
       mockClient.agents.tools.list.mockResolvedValue([]);
@@ -488,14 +488,14 @@ describe('LettaService', () => {
         ok: true,
         json: async () => ({
           id: 'sanitized-agent',
-          name: 'Huly - Test-Project-Name',
+          name: 'PM - Test-Project-Name',
         }),
       });
 
       mockClient.agents.list.mockResolvedValue([]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list.mockResolvedValue([]);
@@ -508,7 +508,7 @@ describe('LettaService', () => {
       expect(fetchWithPool).toHaveBeenCalledWith(
         expect.stringContaining('/agents'),
         expect.objectContaining({
-          body: expect.stringContaining('Huly - Test-Project-Name'),
+          body: expect.stringContaining('PM - Test-Project-Name'),
         })
       );
     });
@@ -528,11 +528,11 @@ describe('LettaService', () => {
 
     it('should attach all tools from control agent', async () => {
       mockClient.agents.list.mockResolvedValue([
-        { id: 'control-123', name: 'Huly-PM-Control', memory: { blocks: [] } },
+        { id: 'control-123', name: 'PM-Control', memory: { blocks: [] } },
       ]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list.mockResolvedValue([
@@ -552,11 +552,11 @@ describe('LettaService', () => {
     it('should skip already attached tools', async () => {
       service._controlAgentCache.toolIds = ['tool-1', 'tool-2'];
       mockClient.agents.list.mockResolvedValue([
-        { id: 'control-123', name: 'Huly-PM-Control', memory: { blocks: [] } },
+        { id: 'control-123', name: 'PM-Control', memory: { blocks: [] } },
       ]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list.mockResolvedValue([{ id: 'tool-1' }, { id: 'tool-2' }]);
@@ -573,11 +573,11 @@ describe('LettaService', () => {
     it('should track errors during attachment', async () => {
       service._controlAgentCache.toolIds = ['tool-1'];
       mockClient.agents.list.mockResolvedValue([
-        { id: 'control-123', name: 'Huly-PM-Control', memory: { blocks: [] } },
+        { id: 'control-123', name: 'PM-Control', memory: { blocks: [] } },
       ]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list.mockResolvedValue([{ id: 'tool-1' }]);
@@ -624,11 +624,11 @@ describe('LettaService', () => {
 
     it('should not detach tools when forceSync is false', async () => {
       mockClient.agents.list.mockResolvedValue([
-        { id: 'control-123', name: 'Huly-PM-Control', memory: { blocks: [] } },
+        { id: 'control-123', name: 'PM-Control', memory: { blocks: [] } },
       ]);
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'control-123',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list
@@ -647,8 +647,8 @@ describe('LettaService', () => {
   // ============================================================
   describe('ensureFolder', () => {
     it('should return cached folder if available', async () => {
-      const cachedFolder = { id: 'folder-cached', name: 'Huly-TEST' };
-      service._folderCache.set('Huly-TEST', cachedFolder);
+      const cachedFolder = { id: 'folder-cached', name: 'PM-TEST' };
+      service._folderCache.set('PM-TEST', cachedFolder);
 
       const result = await service.ensureFolder('TEST');
 
@@ -657,20 +657,20 @@ describe('LettaService', () => {
     });
 
     it('should find existing folder by name', async () => {
-      const existingFolder = { id: 'folder-existing', name: 'Huly-TEST' };
+      const existingFolder = { id: 'folder-existing', name: 'PM-TEST' };
       mockClient.folders.list.mockResolvedValue([existingFolder]);
 
       const result = await service.ensureFolder('TEST');
 
       expect(result.id).toBe('folder-existing');
-      expect(service._folderCache.get('Huly-TEST')).toEqual(existingFolder);
+      expect(service._folderCache.get('PM-TEST')).toEqual(existingFolder);
     });
 
     it('should create new folder if not found', async () => {
       mockClient.folders.list.mockResolvedValue([]);
       mockClient.folders.create.mockResolvedValue({
         id: 'folder-new',
-        name: 'Huly-NEW',
+        name: 'PM-NEW',
       });
 
       const result = await service.ensureFolder('NEW');
@@ -678,7 +678,7 @@ describe('LettaService', () => {
       expect(result.id).toBe('folder-new');
       expect(mockClient.folders.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          name: 'Huly-NEW',
+          name: 'PM-NEW',
           embedding: 'letta/letta-free',
         })
       );
@@ -688,7 +688,7 @@ describe('LettaService', () => {
       mockClient.folders.list.mockResolvedValue([]);
       mockClient.folders.create.mockResolvedValue({
         id: 'folder-with-path',
-        name: 'Huly-PATH',
+        name: 'PM-PATH',
       });
 
       await service.ensureFolder('PATH', '/opt/projects/test');
@@ -1457,7 +1457,7 @@ describe('LettaService', () => {
     it('should return null persona when no persona block exists', async () => {
       mockClient.agents.retrieve.mockResolvedValue({
         id: 'ctrl-1',
-        name: 'Huly-PM-Control',
+        name: 'PM-Control',
         memory: { blocks: [] },
       });
       mockClient.agents.tools.list.mockResolvedValue([]);
@@ -1565,7 +1565,7 @@ describe('LettaService', () => {
           identifier: 'TST',
           name: 'Test',
           agentId: 'agent-123',
-          agentName: 'Huly - Test',
+          agentName: 'PM - Test',
           projectPath: '/opt/project',
         }),
         expect.objectContaining({

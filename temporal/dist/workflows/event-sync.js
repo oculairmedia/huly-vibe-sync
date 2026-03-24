@@ -383,26 +383,38 @@ async function HulyWebhookChangeWorkflow(input) {
                     error: err instanceof Error ? err.message : String(err),
                 });
             }
-            const syncResult = await (0, workflow_1.executeChild)(bidirectional_sync_1.SyncFromHulyWorkflow, {
-                args: [
-                    {
-                        hulyIdentifier: issueId,
-                        hulyIssue: {
-                            identifier: issueId,
-                            title: change.data?.title || issueId,
-                            description: change.data?.description,
-                            status: change.data?.status || 'Backlog',
-                            priority: change.data?.priority,
-                            modifiedOn: change.modifiedOn || Date.now(),
+            let syncResult;
+            try {
+                syncResult = await (0, workflow_1.executeChild)(bidirectional_sync_1.SyncFromHulyWorkflow, {
+                    args: [
+                        {
+                            hulyIdentifier: issueId,
+                            hulyIssue: {
+                                identifier: issueId,
+                                title: change.data?.title || issueId,
+                                description: change.data?.description,
+                                status: change.data?.status || 'Backlog',
+                                priority: change.data?.priority,
+                                modifiedOn: change.modifiedOn || Date.now(),
+                            },
+                            context: {
+                                projectIdentifier,
+                                gitRepoPath,
+                            },
                         },
-                        context: {
-                            projectIdentifier,
-                            gitRepoPath,
-                        },
-                    },
-                ],
-                workflowId: `huly-webhook-sync-${issueId}`,
-            });
+                    ],
+                    workflowId: `huly-webhook-sync-${issueId}`,
+                });
+            }
+            catch (childErr) {
+                const msg = childErr instanceof Error ? childErr.message : String(childErr);
+                if (msg.includes('already started') || msg.includes('Workflow execution already started')) {
+                    workflow_1.log.info('[HulyWebhookChange] Skipping — sync already running', { identifier: issueId });
+                    result.issuesSynced++;
+                    continue;
+                }
+                throw childErr;
+            }
             if (syncResult.success) {
                 result.issuesSynced++;
                 workflow_1.log.info('[HulyWebhookChange] Issue synced via SyncFromHulyWorkflow', {
@@ -419,7 +431,7 @@ async function HulyWebhookChangeWorkflow(input) {
                     result.errors.push({ issueId, error: syncResult.error });
                 }
             }
-            await (0, workflow_1.sleep)('500ms');
+            await (0, workflow_1.sleep)('2 seconds');
         }
         catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);

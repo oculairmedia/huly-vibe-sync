@@ -32,7 +32,6 @@ describe('config', () => {
       const config = loadConfig();
 
       expect(config).toBeDefined();
-      expect(config.huly).toBeDefined();
       expect(config.beads).toBeDefined();
       expect(config.sync).toBeDefined();
       expect(config.stacks).toBeDefined();
@@ -40,13 +39,11 @@ describe('config', () => {
     });
 
     it('should use environment variables when provided', () => {
-      process.env.HULY_API_URL = 'http://custom-huly.local/api';
       process.env.SYNC_INTERVAL = '60000';
       process.env.MAX_WORKERS = '10';
 
       const config = loadConfig();
 
-      expect(config.huly.apiUrl).toBe('http://custom-huly.local/api');
       expect(config.sync.interval).toBe(60000);
       expect(config.sync.maxWorkers).toBe(10);
     });
@@ -119,17 +116,6 @@ describe('config', () => {
       const config = loadConfig();
       expect(config.stacks.baseDir).toBe('/custom/stacks');
     });
-
-    it('should default to REST API mode for Huly', () => {
-      const config = loadConfig();
-      expect(config.huly.useRestApi).toBe(true);
-    });
-
-    it('should allow disabling REST API mode for Huly', () => {
-      process.env.HULY_USE_REST = 'false';
-      const config = loadConfig();
-      expect(config.huly.useRestApi).toBe(false);
-    });
   });
 
   describe('validateConfig', () => {
@@ -138,20 +124,8 @@ describe('config', () => {
       expect(() => validateConfig(config)).not.toThrow();
     });
 
-    it('should reject configuration without Huly URL', () => {
-      const config = {
-        huly: { apiUrl: '' },
-        vibeKanban: { apiUrl: 'http://vibe.local' },
-        sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
-        letta: { enabled: false },
-      };
-
-      expect(() => validateConfig(config)).toThrow('HULY_API_URL or HULY_MCP_URL must be set');
-    });
-
     it('should reject sync interval less than 1000ms', () => {
       const config = {
-        huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 500, maxWorkers: 5, apiDelay: 10 },
         letta: { enabled: false },
@@ -162,7 +136,6 @@ describe('config', () => {
 
     it('should reject invalid maxWorkers', () => {
       const config = {
-        huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 0, apiDelay: 10 },
         letta: { enabled: false },
@@ -173,7 +146,6 @@ describe('config', () => {
 
     it('should reject negative API delay', () => {
       const config = {
-        huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 5, apiDelay: -1 },
         letta: { enabled: false },
@@ -184,7 +156,6 @@ describe('config', () => {
 
     it('should reject enabled Letta without base URL', () => {
       const config = {
-        huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
         reconciliation: { intervalMinutes: 60, action: 'mark_deleted' },
@@ -199,7 +170,6 @@ describe('config', () => {
 
     it('should reject enabled Letta without password', () => {
       const config = {
-        huly: { apiUrl: 'http://huly.local' },
         vibeKanban: { apiUrl: 'http://vibe.local' },
         sync: { interval: 5000, maxWorkers: 5, apiDelay: 10 },
         reconciliation: { intervalMinutes: 60, action: 'mark_deleted' },
@@ -218,8 +188,6 @@ describe('config', () => {
       const config = loadConfig();
       const summary = getConfigSummary(config);
 
-      expect(summary).toHaveProperty('hulyApi');
-      expect(summary).toHaveProperty('hulyMode');
       expect(summary).toHaveProperty('beadsEnabled');
       expect(summary).toHaveProperty('syncInterval');
       expect(summary).toHaveProperty('dryRun');
@@ -231,21 +199,6 @@ describe('config', () => {
       const summary = getConfigSummary(config);
 
       expect(summary.syncInterval).toBe('60s');
-    });
-
-    it('should show REST API mode for Huly', () => {
-      const config = loadConfig();
-      const summary = getConfigSummary(config);
-
-      expect(summary.hulyMode).toBe('REST API');
-    });
-
-    it('should show MCP mode when REST is disabled', () => {
-      process.env.HULY_USE_REST = 'false';
-      const config = loadConfig();
-      const summary = getConfigSummary(config);
-
-      expect(summary.hulyMode).toBe('MCP');
     });
 
     it('should include all sync settings', () => {

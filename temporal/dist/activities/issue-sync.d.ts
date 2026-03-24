@@ -29,10 +29,7 @@ export interface IssueSyncInput {
     operation: 'create' | 'update' | 'delete';
     source: 'huly' | 'vibe' | 'beads';
 }
-/**
- * Sync issue to Huly
- */
-export declare function syncToHuly(input: IssueSyncInput): Promise<SyncResult>;
+export declare function syncToHuly(_input: IssueSyncInput): Promise<SyncResult>;
 /**
  * Sync issue to VibeKanban
  */
@@ -55,10 +52,7 @@ export declare function updateLettaMemory(input: {
         timestamp: number;
     };
 }): Promise<SyncResult>;
-/**
- * Best-effort compensation: delete newly created Huly issue.
- */
-export declare function compensateHulyCreate(input: {
+export declare function compensateHulyCreate(_input: {
     hulyIdentifier?: string;
 }): Promise<SyncResult>;
 /**

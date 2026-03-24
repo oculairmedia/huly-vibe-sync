@@ -1,13 +1,5 @@
-/**
- * Temporal Client — Barrel Export
- *
- * Re-exports all client functions from sub-modules.
- */
-
-// Connection & utilities
 export { getClient, isTemporalEnabled, isTemporalAvailable, TASK_QUEUE } from './connection';
 
-// Memory update workflows
 export {
   scheduleMemoryUpdate,
   scheduleBatchMemoryUpdate,
@@ -18,10 +10,8 @@ export {
   getFailedWorkflows,
 } from './memory-update';
 
-// Issue sync workflows
 export { scheduleIssueSync, executeIssueSync, scheduleBatchIssueSync } from './issue-sync';
 
-// Full sync workflows
 export {
   scheduleSingleIssueSync,
   executeSingleIssueSync,
@@ -33,7 +23,6 @@ export {
   listSyncWorkflows,
 } from './full-sync';
 
-// Schedule management
 export {
   startScheduledSync,
   getActiveScheduledSync,
@@ -42,7 +31,6 @@ export {
   isScheduledSyncActive,
 } from './schedule';
 
-// Reconciliation
 export type {
   ReconciliationAction,
   DataReconciliationInput,
@@ -55,7 +43,6 @@ export {
   stopScheduledReconciliation,
 } from './reconciliation';
 
-// Agent provisioning
 export type {
   ProvisioningInput,
   ProvisioningResult,
@@ -70,7 +57,6 @@ export {
   cleanupFailedProvisions,
 } from './agent-provisioning';
 
-// Beads sync
 export type { BeadsSyncInput } from './beads-sync';
 export {
   scheduleBeadsSync,
@@ -79,6 +65,3 @@ export {
   scheduleBeadsFileChange,
   executeBeadsFileChange,
 } from './beads-sync';
-
-// Event triggers
-export { scheduleHulyWebhookChange, executeHulyWebhookChange } from './event-triggers';

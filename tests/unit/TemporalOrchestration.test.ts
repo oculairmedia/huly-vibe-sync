@@ -48,29 +48,15 @@ const mockHulyIssues = [
 // ============================================================
 
 const createMockActivities = () => ({
-  // Orchestration activities
-  fetchHulyProjects: vi.fn().mockResolvedValue(mockHulyProjects),
-  fetchProjectData: vi.fn().mockResolvedValue({
-    hulyIssues: mockHulyIssues,
-  }),
-  fetchHulyIssuesBulk: vi.fn().mockResolvedValue({
-    TEST1: mockHulyIssues,
-  }),
+  fetchRegistryProjects: vi.fn().mockResolvedValue(mockHulyProjects),
   initializeBeads: vi.fn().mockResolvedValue(true),
   fetchBeadsIssues: vi.fn().mockResolvedValue([]),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
   recordSyncMetrics: vi.fn().mockResolvedValue(undefined),
   checkAgentExists: vi.fn().mockResolvedValue({ exists: false }),
   updateProjectAgent: vi.fn().mockResolvedValue({ success: true }),
-
-  // Sync activities
-  syncIssueToBeads: vi.fn().mockResolvedValue({ success: true }),
-  syncBeadsToHulyBatch: vi.fn().mockResolvedValue({ updated: 0, failed: 0, errors: [] }),
-  createBeadsIssueInHuly: vi.fn().mockResolvedValue({ created: false }),
   commitBeadsToGit: vi.fn().mockResolvedValue({ success: true }),
-  persistIssueSyncState: vi.fn().mockResolvedValue(undefined),
   persistIssueSyncStateBatch: vi.fn().mockResolvedValue(undefined),
-  getIssueSyncStateBatch: vi.fn().mockResolvedValue({}),
 });
 
 // ============================================================
@@ -124,13 +110,13 @@ describe('FullOrchestrationWorkflow', () => {
   // ============================================================
   describe('Basic Flow', () => {
     it('should complete successfully with no projects', async () => {
-      mockActivities.fetchHulyProjects.mockResolvedValue([]);
+      mockActivities.fetchRegistryProjects.mockResolvedValue([]);
 
       const result = await runWorkflowTest({}, mockActivities);
 
       expect(result.success).toBe(true);
       expect(result.projectsProcessed).toBe(0);
-      expect(mockActivities.fetchHulyProjects).toHaveBeenCalled();
+      expect(mockActivities.fetchRegistryProjects).toHaveBeenCalled();
     }, 30000);
 
     it('should filter to specific project when identifier provided', async () => {
@@ -143,16 +129,14 @@ describe('FullOrchestrationWorkflow', () => {
   });
 
   describe('Project execution', () => {
-    it('should run with removed Vibe phases and Beads enabled', async () => {
+    it('should run with Beads enabled and registry-based pipeline', async () => {
       const result = await runWorkflowTest(
         { projectIdentifier: 'TEST1', enableBeads: true },
         mockActivities
       );
 
       expect(result.success).toBe(true);
-      expect(result.projectResults[0].phase1.synced).toBe(0);
-      expect(result.projectResults[0].phase1.skipped).toBe(mockHulyIssues.length);
-      expect(result.projectResults[0].phase2.synced).toBe(0);
+      expect(result.projectResults[0].projectIdentifier).toBe('TEST1');
       expect(mockActivities.initializeBeads).toHaveBeenCalledWith(
         expect.objectContaining({ gitRepoPath: '/opt/stacks/test1' })
       );

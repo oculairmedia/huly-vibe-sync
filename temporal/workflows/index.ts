@@ -1,38 +1,17 @@
-/**
- * Workflow exports for Temporal worker
- *
- * This file re-exports all workflows so the worker can load them.
- */
-
-// Memory update workflows
 export { MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow } from './memory-update';
 
-// Issue sync workflows (raw HTTP)
 export { IssueSyncWorkflow, BatchIssueSyncWorkflow } from './issue-sync';
 
-// Full sync workflows (using existing services)
 export { SyncSingleIssueWorkflow, SyncProjectWorkflow } from './full-sync';
 
-// Bidirectional sync workflows (Huly <-> Beads)
-export {
-  BidirectionalSyncWorkflow,
-  SyncFromHulyWorkflow,
-  SyncFromBeadsWorkflow,
-  BeadsFileChangeWorkflow,
-  HulyWebhookChangeWorkflow,
-} from './bidirectional-sync';
-
-// Full orchestration workflows (replaces SyncOrchestrator)
 export {
   FullOrchestrationWorkflow,
   ScheduledSyncWorkflow,
   ProjectSyncWorkflow,
 } from './orchestration';
 
-// Data reconciliation workflows
 export { DataReconciliationWorkflow, ScheduledReconciliationWorkflow } from './reconciliation';
 
-// Agent provisioning workflows
 export {
   ProvisionAgentsWorkflow,
   ProvisionSingleAgentWorkflow,

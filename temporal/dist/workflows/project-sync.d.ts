@@ -1,26 +1,19 @@
 /**
- * Project Sync Workflow
+ * Project Sync Workflow — Simplified 4-Phase Pipeline
  *
  * Handles syncing a single project with continueAsNew for large issue counts.
- * This prevents workflow history overflow for projects with many issues.
  *
- * Multi-phase execution: init → phase1 → phase2 → phase3 → phase3b → phase3c → done
+ * Phases: init → sync → agent → done
+ *   init:  Discover project in registry, init beads, provision/reconcile agent
+ *   sync:  Read beads issues, persist to registry DB (for MCP queries)
+ *   agent: Update Letta agent memory with latest issue summary
+ *   done:  Record metrics, commit beads changes if any
  */
 export interface ProjectSyncResult {
     projectIdentifier: string;
     projectName: string;
     success: boolean;
-    phase1: {
-        synced: number;
-        skipped: number;
-        errors: number;
-    };
-    phase2: {
-        synced: number;
-        skipped: number;
-        errors: number;
-    };
-    phase3?: {
+    beadsSync: {
         synced: number;
         skipped: number;
         errors: number;
@@ -29,7 +22,7 @@ export interface ProjectSyncResult {
     error?: string;
 }
 export interface ProjectSyncInput {
-    hulyProject: {
+    project: {
         identifier: string;
         name: string;
         description?: string;
@@ -38,29 +31,10 @@ export interface ProjectSyncInput {
     enableBeads: boolean;
     enableLetta: boolean;
     dryRun: boolean;
-    prefetchedIssues?: Array<{
-        identifier: string;
-        title: string;
-        status: string;
-        priority?: string;
-        modifiedOn?: number;
-        parentIssue?: string;
-    }>;
-    prefetchedIssuesAreComplete?: boolean;
-    _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
-    _phase1Index?: number;
-    _phase2Index?: number;
-    _phase3Index?: number;
+    _phase?: 'init' | 'sync' | 'agent' | 'done';
     _accumulatedResult?: ProjectSyncResult;
     _gitRepoPath?: string | null;
     _beadsInitialized?: boolean;
-    _phase1UpdatedTasks?: string[];
 }
-/**
- * ProjectSyncWorkflow
- *
- * Handles syncing a single project with continueAsNew for large issue counts.
- * This prevents workflow history overflow for projects like LTSEL with 990 issues.
- */
 export declare function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<ProjectSyncResult>;
 //# sourceMappingURL=project-sync.d.ts.map

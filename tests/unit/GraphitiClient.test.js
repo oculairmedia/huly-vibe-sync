@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { GraphitiClient, createGraphitiClient, createAstGraphitiClient } from '../../lib/GraphitiClient.js';
+import {
+  GraphitiClient,
+  createGraphitiClient,
+  createAstGraphitiClient,
+} from '../../lib/GraphitiClient.js';
 
 vi.mock('../../lib/http.js', () => ({
   fetchWithPool: vi.fn(),
@@ -310,7 +314,7 @@ describe('GraphitiClient', () => {
       expect(body.messages[0].role_type).toBe('system');
       expect(body.messages[0].role).toBe('code_indexer');
       expect(body.messages[0].name).toBe('file_containment');
-      expect(body.messages[0].source_description).toBe('huly-vibe-sync CodePerception');
+      expect(body.messages[0].source_description).toBe('vibe-sync CodePerception');
       expect(body.messages[0].timestamp).toBeDefined();
     });
   });

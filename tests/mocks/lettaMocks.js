@@ -100,7 +100,7 @@ export function createMockListAgentsResponse(agents = []) {
     createMockLettaAgent({
       id: `agent-${i + 1}`,
       name: `Agent-${i + 1}`,
-    }),
+    })
   );
 }
 
@@ -118,7 +118,7 @@ export function createMockListToolsResponse(tools = []) {
     createMockLettaTool({
       id: `tool-${i + 1}`,
       name: `tool_${i + 1}`,
-    }),
+    })
   );
 }
 
@@ -224,7 +224,7 @@ export function createMock409Response(resource, identifier) {
 export function createMockLettaSetup(options = {}) {
   const controlAgent = createMockLettaAgent({
     id: 'control-agent-id',
-    name: options.controlAgentName || 'Huly-PM-Control',
+    name: options.controlAgentName || 'PM-Control',
     tools: options.controlTools || ['tool-1', 'tool-2', 'tool-3'],
   });
 
@@ -232,7 +232,7 @@ export function createMockLettaSetup(options = {}) {
     const identifier = `PROJ${i + 1}`;
     return createMockLettaAgent({
       id: `agent-${identifier}`,
-      name: `Huly-PM-${identifier}`,
+      name: `PM-${identifier}`,
       metadata: { project: identifier },
       tools: options.inheritTools ? controlAgent.tools : [],
     });
@@ -243,7 +243,7 @@ export function createMockLettaSetup(options = {}) {
     createMockLettaSource({
       id: `source-${i + 1}`,
       name: `source-${i + 1}`,
-    }),
+    })
   );
 
   return {
@@ -268,12 +268,12 @@ export function createLettaApiMocks(baseUrl, options = {}) {
       method: 'GET',
       response: createMockListAgentsResponse(options.agents || []),
     },
-    getAgent: (agentId) => ({
+    getAgent: agentId => ({
       url: `${baseUrl}/v1/agents/${agentId}`,
       method: 'GET',
       response: createMockLettaAgent({ id: agentId, ...options.agent }),
     }),
-    createAgent: (agentData) => ({
+    createAgent: agentData => ({
       url: `${baseUrl}/v1/agents`,
       method: 'POST',
       response: createMockCreateAgentResponse(agentData),

@@ -1,43 +1,25 @@
 #!/usr/bin/env node
 
-/**
- * Huly ↔ Beads Sync Service
- *
- * Bidirectional sync between Huly and Beads (git-backed issue tracker)
- * Uses Huly REST API
- *
- * Delegates to:
- * - lib/MCPClient.js — MCP protocol client
- * - lib/SyncController.js — sync mutex/debounce control
- * - lib/EventHandlers.js — webhook/SSE/file-change event handlers
- * - lib/SchedulerSetup.js — Temporal scheduled sync + reconciliation
- */
-
 import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 
-import { createHulyRestClient } from './lib/HulyRestClient.js';
-
-import { createSyncDatabase, migrateFromJSON } from './lib/database.js';
+import { createSyncDatabase } from './lib/database.js';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
 import { initializeHealthStats } from './lib/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';
-import { createWebhookHandler } from './lib/HulyWebhookHandler.js';
 import { createLettaService } from './lib/LettaService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
 import { logger } from './lib/logger.js';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
+import { ProjectRegistry } from './lib/ProjectRegistry.js';
 
-import { MCPClient } from './lib/MCPClient.js';
 import { createSyncController } from './lib/SyncController.js';
 import { createEventHandlers } from './lib/EventHandlers.js';
 import { setupScheduler } from './lib/SchedulerSetup.js';
 
-// Temporal orchestration (lazy-loaded)
 let temporalOrchestration = null;
 const USE_TEMPORAL_ORCHESTRATION = process.env.USE_TEMPORAL_ORCHESTRATION === 'true';
 
@@ -84,54 +66,39 @@ async function getTemporalOrchestration() {
   return temporalOrchestration;
 }
 
-// Temporal workflow triggers for bidirectional sync (CommonJS module)
-const require = createRequire(import.meta.url);
-let triggerSyncFromHuly, triggerSyncFromBeads, triggerBidirectionalSync, isTemporalAvailable;
-try {
-  const temporalTrigger = require('./temporal/dist/trigger.js');
-  triggerSyncFromHuly = temporalTrigger.triggerSyncFromHuly;
-  triggerSyncFromBeads = temporalTrigger.triggerSyncFromBeads;
-  triggerBidirectionalSync = temporalTrigger.triggerBidirectionalSync;
-  isTemporalAvailable = temporalTrigger.isTemporalAvailable;
-} catch (err) {
-  console.warn('[Temporal] Failed to load trigger module:', err.message);
-  isTemporalAvailable = async () => false;
-  triggerSyncFromHuly = async () => {
-    throw new Error('Temporal not available');
-  };
-  triggerSyncFromBeads = async () => {
-    throw new Error('Temporal not available');
-  };
-  triggerBidirectionalSync = async () => {
-    throw new Error('Temporal not available');
-  };
-}
-
-// ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load and validate configuration
 const config = loadConfig();
 
-// Health tracking
 const healthStats = initializeHealthStats();
 
-// Database initialization
 const DB_PATH = path.join(__dirname, 'logs', 'sync-state.db');
-const SYNC_STATE_FILE = path.join(__dirname, 'logs', '.sync-state.json');
 
 let db;
 try {
   db = createSyncDatabase(DB_PATH);
   logger.info({ dbPath: DB_PATH }, 'Database initialized successfully');
-  migrateFromJSON(db, SYNC_STATE_FILE);
 } catch (dbError) {
   logger.error({ err: dbError }, 'Failed to initialize database, exiting');
   process.exit(1);
 }
 
-// Initialize Letta service (if configured)
+let projectRegistry = null;
+try {
+  projectRegistry = new ProjectRegistry({ db, logger });
+  const scanResult = projectRegistry.scanProjects();
+  logger.info(
+    { discovered: scanResult.discovered, updated: scanResult.updated },
+    'ProjectRegistry initial scan complete'
+  );
+} catch (registryError) {
+  logger.warn(
+    { err: registryError },
+    'Failed to initialize ProjectRegistry, continuing without it'
+  );
+}
+
 let lettaService = null;
 if (isLettaEnabled(config)) {
   try {
@@ -147,7 +114,6 @@ if (isLettaEnabled(config)) {
   logger.info('Letta PM agent integration disabled (credentials not set)');
 }
 
-// Initialize BookStack service (if enabled)
 let bookstackService = null;
 if (config.bookstack?.enabled) {
   try {
@@ -173,7 +139,6 @@ healthStats.bookstack = bookstackService
     }
   : { enabled: false };
 
-// Initialize FileWatcher for realtime file change detection
 let fileWatcher = null;
 if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
   try {
@@ -224,55 +189,14 @@ if (codePerceptionWatcher && lettaService) {
   logger.info('AstMemorySync initialized - PM agents will receive codebase summaries');
 }
 
-// Temporal workflow orchestration status
-let temporalEnabled = false;
-
-logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
+logger.info({ service: 'vibe-sync' }, 'Service starting');
 logger.info({ config: getConfigSummary(config) }, 'Configuration loaded');
 
-/**
- * Start the sync service
- */
 async function main() {
   logger.info('Starting sync service');
 
-  // Initialize Huly client (REST API or MCP)
-  let hulyClient;
-  if (config.huly.useRestApi) {
-    logger.info({ apiUrl: config.huly.apiUrl }, 'Using Huly REST API client');
-    hulyClient = createHulyRestClient(config.huly.apiUrl, { name: 'Huly REST' });
-  } else {
-    logger.info({ mcpUrl: config.huly.apiUrl }, 'Using Huly MCP client');
-    hulyClient = new MCPClient(config.huly.apiUrl, 'Huly');
-  }
-
-  // Initialize Huly client
-  try {
-    await hulyClient.initialize();
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to initialize clients, exiting');
-    process.exit(1);
-  }
-
-  logger.info('All clients initialized successfully');
-
-  // Check Temporal availability
-  try {
-    temporalEnabled = await isTemporalAvailable();
-    if (temporalEnabled) {
-      logger.info('✓ Temporal server available - bidirectional sync via workflows enabled');
-    } else {
-      logger.warn('✗ Temporal server not available - using legacy sync');
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to check Temporal availability - using legacy sync');
-    temporalEnabled = false;
-  }
-
-  // Track sync interval timer (for dynamic config updates)
   let syncTimer = null;
 
-  // Create SyncController
   const syncController = createSyncController({
     config,
     healthStats,
@@ -287,31 +211,12 @@ async function main() {
     },
   });
 
-  // Create EventHandlers
   const eventHandlers = createEventHandlers({
     db,
-    temporalEnabled,
-    triggerSyncFromHuly,
-    triggerSyncFromBeads,
     runSyncWithTimeout: syncController.runSyncWithTimeout,
     bookstackService,
   });
 
-  // Initialize webhook handler
-  const webhookHandler = createWebhookHandler({
-    db,
-    onChangesReceived: eventHandlers.handleWebhookChanges,
-  });
-
-  const subscribed = await webhookHandler.subscribe();
-  if (subscribed) {
-    logger.info('✓ Subscribed to Huly change watcher for real-time updates');
-    logger.info('✓ Polling disabled - using webhook-based change detection');
-  } else {
-    logger.warn('✗ Failed to subscribe to change watcher, will rely on polling');
-  }
-
-  // Initialize BookStack file watcher
   let bookstackWatcher = null;
   if (bookstackService && config.bookstack?.enabled) {
     bookstackWatcher = createBookStackWatcher({
@@ -325,30 +230,27 @@ async function main() {
     if (bookstackWatchResult.watching > 0) {
       logger.info(
         { watching: bookstackWatchResult.watching, available: bookstackWatchResult.available },
-        '✓ BookStack file watcher active for real-time local→BookStack import'
+        'BookStack file watcher active for real-time local→BookStack import'
       );
     }
   }
 
-  // Start API server
   createApiServer({
     config,
     healthStats,
     db,
     onSyncTrigger: syncController.handleSyncTrigger,
     onConfigUpdate: syncController.handleConfigUpdate,
-    webhookHandler,
     getTemporalClient: getTemporalOrchestration,
     codePerceptionWatcher,
+    projectRegistry,
   });
 
-  // Run initial sync
   await syncController.runSyncWithTimeout();
 
-  // Schedule periodic syncs
   await setupScheduler({
     config,
-    subscribed,
+    subscribed: false,
     getTemporalOrchestration,
     runSyncWithTimeout: syncController.runSyncWithTimeout,
     setSyncTimer: t => {
@@ -357,7 +259,6 @@ async function main() {
   });
 }
 
-// Run the service
 main().catch(error => {
   logger.fatal({ err: error }, 'Fatal error, exiting');
   process.exit(1);

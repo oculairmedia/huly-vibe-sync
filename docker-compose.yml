@@ -40,7 +40,7 @@ services:
       - LETTA_UPLOAD_PROJECT_FILES=false
       - LETTA_UPLOAD_FULL_SOURCE=false
       - LETTA_SEND_MESSAGES=${LETTA_SEND_MESSAGES:-false}
-      - LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-Huly-PM-Control}
+      - LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-PM-Control}
       - LETTA_SYNC_TOOLS_FROM_CONTROL=${LETTA_SYNC_TOOLS_FROM_CONTROL:-true}
       - LETTA_SYNC_TOOLS_FORCE=${LETTA_SYNC_TOOLS_FORCE:-false}
       - LETTA_INCREMENTAL_SYNC=${LETTA_INCREMENTAL_SYNC:-true}
@@ -51,7 +51,7 @@ services:
 
       # Graphiti Knowledge Graph Integration
       - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-false}
-      - GRAPHITI_API_URL=${GRAPHITI_API_URL:-http://localhost:8003}
+      - GRAPHITI_API_URL=${GRAPHITI_API_URL:-http://192.168.50.219:8003}
       - GRAPHITI_GROUP_ID=${GRAPHITI_GROUP_ID:-vibesync}
       - GRAPHITI_AST_ENABLED=${GRAPHITI_AST_ENABLED:-true}
 
@@ -126,7 +126,10 @@ services:
     container_name: vibesync-temporal-worker
     restart: unless-stopped
     user: '1000:1000'
+    mem_limit: 2g
+    cpus: 2.0
     environment:
+      - NODE_OPTIONS=--max-old-space-size=1536
       - TEMPORAL_ADDRESS=localhost:7233
       - TEMPORAL_TASK_QUEUE=vibesync-queue
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
@@ -174,10 +177,10 @@ services:
       - '3000'
     labels:
       - homepage.group=Productivity
-      - homepage.name=Huly Vibe Sync UI
+      - homepage.name=Vibe Sync UI
       - homepage.icon=si-react
       - homepage.href=http://192.168.50.90:3110
-      - homepage.description=Huly and Vibe synchronization dashboard
+      - homepage.description=Project synchronization dashboard
     healthcheck:
       test:
         [

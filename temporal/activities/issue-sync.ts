@@ -6,18 +6,11 @@
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
-import { createHulyClient, createVibeClient, createVibeSyncClient } from '../lib';
-import { findMappedIssueByTitle } from './huly-dedupe';
+import { createVibeClient, createVibeSyncClient } from '../lib';
 
-// Configuration from environment
-const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
 const VIBESYNC_API_URL = process.env.VIBESYNC_API_URL || 'http://localhost:3456';
 const TIMEOUT = 30000;
-
-function getHulyClient() {
-  return createHulyClient(process.env.HULY_API_URL || HULY_API_URL, { timeout: TIMEOUT });
-}
 
 function getVibeClient() {
   return createVibeClient(process.env.VIBE_API_URL || VIBE_API_URL, { timeout: TIMEOUT });
@@ -27,17 +20,6 @@ function getVibeSyncClient() {
   return createVibeSyncClient(process.env.VIBESYNC_API_URL || VIBESYNC_API_URL, {
     timeout: TIMEOUT,
   });
-}
-
-/**
- * Check if an issue with the same title already exists in the project
- * Returns the existing issue identifier if found, null otherwise
- */
-async function findExistingIssueByTitle(
-  projectIdentifier: string,
-  title: string
-): Promise<string | null> {
-  return findMappedIssueByTitle(projectIdentifier, title);
 }
 
 // Types
@@ -87,60 +69,9 @@ const STATUS_VIBE_TO_HULY: Record<string, string> = {
   cancelled: 'Canceled',
 };
 
-/**
- * Sync issue to Huly
- */
-export async function syncToHuly(input: IssueSyncInput): Promise<SyncResult> {
-  const { issue, operation } = input;
-
-  console.log(`[Huly Activity] ${operation} issue: ${issue.identifier || issue.title}`);
-
-  try {
-    if (operation === 'create') {
-      // DEDUPLICATION: Check if issue with same title already exists
-      if (!issue.projectIdentifier) {
-        console.warn(
-          `[Huly Activity] ⚠️ WARNING: Create operation without projectIdentifier - deduplication check skipped!`
-        );
-        console.warn(`[Huly Activity] ⚠️ Title: "${issue.title}", Source: ${input.source}`);
-      }
-      if (issue.projectIdentifier) {
-        const existingId = await findExistingIssueByTitle(issue.projectIdentifier, issue.title);
-        if (existingId) {
-          console.warn(
-            `[Huly Activity] ⚠️ DUPLICATE PREVENTED: Issue "${issue.title}" already exists as ${existingId}`
-          );
-          console.warn(
-            `[Huly Activity] ⚠️ Source: ${input.source}, Project: ${issue.projectIdentifier}`
-          );
-          console.warn(`[Huly Activity] ⚠️ Returning existing ID instead of creating duplicate`);
-          // Return the existing issue ID instead of creating a duplicate
-          return { success: true, systemId: existingId };
-        }
-      }
-
-      const result = await getHulyClient().createIssue(issue.projectIdentifier || '', {
-        title: issue.title,
-        description: issue.description || '',
-        status: issue.status,
-        priority: issue.priority || 'NoPriority',
-      });
-      console.log(`[Huly Activity] Created issue: ${result.identifier}`);
-
-      return { success: true, systemId: result.identifier };
-    }
-
-    if (operation === 'update') {
-      await getHulyClient().updateIssue(issue.identifier || '', 'status', issue.status);
-
-      console.log(`[Huly Activity] Updated issue: ${issue.identifier}`);
-      return { success: true, systemId: issue.identifier };
-    }
-
-    return { success: true };
-  } catch (error) {
-    return handleActivityError(error, 'Huly');
-  }
+export async function syncToHuly(_input: IssueSyncInput): Promise<SyncResult> {
+  console.warn('[Huly Activity] Huly sync removed — returning no-op');
+  return { success: true, skipped: true };
 }
 
 /**
@@ -235,23 +166,11 @@ export async function updateLettaMemory(input: {
   return { success: true };
 }
 
-/**
- * Best-effort compensation: delete newly created Huly issue.
- */
-export async function compensateHulyCreate(input: {
+export async function compensateHulyCreate(_input: {
   hulyIdentifier?: string;
 }): Promise<SyncResult> {
-  if (!input.hulyIdentifier) return { success: true, skipped: true };
-
-  try {
-    await getHulyClient().deleteIssue(input.hulyIdentifier);
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  console.warn('[Huly Activity] Huly compensation removed — returning no-op');
+  return { success: true, skipped: true };
 }
 
 /**
