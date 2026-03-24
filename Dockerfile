@@ -28,11 +28,14 @@ FROM node:20-alpine AS runtime
 LABEL maintainer="Oculair Media"
 LABEL description="Huly to Vibe Kanban bidirectional sync service with Letta Code support"
 
-# Runtime-only system packages
-RUN apk add --no-cache git curl bash python3
+# Runtime-only system packages + build tools for node-pty native compilation
+RUN apk add --no-cache git curl bash python3 make g++
 
-# Install Letta Code CLI globally
+# Install Letta Code CLI globally (node-pty requires native build)
 RUN npm install -g @letta-ai/letta-code
+
+# Remove build tools after install to keep image lean
+RUN apk del make g++
 
 # Copy pre-built bd binary (statically linked)
 COPY bd-binary /usr/local/bin/bd
