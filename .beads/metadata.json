@@ -1,4 +1,7 @@
 {
-  "database": "beads.db",
-  "jsonl_export": "issues.jsonl"
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "huly_vibe_sync",
+  "project_id": "e306a94d-b67c-4f58-b8f2-aa9bbb3b2612"
 }

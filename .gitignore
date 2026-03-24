@@ -54,3 +54,7 @@ logs/*.db
 *.db-wal
 *.db-shm
 .beads/bd.sock.startlock
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
