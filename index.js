@@ -31,6 +31,7 @@ import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
 import { logger } from './lib/logger.js';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
+import { ProjectRegistry } from './lib/ProjectRegistry.js';
 
 import { MCPClient } from './lib/MCPClient.js';
 import { createSyncController } from './lib/SyncController.js';
@@ -129,6 +130,22 @@ try {
 } catch (dbError) {
   logger.error({ err: dbError }, 'Failed to initialize database, exiting');
   process.exit(1);
+}
+
+// Initialize ProjectRegistry — filesystem-based project discovery
+let projectRegistry = null;
+try {
+  projectRegistry = new ProjectRegistry({ db, logger });
+  const scanResult = projectRegistry.scanProjects();
+  logger.info(
+    { discovered: scanResult.discovered, updated: scanResult.updated },
+    'ProjectRegistry initial scan complete'
+  );
+} catch (registryError) {
+  logger.warn(
+    { err: registryError },
+    'Failed to initialize ProjectRegistry, continuing without it'
+  );
 }
 
 // Initialize Letta service (if configured)
@@ -340,6 +357,7 @@ async function main() {
     webhookHandler,
     getTemporalClient: getTemporalOrchestration,
     codePerceptionWatcher,
+    projectRegistry,
   });
 
   // Run initial sync
