@@ -114,12 +114,6 @@ describe('BeadsParentChildService', () => {
       expect(typeof syncParentChildToBeads).toBe('function');
     });
 
-    it('should export syncBeadsParentChildToHuly', async () => {
-      const { syncBeadsParentChildToHuly } = await import('../../lib/BeadsParentChildService.js');
-      expect(syncBeadsParentChildToHuly).toBeDefined();
-      expect(typeof syncBeadsParentChildToHuly).toBe('function');
-    });
-
     it('should export getAllParentChildRelationships', async () => {
       const { getAllParentChildRelationships } = await import(
         '../../lib/BeadsParentChildService.js'

@@ -4,7 +4,7 @@
  * Activities for git repo path resolution and Beads operations.
  */
 
-import { createBeadsClient, createHulyClient } from '../lib';
+import { createBeadsClient } from '../lib';
 import { getDb } from './sync-database';
 import type { HulyProject } from './orchestration';
 

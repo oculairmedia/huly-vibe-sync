@@ -42,7 +42,6 @@ const {
   normalizeTitleForComparison,
   openBeadsDB,
   readIssuesFromDB,
-  findHulyIdentifier,
   buildIssueLookups,
   getBeadsIssuesWithLookups,
   getParentIdFromLookup,
@@ -213,62 +212,11 @@ describe('BeadsDBReader', () => {
     });
   });
 
-  // ── findHulyIdentifier ───────────────────────────────
-
-  describe('findHulyIdentifier', () => {
-    it('finds "Huly Issue: PROJ-123" in description', () => {
-      const issue = { description: 'Some text\nHuly Issue: PROJ-123\nMore text', comments: [] };
-      expect(findHulyIdentifier(issue)).toBe('PROJ-123');
-    });
-
-    it('finds "Synced from Huly: PROJ-456" in description', () => {
-      const issue = { description: 'Synced from Huly: PROJ-456', comments: [] };
-      expect(findHulyIdentifier(issue)).toBe('PROJ-456');
-    });
-
-    it('finds identifier in comments when not in description', () => {
-      const issue = {
-        description: 'No huly ref here',
-        comments: [{ text: 'Regular comment' }, { text: 'Huly Issue: ABC-789' }],
-      };
-      expect(findHulyIdentifier(issue)).toBe('ABC-789');
-    });
-
-    it('handles comment with null text', () => {
-      const issue = {
-        description: 'No ref',
-        comments: [{ text: null }, { text: 'Huly Issue: TEST-1' }],
-      };
-      expect(findHulyIdentifier(issue)).toBe('TEST-1');
-    });
-
-    it('returns null when no match found', () => {
-      const issue = { description: 'Just a plain description', comments: [] };
-      expect(findHulyIdentifier(issue)).toBeNull();
-    });
-
-    it('returns null when description is null', () => {
-      const issue = { description: null, comments: [] };
-      expect(findHulyIdentifier(issue)).toBeNull();
-    });
-
-    it('returns null when no description and no comments', () => {
-      const issue = { description: null };
-      expect(findHulyIdentifier(issue)).toBeNull();
-    });
-
-    it('uppercases the identifier', () => {
-      const issue = { description: 'Huly Issue: proj-99', comments: [] };
-      expect(findHulyIdentifier(issue)).toBe('PROJ-99');
-    });
-  });
-
   // ── buildIssueLookups ────────────────────────────────
 
   describe('buildIssueLookups', () => {
     it('returns empty maps for empty array', () => {
       const result = buildIssueLookups([]);
-      expect(result.byHulyId.size).toBe(0);
       expect(result.byTitle.size).toBe(0);
       expect(result.byId.size).toBe(0);
       expect(result.parentMap.size).toBe(0);
@@ -287,54 +235,6 @@ describe('BeadsDBReader', () => {
       ];
       const { byId } = buildIssueLookups(issues);
       expect(byId.get('a')).toBe(issues[0]);
-    });
-
-    it('builds byHulyId map from description', () => {
-      const issues = [
-        {
-          id: 'a',
-          title: 'Task',
-          description: 'Huly Issue: TST-1',
-          created_at: '2025-01-01',
-          comments: [],
-          dependencies: [],
-        },
-        {
-          id: 'b',
-          title: 'Other',
-          description: 'Huly Issue: TST-2',
-          created_at: '2025-01-02',
-          comments: [],
-          dependencies: [],
-        },
-      ];
-      const { byHulyId } = buildIssueLookups(issues);
-      expect(byHulyId.size).toBe(2);
-      expect(byHulyId.get('TST-1').id).toBe('a');
-      expect(byHulyId.get('TST-2').id).toBe('b');
-    });
-
-    it('first issue wins for duplicate Huly IDs', () => {
-      const issues = [
-        {
-          id: 'a',
-          title: 'First',
-          description: 'Huly Issue: DUP-1',
-          created_at: '2025-01-01',
-          comments: [],
-          dependencies: [],
-        },
-        {
-          id: 'b',
-          title: 'Second',
-          description: 'Huly Issue: DUP-1',
-          created_at: '2025-01-02',
-          comments: [],
-          dependencies: [],
-        },
-      ];
-      const { byHulyId } = buildIssueLookups(issues);
-      expect(byHulyId.get('DUP-1').id).toBe('a');
     });
 
     it('builds byTitle map with normalization', () => {
@@ -460,7 +360,7 @@ describe('BeadsDBReader', () => {
     it('returns issues and lookups from DB', () => {
       fs.default.existsSync.mockReturnValue(true);
 
-      const issues = [{ id: 'x', title: 'Test', description: 'Huly Issue: HV-1' }];
+      const issues = [{ id: 'x', title: 'Test', description: 'Test issue' }];
       const stmtIssues = { all: vi.fn(() => issues) };
       const stmtComments = { all: vi.fn(() => []) };
       const stmtDeps = { all: vi.fn(() => []) };
@@ -474,7 +374,6 @@ describe('BeadsDBReader', () => {
       consoleSpy.mockRestore();
 
       expect(result.issues).toHaveLength(1);
-      expect(result.lookups.byHulyId.get('HV-1').id).toBe('x');
       expect(result.lookups.byId.get('x').id).toBe('x');
     });
 
@@ -486,7 +385,7 @@ describe('BeadsDBReader', () => {
       consoleSpy.mockRestore();
 
       expect(result.issues).toEqual([]);
-      expect(result.lookups.byHulyId.size).toBe(0);
+      expect(result.lookups.byId.size).toBe(0);
     });
   });
 

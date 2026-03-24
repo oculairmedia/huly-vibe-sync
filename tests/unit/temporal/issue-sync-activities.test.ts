@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../temporal/lib', () => ({
-  createHulyClient: vi.fn(),
   createVibeClient: vi.fn(),
   createVibeSyncClient: vi.fn(),
 }));
@@ -10,7 +9,6 @@ vi.mock('../../../temporal/activities/huly-dedupe', () => ({
   findMappedIssueByTitle: vi.fn().mockResolvedValue(null),
 }));
 
-import { createHulyClient } from '../../../temporal/lib';
 import { createVibeClient, createVibeSyncClient } from '../../../temporal/lib';
 import {
   compensateBeadsCreate,
@@ -60,12 +58,8 @@ describe('issue-sync activities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.BEADS_SYNC_ENABLED = 'true';
-    (createHulyClient as any).mockReturnValue(mockHulyClient);
     (createVibeClient as any).mockReturnValue(mockVibeClient);
     (createVibeSyncClient as any).mockReturnValue(mockVibeSyncClient);
-    mockHulyClient.createIssue.mockResolvedValue({ identifier: 'HVSYN-123' });
-    mockHulyClient.updateIssue.mockResolvedValue({ identifier: 'HVSYN-123' });
-    mockHulyClient.deleteIssue.mockResolvedValue(true);
     mockVibeClient.createTask.mockResolvedValue({ id: 'vibe-123' });
     mockVibeClient.updateTask.mockResolvedValue({ id: 'vibe-123' });
     mockVibeClient.deleteTask.mockResolvedValue(true);
@@ -84,39 +78,30 @@ describe('issue-sync activities', () => {
     process.env.BEADS_SYNC_ENABLED = originalBeadsSyncEnabled;
   });
 
-  it('routes Huly create through HulyClient', async () => {
+  it('routes Huly create (returns skipped stub)', async () => {
     const result = await syncToHuly(
       makeInput({
         operation: 'create',
       })
     );
 
-    expect(result).toEqual({ success: true, systemId: 'HVSYN-123' });
-    expect(createHulyClient).toHaveBeenCalled();
-    expect(mockHulyClient.createIssue).toHaveBeenCalledWith('HVSYN', {
-      title: 'Test issue',
-      description: '',
-      status: 'Todo',
-      priority: 'NoPriority',
-    });
+    expect(result).toEqual({ success: true, skipped: true });
   });
 
-  it('routes Huly updates through HulyClient', async () => {
+  it('routes Huly updates (returns skipped stub)', async () => {
     const result = await syncToHuly(
       makeInput({
         operation: 'update',
       })
     );
 
-    expect(result).toEqual({ success: true, systemId: 'HVSYN-123' });
-    expect(mockHulyClient.updateIssue).toHaveBeenCalledWith('HVSYN-123', 'status', 'Todo');
+    expect(result).toEqual({ success: true, skipped: true });
   });
 
-  it('routes Huly compensation deletes through HulyClient', async () => {
+  it('routes Huly compensation deletes (returns skipped stub)', async () => {
     const result = await compensateHulyCreate({ hulyIdentifier: 'HVSYN-123' });
 
-    expect(result).toEqual({ success: true });
-    expect(mockHulyClient.deleteIssue).toHaveBeenCalledWith('HVSYN-123');
+    expect(result).toEqual({ success: true, skipped: true });
   });
 
   it('routes Vibe create through VibeClient', async () => {

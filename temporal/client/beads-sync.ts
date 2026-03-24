@@ -1,21 +1,29 @@
-/**
- * Beads Sync Client Functions
- *
- * Schedule and manage Beads sync and file change workflows.
- */
-
-import type {
-  SyncContext,
-  BidirectionalSyncResult,
-  BeadsFileChangeInput,
-  BeadsFileChangeResult,
-} from '../workflows/bidirectional-sync';
-
 import { getClient, TASK_QUEUE } from './connection';
 
-// ============================================================
-// TYPES
-// ============================================================
+export interface SyncContext {
+  projectIdentifier: string;
+  gitRepoPath?: string;
+}
+
+export interface BidirectionalSyncResult {
+  success: boolean;
+  source: string;
+  issueId: string;
+  errors: string[];
+}
+
+export interface BeadsFileChangeInput {
+  projectIdentifier: string;
+  projectPath: string;
+  changedFiles: string[];
+  timestamp: string;
+}
+
+export interface BeadsFileChangeResult {
+  success: boolean;
+  issuesProcessed: number;
+  errors: string[];
+}
 
 export interface BeadsSyncInput {
   beadsIssueId: string;
@@ -23,12 +31,6 @@ export interface BeadsSyncInput {
   linkedIds?: { hulyId?: string; vibeId?: string };
 }
 
-/**
- * Schedule a Beads sync workflow (fire-and-forget)
- *
- * Triggered when Beads files change. Syncs from Beads to Huly and Vibe.
- * Returns immediately; workflow runs in background with retry.
- */
 export async function scheduleBeadsSync(
   input: BeadsSyncInput
 ): Promise<{ workflowId: string; runId: string }> {
@@ -50,11 +52,6 @@ export async function scheduleBeadsSync(
   };
 }
 
-/**
- * Execute a Beads sync and wait for result
- *
- * Blocks until the workflow completes (with all retries).
- */
 export async function executeBeadsSync(input: BeadsSyncInput): Promise<BidirectionalSyncResult> {
   const client = await getClient();
 
@@ -67,12 +64,6 @@ export async function executeBeadsSync(input: BeadsSyncInput): Promise<Bidirecti
   });
 }
 
-/**
- * Schedule batch Beads sync for multiple changed issues
- *
- * When multiple Beads issues change at once (e.g., git pull), this
- * schedules individual workflows for each changed issue.
- */
 export async function scheduleBatchBeadsSync(
   inputs: BeadsSyncInput[]
 ): Promise<Array<{ workflowId: string; runId: string }>> {
@@ -91,12 +82,6 @@ export async function scheduleBatchBeadsSync(
   return results;
 }
 
-/**
- * Schedule a Beads file change workflow
- *
- * This is the main entry point for BeadsWatcher to trigger durable syncs.
- * When .beads files change, call this to sync all Beads issues.
- */
 export async function scheduleBeadsFileChange(
   input: BeadsFileChangeInput
 ): Promise<{ workflowId: string; runId: string }> {
@@ -118,9 +103,6 @@ export async function scheduleBeadsFileChange(
   };
 }
 
-/**
- * Execute a Beads file change workflow and wait for result
- */
 export async function executeBeadsFileChange(
   input: BeadsFileChangeInput
 ): Promise<BeadsFileChangeResult> {

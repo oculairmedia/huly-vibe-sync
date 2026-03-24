@@ -8,7 +8,7 @@
 import { ApplicationFailure } from '@temporalio/activity';
 import { LettaClient } from '@letta-ai/letta-client';
 import path from 'path';
-import { createHulyClient } from '../lib';
+// HulyClient removed in Phase 3 registry-refactor
 
 function appRootModule(modulePath: string): string {
   return path.join(process.cwd(), modulePath);

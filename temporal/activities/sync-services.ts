@@ -9,14 +9,31 @@
 
 import { ApplicationFailure } from '@temporalio/activity';
 import path from 'path';
-import {
-  createHulyClient,
-  createBeadsClient,
-  mapHulyStatusToBeadsSimple,
-  mapHulyPriorityToBeads,
-  mapBeadsStatusToHuly,
-} from '../lib';
-import { findMappedIssueByBeadsId, findMappedIssueByTitle, normalizeTitle } from './huly-dedupe';
+import { createBeadsClient } from '../lib';
+
+function normalizeTitle(title: string): string {
+  return (title || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\[.*?\]\s*/, '');
+}
+
+function mapHulyStatusToBeadsSimple(status: string): string {
+  const map: Record<string, string> = {
+    Backlog: 'open',
+    Todo: 'open',
+    'In Progress': 'in_progress',
+    'In Review': 'open',
+    Done: 'closed',
+    Canceled: 'closed',
+  };
+  return map[status] || 'open';
+}
+
+function mapHulyPriorityToBeads(priority?: string): number {
+  const map: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3, None: 4 };
+  return map[priority || ''] ?? 2;
+}
 
 function appRootModule(modulePath: string): string {
   return path.join(process.cwd(), modulePath);
@@ -180,51 +197,16 @@ export async function syncIssueToBeads(input: {
   }
 }
 
-/**
- * Sync Beads changes back to Huly
- */
-export async function syncBeadsToHuly(input: {
+export async function syncBeadsToHuly(_input: {
   beadsIssue: BeadsIssue & { description?: string; modifiedAt?: number };
   hulyIdentifier: string;
   context: SyncContext;
 }): Promise<SyncActivityResult> {
-  const { beadsIssue, hulyIdentifier } = input;
-
-  console.log(`[Temporal:Beads→Huly] Syncing ${beadsIssue.id} to ${hulyIdentifier}`);
-
-  try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-
-    const patch: Record<string, string | undefined> = {};
-
-    const FORWARD_STATUSES = ['in_progress', 'closed', 'blocked', 'deferred'];
-    if (FORWARD_STATUSES.includes(beadsIssue.status)) {
-      patch.status = mapBeadsStatusToHuly(beadsIssue.status);
-    }
-
-    if (beadsIssue.title) {
-      patch.title = beadsIssue.title;
-    }
-    if (beadsIssue.description !== undefined) {
-      patch.description = beadsIssue.description;
-    }
-
-    if (Object.keys(patch).length === 0) {
-      return { success: true, id: hulyIdentifier, updated: false };
-    }
-
-    await hulyClient.patchIssue(hulyIdentifier, patch);
-
-    console.log(
-      `[Temporal:Beads→Huly] Patched ${hulyIdentifier} (fields=${Object.keys(patch).join(',')})`
-    );
-    return { success: true, id: hulyIdentifier, updated: true };
-  } catch (error) {
-    return handleSyncError(error, 'Beads→Huly');
-  }
+  console.warn('[Temporal:Beads→Huly] Huly sync removed — returning no-op');
+  return { success: true, skipped: true };
 }
 
-export async function syncBeadsToHulyBatch(input: {
+export async function syncBeadsToHulyBatch(_input: {
   beadsIssues: Array<{
     beadsId: string;
     hulyIdentifier: string;
@@ -239,189 +221,16 @@ export async function syncBeadsToHulyBatch(input: {
   failed: number;
   errors: Array<{ identifier: string; error: string }>;
 }> {
-  const { beadsIssues } = input;
-
-  if (beadsIssues.length === 0) {
-    return { success: true, updated: 0, failed: 0, errors: [] };
-  }
-
-  console.log(`[Temporal:Beads→Huly] Batch syncing ${beadsIssues.length} issues`);
-
-  try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-
-    const FORWARD_STATUSES = ['in_progress', 'closed', 'blocked', 'deferred'];
-    const updates = beadsIssues
-      .map(issue => {
-        const changes: Record<string, string> = {};
-        if (FORWARD_STATUSES.includes(issue.status)) {
-          changes.status = mapBeadsStatusToHuly(issue.status);
-        }
-        if (issue.title) {
-          changes.title = issue.title;
-        }
-        if (issue.description !== undefined) {
-          changes.description = issue.description;
-        }
-        return { identifier: issue.hulyIdentifier, changes };
-      })
-      .filter(u => Object.keys(u.changes).length > 0);
-
-    console.log(`[Temporal:Beads→Huly] Syncing ${updates.length} issues in batches of 25`);
-
-    let totalUpdated = 0;
-    let totalFailed = 0;
-    const allErrors: Array<{ identifier: string; error: string }> = [];
-
-    const BATCH_SIZE = 25;
-    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-      const batch = updates.slice(i, i + BATCH_SIZE);
-      console.log(
-        `[Temporal:Beads→Huly] Batch ${Math.floor(i / BATCH_SIZE) + 1}: updating ${batch.length} issues`
-      );
-
-      try {
-        const result = await hulyClient.bulkUpdateIssues({ updates: batch });
-
-        totalUpdated += result.succeeded.length;
-        totalFailed += result.failed.length;
-        allErrors.push(...result.failed);
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error(`[Temporal:Beads→Huly] Bulk update failed: ${errorMsg}`);
-        totalFailed += batch.length;
-        for (const entry of batch) {
-          allErrors.push({ identifier: entry.identifier, error: errorMsg });
-        }
-      }
-    }
-
-    console.log(
-      `[Temporal:Beads→Huly] Batch complete: ${totalUpdated} updated, ${totalFailed} failed`
-    );
-
-    return {
-      success: totalFailed === 0,
-      updated: totalUpdated,
-      failed: totalFailed,
-      errors: allErrors,
-    };
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    return {
-      success: false,
-      updated: 0,
-      failed: beadsIssues.length,
-      errors: beadsIssues.map(i => ({ identifier: i.hulyIdentifier, error: errorMsg })),
-    };
-  }
+  console.warn('[Temporal:Beads→Huly] Huly batch sync removed — returning no-op');
+  return { success: true, updated: 0, failed: 0, errors: [] };
 }
 
-export async function createBeadsIssueInHuly(input: {
+export async function createBeadsIssueInHuly(_input: {
   beadsIssue: BeadsIssue;
   context: SyncContext;
 }): Promise<SyncActivityResult & { hulyIdentifier?: string }> {
-  const { beadsIssue, context } = input;
-
-  if (beadsIssue.labels?.some(l => l.startsWith('huly:'))) {
-    console.log(`[Temporal:Beads→Huly] Skipping ${beadsIssue.id} - already has huly label`);
-    return { success: true, skipped: true };
-  }
-
-  console.log(`[Temporal:Beads→Huly] Creating Huly issue for ${beadsIssue.id}`);
-
-  try {
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-
-    const mappedByBeads = await findMappedIssueByBeadsId(context.projectIdentifier, beadsIssue.id);
-    if (mappedByBeads) {
-      return {
-        success: true,
-        skipped: true,
-        id: mappedByBeads,
-        hulyIdentifier: mappedByBeads,
-      };
-    }
-
-    let existingIssue = null;
-    const mappedByTitle = await findMappedIssueByTitle(context.projectIdentifier, beadsIssue.title);
-    if (mappedByTitle) {
-      existingIssue = await hulyClient.getIssue(mappedByTitle);
-    }
-
-    if (existingIssue) {
-      console.log(
-        `[Temporal:Beads→Huly] Found existing Huly issue ${existingIssue.identifier} for "${beadsIssue.title}"`
-      );
-
-      if (context.gitRepoPath) {
-        try {
-          const beadsClient = createBeadsClient(context.gitRepoPath);
-          await beadsClient.addLabel(beadsIssue.id, `huly:${existingIssue.identifier}`);
-          console.log(
-            `[Temporal:Beads→Huly] Linked ${beadsIssue.id} to existing ${existingIssue.identifier}`
-          );
-        } catch (labelError) {
-          console.warn(`[Temporal:Beads→Huly] Failed to add label: ${labelError}`);
-        }
-      }
-
-      return {
-        success: true,
-        skipped: true,
-        id: existingIssue.identifier,
-        hulyIdentifier: existingIssue.identifier,
-      };
-    }
-
-    const priorityMap: Record<number, string> = { 0: 'Urgent', 1: 'High', 2: 'Medium', 3: 'Low' };
-    const hulyPriority = priorityMap[beadsIssue.priority ?? 2] || 'Medium';
-
-    const hulyStatus =
-      beadsIssue.status === 'closed'
-        ? 'Done'
-        : beadsIssue.status === 'in_progress'
-          ? 'In Progress'
-          : 'Backlog';
-
-    const description = [beadsIssue.description || '', '', '---', `Beads Issue: ${beadsIssue.id}`]
-      .join('\n')
-      .trim();
-
-    const result = (await hulyClient.createIssue(context.projectIdentifier, {
-      title: beadsIssue.title,
-      description,
-      priority: hulyPriority,
-      status: hulyStatus,
-    })) as HulyIssue;
-
-    if (!result?.identifier) {
-      throw new Error('Failed to create Huly issue - no identifier returned');
-    }
-
-    console.log(`[Temporal:Beads→Huly] Created ${result.identifier} from ${beadsIssue.id}`);
-
-    if (context.gitRepoPath) {
-      try {
-        const beadsClient = createBeadsClient(context.gitRepoPath);
-        await beadsClient.addLabel(beadsIssue.id, `huly:${result.identifier}`);
-        console.log(
-          `[Temporal:Beads→Huly] Added huly:${result.identifier} label to ${beadsIssue.id}`
-        );
-      } catch (labelError) {
-        console.warn(`[Temporal:Beads→Huly] Failed to update beads label: ${labelError}`);
-      }
-    }
-
-    return {
-      success: true,
-      created: true,
-      id: result.identifier,
-      hulyIdentifier: result.identifier,
-    };
-  } catch (error) {
-    return handleSyncError(error, 'Beads→Huly Create');
-  }
+  console.warn('[Temporal:Beads→Huly] Huly issue creation removed — returning no-op');
+  return { success: true, skipped: true };
 }
 
 export async function commitBeadsToGit(input: {

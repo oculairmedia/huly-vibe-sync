@@ -4,7 +4,7 @@
  * Activities for fetching and managing Huly/Vibe projects.
  */
 
-import { createHulyClient } from '../lib';
+// HulyClient removed in Phase 3 registry-refactor
 import { handleOrchestratorError } from './orchestration-letta';
 import type { HulyProject, HulyIssue } from './orchestration';
 
