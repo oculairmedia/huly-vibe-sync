@@ -37,6 +37,13 @@ vi.mock('../../lib/HealthService.js', () => ({
 }));
 
 vi.mock('child_process', () => ({
+  exec: vi.fn((cmd, opts, cb) => {
+    if (typeof opts === 'function') {
+      cb = opts;
+      opts = {};
+    }
+    if (cb) cb(null, '', '');
+  }),
   execSync: vi.fn(() => ''),
 }));
 

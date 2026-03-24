@@ -65,6 +65,10 @@ function validConfig(overrides = {}) {
       importOnSync: false,
       bidirectionalSync: false,
     },
+    projectMcp: {
+      enabled: true,
+      path: '/mcp',
+    },
     ...overrides,
   };
 }
