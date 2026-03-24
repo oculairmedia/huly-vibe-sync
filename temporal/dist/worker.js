@@ -1,10 +1,4 @@
 "use strict";
-/**
- * Temporal Worker for VibeSync
- *
- * Registers workflows and activities, polls for tasks.
- * Run with: npx ts-node temporal/worker.ts
- */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -43,19 +37,16 @@ const worker_1 = require("@temporalio/worker");
 const lettaActivities = __importStar(require("./activities/letta"));
 const issueSyncActivities = __importStar(require("./activities/issue-sync"));
 const syncServiceActivities = __importStar(require("./activities/sync-services"));
-const bidirectionalActivities = __importStar(require("./activities/bidirectional"));
 const orchestrationActivities = __importStar(require("./activities/orchestration"));
 const agentProvisioningActivities = __importStar(require("./activities/agent-provisioning"));
 const reconciliationActivities = __importStar(require("./activities/reconciliation"));
 const syncDatabaseActivities = __importStar(require("./activities/sync-database"));
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS || 'localhost:7233';
 const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
-// Merge all activities
 const activities = {
     ...lettaActivities,
     ...issueSyncActivities,
     ...syncServiceActivities,
-    ...bidirectionalActivities,
     ...orchestrationActivities,
     ...agentProvisioningActivities,
     ...reconciliationActivities,
@@ -63,22 +54,22 @@ const activities = {
 };
 async function run() {
     console.log(`[Worker] Connecting to Temporal at ${TEMPORAL_ADDRESS}`);
-    // Connect to Temporal server
     const connection = await worker_1.NativeConnection.connect({
         address: TEMPORAL_ADDRESS,
     });
-    // Create worker
     const worker = await worker_1.Worker.create({
         connection,
         namespace: 'default',
         taskQueue: TASK_QUEUE,
         workflowsPath: require.resolve('./workflows/index'),
         activities,
+        maxConcurrentWorkflowTaskExecutions: 10,
+        maxConcurrentActivityTaskExecutions: 5,
+        maxConcurrentWorkflowTaskPolls: 2,
+        maxConcurrentActivityTaskPolls: 2,
     });
     console.log(`[Worker] Started on task queue: ${TASK_QUEUE}`);
-    console.log(`[Worker] Registered workflows: MemoryUpdateWorkflow, BatchMemoryUpdateWorkflow, IssueSyncWorkflow, BatchIssueSyncWorkflow, SyncSingleIssueWorkflow, SyncProjectWorkflow, BidirectionalSyncWorkflow, SyncFromHulyWorkflow, SyncFromBeadsWorkflow, BeadsFileChangeWorkflow, HulyWebhookChangeWorkflow, FullOrchestrationWorkflow, ScheduledSyncWorkflow, ProjectSyncWorkflow, DataReconciliationWorkflow, ScheduledReconciliationWorkflow, ProvisionAgentsWorkflow, ProvisionSingleAgentWorkflow, CleanupFailedProvisionsWorkflow`);
     console.log(`[Worker] Registered activities: ${Object.keys(activities).join(', ')}`);
-    // Run until interrupted
     await worker.run();
 }
 run().catch(err => {

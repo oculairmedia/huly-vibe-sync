@@ -53,37 +53,17 @@ async function resolveGitRepoPath(input) {
             return cached.value;
         }
         const dbPath = await getGitRepoPathFromSyncDb(projectIdentifier);
-        if (dbPath) {
-            console.log(`[Temporal:Orchestration] Resolved gitRepoPath from sync DB: ${dbPath} for ${projectIdentifier}`);
-            gitRepoPathCache.set(projectIdentifier, {
-                value: dbPath,
-                expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
-            });
-            return dbPath;
-        }
-        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const projects = await hulyClient.listProjects();
-        const project = projects.find((p) => p.identifier === projectIdentifier);
-        if (!project) {
-            console.log(`[Temporal:Orchestration] Project not found for gitRepoPath: ${projectIdentifier}`);
-            gitRepoPathCache.set(projectIdentifier, {
-                value: null,
-                expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
-            });
-            return null;
-        }
-        const path = extractGitRepoPath({ description: project.description });
-        if (path) {
-            console.log(`[Temporal:Orchestration] Resolved gitRepoPath: ${path} for ${projectIdentifier}`);
-        }
-        else {
-            console.log(`[Temporal:Orchestration] No gitRepoPath in description for ${projectIdentifier}`);
-        }
         gitRepoPathCache.set(projectIdentifier, {
-            value: path,
+            value: dbPath,
             expiresAt: Date.now() + GIT_PATH_CACHE_TTL_MS,
         });
-        return path;
+        if (dbPath) {
+            console.log(`[Temporal:Orchestration] Resolved gitRepoPath from DB: ${dbPath} for ${projectIdentifier}`);
+        }
+        else {
+            console.log(`[Temporal:Orchestration] No gitRepoPath in DB for ${projectIdentifier}`);
+        }
+        return dbPath;
     }
     catch (error) {
         console.warn(`[Temporal:Orchestration] resolveGitRepoPath failed for ${projectIdentifier}: ${error}`);

@@ -47,7 +47,6 @@ import {
   extractGitRepoPath,
   resolveGitRepoPath,
   clearGitRepoPathCache,
-  clearProjectCaches,
   initializeBeads,
   fetchBeadsIssues,
   updateLettaMemory,
@@ -61,11 +60,6 @@ import { getDb } from '../../temporal/activities/sync-database';
 // ============================================================
 // MOCK SETUP
 // ============================================================
-
-const mockHulyClient = {
-  listProjects: vi.fn(),
-  listIssues: vi.fn(),
-};
 
 const mockBeadsClient = {
   isInitialized: vi.fn(),
@@ -81,14 +75,10 @@ const mockSyncDb = {
 describe('Orchestration Activities', () => {
   beforeEach(() => {
     clearGitRepoPathCache();
-    clearProjectCaches();
     vi.clearAllMocks();
 
-    // Set up environment variables
-    process.env.HULY_API_URL = 'http://localhost:3458';
     process.env.VIBE_API_URL = 'http://localhost:3105/api';
 
-    // Configure mocks
     (createBeadsClient as any).mockReturnValue(mockBeadsClient);
     mockSyncDb.getProjectFilesystemPath.mockReturnValue(null);
     mockSyncDb.getProject.mockReturnValue(null);

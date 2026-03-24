@@ -15,15 +15,9 @@ exports.compensateVibeCreate = compensateVibeCreate;
 exports.compensateBeadsCreate = compensateBeadsCreate;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
-const huly_dedupe_1 = require("./huly-dedupe");
-// Configuration from environment
-const HULY_API_URL = process.env.HULY_API_URL || 'http://localhost:3458/api';
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
 const VIBESYNC_API_URL = process.env.VIBESYNC_API_URL || 'http://localhost:3456';
 const TIMEOUT = 30000;
-function getHulyClient() {
-    return (0, lib_1.createHulyClient)(process.env.HULY_API_URL || HULY_API_URL, { timeout: TIMEOUT });
-}
 function getVibeClient() {
     return (0, lib_1.createVibeClient)(process.env.VIBE_API_URL || VIBE_API_URL, { timeout: TIMEOUT });
 }
@@ -31,13 +25,6 @@ function getVibeSyncClient() {
     return (0, lib_1.createVibeSyncClient)(process.env.VIBESYNC_API_URL || VIBESYNC_API_URL, {
         timeout: TIMEOUT,
     });
-}
-/**
- * Check if an issue with the same title already exists in the project
- * Returns the existing issue identifier if found, null otherwise
- */
-async function findExistingIssueByTitle(projectIdentifier, title) {
-    return (0, huly_dedupe_1.findMappedIssueByTitle)(projectIdentifier, title);
 }
 // Status mapping between systems
 const STATUS_HULY_TO_VIBE = {
@@ -55,48 +42,9 @@ const STATUS_VIBE_TO_HULY = {
     done: 'Done',
     cancelled: 'Canceled',
 };
-/**
- * Sync issue to Huly
- */
-async function syncToHuly(input) {
-    const { issue, operation } = input;
-    console.log(`[Huly Activity] ${operation} issue: ${issue.identifier || issue.title}`);
-    try {
-        if (operation === 'create') {
-            // DEDUPLICATION: Check if issue with same title already exists
-            if (!issue.projectIdentifier) {
-                console.warn(`[Huly Activity] ⚠️ WARNING: Create operation without projectIdentifier - deduplication check skipped!`);
-                console.warn(`[Huly Activity] ⚠️ Title: "${issue.title}", Source: ${input.source}`);
-            }
-            if (issue.projectIdentifier) {
-                const existingId = await findExistingIssueByTitle(issue.projectIdentifier, issue.title);
-                if (existingId) {
-                    console.warn(`[Huly Activity] ⚠️ DUPLICATE PREVENTED: Issue "${issue.title}" already exists as ${existingId}`);
-                    console.warn(`[Huly Activity] ⚠️ Source: ${input.source}, Project: ${issue.projectIdentifier}`);
-                    console.warn(`[Huly Activity] ⚠️ Returning existing ID instead of creating duplicate`);
-                    // Return the existing issue ID instead of creating a duplicate
-                    return { success: true, systemId: existingId };
-                }
-            }
-            const result = await getHulyClient().createIssue(issue.projectIdentifier || '', {
-                title: issue.title,
-                description: issue.description || '',
-                status: issue.status,
-                priority: issue.priority || 'NoPriority',
-            });
-            console.log(`[Huly Activity] Created issue: ${result.identifier}`);
-            return { success: true, systemId: result.identifier };
-        }
-        if (operation === 'update') {
-            await getHulyClient().updateIssue(issue.identifier || '', 'status', issue.status);
-            console.log(`[Huly Activity] Updated issue: ${issue.identifier}`);
-            return { success: true, systemId: issue.identifier };
-        }
-        return { success: true };
-    }
-    catch (error) {
-        return handleActivityError(error, 'Huly');
-    }
+async function syncToHuly(_input) {
+    console.warn('[Huly Activity] Huly sync removed — returning no-op');
+    return { success: true, skipped: true };
 }
 /**
  * Sync issue to VibeKanban
@@ -165,22 +113,9 @@ async function updateLettaMemory(input) {
     // after the full sync completes
     return { success: true };
 }
-/**
- * Best-effort compensation: delete newly created Huly issue.
- */
-async function compensateHulyCreate(input) {
-    if (!input.hulyIdentifier)
-        return { success: true, skipped: true };
-    try {
-        await getHulyClient().deleteIssue(input.hulyIdentifier);
-        return { success: true };
-    }
-    catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-        };
-    }
+async function compensateHulyCreate(_input) {
+    console.warn('[Huly Activity] Huly compensation removed — returning no-op');
+    return { success: true, skipped: true };
 }
 /**
  * Best-effort compensation: delete newly created Vibe task.

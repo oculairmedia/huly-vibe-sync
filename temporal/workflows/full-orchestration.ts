@@ -1,12 +1,11 @@
 /**
  * Full Orchestration Workflow
  *
- * Top-level workflow that coordinates the complete bidirectional sync across all projects.
+ * Top-level workflow that coordinates project sync across all registry projects.
  *
- * Features:
- * - Fetches all Huly projects
- * - Runs Phase 3 (Beads) for each project
- * - Updates Letta agent memory
+ * Phase 4 pipeline:
+ * - Fetches project list from SQLite registry
+ * - Runs ProjectSyncWorkflow per project (init → sync → agent → done)
  * - Records metrics
  * - Durable execution with automatic retry
  */
@@ -24,7 +23,6 @@ import {
 
 import type * as orchestrationActivities from '../activities/orchestration';
 import type * as agentProvisioningActivities from '../activities/agent-provisioning';
-import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 import { ProjectSyncWorkflow } from './project-sync';
 import type { ProjectSyncResult, ProjectSyncInput } from './project-sync';
 
@@ -32,7 +30,7 @@ import type { ProjectSyncResult, ProjectSyncInput } from './project-sync';
 // ACTIVITY PROXIES
 // ============================================================
 
-const { fetchHulyProjects, fetchHulyIssuesBulk, recordSyncMetrics } = proxyActivities<
+const { fetchRegistryProjects, recordSyncMetrics } = proxyActivities<
   typeof orchestrationActivities
 >({
   startToCloseTimeout: '120 seconds',
@@ -66,29 +64,18 @@ export const progressQuery = defineQuery<SyncProgress>('progress');
 // ============================================================
 
 export interface FullSyncInput {
-  /** Optional: sync only specific project */
   projectIdentifier?: string;
-  /** Batch size for parallel issue sync (default: 5) */
   batchSize?: number;
-  /** Enable Beads sync (default: true if configured) */
   enableBeads?: boolean;
-  /** Enable Letta memory updates (default: true if configured) */
   enableLetta?: boolean;
-  /** Dry run - don't make changes */
   dryRun?: boolean;
-  /** Max consecutive failures before skipping a project (default: 3) */
   circuitBreakerThreshold?: number;
 
-  // ======== Internal fields for continueAsNew ========
-  /** Starting project index (for continuation) */
+  // Internal fields for continueAsNew
   _continueIndex?: number;
-  /** Accumulated results from previous runs */
   _accumulatedResults?: ProjectSyncResult[];
-  /** Accumulated errors from previous runs */
   _accumulatedErrors?: string[];
-  /** Original start time (preserved across continuations) */
   _originalStartTime?: number;
-  /** Circuit breaker: map of project -> consecutive failure count */
   _projectFailures?: Record<string, number>;
 }
 
@@ -116,15 +103,8 @@ export interface SyncProgress {
 // MAIN ORCHESTRATION WORKFLOW
 // ============================================================
 
-// Maximum projects to process before calling continueAsNew (prevents history overflow)
 const MAX_PROJECTS_PER_CONTINUATION = 3;
 
-/**
- * FullOrchestrationWorkflow
- *
- * Replaces SyncOrchestrator.syncHulyToVibe() with a durable Temporal workflow.
- * Orchestrates the complete sync across all projects.
- */
 export async function FullOrchestrationWorkflow(
   input: FullSyncInput = {}
 ): Promise<FullSyncResult> {
@@ -146,7 +126,6 @@ export async function FullOrchestrationWorkflow(
   let cancelled = false;
   const projectFailures = { ..._projectFailures };
 
-  // Progress tracking
   const progress: SyncProgress = {
     status: 'initializing',
     projectsTotal: 0,
@@ -157,7 +136,6 @@ export async function FullOrchestrationWorkflow(
     elapsedMs: 0,
   };
 
-  // Set up signal and query handlers
   setHandler(cancelSignal, () => {
     cancelled = true;
     progress.status = 'cancelled';
@@ -168,14 +146,10 @@ export async function FullOrchestrationWorkflow(
     elapsedMs: Date.now() - startTime,
   }));
 
-  // Initialize result with accumulated data from previous continuations
   const result: FullSyncResult = {
     success: false,
     projectsProcessed: _accumulatedResults.length,
-    issuesSynced: _accumulatedResults.reduce(
-      (sum, r) => sum + r.phase1.synced + r.phase2.synced + (r.phase3?.synced || 0),
-      0
-    ),
+    issuesSynced: _accumulatedResults.reduce((sum, r) => sum + (r.beadsSync?.synced || 0), 0),
     durationMs: 0,
     errors: [..._accumulatedErrors],
     projectResults: [..._accumulatedResults],
@@ -184,7 +158,6 @@ export async function FullOrchestrationWorkflow(
   try {
     log.info('[FullOrchestration] Starting full sync', {
       projectIdentifier,
-      batchSize,
       enableBeads,
       enableLetta,
       dryRun,
@@ -192,20 +165,19 @@ export async function FullOrchestrationWorkflow(
       accumulatedProjects: _accumulatedResults.length,
     });
 
-    // Phase 0: Fetch all projects
+    // Init: load project list from registry
     progress.status = 'fetching';
+    const registryProjects = await fetchRegistryProjects();
 
-    const hulyProjects = await fetchHulyProjects();
-
-    log.info('[FullOrchestration] Fetched projects', {
-      huly: hulyProjects.length,
+    log.info('[FullOrchestration] Loaded registry projects', {
+      count: registryProjects.length,
     });
 
-    // Filter to specific project if requested
-    let projectsToSync = hulyProjects;
+    let projectsToSync = registryProjects;
     if (projectIdentifier) {
-      projectsToSync = hulyProjects.filter(
-        p => p.identifier === projectIdentifier || p.name === projectIdentifier
+      projectsToSync = registryProjects.filter(
+        (p: { identifier: string; name: string }) =>
+          p.identifier === projectIdentifier || p.name === projectIdentifier
       );
 
       if (projectsToSync.length === 0) {
@@ -217,71 +189,30 @@ export async function FullOrchestrationWorkflow(
     progress.projectsCompleted = _continueIndex;
     progress.status = 'syncing';
 
-    // Bulk prefetch issues from all projects (7.4x faster than sequential)
-    const projectIdentifiers = projectsToSync.map(p => p.identifier);
-    let prefetchedIssuesByProject: Record<
-      string,
-      Array<{
-        identifier: string;
-        title: string;
-        status: string;
-        priority?: string;
-        modifiedOn?: number;
-        parentIssue?: string;
-      }>
-    > = {};
-
-    try {
-      prefetchedIssuesByProject = await fetchHulyIssuesBulk({
-        projectIdentifiers,
-        limit: 1000,
-      });
-      log.info('[FullOrchestration] Bulk prefetched issues', {
-        projects: Object.keys(prefetchedIssuesByProject).length,
-        totalIssues: Object.values(prefetchedIssuesByProject).reduce(
-          (sum, arr) => sum + arr.length,
-          0
-        ),
-      });
-    } catch (error) {
-      log.warn('[FullOrchestration] Bulk prefetch failed, falling back to per-project fetch', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-
-    // Track how many projects we process in this continuation
     let projectsProcessedThisRun = 0;
 
-    // Process each project (starting from _continueIndex)
     for (let idx = _continueIndex; idx < projectsToSync.length; idx++) {
-      const hulyProject = projectsToSync[idx];
+      const project = projectsToSync[idx];
 
       if (cancelled) {
         log.info('[FullOrchestration] Cancelled by signal');
         break;
       }
 
-      progress.currentProject = hulyProject.identifier;
+      progress.currentProject = project.identifier;
 
-      // Circuit breaker: skip projects that have failed too many times
-      const failureCount = projectFailures[hulyProject.identifier] || 0;
+      const failureCount = projectFailures[project.identifier] || 0;
       if (failureCount >= circuitBreakerThreshold) {
         log.warn(
           '[FullOrchestration] Circuit breaker: skipping project due to consecutive failures',
-          {
-            project: hulyProject.identifier,
-            failureCount,
-            threshold: circuitBreakerThreshold,
-          }
+          { project: project.identifier, failureCount, threshold: circuitBreakerThreshold }
         );
 
-        // Record as skipped in results
         const skippedResult: ProjectSyncResult = {
-          projectIdentifier: hulyProject.identifier,
-          projectName: hulyProject.name,
+          projectIdentifier: project.identifier,
+          projectName: project.name,
           success: false,
-          phase1: { synced: 0, skipped: 0, errors: 0 },
-          phase2: { synced: 0, skipped: 0, errors: 0 },
+          beadsSync: { synced: 0, skipped: 0, errors: 0 },
           lettaUpdated: false,
           error: `Circuit breaker: skipped after ${failureCount} consecutive failures`,
         };
@@ -289,23 +220,24 @@ export async function FullOrchestrationWorkflow(
         result.projectsProcessed++;
         progress.projectsCompleted++;
         progress.errors++;
-        result.errors.push(`${hulyProject.identifier}: Circuit breaker triggered`);
+        result.errors.push(`${project.identifier}: Circuit breaker triggered`);
         projectsProcessedThisRun++;
         continue;
       }
 
-      // Child workflow isolates history and supports continueAsNew
       const projectResult = await executeChild(ProjectSyncWorkflow, {
-        workflowId: `project-sync-${hulyProject.identifier}-${Date.now()}`,
+        workflowId: `project-sync-${project.identifier}-${Date.now()}`,
         args: [
           {
-            hulyProject,
+            project: {
+              identifier: project.identifier,
+              name: project.name,
+              description: project.description,
+            },
             batchSize,
             enableBeads,
             enableLetta,
             dryRun,
-            prefetchedIssues: prefetchedIssuesByProject[hulyProject.identifier] || undefined,
-            prefetchedIssuesAreComplete: true,
           },
         ],
       });
@@ -313,22 +245,20 @@ export async function FullOrchestrationWorkflow(
       result.projectResults.push(projectResult);
       result.projectsProcessed++;
       progress.projectsCompleted++;
-      progress.issuesSynced += projectResult.phase1.synced + projectResult.phase2.synced;
+      progress.issuesSynced += projectResult.beadsSync?.synced || 0;
 
       if (!projectResult.success) {
         progress.errors++;
-        projectFailures[hulyProject.identifier] =
-          (projectFailures[hulyProject.identifier] || 0) + 1;
+        projectFailures[project.identifier] = (projectFailures[project.identifier] || 0) + 1;
         if (projectResult.error) {
-          result.errors.push(`${hulyProject.identifier}: ${projectResult.error}`);
+          result.errors.push(`${project.identifier}: ${projectResult.error}`);
         }
       } else {
-        projectFailures[hulyProject.identifier] = 0;
+        projectFailures[project.identifier] = 0;
       }
 
       projectsProcessedThisRun++;
 
-      // Check if we need to continue as new (to prevent history overflow)
       const nextIdx = idx + 1;
       const hasMoreProjects = nextIdx < projectsToSync.length;
 
@@ -340,7 +270,6 @@ export async function FullOrchestrationWorkflow(
           nextIndex: nextIdx,
         });
 
-        // Continue as new with accumulated state
         await continueAsNew<typeof FullOrchestrationWorkflow>({
           projectIdentifier,
           batchSize,
@@ -355,15 +284,13 @@ export async function FullOrchestrationWorkflow(
           _projectFailures: projectFailures,
         });
 
-        // This line is never reached - continueAsNew throws
         return result;
       }
 
-      // Small delay between projects to avoid overwhelming APIs
       await sleep('500 milliseconds');
     }
 
-    // Record metrics
+    // Done: record metrics
     progress.status = 'completing';
     result.projectsProcessed = progress.projectsCompleted;
     result.issuesSynced = progress.issuesSynced;
@@ -403,12 +330,6 @@ export async function FullOrchestrationWorkflow(
 // SCHEDULED SYNC WORKFLOW
 // ============================================================
 
-/**
- * ScheduledSyncWorkflow
- *
- * Long-running workflow for periodic sync.
- * Replaces setInterval-based scheduling.
- */
 export async function ScheduledSyncWorkflow(input: {
   intervalMinutes: number;
   maxIterations?: number;
@@ -429,7 +350,6 @@ export async function ScheduledSyncWorkflow(input: {
     log.info(`[ScheduledSync] Running iteration ${iteration}`);
 
     try {
-      // Run full sync as child workflow
       await executeChild(FullOrchestrationWorkflow, {
         workflowId: `full-sync-scheduled-${Date.now()}`,
         args: [syncOptions],
@@ -439,10 +359,8 @@ export async function ScheduledSyncWorkflow(input: {
         iteration,
         error: error instanceof Error ? error.message : String(error),
       });
-      // Continue to next iteration
     }
 
-    // Wait for next interval
     log.info(`[ScheduledSync] Sleeping for ${intervalMinutes} minutes`);
     await sleep(`${intervalMinutes} minutes`);
   }

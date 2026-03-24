@@ -1,8 +1,3 @@
-/**
- * Temporal Client — Barrel Export
- *
- * Re-exports all client functions from sub-modules.
- */
 export { getClient, isTemporalEnabled, isTemporalAvailable, TASK_QUEUE } from './connection';
 export { scheduleMemoryUpdate, scheduleBatchMemoryUpdate, executeMemoryUpdate, getWorkflowStatus, cancelWorkflow, listRecentWorkflows, getFailedWorkflows, } from './memory-update';
 export { scheduleIssueSync, executeIssueSync, scheduleBatchIssueSync } from './issue-sync';
@@ -14,5 +9,4 @@ export type { ProvisioningInput, ProvisioningResult, ProvisioningProgress, } fro
 export { startAgentProvisioning, executeAgentProvisioning, getProvisioningProgress, cancelProvisioning, provisionSingleAgent, cleanupFailedProvisions, } from './agent-provisioning';
 export type { BeadsSyncInput } from './beads-sync';
 export { scheduleBeadsSync, executeBeadsSync, scheduleBatchBeadsSync, scheduleBeadsFileChange, executeBeadsFileChange, } from './beads-sync';
-export { scheduleHulyWebhookChange, executeHulyWebhookChange } from './event-triggers';
 //# sourceMappingURL=index.d.ts.map

@@ -8,7 +8,6 @@
 import { ApplicationFailure } from '@temporalio/activity';
 import { LettaClient } from '@letta-ai/letta-client';
 import path from 'path';
-// HulyClient removed in Phase 3 registry-refactor
 
 function appRootModule(modulePath: string): string {
   return path.join(process.cwd(), modulePath);
@@ -119,16 +118,25 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
   console.log('[Activity:FetchAgents] Fetching agents to provision...');
 
   try {
-    // Fetch Huly projects using the shared client (same as orchestration activities)
-    const hulyClient = createHulyClient(process.env.HULY_API_URL);
-    const hulyProjects = await hulyClient.listProjects();
+    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
+    const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'logs', 'sync-state.db');
+    const db = createSyncDatabase(dbPath);
 
-    console.log(`[Activity:FetchAgents] Found ${hulyProjects.length} Huly projects`);
+    let registryProjects: Array<{ identifier: string; name: string }>;
+    try {
+      const rows = db.getAllProjects();
+      registryProjects = rows
+        .filter((r: any) => r.status === 'active')
+        .map((r: any) => ({ identifier: r.identifier, name: r.name || r.identifier }));
+    } finally {
+      db.close();
+    }
 
-    // Filter to specific projects if provided
-    let projects = hulyProjects;
+    console.log(`[Activity:FetchAgents] Found ${registryProjects.length} registry projects`);
+
+    let projects = registryProjects;
     if (projectIdentifiers && projectIdentifiers.length > 0) {
-      projects = hulyProjects.filter(p => projectIdentifiers.includes(p.identifier));
+      projects = registryProjects.filter((p: any) => projectIdentifiers.includes(p.identifier));
     }
 
     // Get existing Letta agents with huly-vibe-sync tag

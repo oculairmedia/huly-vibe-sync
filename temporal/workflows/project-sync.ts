@@ -1,16 +1,18 @@
 /**
- * Project Sync Workflow
+ * Project Sync Workflow — Simplified 4-Phase Pipeline
  *
  * Handles syncing a single project with continueAsNew for large issue counts.
- * This prevents workflow history overflow for projects with many issues.
  *
- * Multi-phase execution: init → phase1 → phase2 → phase3 → phase3b → phase3c → done
+ * Phases: init → sync → agent → done
+ *   init:  Discover project in registry, init beads, provision/reconcile agent
+ *   sync:  Read beads issues, persist to registry DB (for MCP queries)
+ *   agent: Update Letta agent memory with latest issue summary
+ *   done:  Record metrics, commit beads changes if any
  */
 
-import { proxyActivities, executeChild, log, sleep, continueAsNew } from '@temporalio/workflow';
+import { proxyActivities, executeChild, log, continueAsNew } from '@temporalio/workflow';
 
 import type * as orchestrationActivities from '../activities/orchestration';
-import type * as syncActivities from '../activities/sync-services';
 import type * as syncDatabaseActivities from '../activities/sync-database';
 import type * as agentProvisioningActivities from '../activities/agent-provisioning';
 import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
@@ -19,7 +21,7 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 // ACTIVITY PROXIES
 // ============================================================
 
-const { fetchProjectData, initializeBeads, fetchBeadsIssues } = proxyActivities<
+const { initializeBeads, fetchBeadsIssues, updateLettaMemory } = proxyActivities<
   typeof orchestrationActivities
 >({
   startToCloseTimeout: '120 seconds',
@@ -31,28 +33,25 @@ const { fetchProjectData, initializeBeads, fetchBeadsIssues } = proxyActivities<
   },
 });
 
-const { syncIssueToBeads, syncBeadsToHulyBatch, createBeadsIssueInHuly, commitBeadsToGit } =
-  proxyActivities<typeof syncActivities>({
-    startToCloseTimeout: '120 seconds',
-    retry: {
-      initialInterval: '2 seconds',
-      backoffCoefficient: 2,
-      maximumInterval: '60 seconds',
-      maximumAttempts: 5,
-      nonRetryableErrorTypes: ['HulyValidationError', 'VibeValidationError'],
-    },
-  });
+const { commitBeadsToGit } = proxyActivities<typeof import('../activities/sync-services')>({
+  startToCloseTimeout: '120 seconds',
+  retry: {
+    initialInterval: '2 seconds',
+    backoffCoefficient: 2,
+    maximumInterval: '60 seconds',
+    maximumAttempts: 3,
+  },
+});
 
-const { persistIssueSyncState, persistIssueSyncStateBatch, getIssueSyncStateBatch } =
-  proxyActivities<typeof syncDatabaseActivities>({
-    startToCloseTimeout: '60 seconds',
-    retry: {
-      initialInterval: '1 second',
-      backoffCoefficient: 2,
-      maximumInterval: '20 seconds',
-      maximumAttempts: 3,
-    },
-  });
+const { persistIssueSyncStateBatch } = proxyActivities<typeof syncDatabaseActivities>({
+  startToCloseTimeout: '60 seconds',
+  retry: {
+    initialInterval: '1 second',
+    backoffCoefficient: 2,
+    maximumInterval: '20 seconds',
+    maximumAttempts: 3,
+  },
+});
 
 const { checkAgentExists, updateProjectAgent } = proxyActivities<
   typeof agentProvisioningActivities
@@ -65,46 +64,6 @@ const { checkAgentExists, updateProjectAgent } = proxyActivities<
     maximumAttempts: 3,
   },
 });
-
-function getStatusRank(status: string | undefined): number {
-  switch (status) {
-    case 'Backlog':
-    case 'open':
-      return 0;
-    case 'Todo':
-      return 1;
-    case 'In Progress':
-    case 'in_progress':
-      return 2;
-    case 'In Review':
-      return 3;
-    case 'Done':
-    case 'Cancelled':
-    case 'Canceled':
-    case 'closed':
-      return 4;
-    default:
-      return -1;
-  }
-}
-
-function beadsStatusToHuly(beadsStatus: string, labels: string[] = []): string {
-  const hasLabel = (label: string) => labels.includes(label);
-  switch (beadsStatus) {
-    case 'open':
-      return hasLabel('huly:Todo') ? 'Todo' : 'Backlog';
-    case 'in_progress':
-      return hasLabel('huly:In Review') ? 'In Review' : 'In Progress';
-    case 'blocked':
-      return 'In Progress';
-    case 'deferred':
-      return 'Backlog';
-    case 'closed':
-      return hasLabel('huly:Canceled') ? 'Canceled' : 'Done';
-    default:
-      return 'Backlog';
-  }
-}
 
 function extractGitRepoPath(description?: string): string | null {
   if (!description) return null;
@@ -135,129 +94,84 @@ export interface ProjectSyncResult {
   projectIdentifier: string;
   projectName: string;
   success: boolean;
-  phase1: { synced: number; skipped: number; errors: number };
-  phase2: { synced: number; skipped: number; errors: number };
-  phase3?: { synced: number; skipped: number; errors: number };
+  beadsSync: { synced: number; skipped: number; errors: number };
   lettaUpdated: boolean;
   error?: string;
 }
 
 export interface ProjectSyncInput {
-  hulyProject: { identifier: string; name: string; description?: string };
+  project: { identifier: string; name: string; description?: string };
   batchSize: number;
   enableBeads: boolean;
   enableLetta: boolean;
   dryRun: boolean;
-  prefetchedIssues?: Array<{
-    identifier: string;
-    title: string;
-    status: string;
-    priority?: string;
-    modifiedOn?: number;
-    parentIssue?: string;
-  }>;
-  prefetchedIssuesAreComplete?: boolean;
 
   // Internal continuation state
-  _phase?: 'init' | 'phase1' | 'phase2' | 'phase3' | 'phase3b' | 'phase3c' | 'done';
-  _phase1Index?: number;
-  _phase2Index?: number;
-  _phase3Index?: number;
+  _phase?: 'init' | 'sync' | 'agent' | 'done';
   _accumulatedResult?: ProjectSyncResult;
   _gitRepoPath?: string | null;
   _beadsInitialized?: boolean;
-  _phase1UpdatedTasks?: string[];
 }
 
-// Maximum issues to process before calling continueAsNew
-const MAX_ISSUES_PER_CONTINUATION = 100;
-
-/**
- * ProjectSyncWorkflow
- *
- * Handles syncing a single project with continueAsNew for large issue counts.
- * This prevents workflow history overflow for projects like LTSEL with 990 issues.
- */
 export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<ProjectSyncResult> {
   const {
-    hulyProject,
+    project,
     batchSize,
     enableBeads,
     enableLetta,
     dryRun,
-    prefetchedIssues,
-    prefetchedIssuesAreComplete = true,
-    // Continuation state
     _phase = 'init',
-    _phase1Index = 0,
-    _phase2Index = 0,
-    _phase3Index = 0,
     _accumulatedResult,
     _gitRepoPath,
     _beadsInitialized = false,
-    _phase1UpdatedTasks = [],
   } = input;
 
-  log.info(`[ProjectSync] Processing: ${hulyProject.identifier}`, {
-    phase: _phase,
-    phase1Index: _phase1Index,
-    phase2Index: _phase2Index,
-    phase3Index: _phase3Index,
-  });
+  log.info(`[ProjectSync] Processing: ${project.identifier}`, { phase: _phase });
 
-  // Initialize or restore result
   const result: ProjectSyncResult = _accumulatedResult || {
-    projectIdentifier: hulyProject.identifier,
-    projectName: hulyProject.name,
+    projectIdentifier: project.identifier,
+    projectName: project.name,
     success: false,
-    phase1: { synced: 0, skipped: 0, errors: 0 },
-    phase2: { synced: 0, skipped: 0, errors: 0 },
+    beadsSync: { synced: 0, skipped: 0, errors: 0 },
     lettaUpdated: false,
   };
 
   let gitRepoPath = _gitRepoPath;
   let beadsInitialized = _beadsInitialized;
-  const phase1UpdatedTasks = new Set(_phase1UpdatedTasks);
-  const isWebhookPrefetch = !!prefetchedIssues?.length && prefetchedIssuesAreComplete === false;
-  const effectiveBatchSize = isWebhookPrefetch ? Math.max(batchSize, 20) : batchSize;
-  let issuesProcessedThisRun = 0;
 
   try {
-    // INIT PHASE: Setup project and fetch data
+    // ── INIT: discover project, init beads, provision agent ──
     if (_phase === 'init') {
-      // Extract git repo path for Beads
-      gitRepoPath = extractGitRepoPath(hulyProject.description);
+      gitRepoPath = extractGitRepoPath(project.description);
 
-      // Initialize Beads if enabled
       if (enableBeads && gitRepoPath) {
         beadsInitialized = await initializeBeads({
           gitRepoPath,
-          projectName: hulyProject.name,
-          projectIdentifier: hulyProject.identifier,
+          projectName: project.name,
+          projectIdentifier: project.identifier,
         });
       }
 
-      // Auto-provision PM agent if Letta is enabled and project has a git repo path
       if (enableLetta && gitRepoPath) {
         try {
           const agentCheck = await checkAgentExists({
-            projectIdentifier: hulyProject.identifier,
+            projectIdentifier: project.identifier,
           });
 
           if (agentCheck.exists) {
             log.info(
-              `[ProjectSync] Agent exists for ${hulyProject.identifier}, reconciling tools/memory: ${agentCheck.agentId}`
+              `[ProjectSync] Agent exists for ${project.identifier}, reconciling: ${agentCheck.agentId}`
             );
           } else {
-            log.info(`[ProjectSync] Provisioning PM agent for ${hulyProject.identifier}...`);
+            log.info(`[ProjectSync] Provisioning PM agent for ${project.identifier}...`);
           }
 
           const provisionResult = await executeChild(ProvisionSingleAgentWorkflow, {
-            workflowId: `provision-${hulyProject.identifier}-${Date.now()}`,
+            workflowId: `provision-${project.identifier}-${Date.now()}`,
             args: [
               {
-                projectIdentifier: hulyProject.identifier,
-                projectName: hulyProject.name,
+                projectIdentifier: project.identifier,
+                projectName: project.name,
                 attachTools: true,
               },
             ],
@@ -265,7 +179,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
 
           if (provisionResult.success && provisionResult.agentId) {
             await updateProjectAgent({
-              projectIdentifier: hulyProject.identifier,
+              projectIdentifier: project.identifier,
               agentId: provisionResult.agentId,
             });
             log.info(`[ProjectSync] PM agent reconciled: ${provisionResult.agentId}`);
@@ -278,422 +192,146 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         }
       }
 
-      // Continue to phase1
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
-        _phase: 'phase1',
+        _phase: 'sync',
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
       });
     }
 
-    let hulyIssues: Array<{
-      identifier: string;
-      title: string;
-      status: string;
-      priority?: string;
-      modifiedOn?: number;
-      parentIssue?: string;
-      description?: string;
-    }>;
-
-    if (prefetchedIssues && prefetchedIssues.length > 0) {
-      hulyIssues = prefetchedIssues;
-      log.info(`[ProjectSync] Using ${prefetchedIssues.length} prefetched issues`);
-    } else {
-      const projectData = await fetchProjectData({
-        hulyProject,
-      });
-      hulyIssues = projectData.hulyIssues;
-    }
-
-    // PHASE 1: Huly → Vibe (SKIPPED — VibeKanban removed)
-    if (_phase === 'phase1') {
-      log.info(`[ProjectSync] Phase 1: Skipped (VK disabled) — ${hulyIssues.length} issues`);
-      result.phase1.skipped = hulyIssues.length;
-
-      return await continueAsNew<typeof ProjectSyncWorkflow>({
-        ...input,
-        _phase: 'phase2',
-        _phase1Index: hulyIssues.length,
-
-        _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
-        _accumulatedResult: result,
-        _phase1UpdatedTasks: Array.from(phase1UpdatedTasks),
-      });
-    }
-
-    // PHASE 2: Vibe → Huly (SKIPPED — VibeKanban removed, vibeTasks always empty)
-    if (_phase === 'phase2') {
-      log.info(`[ProjectSync] Phase 2: Skipped (VK disabled)`);
-
+    // ── SYNC: read beads issues, persist to registry DB ──
+    if (_phase === 'sync') {
       if (enableBeads && beadsInitialized && gitRepoPath) {
-        return await continueAsNew<typeof ProjectSyncWorkflow>({
-          ...input,
-          _phase: 'phase3',
-          _phase2Index: 0,
+        log.info(`[ProjectSync] Sync phase: reading beads issues`);
 
-          _gitRepoPath: gitRepoPath,
-          _beadsInitialized: beadsInitialized,
-          _accumulatedResult: result,
-          _phase1UpdatedTasks: Array.from(phase1UpdatedTasks),
+        const beadsIssues = await fetchBeadsIssues({ gitRepoPath });
+
+        if (beadsIssues.length > 0 && !dryRun) {
+          const persistenceBatch = beadsIssues.map(
+            (issue: {
+              id: string;
+              title: string;
+              status: string;
+              priority?: number;
+              description?: string;
+              labels?: string[];
+            }) => {
+              const hulyLabel = issue.labels?.find((l: string) => l.startsWith('huly:'));
+              const hulyIdentifier =
+                hulyLabel?.replace('huly:', '') || `${project.identifier}-${issue.id}`;
+
+              return {
+                identifier: hulyIdentifier,
+                projectIdentifier: project.identifier,
+                title: issue.title,
+                description: issue.description,
+                status: issue.status,
+                beadsIssueId: issue.id,
+                beadsStatus: issue.status,
+                beadsModifiedAt: Date.now(),
+              };
+            }
+          );
+
+          await persistIssueSyncStateBatch({ issues: persistenceBatch });
+          result.beadsSync.synced = beadsIssues.length;
+        } else {
+          result.beadsSync.skipped = beadsIssues.length;
+        }
+
+        log.info(`[ProjectSync] Sync phase complete`, {
+          synced: result.beadsSync.synced,
+          skipped: result.beadsSync.skipped,
         });
       } else {
-        return await continueAsNew<typeof ProjectSyncWorkflow>({
-          ...input,
-          _phase: 'done',
-
-          _gitRepoPath: gitRepoPath,
-          _beadsInitialized: beadsInitialized,
-          _accumulatedResult: result,
-        });
+        log.info(`[ProjectSync] Sync phase: skipped (beads not initialized or disabled)`);
       }
+
+      return await continueAsNew<typeof ProjectSyncWorkflow>({
+        ...input,
+        _phase: 'agent',
+        _gitRepoPath: gitRepoPath,
+        _beadsInitialized: beadsInitialized,
+        _accumulatedResult: result,
+      });
     }
 
-    // PHASE 3: Beads sync (if enabled)
-    if (_phase === 'phase3') {
-      log.info(`[ProjectSync] Phase 3: Beads sync (starting at ${_phase3Index})`);
+    // ── AGENT: update Letta agent memory with latest issue summary ──
+    if (_phase === 'agent') {
+      if (enableLetta && !dryRun) {
+        try {
+          const beadsIssues =
+            beadsInitialized && gitRepoPath ? await fetchBeadsIssues({ gitRepoPath }) : [];
 
-      if (!result.phase3) {
-        result.phase3 = { synced: 0, skipped: 0, errors: 0 };
-      }
-
-      let beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
-
-      for (let i = _phase3Index; i < hulyIssues.length; i += effectiveBatchSize) {
-        const batch = hulyIssues.slice(i, Math.min(i + effectiveBatchSize, hulyIssues.length));
-        const seenTitles = new Set<string>();
-        const batchResults: Array<{ success: boolean; skipped?: boolean; id?: string }> = [];
-        const persistenceBatch: Array<{
-          identifier: string;
-          projectIdentifier: string;
-          title?: string;
-          description?: string;
-          status?: string;
-          priority?: string;
-          hulyId?: string;
-          beadsIssueId?: string;
-          hulyModifiedAt?: number;
-          beadsModifiedAt?: number;
-          beadsStatus?: string;
-          parentHulyId?: string | null;
-        }> = [];
-
-        for (const issue of batch) {
-          if (dryRun) {
-            batchResults.push({ success: true, skipped: true });
-            continue;
-          }
-
-          const normalizedTitle = issue.title.trim().toLowerCase();
-          if (seenTitles.has(normalizedTitle)) {
-            batchResults.push({ success: true, skipped: true });
-            continue;
-          }
-          seenTitles.add(normalizedTitle);
-
-          const syncResult = await syncIssueToBeads({
-            issue,
-            context: {
-              projectIdentifier: hulyProject.identifier,
-
-              gitRepoPath: gitRepoPath!,
-            },
-            existingBeadsIssues: beadsIssues,
-          });
-
-          batchResults.push(syncResult);
-
-          if (syncResult.id) {
-            beadsIssues.push({
-              id: syncResult.id,
-              title: issue.title,
-              status: issue.status,
-            });
-
-            persistenceBatch.push({
-              identifier: issue.identifier,
-              projectIdentifier: hulyProject.identifier,
+          const issuesAsHulyShape = beadsIssues.map(
+            (issue: {
+              id: string;
+              title: string;
+              status: string;
+              priority?: number;
+              description?: string;
+            }) => ({
+              identifier: issue.id,
               title: issue.title,
               description: issue.description,
               status: issue.status,
-              priority: issue.priority,
-              hulyId: issue.identifier,
-              beadsIssueId: syncResult.id,
-              hulyModifiedAt: issue.modifiedOn,
-              beadsModifiedAt: Date.now(),
-              beadsStatus: issue.status,
-              parentHulyId: issue.parentIssue || null,
-            });
-          }
-        }
-
-        if (persistenceBatch.length > 0) {
-          await persistIssueSyncStateBatch({ issues: persistenceBatch });
-        }
-
-        beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
-
-        for (const r of batchResults) {
-          if (r.skipped) result.phase3!.skipped++;
-          else if (r.success) result.phase3!.synced++;
-          else result.phase3!.errors++;
-        }
-
-        issuesProcessedThisRun += batch.length;
-
-        // Check if we need to continue as new
-        const nextIndex = i + effectiveBatchSize;
-        if (
-          issuesProcessedThisRun >= MAX_ISSUES_PER_CONTINUATION &&
-          nextIndex < hulyIssues.length
-        ) {
-          log.info(`[ProjectSync] Phase 3 continuing as new at index ${nextIndex}`);
-          return await continueAsNew<typeof ProjectSyncWorkflow>({
-            ...input,
-            _phase: 'phase3',
-            _phase3Index: nextIndex,
-
-            _gitRepoPath: gitRepoPath,
-            _beadsInitialized: beadsInitialized,
-            _accumulatedResult: result,
-          });
-        }
-      }
-
-      // Commit Beads changes
-      if (!dryRun && result.phase3!.synced > 0) {
-        await commitBeadsToGit({
-          context: {
-            projectIdentifier: hulyProject.identifier,
-            gitRepoPath: gitRepoPath!,
-          },
-          message: `Sync from VibeSync: ${result.phase3!.synced} issues`,
-        });
-      }
-
-      return await continueAsNew<typeof ProjectSyncWorkflow>({
-        ...input,
-        _phase: 'phase3b',
-
-        _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
-        _accumulatedResult: result,
-      });
-    }
-
-    if (_phase === 'phase3b') {
-      log.info(`[ProjectSync] Phase 3b: Beads→Huly sync`);
-
-      const beadsIssues = await fetchBeadsIssues({ gitRepoPath: gitRepoPath! });
-
-      let beadsSynced = 0;
-      let beadsCreated = 0;
-      let beadsSkipped = 0;
-
-      if (dryRun) {
-        beadsSkipped = beadsIssues.length;
-      } else {
-        const toSync: Array<{
-          beadsId: string;
-          hulyIdentifier: string;
-          status: string;
-          title?: string;
-          description?: string;
-        }> = [];
-        const toCreate: typeof beadsIssues = [];
-
-        for (const beadsIssue of beadsIssues) {
-          const hulyLabels = beadsIssue.labels?.filter(l => l.startsWith('huly:')) ?? [];
-          if (hulyLabels.length > 0) {
-            for (const label of hulyLabels) {
-              toSync.push({
-                beadsId: beadsIssue.id,
-                hulyIdentifier: label.replace('huly:', ''),
-                status: beadsIssue.status,
-                title: beadsIssue.title,
-                description: beadsIssue.description,
-              });
-            }
-          } else {
-            toCreate.push(beadsIssue);
-          }
-        }
-
-        if (toSync.length > 0) {
-          // Status hierarchy guard: filter out issues that would regress Huly status
-          const syncStateMap = await getIssueSyncStateBatch({
-            hulyIdentifiers: toSync.map(i => i.hulyIdentifier),
-          });
-          const safeToSync = toSync.filter(item => {
-            const current = syncStateMap[item.hulyIdentifier];
-            if (!current?.status) return true;
-            const targetRank = getStatusRank(beadsStatusToHuly(item.status));
-            const currentRank = getStatusRank(current.status);
-            if (currentRank >= 0 && targetRank < currentRank) {
-              beadsSkipped++;
-              return false;
-            }
-            return true;
-          });
-
-          log.info(
-            `[ProjectSync] Phase 3b: Batch syncing ${safeToSync.length} issues to Huly (${toSync.length - safeToSync.length} skipped as regressions)`
+            })
           );
-          try {
-            const batchResult = await syncBeadsToHulyBatch({
-              beadsIssues: safeToSync,
-              context: {
-                projectIdentifier: hulyProject.identifier,
 
-                gitRepoPath: gitRepoPath!,
-              },
+          const agentCheck = await checkAgentExists({
+            projectIdentifier: project.identifier,
+          });
+
+          if (agentCheck.exists && agentCheck.agentId) {
+            const memResult = await updateLettaMemory({
+              agentId: agentCheck.agentId,
+              hulyProject: project,
+              hulyIssues: issuesAsHulyShape,
+              gitRepoPath: gitRepoPath || undefined,
             });
-            beadsSynced = batchResult.updated;
-            beadsSkipped += batchResult.failed;
-            if (batchResult.errors.length > 0) {
-              log.warn(`[ProjectSync] Phase 3b batch errors`, {
-                errors: batchResult.errors.slice(0, 5),
-              });
-            }
-
-            const failedIdentifiers = new Set(batchResult.errors.map(e => e.identifier));
-            const statusUpdates = toSync
-              .filter(item => !failedIdentifiers.has(item.hulyIdentifier))
-              .map(item => ({
-                identifier: item.hulyIdentifier,
-                projectIdentifier: hulyProject.identifier,
-                beadsIssueId: item.beadsId,
-                beadsStatus: item.status,
-                beadsModifiedAt: Date.now(),
-              }));
-
-            if (statusUpdates.length > 0) {
-              await persistIssueSyncStateBatch({ issues: statusUpdates });
-            }
-          } catch (error) {
-            log.warn(`[ProjectSync] Phase 3b batch sync failed`, {
-              error: error instanceof Error ? error.message : String(error),
-            });
-            beadsSkipped += toSync.length;
+            result.lettaUpdated = memResult.success;
           }
-        }
-
-        for (const beadsIssue of toCreate) {
-          try {
-            const createResult = await createBeadsIssueInHuly({
-              beadsIssue: {
-                id: beadsIssue.id,
-                title: beadsIssue.title,
-                status: beadsIssue.status,
-                priority: beadsIssue.priority,
-                description: beadsIssue.description,
-                labels: beadsIssue.labels,
-              },
-              context: {
-                projectIdentifier: hulyProject.identifier,
-
-                gitRepoPath: gitRepoPath!,
-              },
-            });
-
-            if (createResult.created) {
-              beadsCreated++;
-              log.info(
-                `[ProjectSync] Created Huly issue ${createResult.hulyIdentifier} from ${beadsIssue.id}`
-              );
-
-              if (createResult.hulyIdentifier) {
-                await persistIssueSyncState({
-                  identifier: createResult.hulyIdentifier,
-                  projectIdentifier: hulyProject.identifier,
-                  title: beadsIssue.title,
-                  description: beadsIssue.description,
-                  status: beadsIssue.status,
-                  beadsIssueId: beadsIssue.id,
-                  beadsStatus: beadsIssue.status,
-                  beadsModifiedAt: Date.now(),
-                });
-              }
-            } else {
-              beadsSkipped++;
-
-              if (createResult.hulyIdentifier) {
-                await persistIssueSyncState({
-                  identifier: createResult.hulyIdentifier,
-                  projectIdentifier: hulyProject.identifier,
-                  title: beadsIssue.title,
-                  description: beadsIssue.description,
-                  status: beadsIssue.status,
-                  beadsIssueId: beadsIssue.id,
-                  beadsStatus: beadsIssue.status,
-                  beadsModifiedAt: Date.now(),
-                });
-              }
-            }
-          } catch (error) {
-            log.warn(`[ProjectSync] Phase 3b create error for ${beadsIssue.id}`, {
-              error: error instanceof Error ? error.message : String(error),
-            });
-            beadsSkipped++;
-          }
-          await sleep('100ms');
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          log.warn(`[ProjectSync] Agent memory update failed: ${errorMsg}`);
         }
       }
-
-      log.info(`[ProjectSync] Phase 3b complete`, {
-        synced: beadsSynced,
-        created: beadsCreated,
-        skipped: beadsSkipped,
-      });
-
-      return await continueAsNew<typeof ProjectSyncWorkflow>({
-        ...input,
-        _phase: 'phase3c',
-
-        _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
-        _accumulatedResult: result,
-      });
-    }
-
-    if (_phase === 'phase3c') {
-      log.info(`[ProjectSync] Phase 3c: Skipped (VK disabled)`);
 
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
         _phase: 'done',
-
         _gitRepoPath: gitRepoPath,
         _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
       });
     }
 
-    // DONE PHASE: Finalize
+    // ── DONE: commit beads changes, finalize ──
     if (_phase === 'done') {
-      // Update Letta memory (if enabled)
-      if (enableLetta && !dryRun) {
-        result.lettaUpdated = false; // Placeholder
+      if (!dryRun && beadsInitialized && gitRepoPath && result.beadsSync.synced > 0) {
+        await commitBeadsToGit({
+          context: {
+            projectIdentifier: project.identifier,
+            gitRepoPath,
+          },
+          message: `Sync from VibeSync: ${result.beadsSync.synced} issues`,
+        });
       }
 
       result.success = true;
 
-      log.info(`[ProjectSync] Complete: ${hulyProject.identifier}`, {
-        phase1: result.phase1,
-        phase2: result.phase2,
-        phase3: result.phase3,
+      log.info(`[ProjectSync] Complete: ${project.identifier}`, {
+        beadsSync: result.beadsSync,
+        lettaUpdated: result.lettaUpdated,
       });
 
       return result;
     }
 
-    // Should never reach here
     throw new Error(`Unknown phase: ${_phase}`);
   } catch (error) {
-    // IMPORTANT: ContinueAsNew throws an exception that must be propagated
     if (
       error instanceof Error &&
       (error.name === 'ContinueAsNew' ||
@@ -704,7 +342,7 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     }
 
     result.error = error instanceof Error ? error.message : String(error);
-    log.error(`[ProjectSync] Failed: ${hulyProject.identifier}`, {
+    log.error(`[ProjectSync] Failed: ${project.identifier}`, {
       error: result.error,
     });
     return result;

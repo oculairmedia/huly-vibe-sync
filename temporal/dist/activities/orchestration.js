@@ -3,21 +3,17 @@
  * Orchestration Activities for Temporal — Facade
  *
  * Re-exports all activities from sub-modules:
- *   - orchestration-projects: Project fetching, ensuring, resolving
+ *   - orchestration-projects: Registry-based project fetching
  *   - orchestration-git: Git repo path resolution, Beads operations
  *   - orchestration-letta: Letta memory updates, metrics, error handling
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleOrchestratorError = exports.buildProjectMeta = exports.buildBoardMetrics = exports.recordSyncMetrics = exports.updateLettaMemory = exports.fetchBeadsIssues = exports.initializeBeads = exports.clearGitRepoPathCache = exports.extractGitRepoPath = exports.resolveGitRepoPath = exports.fetchHulyIssuesBulk = exports.fetchProjectData = exports.resolveProjectIdentifier = exports.clearProjectCaches = exports.fetchHulyProjects = void 0;
+exports.handleOrchestratorError = exports.buildProjectMeta = exports.buildBoardMetrics = exports.recordSyncMetrics = exports.updateLettaMemory = exports.fetchBeadsIssues = exports.initializeBeads = exports.clearGitRepoPathCache = exports.extractGitRepoPath = exports.resolveGitRepoPath = exports.fetchRegistryProjects = void 0;
 // ============================================================
 // RE-EXPORTS FROM SUB-MODULES
 // ============================================================
 var orchestration_projects_1 = require("./orchestration-projects");
-Object.defineProperty(exports, "fetchHulyProjects", { enumerable: true, get: function () { return orchestration_projects_1.fetchHulyProjects; } });
-Object.defineProperty(exports, "clearProjectCaches", { enumerable: true, get: function () { return orchestration_projects_1.clearProjectCaches; } });
-Object.defineProperty(exports, "resolveProjectIdentifier", { enumerable: true, get: function () { return orchestration_projects_1.resolveProjectIdentifier; } });
-Object.defineProperty(exports, "fetchProjectData", { enumerable: true, get: function () { return orchestration_projects_1.fetchProjectData; } });
-Object.defineProperty(exports, "fetchHulyIssuesBulk", { enumerable: true, get: function () { return orchestration_projects_1.fetchHulyIssuesBulk; } });
+Object.defineProperty(exports, "fetchRegistryProjects", { enumerable: true, get: function () { return orchestration_projects_1.fetchRegistryProjects; } });
 var orchestration_git_1 = require("./orchestration-git");
 Object.defineProperty(exports, "resolveGitRepoPath", { enumerable: true, get: function () { return orchestration_git_1.resolveGitRepoPath; } });
 Object.defineProperty(exports, "extractGitRepoPath", { enumerable: true, get: function () { return orchestration_git_1.extractGitRepoPath; } });

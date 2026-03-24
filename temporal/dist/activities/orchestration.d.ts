@@ -2,7 +2,7 @@
  * Orchestration Activities for Temporal — Facade
  *
  * Re-exports all activities from sub-modules:
- *   - orchestration-projects: Project fetching, ensuring, resolving
+ *   - orchestration-projects: Registry-based project fetching
  *   - orchestration-git: Git repo path resolution, Beads operations
  *   - orchestration-letta: Letta memory updates, metrics, error handling
  */
@@ -26,7 +26,7 @@ export interface ProjectSyncContext {
     gitRepoPath?: string;
     hulyIssues: HulyIssue[];
 }
-export { fetchHulyProjects, clearProjectCaches, resolveProjectIdentifier, fetchProjectData, fetchHulyIssuesBulk, } from './orchestration-projects';
+export { fetchRegistryProjects } from './orchestration-projects';
 export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, } from './orchestration-git';
 export { updateLettaMemory, recordSyncMetrics, buildBoardMetrics, buildProjectMeta, handleOrchestratorError, } from './orchestration-letta';
 //# sourceMappingURL=orchestration.d.ts.map

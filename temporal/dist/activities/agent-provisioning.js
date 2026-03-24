@@ -54,7 +54,6 @@ exports.updateProjectAgent = updateProjectAgent;
 const activity_1 = require("@temporalio/activity");
 const letta_client_1 = require("@letta-ai/letta-client");
 const path_1 = __importDefault(require("path"));
-const lib_1 = require("../lib");
 function appRootModule(modulePath) {
     return path_1.default.join(process.cwd(), modulePath);
 }
@@ -121,14 +120,23 @@ async function syncAgentMemoryFromControl(agentId) {
 async function fetchAgentsToProvision(projectIdentifiers) {
     console.log('[Activity:FetchAgents] Fetching agents to provision...');
     try {
-        // Fetch Huly projects using the shared client (same as orchestration activities)
-        const hulyClient = (0, lib_1.createHulyClient)(process.env.HULY_API_URL);
-        const hulyProjects = await hulyClient.listProjects();
-        console.log(`[Activity:FetchAgents] Found ${hulyProjects.length} Huly projects`);
-        // Filter to specific projects if provided
-        let projects = hulyProjects;
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const dbPath = process.env.DB_PATH || path_1.default.join(process.cwd(), 'logs', 'sync-state.db');
+        const db = createSyncDatabase(dbPath);
+        let registryProjects;
+        try {
+            const rows = db.getAllProjects();
+            registryProjects = rows
+                .filter((r) => r.status === 'active')
+                .map((r) => ({ identifier: r.identifier, name: r.name || r.identifier }));
+        }
+        finally {
+            db.close();
+        }
+        console.log(`[Activity:FetchAgents] Found ${registryProjects.length} registry projects`);
+        let projects = registryProjects;
         if (projectIdentifiers && projectIdentifiers.length > 0) {
-            projects = hulyProjects.filter(p => projectIdentifiers.includes(p.identifier));
+            projects = registryProjects.filter((p) => projectIdentifiers.includes(p.identifier));
         }
         // Get existing Letta agents with huly-vibe-sync tag
         // Using matchAllTags ensures we only get agents that belong to our sync system

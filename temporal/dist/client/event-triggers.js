@@ -9,10 +9,12 @@ exports.scheduleHulyWebhookChange = scheduleHulyWebhookChange;
 exports.executeHulyWebhookChange = executeHulyWebhookChange;
 const client_1 = require("@temporalio/client");
 const connection_1 = require("./connection");
+const WEBHOOK_WINDOW_MS = 30_000;
 function buildWebhookWorkflowId(input) {
     const timestamp = Date.parse(input.timestamp);
-    const suffix = Number.isFinite(timestamp) ? timestamp : Date.now();
-    return `huly-webhook-${input.type}-${suffix}-${Math.random().toString(36).slice(2, 8)}`;
+    const ts = Number.isFinite(timestamp) ? timestamp : Date.now();
+    const window = Math.floor(ts / WEBHOOK_WINDOW_MS);
+    return `huly-webhook-${input.type}-${window}`;
 }
 /**
  * Schedule a Huly webhook change workflow (fire and forget)
@@ -28,8 +30,9 @@ async function scheduleHulyWebhookChange(input) {
         workflowId,
         args: [input],
         workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        workflowIdConflictPolicy: client_1.WorkflowIdConflictPolicy.USE_EXISTING,
     });
-    console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId}`);
+    console.log(`[Temporal] Scheduled Huly webhook change workflow: ${workflowId} (window=${WEBHOOK_WINDOW_MS}ms)`);
     return {
         workflowId: handle.workflowId,
         runId: handle.firstExecutionRunId,
@@ -45,6 +48,7 @@ async function executeHulyWebhookChange(input) {
         workflowId: buildWebhookWorkflowId(input),
         args: [input],
         workflowIdReusePolicy: client_1.WorkflowIdReusePolicy.ALLOW_DUPLICATE,
+        workflowIdConflictPolicy: client_1.WorkflowIdConflictPolicy.USE_EXISTING,
     });
 }
 //# sourceMappingURL=event-triggers.js.map

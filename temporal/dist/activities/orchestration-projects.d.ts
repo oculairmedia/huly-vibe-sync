@@ -1,29 +1,15 @@
 /**
- * Orchestration Activities — Project Fetching
+ * Orchestration Activities — Project Fetching (Registry-Based)
  *
- * Activities for fetching and managing Huly/Vibe projects.
+ * Activities for fetching projects from the local SQLite ProjectRegistry.
+ * Phase 4: No more Huly API calls — registry is the single source of truth.
  */
-import type { HulyProject, HulyIssue } from './orchestration';
+import type { HulyProject } from './orchestration';
 /**
- * Test-only helper to reset module-level caches between test runs.
+ * Fetch all active projects from the local SQLite ProjectRegistry.
+ *
+ * Replaces the old fetchHulyProjects that called the dead Huly API.
+ * Returns the same HulyProject[] shape for workflow compatibility.
  */
-export declare function clearProjectCaches(): void;
-/**
- * Fetch all Huly projects
- */
-export declare function fetchHulyProjects(): Promise<HulyProject[]>;
-export declare function resolveProjectIdentifier(projectIdOrFolder: string): Promise<string | null>;
-export declare function fetchProjectData(input: {
-    hulyProject: HulyProject;
-}): Promise<{
-    hulyIssues: HulyIssue[];
-}>;
-/**
- * Bulk fetch issues from multiple Huly projects in a single API call.
- */
-export declare function fetchHulyIssuesBulk(input: {
-    projectIdentifiers: string[];
-    modifiedSince?: string;
-    limit?: number;
-}): Promise<Record<string, HulyIssue[]>>;
+export declare function fetchRegistryProjects(): Promise<HulyProject[]>;
 //# sourceMappingURL=orchestration-projects.d.ts.map
