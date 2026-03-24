@@ -189,7 +189,7 @@ if (codePerceptionWatcher && lettaService) {
   logger.info('AstMemorySync initialized - PM agents will receive codebase summaries');
 }
 
-logger.info({ service: 'huly-vibe-sync' }, 'Service starting');
+logger.info({ service: 'vibe-sync' }, 'Service starting');
 logger.info({ config: getConfigSummary(config) }, 'Configuration loaded');
 
 async function main() {

@@ -1,7 +1,7 @@
 {
-  "name": "huly-vibe-sync",
+  "name": "vibe-sync",
   "version": "1.0.0",
-  "description": "Bidirectional sync service between Huly and Vibe Kanban",
+  "description": "Project sync service with PM agent orchestration",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -31,8 +31,8 @@
     "vibesync": "node cli.js"
   },
   "keywords": [
-    "huly",
-    "vibe-kanban",
+    "vibe-sync",
+    "pm-agents",
     "sync",
     "mcp",
     "bidirectional-sync"
