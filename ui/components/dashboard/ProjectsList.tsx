@@ -125,20 +125,20 @@ export function ProjectsList() {
           bVal = b.name.toLowerCase();
           break;
         case 'tech_stack':
-          aVal = a.tech_stack.toLowerCase();
-          bVal = b.tech_stack.toLowerCase();
+          aVal = (a.tech_stack || '').toLowerCase();
+          bVal = (b.tech_stack || '').toLowerCase();
           break;
         case 'letta_agent_id':
           aVal = a.letta_agent_id ? 1 : 0;
           bVal = b.letta_agent_id ? 1 : 0;
           break;
         case 'beads_issue_count':
-          aVal = a.beads_issue_count;
-          bVal = b.beads_issue_count;
+          aVal = a.beads_issue_count ?? 0;
+          bVal = b.beads_issue_count ?? 0;
           break;
         case 'status':
-          aVal = a.status.toLowerCase();
-          bVal = b.status.toLowerCase();
+          aVal = (a.status || '').toLowerCase();
+          bVal = (b.status || '').toLowerCase();
           break;
         default:
           return 0;
@@ -189,6 +189,10 @@ export function ProjectsList() {
             <AlertTriangle className="h-4 w-4" />
             <span>Failed to load projects</span>
           </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">
+            <RefreshCw className="mr-1 h-3 w-3" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -269,9 +273,13 @@ export function ProjectsList() {
                       {project.name}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      <span className={'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' + getTechStackColor(project.tech_stack)}>
-                        {project.tech_stack}
-                      </span>
+                      {project.tech_stack ? (
+                        <span className={'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' + getTechStackColor(project.tech_stack)}>
+                          {project.tech_stack}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       {project.letta_agent_id ? (
@@ -279,22 +287,26 @@ export function ProjectsList() {
                           <Check className="h-4 w-4" />
                         </span>
                       ) : (
-                        <span className="inline-flex items-center text-gray-400">
+                        <span className="inline-flex items-center text-red-400">
                           <X className="h-4 w-4" />
                         </span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums">
-                      {project.beads_issue_count > 0 ? (
+                      {(project.beads_issue_count ?? 0) > 0 ? (
                         <span className="font-medium text-amber-600">{project.beads_issue_count}</span>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">
-                      <Badge variant={getStatusBadgeVariant(project.status)}>
-                        {project.status}
-                      </Badge>
+                      {project.status ? (
+                        <Badge variant={getStatusBadgeVariant(project.status)}>
+                          {project.status}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 ))

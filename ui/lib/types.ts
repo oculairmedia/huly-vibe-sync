@@ -275,21 +275,22 @@ export interface Task {
 export interface ProjectSummary {
   identifier: string
   name: string
+  tech_stack?: string
+  letta_agent_id?: string | null
+  beads_issue_count?: number
+  beads_prefix?: string
+  status?: string
+  last_scan_at?: string
+  issue_count?: number
+  filesystem_path?: string
+  git_url?: string
   description?: string
-  tech_stack: string
-  letta_agent_id: string | null
-  beads_issue_count: number
-  beads_prefix: string
-  status: string
-  last_scan_at: string | null
-  last_sync_at: string | null
-  issue_count: number
-  filesystem_path: string
-  git_url: string | null
+  last_sync_at?: string | null
   [key: string]: any
 }
 
 export interface ProjectsResponse {
   total: number
   projects: ProjectSummary[]
+  timestamp?: string
 }

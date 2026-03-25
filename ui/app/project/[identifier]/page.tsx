@@ -21,9 +21,7 @@ import {
   Clock,
   HardDrive,
   RefreshCw,
-  Tag,
   Activity,
-  Bug,
 } from 'lucide-react';
 
 function getStatusBadgeVariant(status: string): 'success' | 'warning' | 'error' | 'secondary' {
@@ -67,7 +65,7 @@ function LoadingSkeleton() {
       <div className="container mx-auto px-4 py-8">
         <Skeleton className="mb-6 h-9 w-24" />
         <div className="grid gap-6 lg:grid-cols-2">
-          {[1, 2, 3, 4].map(i => (
+          {[1, 2, 3, 4, 5].map(i => (
             <Card key={i}>
               <CardHeader>
                 <Skeleton className="h-6 w-40" />
@@ -122,6 +120,8 @@ export default function ProjectDetailPage() {
 
   if (!project) return null;
 
+  const status = project.status || 'unknown';
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -130,12 +130,12 @@ export default function ProjectDetailPage() {
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => router.push('/')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              Back to Dashboard
             </Button>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                <Badge variant={getStatusBadgeVariant(project.status)}>{project.status}</Badge>
+                <Badge variant={getStatusBadgeVariant(status)}>{status}</Badge>
               </div>
               <p className="text-sm text-muted-foreground">
                 <Badge variant="secondary" className="mr-2 font-mono text-xs">
@@ -154,41 +154,43 @@ export default function ProjectDetailPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Project Info */}
+          {/* Overview */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <FolderKanban className="h-5 w-5" />
-                Project Info
+                Overview
               </CardTitle>
               <CardDescription>Core project metadata</CardDescription>
             </CardHeader>
             <CardContent>
               <dl className="space-y-3">
-                <DetailRow label="Identifier">
-                  <Badge variant="secondary" className="font-mono">{project.identifier}</Badge>
-                </DetailRow>
-                <DetailRow label="Name">{project.name}</DetailRow>
-                <DetailRow label="Description">{project.description || <span className="text-muted-foreground italic">None</span>}</DetailRow>
-                <DetailRow label="Tech Stack">
-                  <Badge variant="outline">{project.tech_stack}</Badge>
-                </DetailRow>
                 <DetailRow label="Status">
-                  <Badge variant={getStatusBadgeVariant(project.status)}>{project.status}</Badge>
+                  <Badge variant={getStatusBadgeVariant(status)}>{status}</Badge>
+                </DetailRow>
+                <DetailRow label="Tech Stack">
+                  {project.tech_stack ? (
+                    <Badge variant="outline">{project.tech_stack}</Badge>
+                  ) : (
+                    <span className="text-muted-foreground italic">Unknown</span>
+                  )}
+                </DetailRow>
+                <DetailRow label="Description">
+                  {project.description || <span className="text-muted-foreground italic">None</span>}
                 </DetailRow>
                 <DetailRow label="Total Issues">
-                  <span className="font-medium tabular-nums">{project.issue_count}</span>
+                  <span className="font-medium tabular-nums">{project.issue_count ?? 0}</span>
                 </DetailRow>
               </dl>
             </CardContent>
           </Card>
 
-          {/* Filesystem & Git */}
+          {/* Paths */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <HardDrive className="h-5 w-5" />
-                Source & Filesystem
+                Paths
               </CardTitle>
               <CardDescription>Filesystem path and git info</CardDescription>
             </CardHeader>
@@ -223,12 +225,12 @@ export default function ProjectDetailPage() {
             </CardContent>
           </Card>
 
-          {/* PM Agent */}
+          {/* Agent */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Bot className="h-5 w-5" />
-                PM Agent
+                Agent
               </CardTitle>
               <CardDescription>Letta AI agent configuration</CardDescription>
             </CardHeader>
@@ -238,7 +240,7 @@ export default function ProjectDetailPage() {
                   {project.letta_agent_id ? (
                     <Badge variant="success">Connected</Badge>
                   ) : (
-                    <Badge variant="secondary">No Agent</Badge>
+                    <Badge variant="secondary">No agent linked</Badge>
                   )}
                 </DetailRow>
                 <DetailRow label="Agent ID">
@@ -247,21 +249,21 @@ export default function ProjectDetailPage() {
                       {project.letta_agent_id}
                     </code>
                   ) : (
-                    <span className="text-muted-foreground italic">None assigned</span>
+                    <span className="text-muted-foreground italic">No agent linked</span>
                   )}
                 </DetailRow>
               </dl>
             </CardContent>
           </Card>
 
-          {/* Beads & Sync */}
+          {/* Beads */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Activity className="h-5 w-5" />
-                Beads & Sync
+                Beads
               </CardTitle>
-              <CardDescription>Beads integration and sync timestamps</CardDescription>
+              <CardDescription>Beads integration details</CardDescription>
             </CardHeader>
             <CardContent>
               <dl className="space-y-3">
@@ -275,10 +277,25 @@ export default function ProjectDetailPage() {
                   )}
                 </DetailRow>
                 <DetailRow label="Beads Issues">
-                  <span className={`font-medium tabular-nums ${project.beads_issue_count > 0 ? 'text-amber-600' : ''}`}>
-                    {project.beads_issue_count}
+                  <span className={`font-medium tabular-nums ${(project.beads_issue_count ?? 0) > 0 ? 'text-amber-600' : ''}`}>
+                    {project.beads_issue_count ?? 0}
                   </span>
                 </DetailRow>
+              </dl>
+            </CardContent>
+          </Card>
+
+          {/* Sync */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Clock className="h-5 w-5" />
+                Sync
+              </CardTitle>
+              <CardDescription>Scan and sync timestamps</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3">
                 <DetailRow label="Last Scan">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="h-3 w-3 text-muted-foreground" />
