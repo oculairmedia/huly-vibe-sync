@@ -71,9 +71,9 @@ export function QuickActions() {
         <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
           <p className="font-semibold mb-1">What does this do?</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>Fetches latest data from Huly for all projects</li>
-            <li>Syncs all issues bidirectionally with Vibe Kanban</li>
-            <li>Updates project metadata and issue counts</li>
+            <li>Scans project registry for changes</li>
+            <li>Syncs beads issues across all projects</li>
+            <li>Updates project metadata and beads issue counts</li>
             <li>Bypasses scheduled interval for immediate execution</li>
           </ul>
         </div>

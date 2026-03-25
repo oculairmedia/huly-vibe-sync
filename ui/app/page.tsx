@@ -1,7 +1,7 @@
 /**
  * Dashboard Page
  *
- * Main dashboard displaying sync status, health metrics, and controls
+ * Main dashboard displaying registry status, health metrics, and controls
  */
 
 'use client'
@@ -12,6 +12,8 @@ import { QuickActions } from '@/components/dashboard/QuickActions'
 import { ConnectionStatus } from '@/components/dashboard/ConnectionStatus'
 import { DatabaseStats } from '@/components/dashboard/DatabaseStats'
 import { ProjectsList } from '@/components/dashboard/ProjectsList'
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
+import { TemporalMonitor } from '@/components/dashboard/TemporalMonitor'
 
 export default function DashboardPage() {
   return (
@@ -22,10 +24,10 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Huly-Vibe Sync Dashboard
+                VibeSync Dashboard
               </h1>
               <p className="text-sm text-gray-600">
-                Monitor and manage bidirectional synchronization
+                Project Registry & System Monitor
               </p>
             </div>
             <ConnectionStatus />
@@ -64,19 +66,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Third Row - Activity Feed & Temporal Workflows */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <ActivityFeed />
+          <TemporalMonitor />
+        </div>
+
         {/* Footer Info */}
         <div className="mt-8 rounded-lg border bg-white p-6">
           <h2 className="mb-4 text-lg font-semibold">About</h2>
           <div className="space-y-2 text-sm text-gray-600">
             <p>
-              This dashboard monitors the bidirectional synchronization service between
-              Huly (project management) and Vibe Kanban (AI-powered task execution).
+              This dashboard monitors the VibeSync registry — a centralized system for
+              managing project metadata, beads issues, and synchronization state.
             </p>
             <p>
               <strong>Features:</strong>
             </p>
             <ul className="ml-6 list-disc space-y-1">
-              <li>Real-time sync status and health monitoring</li>
+              <li>Real-time registry status and health monitoring</li>
               <li>Live updates via Server-Sent Events (SSE)</li>
               <li>Manual sync triggers for on-demand synchronization</li>
               <li>Performance metrics and error tracking</li>
