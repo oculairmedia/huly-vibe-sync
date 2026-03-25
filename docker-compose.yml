@@ -98,6 +98,9 @@ services:
       # Access to stacks directory (read-write for state persistence)
       - /opt/stacks:/opt/stacks:rw
 
+      # Host bd binary (needs glibc compat — installed in image)
+      - /usr/local/bin/bd:/usr/local/bin/bd:ro
+
     network_mode: host
     user: '1000:1000'
 
@@ -165,7 +168,7 @@ services:
     command: ['node', 'server.js']
     environment:
       - API_URL=${API_URL:-http://192.168.50.90:3099}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://192.168.50.90:3099}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
