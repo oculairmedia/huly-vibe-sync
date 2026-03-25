@@ -8,7 +8,7 @@
  *   - orchestration-letta: Letta memory updates, metrics, error handling
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleOrchestratorError = exports.buildProjectMeta = exports.buildBoardMetrics = exports.recordSyncMetrics = exports.updateLettaMemory = exports.fetchBeadsIssues = exports.initializeBeads = exports.clearGitRepoPathCache = exports.extractGitRepoPath = exports.resolveGitRepoPath = exports.fetchRegistryProjects = void 0;
+exports.handleOrchestratorError = exports.recordSyncMetrics = exports.updateLettaMemory = exports.fetchBeadsIssues = exports.initializeBeads = exports.clearGitRepoPathCache = exports.extractGitRepoPath = exports.resolveGitRepoPath = exports.fetchRegistryProjects = void 0;
 // ============================================================
 // RE-EXPORTS FROM SUB-MODULES
 // ============================================================
@@ -23,7 +23,5 @@ Object.defineProperty(exports, "fetchBeadsIssues", { enumerable: true, get: func
 var orchestration_letta_1 = require("./orchestration-letta");
 Object.defineProperty(exports, "updateLettaMemory", { enumerable: true, get: function () { return orchestration_letta_1.updateLettaMemory; } });
 Object.defineProperty(exports, "recordSyncMetrics", { enumerable: true, get: function () { return orchestration_letta_1.recordSyncMetrics; } });
-Object.defineProperty(exports, "buildBoardMetrics", { enumerable: true, get: function () { return orchestration_letta_1.buildBoardMetrics; } });
-Object.defineProperty(exports, "buildProjectMeta", { enumerable: true, get: function () { return orchestration_letta_1.buildProjectMeta; } });
 Object.defineProperty(exports, "handleOrchestratorError", { enumerable: true, get: function () { return orchestration_letta_1.handleOrchestratorError; } });
 //# sourceMappingURL=orchestration.js.map

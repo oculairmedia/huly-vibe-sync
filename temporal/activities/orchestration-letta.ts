@@ -6,22 +6,56 @@
 
 import { ApplicationFailure } from '@temporalio/activity';
 import { pooledFetch } from '../lib/httpPool';
-import type { HulyProject, HulyIssue } from './orchestration';
+import {
+  buildBoardMetrics as buildBeadsBoardMetrics,
+  buildProjectMeta as buildBeadsProjectMeta,
+} from '../../lib/LettaMemoryBuilders.js';
+
+// ============================================================
+// TYPE DEFINITIONS
+// ============================================================
+
+interface BeadsIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  createdOn: number;
+  modifiedOn: number;
+  component: string | null;
+  assignee: string | null;
+  _beads: {
+    raw_status: string;
+    raw_priority: number;
+    closed_at: string | null;
+    close_reason: string | null;
+  };
+}
+
+interface Project {
+  name: string;
+  identifier: string;
+  description?: string;
+  status?: string;
+}
 
 // ============================================================
 // LETTA MEMORY ACTIVITIES
 // ============================================================
 
 /**
- * Update Letta agent memory with project state
+ * Update Letta agent memory with project state from beads data
  */
 export async function updateLettaMemory(input: {
   agentId: string;
-  hulyProject: HulyProject;
-  hulyIssues: HulyIssue[];
+  project: Project;
+  issues: BeadsIssue[];
   gitRepoPath?: string;
+  gitUrl?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { agentId, hulyProject, hulyIssues } = input;
+  const { agentId, project, issues, gitRepoPath, gitUrl } = input;
 
   console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId}`);
 
@@ -34,9 +68,9 @@ export async function updateLettaMemory(input: {
       return { success: true };
     }
 
-    // Build memory blocks
-    const boardMetrics = buildBoardMetrics(hulyIssues);
-    const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
+    // Build memory blocks using beads-aware builders
+    const boardMetrics = buildBeadsBoardMetrics(issues);
+    const projectMeta = buildBeadsProjectMeta(project, gitRepoPath || null, gitUrl || null);
 
     // Update memory blocks via Letta API
     const response = await pooledFetch(`${lettaUrl}/v1/agents/${agentId}/memory`, {
@@ -47,8 +81,8 @@ export async function updateLettaMemory(input: {
       },
       body: JSON.stringify({
         blocks: [
-          { label: 'board_metrics', value: boardMetrics },
-          { label: 'project', value: projectMeta },
+          { label: 'board_metrics', value: JSON.stringify(boardMetrics) },
+          { label: 'project', value: JSON.stringify(projectMeta) },
         ],
       }),
     });
@@ -95,30 +129,9 @@ export async function recordSyncMetrics(input: {
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
-
-export function buildBoardMetrics(hulyIssues: HulyIssue[]): string {
-  const statusCounts: Record<string, number> = {};
-
-  for (const issue of hulyIssues) {
-    const status = issue.status || 'Unknown';
-    statusCounts[status] = (statusCounts[status] || 0) + 1;
-  }
-
-  return JSON.stringify({
-    totalIssues: hulyIssues.length,
-    byStatus: statusCounts,
-    lastUpdated: new Date().toISOString(),
-  });
-}
-
-export function buildProjectMeta(hulyProject: HulyProject, hulyIssues: HulyIssue[]): string {
-  return JSON.stringify({
-    identifier: hulyProject.identifier,
-    name: hulyProject.name,
-    issueCount: hulyIssues.length,
-    lastSynced: new Date().toISOString(),
-  });
-}
+// Note: buildBoardMetrics and buildProjectMeta have been moved to
+// lib/LettaMemoryBuilders.js for consistency across the codebase.
+// They are imported at the top of this file.
 
 export function handleOrchestratorError(error: unknown, operation: string): never {
   if (error instanceof ApplicationFailure) {

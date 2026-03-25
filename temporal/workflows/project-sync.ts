@@ -265,31 +265,18 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           const beadsIssues =
             beadsInitialized && gitRepoPath ? await fetchBeadsIssues({ gitRepoPath }) : [];
 
-          const issuesAsHulyShape = beadsIssues.map(
-            (issue: {
-              id: string;
-              title: string;
-              status: string;
-              priority?: number;
-              description?: string;
-            }) => ({
-              identifier: issue.id,
-              title: issue.title,
-              description: issue.description,
-              status: issue.status,
-            })
-          );
-
           const agentCheck = await checkAgentExists({
             projectIdentifier: project.identifier,
           });
 
           if (agentCheck.exists && agentCheck.agentId) {
+            // Pass beads issues directly - they're already normalized by fetchBeadsIssues
             const memResult = await updateLettaMemory({
               agentId: agentCheck.agentId,
-              hulyProject: project,
-              hulyIssues: issuesAsHulyShape,
+              project: project,
+              issues: beadsIssues as any, // Type cast to avoid workflow complexity
               gitRepoPath: gitRepoPath || undefined,
+              gitUrl: undefined, // TODO: extract from project metadata if needed
             });
             result.lettaUpdated = memResult.success;
           }

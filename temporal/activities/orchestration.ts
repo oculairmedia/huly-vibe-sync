@@ -51,7 +51,5 @@ export {
 export {
   updateLettaMemory,
   recordSyncMetrics,
-  buildBoardMetrics,
-  buildProjectMeta,
   handleOrchestratorError,
 } from './orchestration-letta';

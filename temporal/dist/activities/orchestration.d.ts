@@ -28,5 +28,5 @@ export interface ProjectSyncContext {
 }
 export { fetchRegistryProjects } from './orchestration-projects';
 export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, } from './orchestration-git';
-export { updateLettaMemory, recordSyncMetrics, buildBoardMetrics, buildProjectMeta, handleOrchestratorError, } from './orchestration-letta';
+export { updateLettaMemory, recordSyncMetrics, handleOrchestratorError, } from './orchestration-letta';
 //# sourceMappingURL=orchestration.d.ts.map

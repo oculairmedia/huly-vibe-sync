@@ -7,19 +7,18 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateLettaMemory = updateLettaMemory;
 exports.recordSyncMetrics = recordSyncMetrics;
-exports.buildBoardMetrics = buildBoardMetrics;
-exports.buildProjectMeta = buildProjectMeta;
 exports.handleOrchestratorError = handleOrchestratorError;
 const activity_1 = require("@temporalio/activity");
 const httpPool_1 = require("../lib/httpPool");
+const LettaMemoryBuilders_js_1 = require("../../lib/LettaMemoryBuilders.js");
 // ============================================================
 // LETTA MEMORY ACTIVITIES
 // ============================================================
 /**
- * Update Letta agent memory with project state
+ * Update Letta agent memory with project state from beads data
  */
 async function updateLettaMemory(input) {
-    const { agentId, hulyProject, hulyIssues } = input;
+    const { agentId, project, issues, gitRepoPath, gitUrl } = input;
     console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId}`);
     try {
         const lettaUrl = process.env.LETTA_BASE_URL || process.env.LETTA_API_URL;
@@ -28,9 +27,9 @@ async function updateLettaMemory(input) {
             console.log('[Temporal:Orchestration] Letta not configured, skipping memory update');
             return { success: true };
         }
-        // Build memory blocks
-        const boardMetrics = buildBoardMetrics(hulyIssues);
-        const projectMeta = buildProjectMeta(hulyProject, hulyIssues);
+        // Build memory blocks using beads-aware builders
+        const boardMetrics = (0, LettaMemoryBuilders_js_1.buildBoardMetrics)(issues);
+        const projectMeta = (0, LettaMemoryBuilders_js_1.buildProjectMeta)(project, gitRepoPath || null, gitUrl || null);
         // Update memory blocks via Letta API
         const response = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/agents/${agentId}/memory`, {
             method: 'POST',
@@ -40,8 +39,8 @@ async function updateLettaMemory(input) {
             },
             body: JSON.stringify({
                 blocks: [
-                    { label: 'board_metrics', value: boardMetrics },
-                    { label: 'project', value: projectMeta },
+                    { label: 'board_metrics', value: JSON.stringify(boardMetrics) },
+                    { label: 'project', value: JSON.stringify(projectMeta) },
                 ],
             }),
         });
@@ -77,26 +76,9 @@ async function recordSyncMetrics(input) {
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
-function buildBoardMetrics(hulyIssues) {
-    const statusCounts = {};
-    for (const issue of hulyIssues) {
-        const status = issue.status || 'Unknown';
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
-    }
-    return JSON.stringify({
-        totalIssues: hulyIssues.length,
-        byStatus: statusCounts,
-        lastUpdated: new Date().toISOString(),
-    });
-}
-function buildProjectMeta(hulyProject, hulyIssues) {
-    return JSON.stringify({
-        identifier: hulyProject.identifier,
-        name: hulyProject.name,
-        issueCount: hulyIssues.length,
-        lastSynced: new Date().toISOString(),
-    });
-}
+// Note: buildBoardMetrics and buildProjectMeta have been moved to
+// lib/LettaMemoryBuilders.js for consistency across the codebase.
+// They are imported at the top of this file.
 function handleOrchestratorError(error, operation) {
     if (error instanceof activity_1.ApplicationFailure) {
         throw error;

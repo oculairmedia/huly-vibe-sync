@@ -16,33 +16,56 @@ import {
   buildExpression,
 } from '../../lib/LettaMemoryBuilders.js';
 
+// Helper to create beads-format test issues
+function createBeadsIssue(overrides = {}) {
+  const defaults = {
+    id: 'test-' + Math.random().toString(36).substring(7),
+    identifier: 'TEST-1',
+    title: 'Test Issue',
+    description: '',
+    status: 'Todo', // Normalized status
+    priority: 'medium', // Normalized priority
+    createdOn: Date.now(),
+    modifiedOn: Date.now(),
+    component: null,
+    assignee: null,
+    _beads: {
+      raw_status: 'open',
+      raw_priority: 2,
+      closed_at: null,
+      close_reason: null,
+    },
+  };
+  return { ...defaults, ...overrides };
+}
+
 describe('Letta Memory Block Builders', () => {
   // ============================================================
   // buildProjectMeta Tests
   // ============================================================
   describe('buildProjectMeta', () => {
     it('should build project metadata', () => {
-      const hulyProject = {
-        id: 'huly-123',
+      const project = {
         identifier: 'TEST',
         name: 'Test Project',
         description: 'A test project',
+        status: 'active',
       };
 
-      const result = buildProjectMeta(hulyProject, '/path/to/repo', 'https://github.com/test/repo');
+      const result = buildProjectMeta(project, '/path/to/repo', 'https://github.com/test/repo');
 
       expect(result.name).toBe('Test Project');
       expect(result.identifier).toBe('TEST');
       expect(result.description).toBe('A test project');
-      expect(result.huly.id).toBe('huly-123');
+      expect(result.status).toBe('active');
       expect(result.repository.filesystem_path).toBe('/path/to/repo');
       expect(result.repository.git_url).toBe('https://github.com/test/repo');
     });
 
     it('should handle missing optional fields', () => {
-      const hulyProject = { name: 'Minimal Project' };
+      const project = { name: 'Minimal Project' };
 
-      const result = buildProjectMeta(hulyProject, null, null);
+      const result = buildProjectMeta(project, null, null);
 
       expect(result.name).toBe('Minimal Project');
       expect(result.identifier).toBe('Minimal Project'); // Falls back to name
@@ -55,14 +78,16 @@ describe('Letta Memory Block Builders', () => {
   // buildBoardConfig Tests
   // ============================================================
   describe('buildBoardConfig', () => {
-    it('should return static board configuration', () => {
+    it('should return beads workflow configuration', () => {
       const result = buildBoardConfig();
 
-      expect(result.status_mapping.huly_to_beads.Backlog).toBe('open');
-      expect(result.status_mapping.huly_to_beads.Done).toBe('closed');
-      expect(result.status_mapping.beads_to_huly.closed).toBe('Done');
-      expect(result.workflow.sync_direction).toBe('bidirectional');
-      expect(result.definitions_of_done.done).toBeDefined();
+      expect(result.statuses.open).toBeDefined();
+      expect(result.statuses['in-progress']).toBeDefined();
+      expect(result.statuses.closed).toBeDefined();
+      expect(result.priorities.P0).toContain('Urgent');
+      expect(result.priorities.P4).toContain('Backlog');
+      expect(result.workflow.description).toContain('Beads');
+      expect(result.workflow.status_flow).toBe('open → in-progress → closed');
     });
   });
 
@@ -70,24 +95,24 @@ describe('Letta Memory Block Builders', () => {
   // buildBoardMetrics Tests
   // ============================================================
   describe('buildBoardMetrics', () => {
-    it('should calculate metrics from tasks', () => {
-      const hulyIssues = [
-        { status: 'Todo' },
-        { status: 'Todo' },
-        { status: 'In Progress' },
-        { status: 'Done' },
-        { status: 'Done' },
+    it('should calculate metrics from beads issues', () => {
+      const issues = [
+        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
+        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
+        createBeadsIssue({ _beads: { raw_status: 'in-progress', raw_priority: 1 } }),
+        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
+        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
       ];
 
-      const result = buildBoardMetrics(hulyIssues);
+      const result = buildBoardMetrics(issues);
 
       expect(result.total_tasks).toBe(5);
-      expect(result.by_status.Todo).toBe(2);
-      expect(result.by_status['In Progress']).toBe(1);
-      expect(result.by_status.Done).toBe(2);
-      expect(result.wip_count).toBe(1); // inprogress + inreview
+      expect(result.by_status.open).toBe(2);
+      expect(result.by_status['in-progress']).toBe(1);
+      expect(result.by_status.closed).toBe(2);
+      expect(result.wip_count).toBe(1); // in-progress only
       expect(result.completion_rate).toBe('40.0%');
-      expect(result.active_tasks).toBe(3); // todo + inprogress + inreview
+      expect(result.active_tasks).toBe(3); // open + in-progress
     });
 
     it('should handle empty task list', () => {
@@ -103,18 +128,26 @@ describe('Letta Memory Block Builders', () => {
   // ============================================================
   describe('buildHotspots', () => {
     it('should identify blocked items by keywords', () => {
-      const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Normal task', status: 'Todo' },
-        { identifier: 'TEST-2', title: 'Blocked by API', status: 'In Progress' },
-        {
+      const issues = [
+        createBeadsIssue({
+          identifier: 'TEST-1',
+          title: 'Normal task',
+          _beads: { raw_status: 'open' },
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-2',
+          title: 'Blocked by API',
+          _beads: { raw_status: 'in-progress' },
+        }),
+        createBeadsIssue({
           identifier: 'TEST-3',
           title: 'Waiting on review',
           description: '',
-          status: 'In Progress',
-        },
+          _beads: { raw_status: 'in-progress' },
+        }),
       ];
 
-      const result = buildHotspots(hulyIssues);
+      const result = buildHotspots(issues);
 
       expect(result.blocked_items).toHaveLength(2);
       expect(result.blocked_items[0].title).toBe('Blocked by API');
@@ -122,27 +155,42 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should identify ageing WIP items', () => {
-      const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
-      const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Old task', status: 'In Progress', modifiedOn: tenDaysAgo },
+      const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
+      const issues = [
+        createBeadsIssue({
+          identifier: 'TEST-1',
+          title: 'Old task',
+          _beads: { raw_status: 'in-progress' },
+          modifiedOn: tenDaysAgo,
+        }),
       ];
 
-      const result = buildHotspots(hulyIssues);
+      const result = buildHotspots(issues);
 
       expect(result.ageing_wip).toHaveLength(1);
       expect(result.ageing_wip[0].age_days).toBeGreaterThanOrEqual(10);
     });
 
-    it('should identify high priority todos', () => {
-      const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Urgent fix', status: 'Todo', priority: 'Urgent' },
-        { identifier: 'TEST-2', title: 'Normal task', status: 'Todo', priority: 'Medium' },
+    it('should identify high priority open items', () => {
+      const issues = [
+        createBeadsIssue({
+          identifier: 'TEST-1',
+          title: 'Urgent fix',
+          _beads: { raw_status: 'open' },
+          priority: 'urgent',
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-2',
+          title: 'Normal task',
+          _beads: { raw_status: 'open' },
+          priority: 'medium',
+        }),
       ];
 
-      const result = buildHotspots(hulyIssues);
+      const result = buildHotspots(issues);
 
-      expect(result.high_priority_todo).toHaveLength(1);
-      expect(result.high_priority_todo[0].priority).toBe('Urgent');
+      expect(result.high_priority_open).toHaveLength(1);
+      expect(result.high_priority_open[0].priority).toBe('urgent');
     });
   });
 
@@ -151,31 +199,53 @@ describe('Letta Memory Block Builders', () => {
   // ============================================================
   describe('buildBacklogSummary', () => {
     it('should summarize backlog by priority', () => {
-      const hulyIssues = [
-        { identifier: 'TEST-1', title: 'Urgent', status: 'Todo', priority: 'Urgent' },
-        { identifier: 'TEST-2', title: 'High', status: 'Backlog', priority: 'High' },
-        { identifier: 'TEST-3', title: 'Medium', status: 'Todo', priority: 'Medium' },
-        { identifier: 'TEST-4', title: 'Done', status: 'Done', priority: 'High' },
+      const issues = [
+        createBeadsIssue({
+          identifier: 'TEST-1',
+          title: 'Urgent',
+          _beads: { raw_status: 'open' },
+          priority: 'urgent',
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-2',
+          title: 'High',
+          _beads: { raw_status: 'open' },
+          priority: 'high',
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-3',
+          title: 'Medium',
+          _beads: { raw_status: 'open' },
+          priority: 'medium',
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-4',
+          title: 'Done',
+          _beads: { raw_status: 'closed' },
+          priority: 'high',
+        }),
       ];
 
-      const result = buildBacklogSummary(hulyIssues);
+      const result = buildBacklogSummary(issues);
 
-      expect(result.total_backlog).toBe(3); // Only todo items
+      expect(result.total_backlog).toBe(3); // Only open items
       expect(result.priority_breakdown.urgent).toBe(1);
       expect(result.priority_breakdown.high).toBe(1);
       expect(result.priority_breakdown.medium).toBe(1);
       expect(result.top_items).toHaveLength(3);
-      expect(result.top_items[0].priority).toBe('Urgent'); // Sorted by priority
+      expect(result.top_items[0].priority).toBe('urgent'); // Sorted by priority
     });
 
     it('should limit to top 15 items', () => {
-      const hulyIssues = Array.from({ length: 20 }, (_, i) => ({
-        identifier: `TEST-${i}`,
-        title: `Task ${i}`,
-        status: 'Backlog',
-      }));
+      const issues = Array.from({ length: 20 }, (_, i) =>
+        createBeadsIssue({
+          identifier: `TEST-${i}`,
+          title: `Task ${i}`,
+          _beads: { raw_status: 'open' },
+        })
+      );
 
-      const result = buildBacklogSummary(hulyIssues);
+      const result = buildBacklogSummary(issues);
 
       expect(result.top_items).toHaveLength(15);
       expect(result.total_backlog).toBe(20);
@@ -227,18 +297,18 @@ describe('Letta Memory Block Builders', () => {
       expect(result.patterns).toHaveLength(0);
     });
 
-    it('should detect blocked spike pattern', () => {
+    it('should detect high WIP pattern', () => {
       const activityData = {
         since: '2025-01-15T00:00:00Z',
         activities: [],
-        summary: { created: 0, updated: 5, total: 5 },
-        byStatus: { Blocked: 5 },
+        summary: { created: 0, updated: 10, total: 10 },
+        byStatus: { 'In Progress': 10 },
       };
 
       const result = buildRecentActivity(activityData);
 
       expect(result.patterns).toContainEqual(
-        expect.objectContaining({ type: 'blocked_spike', severity: 'warning' })
+        expect.objectContaining({ type: 'high_wip', severity: 'info' })
       );
     });
 
@@ -310,92 +380,75 @@ describe('Letta Memory Block Builders', () => {
   });
 
   // ============================================================
-  // buildComponentsSummary Tests
+  // buildComponentsSummary Tests (now type-based)
   // ============================================================
   describe('buildComponentsSummary', () => {
-    it('should build components summary with issue counts', () => {
-      const components = [
-        { label: 'Core', description: 'Core functionality' },
-        { label: 'API', description: 'REST API endpoints' },
-        { label: 'Docs', description: 'Documentation' },
+    it('should build issue type summary with counts', () => {
+      const issues = [
+        createBeadsIssue({
+          identifier: 'TEST-1',
+          component: 'task',
+          _beads: { raw_status: 'closed' },
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-2',
+          component: 'task',
+          _beads: { raw_status: 'open' },
+        }),
+        createBeadsIssue({
+          identifier: 'TEST-3',
+          component: 'bug',
+          _beads: { raw_status: 'in-progress' },
+        }),
+        createBeadsIssue({ identifier: 'TEST-4', component: null, _beads: { raw_status: 'open' } }), // Untyped
       ];
-      const hulyIssues = [
-        { identifier: 'TEST-1', component: 'Core', status: 'Done' },
-        { identifier: 'TEST-2', component: 'Core', status: 'Backlog' },
-        { identifier: 'TEST-3', component: 'API', status: 'In Progress' },
-        { identifier: 'TEST-4', component: null, status: 'Backlog' }, // Unassigned
-      ];
 
-      const result = buildComponentsSummary(components, hulyIssues);
+      const result = buildComponentsSummary(issues);
 
-      expect(result.total_components).toBe(3);
-      expect(result.active_components).toBe(2); // Core and API have issues
-      expect(result.empty_components).toBe(1); // Docs has no issues
-      expect(result.unassigned_count).toBe(1);
+      expect(result.total_types).toBe(2); // task and bug
+      expect(result.untyped_count).toBe(1);
 
-      // Components should be sorted by issue count
-      expect(result.components[0].label).toBe('Core');
-      expect(result.components[0].issue_count).toBe(2);
-      expect(result.components[0].status_breakdown.Done).toBe(1);
-      expect(result.components[0].status_breakdown.Backlog).toBe(1);
+      // Types should be sorted by issue count
+      expect(result.types[0].type).toBe('task');
+      expect(result.types[0].issue_count).toBe(2);
+      expect(result.types[0].status_breakdown.closed).toBe(1);
+      expect(result.types[0].status_breakdown.open).toBe(1);
     });
 
-    it('should handle empty components list', () => {
-      const hulyIssues = [{ identifier: 'TEST-1', component: null, status: 'Backlog' }];
+    it('should handle empty issue list', () => {
+      const result = buildComponentsSummary([]);
 
-      const result = buildComponentsSummary([], hulyIssues);
-
-      expect(result.total_components).toBe(0);
-      expect(result.components).toHaveLength(0);
-      expect(result.unassigned_count).toBe(1);
-      expect(result.summary).toContain('No components defined');
+      expect(result.total_types).toBe(0);
+      expect(result.types).toHaveLength(0);
+      expect(result.untyped_count).toBe(0);
+      expect(result.summary).toContain('No issues found');
     });
 
     it('should handle null/undefined inputs', () => {
-      const result = buildComponentsSummary(null, null);
+      const result = buildComponentsSummary(null);
 
-      expect(result.total_components).toBe(0);
-      expect(result.unassigned_count).toBe(0);
+      expect(result.total_types).toBe(0);
+      expect(result.untyped_count).toBe(0);
     });
 
-    it('should include component descriptions', () => {
-      const components = [{ label: 'Beads Integration', description: 'Beads issue tracker sync' }];
-      const hulyIssues = [];
-
-      const result = buildComponentsSummary(components, hulyIssues);
-
-      expect(result.components[0].description).toBe('Beads issue tracker sync');
-    });
-
-    it('should deduplicate components by label', () => {
-      const components = [
-        { label: 'Core', description: 'First description' },
-        { label: 'Core', description: 'Second description' }, // Duplicate
-      ];
-      const hulyIssues = [];
-
-      const result = buildComponentsSummary(components, hulyIssues);
-
-      // Should only have one Core component (first one wins)
-      const coreComponents = result.components.filter(c => c.label === 'Core');
-      expect(coreComponents).toHaveLength(1);
-    });
-
-    it('should calculate status breakdown per component', () => {
-      const components = [{ label: 'API', description: 'API endpoints' }];
-      const hulyIssues = [
-        { identifier: 'TEST-1', component: 'API', status: 'Backlog' },
-        { identifier: 'TEST-2', component: 'API', status: 'Backlog' },
-        { identifier: 'TEST-3', component: 'API', status: 'Done' },
-        { identifier: 'TEST-4', component: 'API', status: 'In Progress' },
+    it('should calculate status breakdown per type', () => {
+      const issues = [
+        createBeadsIssue({ identifier: 'TEST-1', component: 'feature', _beads: { raw_status: 'open' } }),
+        createBeadsIssue({ identifier: 'TEST-2', component: 'feature', _beads: { raw_status: 'open' } }),
+        createBeadsIssue({ identifier: 'TEST-3', component: 'feature', _beads: { raw_status: 'closed' } }),
+        createBeadsIssue({
+          identifier: 'TEST-4',
+          component: 'feature',
+          _beads: { raw_status: 'in-progress' },
+        }),
       ];
 
-      const result = buildComponentsSummary(components, hulyIssues);
+      const result = buildComponentsSummary(issues);
 
-      expect(result.components[0].status_breakdown).toEqual({
-        Backlog: 2,
-        Done: 1,
-        'In Progress': 1,
+      expect(result.types[0].status_breakdown).toEqual({
+        open: 2,
+        closed: 1,
+        'in-progress': 1,
       });
     });
   });
@@ -406,8 +459,8 @@ describe('Letta Memory Block Builders', () => {
   describe('buildChangeLog', () => {
     it('should mark all issues as new on first sync', () => {
       const currentIssues = [
-        { identifier: 'TEST-1', title: 'Issue 1', status: 'Backlog' },
-        { identifier: 'TEST-2', title: 'Issue 2', status: 'Done' },
+        createBeadsIssue({ identifier: 'TEST-1', title: 'Issue 1', _beads: { raw_status: 'open' } }),
+        createBeadsIssue({ identifier: 'TEST-2', title: 'Issue 2', _beads: { raw_status: 'closed' } }),
       ];
       const mockDb = { getProjectIssues: () => [] };
 
@@ -420,11 +473,13 @@ describe('Letta Memory Block Builders', () => {
 
     it('should detect new issues', () => {
       const currentIssues = [
-        { identifier: 'TEST-1', title: 'Existing', status: 'Backlog' },
-        { identifier: 'TEST-2', title: 'New Issue', status: 'Backlog' },
+        createBeadsIssue({ identifier: 'TEST-1', title: 'Existing', _beads: { raw_status: 'open' } }),
+        createBeadsIssue({ identifier: 'TEST-2', title: 'New Issue', _beads: { raw_status: 'open' } }),
       ];
       const mockDb = {
-        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Existing', status: 'Backlog' }],
+        getProjectIssues: () => [
+          createBeadsIssue({ identifier: 'TEST-1', title: 'Existing', _beads: { raw_status: 'open' } }),
+        ],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
@@ -435,23 +490,31 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should detect status transitions', () => {
-      const currentIssues = [{ identifier: 'TEST-1', title: 'Issue 1', status: 'Done' }];
+      const currentIssues = [
+        createBeadsIssue({ identifier: 'TEST-1', title: 'Issue 1', _beads: { raw_status: 'closed' } }),
+      ];
       const mockDb = {
-        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Issue 1', status: 'In Progress' }],
+        getProjectIssues: () => [
+          createBeadsIssue({
+            identifier: 'TEST-1',
+            title: 'Issue 1',
+            _beads: { raw_status: 'in-progress' },
+          }),
+        ],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
 
       expect(result.status_transitions).toHaveLength(1);
-      expect(result.status_transitions[0].from).toBe('In Progress');
-      expect(result.status_transitions[0].to).toBe('Done');
+      expect(result.status_transitions[0].from).toBe('in-progress');
+      expect(result.status_transitions[0].to).toBe('closed');
     });
 
     it('should detect closed/removed issues', () => {
       const currentIssues = [];
       const mockDb = {
         getProjectIssues: () => [
-          { identifier: 'TEST-1', title: 'Removed Issue', status: 'Backlog' },
+          createBeadsIssue({ identifier: 'TEST-1', title: 'Removed Issue', _beads: { raw_status: 'open' } }),
         ],
       };
 
@@ -462,9 +525,13 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should detect title changes', () => {
-      const currentIssues = [{ identifier: 'TEST-1', title: 'Updated Title', status: 'Backlog' }];
+      const currentIssues = [
+        createBeadsIssue({ identifier: 'TEST-1', title: 'Updated Title', _beads: { raw_status: 'open' } }),
+      ];
       const mockDb = {
-        getProjectIssues: () => [{ identifier: 'TEST-1', title: 'Old Title', status: 'Backlog' }],
+        getProjectIssues: () => [
+          createBeadsIssue({ identifier: 'TEST-1', title: 'Old Title', _beads: { raw_status: 'open' } }),
+        ],
       };
 
       const result = buildChangeLog(currentIssues, Date.now() - 1000, mockDb, 'TEST');
@@ -474,11 +541,13 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should limit results to prevent large blocks', () => {
-      const currentIssues = Array.from({ length: 20 }, (_, i) => ({
-        identifier: `TEST-${i}`,
-        title: `Issue ${i}`,
-        status: 'Backlog',
-      }));
+      const currentIssues = Array.from({ length: 20 }, (_, i) =>
+        createBeadsIssue({
+          identifier: `TEST-${i}`,
+          title: `Issue ${i}`,
+          _beads: { raw_status: 'open' },
+        })
+      );
       const mockDb = { getProjectIssues: () => [] };
 
       const result = buildChangeLog(currentIssues, null, mockDb, 'TEST');

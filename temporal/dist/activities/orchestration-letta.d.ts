@@ -3,15 +3,39 @@
  *
  * Activities for Letta memory updates, metrics recording, and shared error handling.
  */
-import type { HulyProject, HulyIssue } from './orchestration';
+interface BeadsIssue {
+    id: string;
+    identifier: string;
+    title: string;
+    description: string;
+    status: string;
+    priority: string;
+    createdOn: number;
+    modifiedOn: number;
+    component: string | null;
+    assignee: string | null;
+    _beads: {
+        raw_status: string;
+        raw_priority: number;
+        closed_at: string | null;
+        close_reason: string | null;
+    };
+}
+interface Project {
+    name: string;
+    identifier: string;
+    description?: string;
+    status?: string;
+}
 /**
- * Update Letta agent memory with project state
+ * Update Letta agent memory with project state from beads data
  */
 export declare function updateLettaMemory(input: {
     agentId: string;
-    hulyProject: HulyProject;
-    hulyIssues: HulyIssue[];
+    project: Project;
+    issues: BeadsIssue[];
     gitRepoPath?: string;
+    gitUrl?: string;
 }): Promise<{
     success: boolean;
     error?: string;
@@ -25,7 +49,6 @@ export declare function recordSyncMetrics(input: {
     durationMs: number;
     errors: number;
 }): Promise<void>;
-export declare function buildBoardMetrics(hulyIssues: HulyIssue[]): string;
-export declare function buildProjectMeta(hulyProject: HulyProject, hulyIssues: HulyIssue[]): string;
 export declare function handleOrchestratorError(error: unknown, operation: string): never;
+export {};
 //# sourceMappingURL=orchestration-letta.d.ts.map
