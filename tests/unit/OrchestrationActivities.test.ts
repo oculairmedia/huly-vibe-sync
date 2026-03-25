@@ -252,8 +252,8 @@ describe('Orchestration Activities', () => {
 
       const result = await updateLettaMemory({
         agentId: 'agent-1',
-        hulyProject: { identifier: 'TEST', name: 'Test' },
-        hulyIssues: [],
+        project: { identifier: 'TEST', name: 'Test' },
+        issues: [],
       });
 
       expect(result.success).toBe(true);
@@ -271,8 +271,8 @@ describe('Orchestration Activities', () => {
 
       const result = await updateLettaMemory({
         agentId: 'agent-1',
-        hulyProject: { identifier: 'TEST', name: 'Test' },
-        hulyIssues: [{ identifier: 'T-1', title: 'Issue', status: 'Backlog' }],
+        project: { identifier: 'TEST', name: 'Test' },
+        issues: [{ id: 'T-1', identifier: 'T-1', title: 'Issue', description: '', status: 'open', priority: 'medium', createdOn: Date.now(), modifiedOn: Date.now(), component: null, assignee: null, _beads: { raw_status: 'open', raw_priority: 2, closed_at: null, close_reason: null } }],
       });
 
       expect(result.success).toBe(true);
@@ -299,8 +299,8 @@ describe('Orchestration Activities', () => {
 
       const result = await updateLettaMemory({
         agentId: 'agent-1',
-        hulyProject: { identifier: 'TEST', name: 'Test' },
-        hulyIssues: [],
+        project: { identifier: 'TEST', name: 'Test' },
+        issues: [],
       });
 
       expect(result.success).toBe(false);

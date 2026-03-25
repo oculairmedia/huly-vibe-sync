@@ -274,13 +274,17 @@ describe('ProjectRegistry', () => {
   });
 
   describe('beads detection', () => {
-    it('should count beads issues', () => {
+    it('should count beads issues from issues.jsonl', () => {
+      const issuesJsonl = [
+        JSON.stringify({ id: '1', title: 'Issue 1', status: 'open' }),
+        JSON.stringify({ id: '2', title: 'Issue 2', status: 'closed' }),
+        JSON.stringify({ id: '3', title: 'Issue 3', status: 'open' }),
+      ].join('\n');
+
       createDir('beads-proj', {
         beads: true,
         files: [
-          { name: '.beads/issues/issue-1.json', content: '{}' },
-          { name: '.beads/issues/issue-2.json', content: '{}' },
-          { name: '.beads/issues/issue-3.json', content: '{}' },
+          { name: '.beads/issues.jsonl', content: issuesJsonl },
         ],
       });
 
@@ -291,27 +295,29 @@ describe('ProjectRegistry', () => {
       expect(project.beads_issue_count).toBe(3);
     });
 
-    it('should read beads prefix from config.json', () => {
+    it('should read beads prefix from metadata.json dolt_database', () => {
       createDir('prefixed-proj', {
         beads: true,
-        files: [{ name: '.beads/config.json', content: JSON.stringify({ prefix: 'PFXD' }) }],
+        files: [{ name: '.beads/metadata.json', content: JSON.stringify({ dolt_database: 'pfxd_proj' }) }],
       });
 
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
       registry.scanProjects();
 
       const project = db.getProject('prefixed-proj');
-      expect(project.beads_prefix).toBe('PFXD');
+      // dolt_database underscores are converted to hyphens
+      expect(project.beads_prefix).toBe('pfxd-proj');
     });
 
-    it('should handle missing beads config gracefully', () => {
+    it('should fallback to directory name when metadata.json missing', () => {
       createDir('no-config-proj', { beads: true });
 
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
       registry.scanProjects();
 
       const project = db.getProject('no-config-proj');
-      expect(project.beads_prefix).toBeNull();
+      // Falls back to directory name
+      expect(project.beads_prefix).toBe('no-config-proj');
     });
 
     it('should set beads_issue_count to 0 for non-beads projects', () => {
@@ -360,7 +366,7 @@ describe('ProjectRegistry', () => {
         beads: true,
         files: [
           { name: 'package.json', content: '{}' },
-          { name: '.beads/config.json', content: JSON.stringify({ prefix: 'PA' }) },
+          { name: '.beads/metadata.json', content: JSON.stringify({ dolt_database: 'proj_a' }) },
         ],
       });
       createDir('proj-b', {
@@ -392,7 +398,7 @@ describe('ProjectRegistry', () => {
       const beadsProjects = registry.getProjects({ has_beads: true });
 
       expect(beadsProjects.length).toBe(1);
-      expect(beadsProjects[0].beads_prefix).toBe('PA');
+      expect(beadsProjects[0].beads_prefix).toBe('proj-a');
     });
 
     it('should filter by status', () => {
