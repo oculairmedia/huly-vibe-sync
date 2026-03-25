@@ -58,3 +58,12 @@ logs/*.db
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key
+
+# Build cache (generated)
+.vibesync-cache/
+
+# Rust analyzer output (IDE)
+target/
+
+# bd binary (host-mounted, not tracked)
+bd-binary

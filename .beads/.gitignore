@@ -10,6 +10,10 @@ daemon.lock
 daemon.log
 daemon.pid
 bd.sock
+dolt-server.lock
+dolt-server.pid
+dolt-server.port
+last-touched
 
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
@@ -17,6 +21,9 @@ bd.sock
 # Legacy database files
 db.sqlite
 bd.db
+
+# Dolt server data directory (runtime state)
+dolt/
 
 # Merge artifacts (temporary files from 3-way merge)
 beads.base.jsonl
