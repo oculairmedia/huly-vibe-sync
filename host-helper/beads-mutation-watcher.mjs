@@ -22,6 +22,10 @@ const POLL_INTERVAL = parseInt(process.env.BEADS_POLL_INTERVAL || '2000', 10);
 const DEBOUNCE_MS = parseInt(process.env.BEADS_DEBOUNCE_MS || '3000', 10);
 const HEALTH_INTERVAL = parseInt(process.env.BEADS_HEALTH_INTERVAL || '30000', 10);
 const RECONNECT_INTERVAL = parseInt(process.env.BEADS_RECONNECT_INTERVAL || '10000', 10);
+const SYNC_RETRY_ATTEMPTS = parseInt(process.env.BEADS_SYNC_RETRY_ATTEMPTS || '3', 10);
+const SYNC_RETRY_BASE_MS = parseInt(process.env.BEADS_SYNC_RETRY_BASE_MS || '2000', 10);
+const RECONCILE_INTERVAL = parseInt(process.env.BEADS_RECONCILE_INTERVAL || '1800000', 10); // 30 min
+const RECONCILE_API = process.env.BEADS_RECONCILE_API || 'http://localhost:3099/api/beads/reconcile';
 
 // Mutation types that should trigger a sync
 const SYNCABLE_MUTATIONS = new Set(['create', 'update', 'status', 'delete']);
@@ -130,13 +134,34 @@ class WorkspaceWatcher {
 
     const timer = setTimeout(() => {
       this.pendingIssues.delete(event.IssueID);
-      this.syncIssue(event).catch(err => {
-        log('error', `Sync failed`, { issue: event.IssueID, error: err.message });
+      this.syncIssueWithRetry(event).catch(err => {
+        log('error', `Sync failed after all retries`, { issue: event.IssueID, error: err.message, attempts: SYNC_RETRY_ATTEMPTS });
         this.stats.errors++;
       });
     }, DEBOUNCE_MS);
 
     this.pendingIssues.set(event.IssueID, { timer, mutation: event });
+  }
+
+  async syncIssueWithRetry(event) {
+    let lastError;
+    for (let attempt = 1; attempt <= SYNC_RETRY_ATTEMPTS; attempt++) {
+      try {
+        await this.syncIssue(event);
+        return; // Success
+      } catch (err) {
+        lastError = err;
+        if (attempt < SYNC_RETRY_ATTEMPTS) {
+          const delay = SYNC_RETRY_BASE_MS * Math.pow(2, attempt - 1);
+          log('warn', `Sync attempt ${attempt}/${SYNC_RETRY_ATTEMPTS} failed, retrying in ${delay}ms`, {
+            issue: event.IssueID,
+            error: err.message,
+          });
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError;
   }
 
   async syncIssue(event) {
@@ -213,8 +238,62 @@ class WorkspaceWatcher {
       running: this.running,
       connected: this.client?.isConnected() ?? false,
       pending: this.pendingIssues.size,
-      stats: { ...this.stats },
+      stats: { ...this.stats, reconciliations: this.stats.reconciliations || 0 },
     };
+  }
+
+  async triggerReconciliation() {
+    if (!this.running || !this.client?.isConnected()) return;
+
+    try {
+      // Fetch all issues from the beads daemon
+      const allIssues = await this.client.list({ limit: 0 });
+      const issues = (allIssues || []).filter(i => i.status !== 'tombstone');
+
+      if (issues.length === 0) return;
+
+      const payload = {
+        projectId: this.projectName,
+        issues: issues.map(i => ({
+          id: i.id,
+          title: i.title,
+          status: i.status,
+          priority: i.priority,
+          description: i.description,
+          labels: i.labels || [],
+        })),
+      };
+
+      log('info', `Reconciliation: sending ${issues.length} issues`, {
+        workspace: this.projectName,
+      });
+
+      const response = await fetch(RECONCILE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`Reconcile API returned ${response.status}: ${body}`);
+      }
+
+      const result = await response.json();
+      this.stats.reconciliations = (this.stats.reconciliations || 0) + 1;
+
+      log('info', `Reconciliation complete`, {
+        workspace: this.projectName,
+        workflowId: result.workflowId,
+        issueCount: issues.length,
+      });
+    } catch (err) {
+      log('error', `Reconciliation failed`, {
+        workspace: this.projectName,
+        error: err.message,
+      });
+    }
   }
 }
 
@@ -231,6 +310,7 @@ class BeadsMutationService {
       syncApi: SYNC_API,
       pollInterval: POLL_INTERVAL,
       debounce: DEBOUNCE_MS,
+      reconcileInterval: RECONCILE_INTERVAL,
     });
 
     // Discover workspaces
@@ -247,6 +327,20 @@ class BeadsMutationService {
       });
     }, RECONNECT_INTERVAL);
 
+    // Periodic reconciliation heartbeat
+    this.reconcileTimer = setInterval(() => {
+      this.runReconciliation().catch(err => {
+        log('error', `Reconciliation cycle failed`, { error: err.message });
+      });
+    }, RECONCILE_INTERVAL);
+
+    // Run initial reconciliation after a short delay to let watchers connect
+    setTimeout(() => {
+      this.runReconciliation().catch(err => {
+        log('error', `Initial reconciliation failed`, { error: err.message });
+      });
+    }, 15000);
+
     // Handle graceful shutdown
     const shutdown = async signal => {
       if (this.shutdownRequested) return;
@@ -255,6 +349,7 @@ class BeadsMutationService {
 
       clearInterval(this.healthTimer);
       clearInterval(this.discoveryTimer);
+      clearInterval(this.reconcileTimer);
 
       const stops = [];
       for (const watcher of this.watchers.values()) {
@@ -316,7 +411,18 @@ class BeadsMutationService {
       totalMutations,
       totalSyncs,
       totalErrors,
+      totalReconciliations: healths.reduce((s, h) => s + (h.stats.reconciliations || 0), 0),
     });
+  }
+
+  async runReconciliation() {
+    log('info', `Starting reconciliation cycle`, { workspaces: this.watchers.size });
+
+    for (const watcher of this.watchers.values()) {
+      await watcher.triggerReconciliation();
+    }
+
+    log('info', `Reconciliation cycle complete`);
   }
 }
 
