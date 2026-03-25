@@ -37,9 +37,12 @@ RUN npm install -g @letta-ai/letta-code
 # Remove build tools after install to keep image lean
 RUN apk del make g++
 
-# Copy pre-built bd binary (statically linked)
-COPY bd-binary /usr/local/bin/bd
-RUN chmod +x /usr/local/bin/bd
+# Install glibc compatibility for host-mounted bd binary (dynamically linked)
+RUN apk add --no-cache gcompat
+
+# Copy fallback bd binary (used when host binary not volume-mounted)
+COPY bd-binary /usr/local/bin/bd-fallback
+RUN chmod +x /usr/local/bin/bd-fallback
 
 # Copy Python packages from builder
 COPY --from=python-builder /python-deps /usr
