@@ -67,7 +67,6 @@ You (Developer Agent - experienced)
 <!-- VIBESYNC:reporting-hierarchy:END -->
 
 <!-- VIBESYNC:beads-instructions:START -->
-
 ## Beads Issue Tracking
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
@@ -105,7 +104,6 @@ bd create "New task"   # Auto-syncs to Huly
 bd close some-issue    # Auto-syncs to Huly
 bd sync                # Git backup (recommended before session end)
 ```
-
 <!-- VIBESYNC:beads-instructions:END -->
 
 <!-- VIBESYNC:bookstack-docs:START -->
@@ -120,7 +118,6 @@ bd sync                # Git backup (recommended before session end)
 <!-- VIBESYNC:bookstack-docs:END -->
 
 <!-- VIBESYNC:session-completion:START -->
-
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
