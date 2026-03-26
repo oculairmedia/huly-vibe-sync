@@ -234,7 +234,7 @@ describe('DoltQueryService', () => {
       const result = await svc.getOpenByPriority();
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'SELECT * FROM issues WHERE status = ? ORDER BY priority ASC',
+        'SELECT id, title, status, priority, issue_type, description, created_at, updated_at FROM issues WHERE status = ? ORDER BY priority ASC',
         ['open']
       );
       expect(result).toEqual(mockRows);
@@ -321,7 +321,7 @@ describe('DoltQueryService', () => {
       const result = await svc.getIssuesByStatus('in-progress');
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'SELECT * FROM issues WHERE status = ? ORDER BY updated_at DESC',
+        'SELECT id, title, status, priority, issue_type, description, created_at, updated_at FROM issues WHERE status = ? ORDER BY updated_at DESC',
         ['in-progress']
       );
       expect(result).toHaveLength(2);
@@ -389,10 +389,42 @@ describe('DoltQueryService', () => {
       const result = await svc.getCommitLog();
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'SELECT * FROM dolt_log LIMIT ?',
+        'SELECT commit_hash, committer, email, date, message FROM dolt_log LIMIT ?',
         [20]
       );
       expect(result).toEqual(mockRows);
+    });
+
+    it('should return cached result on subsequent calls within TTL', async () => {
+      const svc = await createConnectedService();
+      // Generate 20 rows to satisfy default limit=20 cache check
+      const mockRows = Array.from({ length: 20 }, (_, i) => ({
+        commit_hash: `hash${i}`, committer: 'user', email: 'u@e.com', date: new Date(), message: `Commit ${i}`,
+      }));
+      mockExecute.mockResolvedValue([mockRows, []]);
+
+      const result1 = await svc.getCommitLog();
+      const result2 = await svc.getCommitLog();
+
+      // Should only hit the database once
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+      expect(result1).toEqual(result2);
+    });
+
+    it('should bypass cache when requesting more rows than cached', async () => {
+      const svc = await createConnectedService();
+      const smallRows = [{ commit_hash: 'a', committer: 'u', email: 'e', date: new Date(), message: 'm' }];
+      const largeRows = Array.from({ length: 50 }, (_, i) => ({ commit_hash: `c${i}`, committer: 'u', email: 'e', date: new Date(), message: `m${i}` }));
+
+      mockExecute
+        .mockResolvedValueOnce([smallRows, []])
+        .mockResolvedValueOnce([largeRows, []]);
+
+      await svc.getCommitLog(1);  // cache 1 row
+      const result = await svc.getCommitLog(50);  // need 50, cache only has 1
+
+      expect(mockExecute).toHaveBeenCalledTimes(2);
+      expect(result).toEqual(largeRows);
     });
 
     it('should accept custom limit', async () => {
@@ -402,7 +434,7 @@ describe('DoltQueryService', () => {
       await svc.getCommitLog(5);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'SELECT * FROM dolt_log LIMIT ?',
+        'SELECT commit_hash, committer, email, date, message FROM dolt_log LIMIT ?',
         [5]
       );
     });

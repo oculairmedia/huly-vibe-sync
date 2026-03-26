@@ -16,6 +16,7 @@ const mockEnd = vi.fn();
 const mockGetCurrentCommitHash = vi.fn();
 const mockGetRecentChanges = vi.fn();
 const mockGetIssueById = vi.fn();
+const mockGetAllActiveIssuesWithLabels = vi.fn();
 const mockConnect = vi.fn();
 const mockDisconnect = vi.fn();
 
@@ -32,6 +33,7 @@ class MockDoltQueryService {
     this.getCurrentCommitHash = mockGetCurrentCommitHash;
     this.getRecentChanges = mockGetRecentChanges;
     this.getIssueById = mockGetIssueById;
+    this.getAllActiveIssuesWithLabels = mockGetAllActiveIssuesWithLabels;
   }
 }
 
@@ -109,6 +111,7 @@ describe('DoltCommitWatcher', () => {
     mockGetCurrentCommitHash.mockResolvedValue('abc123def456');
     mockGetRecentChanges.mockResolvedValue([]);
     mockGetIssueById.mockResolvedValue(null);
+    mockGetAllActiveIssuesWithLabels.mockResolvedValue([]);
     mockExecute.mockResolvedValue([[], []]);
     mockEnd.mockResolvedValue(undefined);
     mockFetch.mockResolvedValue(createMockFetchResponse(202, { workflowId: 'wf-123' }));
@@ -751,16 +754,14 @@ describe('DoltCommitWatcher', () => {
         { id: 'issue-1', title: 'Issue 1', status: 'open', priority: 1, description: 'Desc 1', labels: 'bug,urgent' },
         { id: 'issue-2', title: 'Issue 2', status: 'in-progress', priority: 2, description: 'Desc 2', labels: null },
       ];
-      mockExecute.mockResolvedValue([mockIssues, []]);
+      mockGetAllActiveIssuesWithLabels.mockResolvedValue(mockIssues);
 
       mockFetch.mockResolvedValue(createMockFetchResponse(202, { workflowId: 'wf-recon' }));
 
       await watcher.triggerReconciliation();
 
-      // Verify SQL query filters tombstones
-      expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining("status != 'tombstone'")
-      );
+      // Verify DoltQueryService abstraction was called with tombstone filter
+      expect(mockGetAllActiveIssuesWithLabels).toHaveBeenCalledWith('tombstone');
 
       // Verify POST to reconcile API
       const [url, opts] = mockFetch.mock.calls[0];
@@ -803,9 +804,9 @@ describe('DoltCommitWatcher', () => {
       const watcher = new WorkspaceWatcher(WORKSPACE_PATH);
       await watcher.start();
 
-      mockExecute.mockResolvedValue([[
+      mockGetAllActiveIssuesWithLabels.mockResolvedValue([
         { id: 'issue-1', title: 'Issue 1', status: 'open', priority: 1, description: 'Desc 1', labels: null },
-      ], []]);
+      ]);
 
       mockFetch.mockResolvedValue(createMockFetchResponse(500, { error: 'Server error' }));
 
@@ -821,7 +822,7 @@ describe('DoltCommitWatcher', () => {
       const watcher = new WorkspaceWatcher(WORKSPACE_PATH);
       await watcher.start();
 
-      mockExecute.mockRejectedValue(new Error('Connection lost'));
+      mockGetAllActiveIssuesWithLabels.mockRejectedValue(new Error('Connection lost'));
 
       // Should not throw
       await watcher.triggerReconciliation();
@@ -1023,9 +1024,9 @@ describe('DoltCommitWatcher', () => {
       const watcher = new WorkspaceWatcher(WORKSPACE_PATH);
       await watcher.start();
 
-      mockExecute.mockResolvedValue([[
+      mockGetAllActiveIssuesWithLabels.mockResolvedValue([
         { id: 'issue-1', title: 'Issue 1', status: 'open', priority: 1, description: 'Desc', labels: 'bug' },
-      ], []]);
+      ]);
 
       mockFetch.mockResolvedValue(createMockFetchResponse(202, { workflowId: 'wf-recon' }));
 
