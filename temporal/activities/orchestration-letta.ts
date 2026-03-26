@@ -113,6 +113,72 @@ function normalizeIssue(raw: RawBeadsIssue): NormalizedIssue {
 // ============================================================
 
 /**
+ * Pool cache to prevent connection exhaustion.
+ * Each gitRepoPath gets one shared DoltQueryService instance.
+ */
+const poolCache = new Map<string, { dolt: any; lastUsed: number }>();
+const POOL_IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get or create a cached DoltQueryService pool for a gitRepoPath.
+ * Reuses existing connections instead of creating new pools on every call.
+ */
+async function getOrCreatePool(gitRepoPath: string): Promise<any> {
+  const cached = poolCache.get(gitRepoPath);
+  if (cached) {
+    cached.lastUsed = Date.now();
+    return cached.dolt;
+  }
+
+  const DoltQueryServiceClass = await getDoltQueryServiceClass();
+  const dolt = new DoltQueryServiceClass();
+  await dolt.connect(gitRepoPath);
+
+  poolCache.set(gitRepoPath, { dolt, lastUsed: Date.now() });
+  console.log(`[Temporal:Orchestration] Created new pool for ${gitRepoPath}`);
+  return dolt;
+}
+
+/**
+ * Cleanup idle pools to prevent resource leaks.
+ * Called periodically to disconnect stale connections.
+ */
+function cleanupIdlePools() {
+  const now = Date.now();
+  const toRemove: string[] = [];
+
+  for (const [path, { dolt, lastUsed }] of poolCache) {
+    if (now - lastUsed > POOL_IDLE_TIMEOUT_MS) {
+      toRemove.push(path);
+      dolt.disconnect().catch(() => {
+        // ignore disconnect errors
+      });
+    }
+  }
+
+  for (const path of toRemove) {
+    poolCache.delete(path);
+    console.log(`[Temporal:Orchestration] Cleaned up idle pool for ${path}`);
+  }
+}
+
+/**
+ * Disconnect all cached pools (for graceful shutdown).
+ */
+export async function disconnectAllPools(): Promise<void> {
+  const disconnects = [];
+  for (const { dolt } of poolCache.values()) {
+    disconnects.push(dolt.disconnect().catch(() => {}));
+  }
+  await Promise.allSettled(disconnects);
+  poolCache.clear();
+  console.log(`[Temporal:Orchestration] Disconnected all pools`);
+}
+
+// Run cleanup every minute
+setInterval(cleanupIdlePools, 60000);
+
+/**
  * Build all memory blocks from direct Dolt SQL queries.
  *
  * Connects to the Dolt server for the given repo, runs targeted aggregation
@@ -129,9 +195,7 @@ async function buildBlocksFromSQL(
   let dolt: any = null;
 
   try {
-    const DoltQueryServiceClass = await getDoltQueryServiceClass();
-    dolt = new DoltQueryServiceClass();
-    await dolt.connect(gitRepoPath);
+    dolt = await getOrCreatePool(gitRepoPath);
 
     // Run SQL queries in parallel for efficiency
     const [statusCounts, openByPriority, blockedRows, agingWipRows, highPriorityRows, typeStatsRows] =
@@ -240,15 +304,8 @@ async function buildBlocksFromSQL(
   } catch (error) {
     console.warn(`[Temporal:Orchestration] SQL block build failed: ${error}`);
     return null;
-  } finally {
-    if (dolt) {
-      try {
-        await dolt.disconnect();
-      } catch {
-        // ignore disconnect errors
-      }
-    }
   }
+  // NOTE: Pool is shared and cached — do not disconnect here
 }
 
 // ============================================================

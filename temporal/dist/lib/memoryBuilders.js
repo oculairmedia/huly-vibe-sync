@@ -50,6 +50,11 @@ exports.buildHotspots = buildHotspots;
 exports.buildBacklogSummary = buildBacklogSummary;
 exports.buildRecentActivity = buildRecentActivity;
 exports.buildComponentsSummary = buildComponentsSummary;
+exports.buildBoardMetricsFromSQL = buildBoardMetricsFromSQL;
+exports.buildBacklogSummaryFromSQL = buildBacklogSummaryFromSQL;
+exports.buildHotspotsFromSQL = buildHotspotsFromSQL;
+exports.buildComponentsSummaryFromSQL = buildComponentsSummaryFromSQL;
+exports.buildRecentActivityFromSQL = buildRecentActivityFromSQL;
 const path = __importStar(require("path"));
 let _builders = null;
 // Preserve dynamic import() through CJS compilation
@@ -90,5 +95,28 @@ async function buildRecentActivity(activityData) {
 async function buildComponentsSummary(issues) {
     const b = await getBuilders();
     return b.buildComponentsSummary(issues);
+}
+// ============================================================
+// SQL-BASED BUILDER WRAPPERS
+// ============================================================
+async function buildBoardMetricsFromSQL(statusCounts) {
+    const b = await getBuilders();
+    return b.buildBoardMetricsFromSQL(statusCounts);
+}
+async function buildBacklogSummaryFromSQL(openIssues) {
+    const b = await getBuilders();
+    return b.buildBacklogSummaryFromSQL(openIssues);
+}
+async function buildHotspotsFromSQL(params) {
+    const b = await getBuilders();
+    return b.buildHotspotsFromSQL(params);
+}
+async function buildComponentsSummaryFromSQL(typeStats) {
+    const b = await getBuilders();
+    return b.buildComponentsSummaryFromSQL(typeStats);
+}
+async function buildRecentActivityFromSQL(doltChanges) {
+    const b = await getBuilders();
+    return b.buildRecentActivityFromSQL(doltChanges);
 }
 //# sourceMappingURL=memoryBuilders.js.map

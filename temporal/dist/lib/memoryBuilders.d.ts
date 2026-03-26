@@ -15,4 +15,20 @@ export declare function buildHotspots(issues: any[]): Promise<any>;
 export declare function buildBacklogSummary(issues: any[]): Promise<any>;
 export declare function buildRecentActivity(activityData: any): Promise<any>;
 export declare function buildComponentsSummary(issues: any[]): Promise<any>;
+export declare function buildBoardMetricsFromSQL(statusCounts: Array<{
+    status: string;
+    count: number;
+}>): Promise<any>;
+export declare function buildBacklogSummaryFromSQL(openIssues: any[]): Promise<any>;
+export declare function buildHotspotsFromSQL(params: {
+    blocked: any[];
+    agingWip: any[];
+    highPriority: any[];
+}): Promise<any>;
+export declare function buildComponentsSummaryFromSQL(typeStats: Array<{
+    issue_type: string;
+    status: string;
+    count: number;
+}>): Promise<any>;
+export declare function buildRecentActivityFromSQL(doltChanges: any): Promise<any>;
 //# sourceMappingURL=memoryBuilders.d.ts.map

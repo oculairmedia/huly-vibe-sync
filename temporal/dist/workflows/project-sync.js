@@ -186,20 +186,35 @@ async function ProjectSyncWorkflow(input) {
         if (_phase === 'agent') {
             if (enableLetta && !dryRun) {
                 try {
-                    const beadsIssues = beadsInitialized && gitRepoPath ? await fetchBeadsIssues({ gitRepoPath }) : [];
                     const agentCheck = await checkAgentExists({
                         projectIdentifier: project.identifier,
                     });
                     if (agentCheck.exists && agentCheck.agentId) {
-                        // Pass beads issues directly - they're already normalized by fetchBeadsIssues
-                        const memResult = await updateLettaMemory({
-                            agentId: agentCheck.agentId,
-                            project: project,
-                            issues: beadsIssues, // Type cast to avoid workflow complexity
-                            gitRepoPath: gitRepoPath || undefined,
-                            gitUrl: undefined, // TODO: extract from project metadata if needed
-                        });
-                        result.lettaUpdated = memResult.success;
+                        // Prefer SQL path when gitRepoPath is available (Dolt aggregation).
+                        // Falls back to array path inside updateLettaMemory if SQL fails.
+                        if (beadsInitialized && gitRepoPath) {
+                            const memResult = await updateLettaMemory({
+                                agentId: agentCheck.agentId,
+                                project: project,
+                                gitRepoPath: gitRepoPath,
+                                gitUrl: undefined,
+                            });
+                            result.lettaUpdated = memResult.success;
+                        }
+                        else {
+                            // No Dolt available — fetch issues array as fallback
+                            const beadsIssues = beadsInitialized && gitRepoPath
+                                ? await fetchBeadsIssues({ gitRepoPath })
+                                : [];
+                            const memResult = await updateLettaMemory({
+                                agentId: agentCheck.agentId,
+                                project: project,
+                                issues: beadsIssues,
+                                gitRepoPath: gitRepoPath || undefined,
+                                gitUrl: undefined,
+                            });
+                            result.lettaUpdated = memResult.success;
+                        }
                     }
                 }
                 catch (error) {
