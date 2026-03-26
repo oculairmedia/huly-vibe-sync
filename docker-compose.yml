@@ -92,6 +92,16 @@ services:
       - ./node_modules/abort-controller:/app/node_modules/abort-controller:ro
       - ./node_modules/uuid:/app/node_modules/uuid:ro
 
+      # Dolt SQL client (mysql2 + deps)
+      - ./node_modules/mysql2:/app/node_modules/mysql2:ro
+      - ./node_modules/denque:/app/node_modules/denque:ro
+      - ./node_modules/generate-function:/app/node_modules/generate-function:ro
+      - ./node_modules/is-property:/app/node_modules/is-property:ro
+      - ./node_modules/lru.min:/app/node_modules/lru.min:ro
+      - ./node_modules/named-placeholders:/app/node_modules/named-placeholders:ro
+      - ./node_modules/sql-escaper:/app/node_modules/sql-escaper:ro
+      - ./node_modules/aws-ssl-profiles:/app/node_modules/aws-ssl-profiles:ro
+
       # Letta agent persistence (read-write for storing agent IDs)
       - ./.letta:/app/.letta
 
@@ -150,6 +160,15 @@ services:
       - ./lib:/app/lib:ro
       # Mount logs directory for database access
       - ./logs:/app/logs:rw
+      # Dolt SQL client (mysql2 + deps)
+      - ./node_modules/mysql2:/app/node_modules/mysql2:ro
+      - ./node_modules/denque:/app/node_modules/denque:ro
+      - ./node_modules/generate-function:/app/node_modules/generate-function:ro
+      - ./node_modules/is-property:/app/node_modules/is-property:ro
+      - ./node_modules/lru.min:/app/node_modules/lru.min:ro
+      - ./node_modules/named-placeholders:/app/node_modules/named-placeholders:ro
+      - ./node_modules/sql-escaper:/app/node_modules/sql-escaper:ro
+      - ./node_modules/aws-ssl-profiles:/app/node_modules/aws-ssl-profiles:ro
     network_mode: host
     depends_on:
       - huly-vibe-sync
