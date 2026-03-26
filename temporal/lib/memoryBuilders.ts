@@ -61,3 +61,27 @@ export async function buildComponentsSummary(issues: any[]) {
   const b = await getBuilders();
   return b.buildComponentsSummary(issues);
 }
+
+// ============================================================
+// SQL-BASED BUILDER WRAPPERS
+// ============================================================
+
+export async function buildBoardMetricsFromSQL(statusCounts: Array<{ status: string; count: number }>) {
+  const b = await getBuilders();
+  return b.buildBoardMetricsFromSQL(statusCounts);
+}
+
+export async function buildBacklogSummaryFromSQL(openIssues: any[]) {
+  const b = await getBuilders();
+  return b.buildBacklogSummaryFromSQL(openIssues);
+}
+
+export async function buildHotspotsFromSQL(params: { blocked: any[]; agingWip: any[]; highPriority: any[] }) {
+  const b = await getBuilders();
+  return b.buildHotspotsFromSQL(params);
+}
+
+export async function buildComponentsSummaryFromSQL(typeStats: Array<{ issue_type: string; status: string; count: number }>) {
+  const b = await getBuilders();
+  return b.buildComponentsSummaryFromSQL(typeStats);
+}

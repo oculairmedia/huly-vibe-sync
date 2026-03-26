@@ -2,6 +2,12 @@
  * Orchestration Activities — Letta, Metrics & Helpers
  *
  * Activities for Letta memory updates, metrics recording, and shared error handling.
+ *
+ * Supports two paths for building memory blocks:
+ * 1. **SQL path** (preferred): Uses DoltQueryService to run pre-aggregated queries
+ *    directly against the Dolt database, avoiding full issue array normalization.
+ * 2. **Legacy array path**: Accepts raw/normalized issue arrays and passes them
+ *    through the original builders (backward compatible with existing callers).
  */
 
 import { ApplicationFailure } from '@temporalio/activity';
@@ -14,7 +20,12 @@ import {
   buildBacklogSummary as buildBeadsBacklogSummary,
   buildRecentActivity as buildBeadsRecentActivity,
   buildComponentsSummary as buildBeadsComponentsSummary,
+  buildBoardMetricsFromSQL,
+  buildBacklogSummaryFromSQL,
+  buildHotspotsFromSQL,
+  buildComponentsSummaryFromSQL,
 } from '../lib/memoryBuilders';
+import { getDoltQueryServiceClass } from './orchestration-git';
 
 // ============================================================
 // TYPE DEFINITIONS
@@ -97,11 +108,224 @@ function normalizeIssue(raw: RawBeadsIssue): NormalizedIssue {
 }
 
 // ============================================================
+// DOLT SQL BLOCK BUILDERS
+// ============================================================
+
+/**
+ * Build all memory blocks from direct Dolt SQL queries.
+ *
+ * Connects to the Dolt server for the given repo, runs targeted aggregation
+ * queries, and feeds pre-computed results to the SQL builder variants.
+ *
+ * @returns Array of { label, value } blocks, or null if SQL path fails
+ */
+async function buildBlocksFromSQL(
+  gitRepoPath: string,
+  project: Project,
+  gitUrl?: string,
+  sinceCommit?: string,
+): Promise<Array<{ label: string; value: string }> | null> {
+  let dolt: any = null;
+
+  try {
+    const DoltQueryServiceClass = await getDoltQueryServiceClass();
+    dolt = new DoltQueryServiceClass();
+    await dolt.connect(gitRepoPath);
+
+    // Run SQL queries in parallel for efficiency
+    const [statusCounts, openByPriority, blockedRows, agingWipRows, highPriorityRows, typeStatsRows] =
+      await Promise.all([
+        // board_metrics: status counts
+        dolt.getStatusCounts(),
+
+        // backlog_summary: open issues sorted by priority
+        dolt.getOpenByPriority(),
+
+        // hotspots — blocked: keyword search in title/description
+        dolt.pool.execute(
+          `SELECT id, title, status, description, updated_at, priority
+           FROM issues
+           WHERE (LOWER(title) LIKE '%blocked%'
+              OR LOWER(title) LIKE '%blocker%'
+              OR LOWER(title) LIKE '%waiting on%'
+              OR LOWER(title) LIKE '%waiting for%'
+              OR LOWER(title) LIKE '%stuck%'
+              OR LOWER(description) LIKE '%blocked%'
+              OR LOWER(description) LIKE '%blocker%'
+              OR LOWER(description) LIKE '%waiting on%'
+              OR LOWER(description) LIKE '%waiting for%'
+              OR LOWER(description) LIKE '%stuck%')
+             AND status != 'closed'
+           LIMIT 10`
+        ).then(([rows]: any) => rows),
+
+        // hotspots — aging WIP: in-progress older than 7 days
+        dolt.pool.execute(
+          `SELECT id, title, status, updated_at, priority
+           FROM issues
+           WHERE status = 'in-progress'
+             AND updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
+           ORDER BY updated_at ASC
+           LIMIT 10`
+        ).then(([rows]: any) => rows),
+
+        // hotspots — high priority open (priority 0=urgent, 1=high)
+        dolt.pool.execute(
+          `SELECT id, title, status, priority
+           FROM issues
+           WHERE status = 'open' AND priority <= 1
+           ORDER BY priority ASC
+           LIMIT 10`
+        ).then(([rows]: any) => rows),
+
+        // components: issue_type × status counts
+        dolt.pool.execute(
+          `SELECT issue_type, status, COUNT(*) AS count
+           FROM issues
+           GROUP BY issue_type, status`
+        ).then(([rows]: any) => rows),
+      ]);
+
+    // Build blocks from pre-aggregated data
+    const blocks: Array<{ label: string; value: string }> = [
+      {
+        label: 'board_metrics',
+        value: JSON.stringify(await buildBoardMetricsFromSQL(statusCounts), null, 2),
+      },
+      {
+        label: 'project',
+        value: JSON.stringify(await buildBeadsProjectMeta(project, gitRepoPath || null, gitUrl || null), null, 2),
+      },
+      {
+        label: 'board_config',
+        value: JSON.stringify(await buildBeadsBoardConfig(), null, 2),
+      },
+      {
+        label: 'hotspots',
+        value: JSON.stringify(
+          await buildHotspotsFromSQL({
+            blocked: blockedRows,
+            agingWip: agingWipRows,
+            highPriority: highPriorityRows,
+          }),
+          null,
+          2,
+        ),
+      },
+      {
+        label: 'backlog_summary',
+        value: JSON.stringify(await buildBacklogSummaryFromSQL(openByPriority), null, 2),
+      },
+      {
+        label: 'components',
+        value: JSON.stringify(await buildComponentsSummaryFromSQL(typeStatsRows), null, 2),
+      },
+    ];
+
+    // recent_activity via Dolt diff (if a sinceCommit was provided)
+    if (sinceCommit) {
+      try {
+        const changes = await dolt.getRecentChanges(sinceCommit);
+        const activityData = {
+          since: sinceCommit,
+          activities: changes.slice(0, 10).map((c: any) => ({
+            type: c.diff_type === 'added' ? 'issue.created' : 'issue.updated',
+            issue: c.to_id || c.from_id,
+            title: c.to_title || c.from_title || '',
+            status: c.to_status || c.from_status || '',
+            timestamp: c.to_updated_at || c.from_updated_at || null,
+          })),
+          summary: {
+            created: changes.filter((c: any) => c.diff_type === 'added').length,
+            updated: changes.filter((c: any) => c.diff_type === 'modified').length,
+            total: changes.length,
+          },
+          byStatus: {},
+        };
+
+        blocks.push({
+          label: 'recent_activity',
+          value: JSON.stringify(await buildBeadsRecentActivity(activityData), null, 2),
+        });
+      } catch (diffError) {
+        console.warn(`[Temporal:Orchestration] Dolt diff for recent_activity failed: ${diffError}`);
+        // Non-fatal: skip recent_activity block
+      }
+    }
+
+    console.log(`[Temporal:Orchestration] Built ${blocks.length} blocks from Dolt SQL`);
+    return blocks;
+  } catch (error) {
+    console.warn(`[Temporal:Orchestration] SQL block build failed: ${error}`);
+    return null;
+  } finally {
+    if (dolt) {
+      try {
+        await dolt.disconnect();
+      } catch {
+        // ignore disconnect errors
+      }
+    }
+  }
+}
+
+// ============================================================
+// LEGACY ARRAY-BASED BLOCK BUILDERS
+// ============================================================
+
+/**
+ * Build all memory blocks from an issue array (original path).
+ * Normalizes issues, then passes to the array-based builders.
+ */
+async function buildBlocksFromArray(
+  issues: RawBeadsIssue[] | NormalizedIssue[],
+  project: Project,
+  gitRepoPath?: string,
+  gitUrl?: string,
+  activityData?: any,
+): Promise<Array<{ label: string; value: string }>> {
+  // Normalize issues if they're raw beads format (no _beads field)
+  const normalized: NormalizedIssue[] = issues.map((issue: any) =>
+    issue._beads ? issue : normalizeIssue(issue as RawBeadsIssue)
+  );
+
+  // Build ALL memory blocks using beads-aware builders (async due to ESM bridge)
+  const blocks: Array<{ label: string; value: string }> = [
+    { label: 'board_metrics', value: JSON.stringify(await buildBeadsBoardMetrics(normalized), null, 2) },
+    { label: 'project', value: JSON.stringify(await buildBeadsProjectMeta(project, gitRepoPath || null, gitUrl || null), null, 2) },
+    { label: 'board_config', value: JSON.stringify(await buildBeadsBoardConfig(), null, 2) },
+    { label: 'hotspots', value: JSON.stringify(await buildBeadsHotspots(normalized), null, 2) },
+    { label: 'backlog_summary', value: JSON.stringify(await buildBeadsBacklogSummary(normalized), null, 2) },
+    { label: 'components', value: JSON.stringify(await buildBeadsComponentsSummary(normalized), null, 2) },
+  ];
+
+  // Add recent_activity if activity data provided
+  if (activityData) {
+    blocks.push({
+      label: 'recent_activity',
+      value: JSON.stringify(await buildBeadsRecentActivity(activityData), null, 2),
+    });
+  }
+
+  return blocks;
+}
+
+// ============================================================
 // LETTA MEMORY ACTIVITIES
 // ============================================================
 
 /**
  * Update Letta agent memory with project state from beads data.
+ *
+ * Supports two modes:
+ * 1. **SQL mode** (gitRepoPath provided, issues omitted or empty): Builds blocks
+ *    directly from Dolt SQL aggregations — more efficient, no issue array needed.
+ * 2. **Legacy array mode** (issues provided): Normalizes and loops over the array
+ *    using the original builders.
+ *
+ * When gitRepoPath is provided, the SQL path is attempted first. If it fails
+ * (e.g. Dolt server not running), falls back to the array path if issues are
+ * available.
  *
  * Builds ALL memory blocks (board_metrics, project, board_config, hotspots,
  * backlog_summary, recent_activity, components) and upserts them via the
@@ -110,14 +334,20 @@ function normalizeIssue(raw: RawBeadsIssue): NormalizedIssue {
 export async function updateLettaMemory(input: {
   agentId: string;
   project: Project;
-  issues: RawBeadsIssue[] | NormalizedIssue[];
+  issues?: RawBeadsIssue[] | NormalizedIssue[];
   gitRepoPath?: string;
   gitUrl?: string;
   activityData?: any;
+  sinceCommit?: string;
 }): Promise<{ success: boolean; error?: string; blocksUpdated?: number }> {
-  const { agentId, project, issues, gitRepoPath, gitUrl, activityData } = input;
+  const { agentId, project, issues, gitRepoPath, gitUrl, activityData, sinceCommit } = input;
 
-  console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId} (${issues.length} issues)`);
+  const issueCount = issues?.length ?? 0;
+  const mode = gitRepoPath ? 'sql' : 'array';
+  console.log(
+    `[Temporal:Orchestration] Updating Letta memory for agent ${agentId}` +
+    ` (mode=${mode}, issues=${issueCount}, gitRepoPath=${gitRepoPath || 'none'})`
+  );
 
   try {
     const lettaUrl = process.env.LETTA_BASE_URL || process.env.LETTA_API_URL;
@@ -128,27 +358,21 @@ export async function updateLettaMemory(input: {
       return { success: true };
     }
 
-    // Normalize issues if they're raw beads format (no _beads field)
-    const normalized: NormalizedIssue[] = issues.map((issue: any) =>
-      issue._beads ? issue : normalizeIssue(issue as RawBeadsIssue)
-    );
+    // Build blocks: try SQL path first if gitRepoPath available, fallback to array
+    let blocks: Array<{ label: string; value: string }> | null = null;
 
-    // Build ALL memory blocks using beads-aware builders (async due to ESM bridge)
-    const blocks: Array<{ label: string; value: string }> = [
-      { label: 'board_metrics', value: JSON.stringify(await buildBeadsBoardMetrics(normalized), null, 2) },
-      { label: 'project', value: JSON.stringify(await buildBeadsProjectMeta(project, gitRepoPath || null, gitUrl || null), null, 2) },
-      { label: 'board_config', value: JSON.stringify(await buildBeadsBoardConfig(), null, 2) },
-      { label: 'hotspots', value: JSON.stringify(await buildBeadsHotspots(normalized), null, 2) },
-      { label: 'backlog_summary', value: JSON.stringify(await buildBeadsBacklogSummary(normalized), null, 2) },
-      { label: 'components', value: JSON.stringify(await buildBeadsComponentsSummary(normalized), null, 2) },
-    ];
+    if (gitRepoPath) {
+      blocks = await buildBlocksFromSQL(gitRepoPath, project, gitUrl, sinceCommit);
+    }
 
-    // Add recent_activity if activity data provided
-    if (activityData) {
-      blocks.push({
-        label: 'recent_activity',
-        value: JSON.stringify(await buildBeadsRecentActivity(activityData), null, 2),
-      });
+    if (!blocks) {
+      // Fallback to legacy array path
+      if (issues && issues.length > 0) {
+        blocks = await buildBlocksFromArray(issues, project, gitRepoPath, gitUrl, activityData);
+      } else {
+        // No SQL path and no issues — build with empty array for baseline blocks
+        blocks = await buildBlocksFromArray([], project, gitRepoPath, gitUrl, activityData);
+      }
     }
 
     // Fetch existing blocks from agent to get block IDs

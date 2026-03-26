@@ -40,6 +40,11 @@ vi.mock('../../temporal/lib/memoryBuilders', () => ({
   buildBacklogSummary: vi.fn(async () => ({ total_backlog: 0, top_items: [] })),
   buildRecentActivity: vi.fn(async () => ({ summary: {} })),
   buildComponentsSummary: vi.fn(async () => ({ types: [], total_types: 0 })),
+  // SQL-based builder variants
+  buildBoardMetricsFromSQL: vi.fn(async () => ({ total_tasks: 5, by_status: { open: 3, 'in-progress': 1, closed: 1 } })),
+  buildBacklogSummaryFromSQL: vi.fn(async () => ({ total_backlog: 3, top_items: [] })),
+  buildHotspotsFromSQL: vi.fn(async () => ({ blocked_items: [], ageing_wip: [], high_priority_open: [], summary: {} })),
+  buildComponentsSummaryFromSQL: vi.fn(async () => ({ types: [], total_types: 0 })),
 }));
 
 vi.mock('fs', async () => {
@@ -367,6 +372,166 @@ describe('Orchestration Activities', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('500');
+    });
+
+    it('should use SQL path when gitRepoPath is provided', async () => {
+      process.env.LETTA_BASE_URL = 'https://letta.test.com';
+      process.env.LETTA_PASSWORD = 'test-password';
+
+      // Configure MockDoltQueryService for SQL queries
+      const mockStatusCounts = [
+        { status: 'open', count: 3 },
+        { status: 'in-progress', count: 1 },
+        { status: 'closed', count: 1 },
+      ];
+      const mockOpenByPriority = [
+        { id: 'i-1', title: 'Task 1', priority: 0 },
+        { id: 'i-2', title: 'Task 2', priority: 2 },
+      ];
+
+      // Inject a SQL-capable mock
+      class SQLMockDoltQueryService {
+        pool = {
+          execute: vi.fn().mockResolvedValue([[]]),
+          end: vi.fn(),
+        };
+        connect = vi.fn().mockResolvedValue(undefined);
+        disconnect = vi.fn().mockResolvedValue(undefined);
+        getStatusCounts = vi.fn().mockResolvedValue(mockStatusCounts);
+        getOpenByPriority = vi.fn().mockResolvedValue(mockOpenByPriority);
+        getRecentChanges = vi.fn().mockResolvedValue([]);
+      }
+      setDoltQueryServiceClass(SQLMockDoltQueryService);
+
+      // Mock Letta API
+      (pooledFetch as any).mockImplementation((url: string, opts?: any) => {
+        if (!opts?.method || opts.method === 'GET') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              memory: {
+                blocks: [
+                  { id: 'block-1', label: 'board_metrics', value: '{}' },
+                  { id: 'block-2', label: 'project', value: '{}' },
+                  { id: 'block-3', label: 'board_config', value: '{}' },
+                  { id: 'block-4', label: 'hotspots', value: '{}' },
+                  { id: 'block-5', label: 'backlog_summary', value: '{}' },
+                  { id: 'block-6', label: 'components', value: '{}' },
+                ],
+              },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      const result = await updateLettaMemory({
+        agentId: 'agent-1',
+        project: { identifier: 'TEST', name: 'Test' },
+        gitRepoPath: '/opt/stacks/test',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.blocksUpdated).toBeGreaterThan(0);
+
+      // Cleanup
+      setDoltQueryServiceClass(null);
+    });
+
+    it('should fall back to array path when SQL fails', async () => {
+      process.env.LETTA_BASE_URL = 'https://letta.test.com';
+      process.env.LETTA_PASSWORD = 'test-password';
+
+      // SQL will fail
+      class FailingSQLDoltQueryService {
+        pool = { execute: vi.fn(), end: vi.fn() };
+        connect = vi.fn().mockRejectedValue(new Error('Connection refused'));
+        disconnect = vi.fn().mockResolvedValue(undefined);
+        getStatusCounts = vi.fn().mockRejectedValue(new Error('fail'));
+        getOpenByPriority = vi.fn().mockRejectedValue(new Error('fail'));
+      }
+      setDoltQueryServiceClass(FailingSQLDoltQueryService);
+
+      (pooledFetch as any).mockImplementation((url: string, opts?: any) => {
+        if (!opts?.method || opts.method === 'GET') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              memory: {
+                blocks: [
+                  { id: 'block-1', label: 'board_metrics', value: '{}' },
+                  { id: 'block-2', label: 'project', value: '{}' },
+                  { id: 'block-3', label: 'board_config', value: '{}' },
+                  { id: 'block-4', label: 'hotspots', value: '{}' },
+                  { id: 'block-5', label: 'backlog_summary', value: '{}' },
+                  { id: 'block-6', label: 'components', value: '{}' },
+                ],
+              },
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      // Falls back to array path with provided issues
+      const result = await updateLettaMemory({
+        agentId: 'agent-1',
+        project: { identifier: 'TEST', name: 'Test' },
+        gitRepoPath: '/opt/stacks/test',
+        issues: [{ id: 'T-1', title: 'Issue', status: 'open', priority: 2 }],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.blocksUpdated).toBeGreaterThan(0);
+
+      setDoltQueryServiceClass(null);
+    });
+
+    it('should work without issues array (SQL-only mode)', async () => {
+      process.env.LETTA_BASE_URL = 'https://letta.test.com';
+      process.env.LETTA_PASSWORD = 'test-password';
+
+      // SQL-capable mock
+      class SQLMockDoltQueryService {
+        pool = {
+          execute: vi.fn().mockResolvedValue([[]]),
+          end: vi.fn(),
+        };
+        connect = vi.fn().mockResolvedValue(undefined);
+        disconnect = vi.fn().mockResolvedValue(undefined);
+        getStatusCounts = vi.fn().mockResolvedValue([{ status: 'open', count: 1 }]);
+        getOpenByPriority = vi.fn().mockResolvedValue([]);
+      }
+      setDoltQueryServiceClass(SQLMockDoltQueryService);
+
+      (pooledFetch as any).mockImplementation((url: string, opts?: any) => {
+        if (!opts?.method || opts.method === 'GET') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              memory: { blocks: [] },
+            }),
+          });
+        }
+        if (opts?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: 'new-block-id' }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      // No issues array at all
+      const result = await updateLettaMemory({
+        agentId: 'agent-1',
+        project: { identifier: 'TEST', name: 'Test' },
+        gitRepoPath: '/opt/stacks/test',
+      });
+
+      expect(result.success).toBe(true);
+
+      setDoltQueryServiceClass(null);
     });
   });
 

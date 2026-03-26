@@ -14,6 +14,10 @@ import {
   buildChangeLog,
   buildScratchpad,
   buildExpression,
+  buildBoardMetricsFromSQL,
+  buildBacklogSummaryFromSQL,
+  buildHotspotsFromSQL,
+  buildComponentsSummaryFromSQL,
 } from '../../lib/LettaMemoryBuilders.js';
 
 // Helper to create beads-format test issues
@@ -636,6 +640,227 @@ describe('Letta Memory Block Builders', () => {
       const result1 = buildExpression('pm');
       const result2 = buildExpression('pm');
       expect(result1).toBe(result2);
+    });
+  });
+
+  // ============================================================
+  // SQL-Based Builder Variants
+  // ============================================================
+
+  describe('buildBoardMetricsFromSQL', () => {
+    it('should build metrics from pre-aggregated status counts', () => {
+      const statusCounts = [
+        { status: 'open', count: 5 },
+        { status: 'in-progress', count: 3 },
+        { status: 'closed', count: 12 },
+      ];
+
+      const result = buildBoardMetricsFromSQL(statusCounts);
+
+      expect(result.total_tasks).toBe(20);
+      expect(result.by_status.open).toBe(5);
+      expect(result.by_status['in-progress']).toBe(3);
+      expect(result.by_status.closed).toBe(12);
+      expect(result.wip_count).toBe(3);
+      expect(result.completion_rate).toBe('60.0%');
+      expect(result.active_tasks).toBe(8);
+    });
+
+    it('should handle empty status counts', () => {
+      const result = buildBoardMetricsFromSQL([]);
+
+      expect(result.total_tasks).toBe(0);
+      expect(result.completion_rate).toBe('0%');
+      expect(result.active_tasks).toBe(0);
+    });
+
+    it('should ignore unknown statuses in by_status but count them in total', () => {
+      const statusCounts = [
+        { status: 'open', count: 2 },
+        { status: 'tombstone', count: 1 },
+      ];
+
+      const result = buildBoardMetricsFromSQL(statusCounts);
+
+      expect(result.total_tasks).toBe(3);
+      expect(result.by_status.open).toBe(2);
+      // tombstone not in by_status keys
+      expect(result.by_status.tombstone).toBeUndefined();
+    });
+
+    it('should produce same shape as buildBoardMetrics', () => {
+      const issues = [
+        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
+        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
+      ];
+      const arrayResult = buildBoardMetrics(issues);
+      const sqlResult = buildBoardMetricsFromSQL([
+        { status: 'open', count: 1 },
+        { status: 'closed', count: 1 },
+      ]);
+
+      // Same keys
+      expect(Object.keys(sqlResult).sort()).toEqual(Object.keys(arrayResult).sort());
+    });
+  });
+
+  describe('buildBacklogSummaryFromSQL', () => {
+    it('should build backlog from pre-sorted open issues', () => {
+      const openIssues = [
+        { id: 'i-1', title: 'Urgent fix', priority: 0 },
+        { id: 'i-2', title: 'High fix', priority: 1 },
+        { id: 'i-3', title: 'Medium task', priority: 2 },
+        { id: 'i-4', title: 'Low task', priority: 3 },
+      ];
+
+      const result = buildBacklogSummaryFromSQL(openIssues);
+
+      expect(result.total_backlog).toBe(4);
+      expect(result.top_items).toHaveLength(4);
+      expect(result.top_items[0].priority).toBe('urgent');
+      expect(result.top_items[1].priority).toBe('high');
+      expect(result.priority_breakdown.urgent).toBe(1);
+      expect(result.priority_breakdown.high).toBe(1);
+      expect(result.priority_breakdown.medium).toBe(1);
+      expect(result.priority_breakdown.low).toBe(1);
+    });
+
+    it('should limit to top 15 items', () => {
+      const openIssues = Array.from({ length: 20 }, (_, i) => ({
+        id: `i-${i}`,
+        title: `Task ${i}`,
+        priority: 2,
+      }));
+
+      const result = buildBacklogSummaryFromSQL(openIssues);
+
+      expect(result.total_backlog).toBe(20);
+      expect(result.top_items).toHaveLength(15);
+    });
+
+    it('should handle empty list', () => {
+      const result = buildBacklogSummaryFromSQL([]);
+
+      expect(result.total_backlog).toBe(0);
+      expect(result.top_items).toHaveLength(0);
+    });
+  });
+
+  describe('buildHotspotsFromSQL', () => {
+    it('should build hotspots from pre-filtered SQL results', () => {
+      const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+
+      const result = buildHotspotsFromSQL({
+        blocked: [
+          { id: 'b-1', title: 'Blocked by API', status: 'in-progress' },
+          { id: 'b-2', title: 'Waiting on review', status: 'open' },
+        ],
+        agingWip: [
+          { id: 'a-1', title: 'Old task', status: 'in-progress', updated_at: tenDaysAgo },
+        ],
+        highPriority: [
+          { id: 'h-1', title: 'Urgent fix', priority: 0 },
+        ],
+      });
+
+      expect(result.blocked_items).toHaveLength(2);
+      expect(result.blocked_items[0].id).toBe('b-1');
+      expect(result.ageing_wip).toHaveLength(1);
+      expect(result.ageing_wip[0].age_days).toBeGreaterThanOrEqual(10);
+      expect(result.high_priority_open).toHaveLength(1);
+      expect(result.high_priority_open[0].priority).toBe('urgent');
+      expect(result.summary.blocked_count).toBe(2);
+      expect(result.summary.ageing_wip_count).toBe(1);
+      expect(result.summary.high_priority_count).toBe(1);
+    });
+
+    it('should handle empty arrays', () => {
+      const result = buildHotspotsFromSQL({
+        blocked: [],
+        agingWip: [],
+        highPriority: [],
+      });
+
+      expect(result.blocked_items).toHaveLength(0);
+      expect(result.ageing_wip).toHaveLength(0);
+      expect(result.high_priority_open).toHaveLength(0);
+      expect(result.summary.blocked_count).toBe(0);
+    });
+
+    it('should limit each category to 10 items', () => {
+      const blocked = Array.from({ length: 15 }, (_, i) => ({
+        id: `b-${i}`, title: `Blocked ${i}`, status: 'open',
+      }));
+
+      const result = buildHotspotsFromSQL({
+        blocked,
+        agingWip: [],
+        highPriority: [],
+      });
+
+      expect(result.blocked_items).toHaveLength(10);
+    });
+
+    it('should sort aging WIP by age descending', () => {
+      const result = buildHotspotsFromSQL({
+        blocked: [],
+        agingWip: [
+          { id: 'a-1', title: 'Newer', updated_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() },
+          { id: 'a-2', title: 'Older', updated_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString() },
+        ],
+        highPriority: [],
+      });
+
+      expect(result.ageing_wip[0].id).toBe('a-2');
+      expect(result.ageing_wip[1].id).toBe('a-1');
+    });
+  });
+
+  describe('buildComponentsSummaryFromSQL', () => {
+    it('should build from pre-grouped type stats', () => {
+      const typeStats = [
+        { issue_type: 'task', status: 'open', count: 5 },
+        { issue_type: 'task', status: 'closed', count: 3 },
+        { issue_type: 'bug', status: 'in-progress', count: 2 },
+        { issue_type: 'bug', status: 'open', count: 1 },
+      ];
+
+      const result = buildComponentsSummaryFromSQL(typeStats);
+
+      expect(result.total_types).toBe(2);
+      expect(result.types[0].type).toBe('task'); // Most issues
+      expect(result.types[0].issue_count).toBe(8);
+      expect(result.types[0].status_breakdown.open).toBe(5);
+      expect(result.types[0].status_breakdown.closed).toBe(3);
+      expect(result.types[1].type).toBe('bug');
+      expect(result.types[1].issue_count).toBe(3);
+    });
+
+    it('should track untyped issues', () => {
+      const typeStats = [
+        { issue_type: null, status: 'open', count: 4 },
+        { issue_type: 'task', status: 'open', count: 2 },
+      ];
+
+      const result = buildComponentsSummaryFromSQL(typeStats);
+
+      expect(result.total_types).toBe(1);
+      expect(result.untyped_count).toBe(4);
+    });
+
+    it('should handle empty input', () => {
+      const result = buildComponentsSummaryFromSQL([]);
+
+      expect(result.total_types).toBe(0);
+      expect(result.types).toHaveLength(0);
+      expect(result.summary).toContain('No issues found');
+    });
+
+    it('should handle null input', () => {
+      const result = buildComponentsSummaryFromSQL(null);
+
+      expect(result.total_types).toBe(0);
+      expect(result.untyped_count).toBe(0);
     });
   });
 });
