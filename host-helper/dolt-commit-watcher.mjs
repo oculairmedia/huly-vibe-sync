@@ -446,15 +446,8 @@ class WorkspaceWatcher {
     if (!this.running || !this.doltService) return;
 
     try {
-      // Query all non-tombstone issues directly from Dolt
-      const [rows] = await this.doltService.pool.execute(
-        `SELECT i.*, GROUP_CONCAT(l.label) AS labels
-         FROM issues i
-         LEFT JOIN labels l ON i.id = l.issue_id
-         WHERE i.status != 'tombstone'
-         GROUP BY i.id
-         ORDER BY i.updated_at DESC`
-      );
+      // Query all non-tombstone issues using DoltQueryService abstraction
+      const rows = await this.doltService.getAllActiveIssuesWithLabels('tombstone');
 
       const issues = (rows || []).map(row => ({
         id: row.id,
