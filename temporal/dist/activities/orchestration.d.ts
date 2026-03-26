@@ -27,6 +27,6 @@ export interface ProjectSyncContext {
     hulyIssues: HulyIssue[];
 }
 export { fetchRegistryProjects } from './orchestration-projects';
-export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, loadDoltQueryService, } from './orchestration-git';
+export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, setDoltQueryServiceClass, } from './orchestration-git';
 export { updateLettaMemory, recordSyncMetrics, handleOrchestratorError, } from './orchestration-letta';
 //# sourceMappingURL=orchestration.d.ts.map

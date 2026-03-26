@@ -44,7 +44,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearGitRepoPathCache = clearGitRepoPathCache;
 exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
-exports.loadDoltQueryService = loadDoltQueryService;
+exports.getDoltQueryServiceClass = getDoltQueryServiceClass;
+exports.setDoltQueryServiceClass = setDoltQueryServiceClass;
 exports.initializeBeads = initializeBeads;
 exports.fetchBeadsIssues = fetchBeadsIssues;
 const path_1 = __importDefault(require("path"));
@@ -139,13 +140,27 @@ function extractGitRepoPath(input) {
 // ============================================================
 // DOLT QUERY SERVICE LOADER
 // ============================================================
+/** Cached reference to the DoltQueryService class (lazy-loaded from ESM). */
+let _DoltQueryServiceClass = null;
 /**
- * Load DoltQueryService dynamically (ESM module from CJS context).
- * Exported for test-time mocking.
+ * Get the DoltQueryService class, lazy-loading it from the ESM module.
+ * The class reference is cached after first load.
+ *
+ * @internal Exposed for test-time replacement via `setDoltQueryServiceClass`.
  */
-async function loadDoltQueryService() {
-    const mod = await Promise.resolve(`${appRootModule('lib/DoltQueryService.js')}`).then(s => __importStar(require(s)));
-    return mod.DoltQueryService;
+async function getDoltQueryServiceClass() {
+    if (!_DoltQueryServiceClass) {
+        const mod = await Promise.resolve(`${appRootModule('lib/DoltQueryService.js')}`).then(s => __importStar(require(s)));
+        _DoltQueryServiceClass = mod.DoltQueryService;
+    }
+    return _DoltQueryServiceClass;
+}
+/**
+ * Override the DoltQueryService class (for testing).
+ * Pass `null` to reset to lazy-loaded default.
+ */
+function setDoltQueryServiceClass(cls) {
+    _DoltQueryServiceClass = cls;
 }
 // ============================================================
 // BEADS ACTIVITIES
@@ -183,7 +198,7 @@ async function fetchBeadsIssues(input) {
     const { gitRepoPath } = input;
     console.log(`[Temporal:Orchestration] Fetching Beads issues from Dolt: ${gitRepoPath}`);
     try {
-        const DoltQueryServiceClass = await loadDoltQueryService();
+        const DoltQueryServiceClass = await getDoltQueryServiceClass();
         const dolt = new DoltQueryServiceClass();
         await dolt.connect(gitRepoPath);
         try {

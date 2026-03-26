@@ -23,10 +23,17 @@ export declare function extractGitRepoPath(input: {
     description?: string;
 }): string | null;
 /**
- * Load DoltQueryService dynamically (ESM module from CJS context).
- * Exported for test-time mocking.
+ * Get the DoltQueryService class, lazy-loading it from the ESM module.
+ * The class reference is cached after first load.
+ *
+ * @internal Exposed for test-time replacement via `setDoltQueryServiceClass`.
  */
-export declare function loadDoltQueryService(): Promise<any>;
+export declare function getDoltQueryServiceClass(): Promise<any>;
+/**
+ * Override the DoltQueryService class (for testing).
+ * Pass `null` to reset to lazy-loaded default.
+ */
+export declare function setDoltQueryServiceClass(cls: any): void;
 /**
  * Initialize Beads in a git repository
  */
