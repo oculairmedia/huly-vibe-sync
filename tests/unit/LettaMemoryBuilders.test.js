@@ -18,6 +18,7 @@ import {
   buildBacklogSummaryFromSQL,
   buildHotspotsFromSQL,
   buildComponentsSummaryFromSQL,
+  buildRecentActivityFromSQL,
 } from '../../lib/LettaMemoryBuilders.js';
 
 // Helper to create beads-format test issues
@@ -861,6 +862,186 @@ describe('Letta Memory Block Builders', () => {
 
       expect(result.total_types).toBe(0);
       expect(result.untyped_count).toBe(0);
+    });
+  });
+
+  // ============================================================
+  // buildRecentActivityFromSQL Tests
+  // ============================================================
+
+  describe('buildRecentActivityFromSQL', () => {
+    it('should build activity from Dolt diff changes', () => {
+      const doltChanges = {
+        changes: [
+          { action: 'created', id: 'i-1', title: 'New issue', from_status: null, to_status: 'open', updated_at: '2025-06-01T10:00:00Z', diff_type: 'added' },
+          { action: 'updated', id: 'i-2', title: 'Updated issue', from_status: 'open', to_status: 'in-progress', updated_at: '2025-06-01T11:00:00Z', diff_type: 'modified' },
+          { action: 'closed', id: 'i-3', title: 'Closed issue', from_status: 'in-progress', to_status: 'closed', updated_at: '2025-06-01T12:00:00Z', diff_type: 'modified' },
+          { action: 'deleted', id: 'i-4', title: 'Deleted issue', from_status: 'open', to_status: null, updated_at: '2025-06-01T13:00:00Z', diff_type: 'removed' },
+        ],
+        summary: { created: 1, updated: 1, closed: 1, deleted: 1, total: 4 },
+        byStatus: { open: 1, 'in-progress': 1, closed: 1 },
+        since: '2025-05-31T10:00:00Z',
+      };
+
+      const result = buildRecentActivityFromSQL(doltChanges);
+
+      expect(result.since).toBe('2025-05-31T10:00:00Z');
+      expect(result.summary.created).toBe(1);
+      expect(result.summary.updated).toBe(1);
+      expect(result.summary.closed).toBe(1);
+      expect(result.summary.deleted).toBe(1);
+      expect(result.summary.total).toBe(4);
+      expect(result.by_status['in-progress']).toBe(1);
+      expect(result.recent_items).toHaveLength(4);
+      expect(result.recent_items[0].type).toBe('issue.created');
+      expect(result.recent_items[1].type).toBe('issue.updated');
+      expect(result.recent_items[2].type).toBe('issue.closed');
+      expect(result.recent_items[3].type).toBe('issue.deleted');
+    });
+
+    it('should handle null/empty input', () => {
+      const result = buildRecentActivityFromSQL(null);
+
+      expect(result.since).toBeNull();
+      expect(result.summary.total).toBe(0);
+      expect(result.recent_items).toHaveLength(0);
+      expect(result.patterns).toHaveLength(0);
+    });
+
+    it('should handle empty changes array', () => {
+      const result = buildRecentActivityFromSQL({
+        changes: [],
+        summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 },
+        byStatus: {},
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.since).toBe('2025-05-31T10:00:00Z');
+      expect(result.summary.total).toBe(0);
+      expect(result.recent_items).toHaveLength(0);
+    });
+
+    it('should detect high_activity pattern', () => {
+      const changes = Array.from({ length: 25 }, (_, i) => ({
+        action: 'updated',
+        id: `i-${i}`,
+        title: `Issue ${i}`,
+        from_status: 'open',
+        to_status: 'open',
+        updated_at: new Date().toISOString(),
+        diff_type: 'modified',
+      }));
+
+      const result = buildRecentActivityFromSQL({
+        changes,
+        summary: { created: 0, updated: 25, closed: 0, deleted: 0, total: 25 },
+        byStatus: { open: 25 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'high_activity', severity: 'info' })
+      );
+    });
+
+    it('should detect completion_streak pattern', () => {
+      const result = buildRecentActivityFromSQL({
+        changes: Array.from({ length: 6 }, (_, i) => ({
+          action: 'closed',
+          id: `i-${i}`,
+          title: `Issue ${i}`,
+          from_status: 'in-progress',
+          to_status: 'closed',
+          updated_at: new Date().toISOString(),
+          diff_type: 'modified',
+        })),
+        summary: { created: 0, updated: 0, closed: 6, deleted: 0, total: 6 },
+        byStatus: { closed: 6 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'completion_streak', severity: 'positive' })
+      );
+    });
+
+    it('should detect high_wip pattern', () => {
+      const result = buildRecentActivityFromSQL({
+        changes: Array.from({ length: 7 }, (_, i) => ({
+          action: 'updated',
+          id: `i-${i}`,
+          title: `Issue ${i}`,
+          from_status: 'open',
+          to_status: 'in-progress',
+          updated_at: new Date().toISOString(),
+          diff_type: 'modified',
+        })),
+        summary: { created: 0, updated: 7, closed: 0, deleted: 0, total: 7 },
+        byStatus: { 'in-progress': 7 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'high_wip', severity: 'info' })
+      );
+    });
+
+    it('should detect no_activity pattern', () => {
+      const result = buildRecentActivityFromSQL({
+        changes: [],
+        summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 },
+        byStatus: {},
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.patterns).toContainEqual(
+        expect.objectContaining({ type: 'no_activity', severity: 'info' })
+      );
+    });
+
+    it('should limit recent_items to 10', () => {
+      const changes = Array.from({ length: 15 }, (_, i) => ({
+        action: 'updated',
+        id: `i-${i}`,
+        title: `Issue ${i}`,
+        from_status: 'open',
+        to_status: 'open',
+        updated_at: new Date().toISOString(),
+        diff_type: 'modified',
+      }));
+
+      const result = buildRecentActivityFromSQL({
+        changes,
+        summary: { created: 0, updated: 15, closed: 0, deleted: 0, total: 15 },
+        byStatus: { open: 15 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      expect(result.recent_items).toHaveLength(10);
+    });
+
+    it('should produce same output shape as buildRecentActivity', () => {
+      const doltResult = buildRecentActivityFromSQL({
+        changes: [
+          { action: 'created', id: 'i-1', title: 'Issue', from_status: null, to_status: 'open', updated_at: new Date().toISOString(), diff_type: 'added' },
+        ],
+        summary: { created: 1, updated: 0, closed: 0, deleted: 0, total: 1 },
+        byStatus: { open: 1 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      const arrayResult = buildRecentActivity({
+        activities: [{ type: 'issue.created', issue: 'i-1', title: 'Issue', status: 'open', timestamp: new Date().toISOString() }],
+        summary: { created: 1, updated: 0, total: 1 },
+        byStatus: { open: 1 },
+        since: '2025-05-31T10:00:00Z',
+      });
+
+      // Both should have the same top-level keys
+      expect(Object.keys(doltResult).sort()).toEqual(Object.keys(arrayResult).sort());
+      // Both should have patterns array
+      expect(Array.isArray(doltResult.patterns)).toBe(true);
+      expect(Array.isArray(arrayResult.patterns)).toBe(true);
     });
   });
 });

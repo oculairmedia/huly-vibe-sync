@@ -24,6 +24,7 @@ import {
   buildBacklogSummaryFromSQL,
   buildHotspotsFromSQL,
   buildComponentsSummaryFromSQL,
+  buildRecentActivityFromSQL,
 } from '../lib/memoryBuilders';
 import { getDoltQueryServiceClass } from './orchestration-git';
 
@@ -222,35 +223,16 @@ async function buildBlocksFromSQL(
       },
     ];
 
-    // recent_activity via Dolt diff (if a sinceCommit was provided)
-    if (sinceCommit) {
-      try {
-        const changes = await dolt.getRecentChanges(sinceCommit);
-        const activityData = {
-          since: sinceCommit,
-          activities: changes.slice(0, 10).map((c: any) => ({
-            type: c.diff_type === 'added' ? 'issue.created' : 'issue.updated',
-            issue: c.to_id || c.from_id,
-            title: c.to_title || c.from_title || '',
-            status: c.to_status || c.from_status || '',
-            timestamp: c.to_updated_at || c.from_updated_at || null,
-          })),
-          summary: {
-            created: changes.filter((c: any) => c.diff_type === 'added').length,
-            updated: changes.filter((c: any) => c.diff_type === 'modified').length,
-            total: changes.length,
-          },
-          byStatus: {},
-        };
-
-        blocks.push({
-          label: 'recent_activity',
-          value: JSON.stringify(await buildBeadsRecentActivity(activityData), null, 2),
-        });
-      } catch (diffError) {
-        console.warn(`[Temporal:Orchestration] Dolt diff for recent_activity failed: ${diffError}`);
-        // Non-fatal: skip recent_activity block
-      }
+    // recent_activity via Dolt time-travel diff
+    try {
+      const doltActivityData = await dolt.getRecentActivityFromDolt(24);
+      blocks.push({
+        label: 'recent_activity',
+        value: JSON.stringify(await buildRecentActivityFromSQL(doltActivityData), null, 2),
+      });
+    } catch (diffError) {
+      console.warn(`[Temporal:Orchestration] Dolt diff for recent_activity failed: ${diffError}`);
+      // Non-fatal: skip recent_activity block
     }
 
     console.log(`[Temporal:Orchestration] Built ${blocks.length} blocks from Dolt SQL`);

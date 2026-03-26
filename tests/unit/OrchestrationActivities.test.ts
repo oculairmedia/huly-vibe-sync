@@ -17,6 +17,7 @@ class MockDoltQueryService {
   pool = mockDoltPool;
   connect = vi.fn().mockResolvedValue(undefined);
   disconnect = vi.fn().mockResolvedValue(undefined);
+  getRecentActivityFromDolt = vi.fn().mockResolvedValue({ changes: [], summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 }, byStatus: {}, since: null });
 }
 
 // Mock external dependencies before importing activities
@@ -45,6 +46,7 @@ vi.mock('../../temporal/lib/memoryBuilders', () => ({
   buildBacklogSummaryFromSQL: vi.fn(async () => ({ total_backlog: 3, top_items: [] })),
   buildHotspotsFromSQL: vi.fn(async () => ({ blocked_items: [], ageing_wip: [], high_priority_open: [], summary: {} })),
   buildComponentsSummaryFromSQL: vi.fn(async () => ({ types: [], total_types: 0 })),
+  buildRecentActivityFromSQL: vi.fn(async () => ({ since: null, summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 }, by_status: {}, recent_items: [], patterns: [] })),
 }));
 
 vi.mock('fs', async () => {
@@ -400,6 +402,7 @@ describe('Orchestration Activities', () => {
         getStatusCounts = vi.fn().mockResolvedValue(mockStatusCounts);
         getOpenByPriority = vi.fn().mockResolvedValue(mockOpenByPriority);
         getRecentChanges = vi.fn().mockResolvedValue([]);
+        getRecentActivityFromDolt = vi.fn().mockResolvedValue({ changes: [], summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 }, byStatus: {}, since: null });
       }
       setDoltQueryServiceClass(SQLMockDoltQueryService);
 
@@ -501,6 +504,7 @@ describe('Orchestration Activities', () => {
         disconnect = vi.fn().mockResolvedValue(undefined);
         getStatusCounts = vi.fn().mockResolvedValue([{ status: 'open', count: 1 }]);
         getOpenByPriority = vi.fn().mockResolvedValue([]);
+        getRecentActivityFromDolt = vi.fn().mockResolvedValue({ changes: [], summary: { created: 0, updated: 0, closed: 0, deleted: 0, total: 0 }, byStatus: {}, since: null });
       }
       setDoltQueryServiceClass(SQLMockDoltQueryService);
 

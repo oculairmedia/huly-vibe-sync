@@ -85,3 +85,8 @@ export async function buildComponentsSummaryFromSQL(typeStats: Array<{ issue_typ
   const b = await getBuilders();
   return b.buildComponentsSummaryFromSQL(typeStats);
 }
+
+export async function buildRecentActivityFromSQL(doltChanges: any) {
+  const b = await getBuilders();
+  return b.buildRecentActivityFromSQL(doltChanges);
+}

@@ -458,6 +458,185 @@ describe('DoltQueryService', () => {
   });
 
   // ----------------------------------------------------------
+  // getRecentActivityFromDolt()
+  // ----------------------------------------------------------
+  describe('getRecentActivityFromDolt', () => {
+    it('should return empty result when no commits exist', async () => {
+      const svc = await createConnectedService();
+      // getCommitLog returns empty
+      mockExecute.mockResolvedValue([[], []]);
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      expect(result.changes).toEqual([]);
+      expect(result.summary.total).toBe(0);
+      expect(result.since).toBeNull();
+    });
+
+    it('should find commit closest to 24h ago and diff from it', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+      const tenHoursAgo = new Date(now.getTime() - 10 * 60 * 60 * 1000);
+      const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+
+      // First call: getCommitLog (via getCommitLog -> pool.execute)
+      const commitLogRows = [
+        { commit_hash: 'commit_5h', date: fiveHoursAgo, message: 'Recent' },
+        { commit_hash: 'commit_10h', date: tenHoursAgo, message: 'Older' },
+        { commit_hash: 'commit_30h', date: thirtyHoursAgo, message: 'Old' },
+      ];
+
+      // Second call: getRecentChanges (diff from commit_30h)
+      const diffRows = [
+        { diff_type: 'added', to_id: 'i-1', to_title: 'New Issue', from_id: null, from_title: null, to_status: 'open', from_status: null, to_updated_at: now.toISOString(), from_updated_at: null },
+        { diff_type: 'modified', to_id: 'i-2', to_title: 'Updated Issue', from_id: 'i-2', from_title: 'Updated Issue', to_status: 'closed', from_status: 'in-progress', to_updated_at: now.toISOString(), from_updated_at: tenHoursAgo.toISOString() },
+        { diff_type: 'modified', to_id: 'i-3', to_title: 'Changed Issue', from_id: 'i-3', from_title: 'Changed Issue', to_status: 'in-progress', from_status: 'open', to_updated_at: now.toISOString(), from_updated_at: tenHoursAgo.toISOString() },
+        { diff_type: 'removed', to_id: null, to_title: null, from_id: 'i-4', from_title: 'Deleted Issue', to_status: null, from_status: 'open', to_updated_at: null, from_updated_at: tenHoursAgo.toISOString() },
+      ];
+
+      mockExecute
+        .mockResolvedValueOnce([commitLogRows, []])  // getCommitLog
+        .mockResolvedValueOnce([diffRows, []]);       // getRecentChanges
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      // Should have picked commit_30h as the base (first commit older than 24h)
+      expect(result.changes).toHaveLength(4);
+      expect(result.summary.created).toBe(1);
+      expect(result.summary.closed).toBe(1);
+      expect(result.summary.updated).toBe(1);
+      expect(result.summary.deleted).toBe(1);
+      expect(result.summary.total).toBe(4);
+      expect(result.since).toBe(thirtyHoursAgo.toISOString());
+
+      // Verify diff was called with the correct base commit
+      expect(mockExecute).toHaveBeenCalledWith(
+        "SELECT * FROM dolt_diff('issues', ?, 'HEAD')",
+        ['commit_30h']
+      );
+    });
+
+    it('should fallback to oldest commit when no commit is older than cutoff', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+      const commitLogRows = [
+        { commit_hash: 'commit_2h', date: twoHoursAgo, message: 'Recent' },
+        { commit_hash: 'commit_5h', date: fiveHoursAgo, message: 'Older' },
+      ];
+
+      mockExecute
+        .mockResolvedValueOnce([commitLogRows, []])  // getCommitLog
+        .mockResolvedValueOnce([[], []]);             // getRecentChanges (empty diff)
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      // Should fallback to oldest commit (commit_5h)
+      expect(mockExecute).toHaveBeenCalledWith(
+        "SELECT * FROM dolt_diff('issues', ?, 'HEAD')",
+        ['commit_5h']
+      );
+      expect(result.changes).toEqual([]);
+      expect(result.summary.total).toBe(0);
+      expect(result.since).toBe(fiveHoursAgo.toISOString());
+    });
+
+    it('should classify diff_type=added as created', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+      mockExecute
+        .mockResolvedValueOnce([[{ commit_hash: 'old', date: thirtyHoursAgo, message: 'old' }], []])
+        .mockResolvedValueOnce([[{ diff_type: 'added', to_id: 'i-new', to_title: 'New', to_status: 'open', from_id: null, from_title: null, from_status: null, to_updated_at: now.toISOString(), from_updated_at: null }], []]);
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      expect(result.changes[0].action).toBe('created');
+      expect(result.changes[0].id).toBe('i-new');
+    });
+
+    it('should classify modified + to_status=closed as closed', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+      mockExecute
+        .mockResolvedValueOnce([[{ commit_hash: 'old', date: thirtyHoursAgo, message: 'old' }], []])
+        .mockResolvedValueOnce([[{ diff_type: 'modified', to_id: 'i-closed', to_title: 'Closed', to_status: 'closed', from_id: 'i-closed', from_title: 'Closed', from_status: 'in-progress', to_updated_at: now.toISOString(), from_updated_at: null }], []]);
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      expect(result.changes[0].action).toBe('closed');
+    });
+
+    it('should classify modified with other status as updated', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+      mockExecute
+        .mockResolvedValueOnce([[{ commit_hash: 'old', date: thirtyHoursAgo, message: 'old' }], []])
+        .mockResolvedValueOnce([[{ diff_type: 'modified', to_id: 'i-upd', to_title: 'Updated', to_status: 'in-progress', from_id: 'i-upd', from_title: 'Updated', from_status: 'open', to_updated_at: now.toISOString(), from_updated_at: null }], []]);
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      expect(result.changes[0].action).toBe('updated');
+    });
+
+    it('should populate byStatus counts', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const thirtyHoursAgo = new Date(now.getTime() - 30 * 60 * 60 * 1000);
+
+      mockExecute
+        .mockResolvedValueOnce([[{ commit_hash: 'old', date: thirtyHoursAgo, message: 'old' }], []])
+        .mockResolvedValueOnce([[
+          { diff_type: 'added', to_id: 'i-1', to_title: 'A', to_status: 'open', from_id: null, from_title: null, from_status: null, to_updated_at: now.toISOString(), from_updated_at: null },
+          { diff_type: 'added', to_id: 'i-2', to_title: 'B', to_status: 'open', from_id: null, from_title: null, from_status: null, to_updated_at: now.toISOString(), from_updated_at: null },
+          { diff_type: 'modified', to_id: 'i-3', to_title: 'C', to_status: 'closed', from_id: 'i-3', from_title: 'C', from_status: 'open', to_updated_at: now.toISOString(), from_updated_at: null },
+        ], []]);
+
+      const result = await svc.getRecentActivityFromDolt(24);
+
+      expect(result.byStatus.open).toBe(2);
+      expect(result.byStatus.closed).toBe(1);
+    });
+
+    it('should accept custom hoursAgo parameter', async () => {
+      const svc = await createConnectedService();
+      const now = new Date();
+      const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+      const tenHoursAgo = new Date(now.getTime() - 10 * 60 * 60 * 1000);
+
+      const commitLogRows = [
+        { commit_hash: 'commit_5h', date: fiveHoursAgo, message: 'Recent' },
+        { commit_hash: 'commit_10h', date: tenHoursAgo, message: 'Older' },
+      ];
+
+      mockExecute
+        .mockResolvedValueOnce([commitLogRows, []])
+        .mockResolvedValueOnce([[], []]);
+
+      // 8 hours ago — should pick commit_10h (the first commit older than 8h)
+      const result = await svc.getRecentActivityFromDolt(8);
+
+      expect(mockExecute).toHaveBeenCalledWith(
+        "SELECT * FROM dolt_diff('issues', ?, 'HEAD')",
+        ['commit_10h']
+      );
+    });
+
+    it('should throw if not connected', async () => {
+      const svc = new DoltQueryService();
+      await expect(svc.getRecentActivityFromDolt()).rejects.toThrow('not connected');
+    });
+  });
+
+  // ----------------------------------------------------------
   // Error handling
   // ----------------------------------------------------------
   describe('error handling', () => {
@@ -493,6 +672,7 @@ describe('DoltQueryService', () => {
       await expect(svc.getCurrentCommitHash()).rejects.toThrow('not connected');
       await expect(svc.getCommitLog()).rejects.toThrow('not connected');
       await expect(svc.queryAsOf('abc', 'SELECT 1')).rejects.toThrow('not connected');
+      await expect(svc.getRecentActivityFromDolt()).rejects.toThrow('not connected');
     });
   });
 });
