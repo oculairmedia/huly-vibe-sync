@@ -10,16 +10,51 @@ exports.recordSyncMetrics = recordSyncMetrics;
 exports.handleOrchestratorError = handleOrchestratorError;
 const activity_1 = require("@temporalio/activity");
 const httpPool_1 = require("../lib/httpPool");
-const LettaMemoryBuilders_js_1 = require("../../lib/LettaMemoryBuilders.js");
+const memoryBuilders_1 = require("../lib/memoryBuilders");
+const PRIORITY_MAP = {
+    0: 'urgent',
+    1: 'high',
+    2: 'medium',
+    3: 'low',
+    4: 'none',
+};
+/**
+ * Normalize a raw beads issue into the format expected by LettaMemoryBuilders.
+ * This ensures all builders get consistent data with _beads.raw_status etc.
+ */
+function normalizeIssue(raw) {
+    return {
+        id: raw.id,
+        identifier: raw.id,
+        title: raw.title || 'Untitled',
+        description: raw.description || '',
+        status: raw.status || 'open',
+        priority: PRIORITY_MAP[raw.priority ?? 4] || 'none',
+        createdOn: raw.created_at ? new Date(raw.created_at).getTime() : Date.now(),
+        modifiedOn: raw.updated_at ? new Date(raw.updated_at).getTime() : Date.now(),
+        component: raw.issue_type || null,
+        assignee: raw.assignee || null,
+        _beads: {
+            raw_status: raw.status || 'open',
+            raw_priority: raw.priority ?? 4,
+            closed_at: raw.closed_at || null,
+            close_reason: raw.close_reason || null,
+        },
+    };
+}
 // ============================================================
 // LETTA MEMORY ACTIVITIES
 // ============================================================
 /**
- * Update Letta agent memory with project state from beads data
+ * Update Letta agent memory with project state from beads data.
+ *
+ * Builds ALL memory blocks (board_metrics, project, board_config, hotspots,
+ * backlog_summary, recent_activity, components) and upserts them via the
+ * Letta block modify API.
  */
 async function updateLettaMemory(input) {
-    const { agentId, project, issues, gitRepoPath, gitUrl } = input;
-    console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId}`);
+    const { agentId, project, issues, gitRepoPath, gitUrl, activityData } = input;
+    console.log(`[Temporal:Orchestration] Updating Letta memory for agent ${agentId} (${issues.length} issues)`);
     try {
         const lettaUrl = process.env.LETTA_BASE_URL || process.env.LETTA_API_URL;
         const lettaPassword = process.env.LETTA_PASSWORD;
@@ -27,28 +62,89 @@ async function updateLettaMemory(input) {
             console.log('[Temporal:Orchestration] Letta not configured, skipping memory update');
             return { success: true };
         }
-        // Build memory blocks using beads-aware builders
-        const boardMetrics = (0, LettaMemoryBuilders_js_1.buildBoardMetrics)(issues);
-        const projectMeta = (0, LettaMemoryBuilders_js_1.buildProjectMeta)(project, gitRepoPath || null, gitUrl || null);
-        // Update memory blocks via Letta API
-        const response = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/agents/${agentId}/memory`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${lettaPassword}`,
-            },
-            body: JSON.stringify({
-                blocks: [
-                    { label: 'board_metrics', value: JSON.stringify(boardMetrics) },
-                    { label: 'project', value: JSON.stringify(projectMeta) },
-                ],
-            }),
-        });
-        if (!response.ok) {
-            throw new Error(`Letta API error: ${response.status} ${response.statusText}`);
+        // Normalize issues if they're raw beads format (no _beads field)
+        const normalized = issues.map((issue) => issue._beads ? issue : normalizeIssue(issue));
+        // Build ALL memory blocks using beads-aware builders (async due to ESM bridge)
+        const blocks = [
+            { label: 'board_metrics', value: JSON.stringify(await (0, memoryBuilders_1.buildBoardMetrics)(normalized), null, 2) },
+            { label: 'project', value: JSON.stringify(await (0, memoryBuilders_1.buildProjectMeta)(project, gitRepoPath || null, gitUrl || null), null, 2) },
+            { label: 'board_config', value: JSON.stringify(await (0, memoryBuilders_1.buildBoardConfig)(), null, 2) },
+            { label: 'hotspots', value: JSON.stringify(await (0, memoryBuilders_1.buildHotspots)(normalized), null, 2) },
+            { label: 'backlog_summary', value: JSON.stringify(await (0, memoryBuilders_1.buildBacklogSummary)(normalized), null, 2) },
+            { label: 'components', value: JSON.stringify(await (0, memoryBuilders_1.buildComponentsSummary)(normalized), null, 2) },
+        ];
+        // Add recent_activity if activity data provided
+        if (activityData) {
+            blocks.push({
+                label: 'recent_activity',
+                value: JSON.stringify(await (0, memoryBuilders_1.buildRecentActivity)(activityData), null, 2),
+            });
         }
-        console.log(`[Temporal:Orchestration] Updated Letta memory for ${agentId}`);
-        return { success: true };
+        // Fetch existing blocks from agent to get block IDs
+        const agentResp = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/agents/${agentId}`, {
+            headers: { Authorization: `Bearer ${lettaPassword}` },
+        });
+        if (!agentResp.ok) {
+            throw new Error(`Failed to fetch agent: ${agentResp.status} ${agentResp.statusText}`);
+        }
+        const agentData = await agentResp.json();
+        const existingBlocks = agentData?.memory?.blocks || [];
+        const blockMap = new Map(existingBlocks.map((b) => [b.label, b]));
+        // Upsert each block
+        let updatedCount = 0;
+        let skippedCount = 0;
+        for (const block of blocks) {
+            const existing = blockMap.get(block.label);
+            if (existing) {
+                // Skip if content unchanged
+                if (existing.value === block.value) {
+                    skippedCount++;
+                    continue;
+                }
+                // Update existing block via PATCH /v1/blocks/{id}
+                const resp = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/blocks/${existing.id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${lettaPassword}`,
+                    },
+                    body: JSON.stringify({ value: block.value }),
+                });
+                if (!resp.ok) {
+                    console.warn(`[Temporal:Orchestration] Failed to update block "${block.label}": ${resp.status}`);
+                    continue;
+                }
+                updatedCount++;
+            }
+            else {
+                // Create new block and attach to agent
+                const createResp = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/blocks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${lettaPassword}`,
+                    },
+                    body: JSON.stringify({ label: block.label, value: block.value }),
+                });
+                if (!createResp.ok) {
+                    console.warn(`[Temporal:Orchestration] Failed to create block "${block.label}": ${createResp.status}`);
+                    continue;
+                }
+                const newBlock = await createResp.json();
+                // Attach block to agent
+                const attachResp = await (0, httpPool_1.pooledFetch)(`${lettaUrl}/v1/agents/${agentId}/core-memory/blocks/attach/${newBlock.id}`, {
+                    method: 'PATCH',
+                    headers: { Authorization: `Bearer ${lettaPassword}` },
+                });
+                if (!attachResp.ok) {
+                    console.warn(`[Temporal:Orchestration] Failed to attach block "${block.label}": ${attachResp.status}`);
+                    continue;
+                }
+                updatedCount++;
+            }
+        }
+        console.log(`[Temporal:Orchestration] Updated ${updatedCount} blocks, skipped ${skippedCount} unchanged for ${agentId}`);
+        return { success: true, blocksUpdated: updatedCount };
     }
     catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);

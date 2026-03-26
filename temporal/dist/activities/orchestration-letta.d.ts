@@ -3,7 +3,23 @@
  *
  * Activities for Letta memory updates, metrics recording, and shared error handling.
  */
-interface BeadsIssue {
+/** Raw beads issue as returned by fetchBeadsIssues activity */
+interface RawBeadsIssue {
+    id: string;
+    title: string;
+    status: string;
+    priority?: number;
+    description?: string;
+    labels?: string[];
+    created_at?: string;
+    updated_at?: string;
+    issue_type?: string;
+    assignee?: string;
+    closed_at?: string;
+    close_reason?: string;
+}
+/** Normalized issue format expected by LettaMemoryBuilders */
+interface NormalizedIssue {
     id: string;
     identifier: string;
     title: string;
@@ -28,17 +44,23 @@ interface Project {
     status?: string;
 }
 /**
- * Update Letta agent memory with project state from beads data
+ * Update Letta agent memory with project state from beads data.
+ *
+ * Builds ALL memory blocks (board_metrics, project, board_config, hotspots,
+ * backlog_summary, recent_activity, components) and upserts them via the
+ * Letta block modify API.
  */
 export declare function updateLettaMemory(input: {
     agentId: string;
     project: Project;
-    issues: BeadsIssue[];
+    issues: RawBeadsIssue[] | NormalizedIssue[];
     gitRepoPath?: string;
     gitUrl?: string;
+    activityData?: any;
 }): Promise<{
     success: boolean;
     error?: string;
+    blocksUpdated?: number;
 }>;
 /**
  * Record sync completion metrics

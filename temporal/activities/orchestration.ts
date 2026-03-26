@@ -46,6 +46,7 @@ export {
   clearGitRepoPathCache,
   initializeBeads,
   fetchBeadsIssues,
+  setDoltQueryServiceClass,
 } from './orchestration-git';
 
 export {

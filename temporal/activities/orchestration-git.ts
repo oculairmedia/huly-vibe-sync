@@ -4,8 +4,13 @@
  * Activities for git repo path resolution and Beads operations.
  */
 
+import path from 'path';
 import { createBeadsClient } from '../lib';
 import { getDb } from './sync-database';
+
+function appRootModule(modulePath: string): string {
+  return path.join(process.cwd(), modulePath);
+}
 
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map<string, { value: string | null; expiresAt: number }>();
@@ -114,6 +119,35 @@ export function extractGitRepoPath(input: { description?: string }): string | nu
 }
 
 // ============================================================
+// DOLT QUERY SERVICE LOADER
+// ============================================================
+
+/** Cached reference to the DoltQueryService class (lazy-loaded from ESM). */
+let _DoltQueryServiceClass: any = null;
+
+/**
+ * Get the DoltQueryService class, lazy-loading it from the ESM module.
+ * The class reference is cached after first load.
+ *
+ * @internal Exposed for test-time replacement via `setDoltQueryServiceClass`.
+ */
+export async function getDoltQueryServiceClass(): Promise<any> {
+  if (!_DoltQueryServiceClass) {
+    const mod = await import(appRootModule('lib/DoltQueryService.js'));
+    _DoltQueryServiceClass = mod.DoltQueryService;
+  }
+  return _DoltQueryServiceClass;
+}
+
+/**
+ * Override the DoltQueryService class (for testing).
+ * Pass `null` to reset to lazy-loaded default.
+ */
+export function setDoltQueryServiceClass(cls: any): void {
+  _DoltQueryServiceClass = cls;
+}
+
+// ============================================================
 // BEADS ACTIVITIES
 // ============================================================
 
@@ -148,7 +182,11 @@ export async function initializeBeads(input: {
 }
 
 /**
- * Fetch Beads issues from a repository
+ * Fetch Beads issues from a repository via Dolt SQL.
+ *
+ * Connects to the local Dolt SQL server (port discovered from
+ * `.beads/dolt-server.port`), queries active issues with labels,
+ * and returns them in the canonical shape expected by callers.
  */
 export async function fetchBeadsIssues(input: { gitRepoPath: string }): Promise<
   Array<{
@@ -162,20 +200,40 @@ export async function fetchBeadsIssues(input: { gitRepoPath: string }): Promise<
 > {
   const { gitRepoPath } = input;
 
-  console.log(`[Temporal:Orchestration] Fetching Beads issues from ${gitRepoPath}`);
+  console.log(`[Temporal:Orchestration] Fetching Beads issues from Dolt: ${gitRepoPath}`);
 
   try {
-    const beadsClient = createBeadsClient(gitRepoPath);
+    const DoltQueryServiceClass = await getDoltQueryServiceClass();
+    const dolt = new DoltQueryServiceClass();
+    await dolt.connect(gitRepoPath);
 
-    if (!beadsClient.isInitialized()) {
-      return [];
+    try {
+      // Query active issues (exclude tombstones) with labels joined
+      const [rows]: any = await dolt.pool.execute(
+        `SELECT i.*, GROUP_CONCAT(l.label) AS labels
+         FROM issues i
+         LEFT JOIN labels l ON i.id = l.issue_id
+         WHERE i.status != 'tombstone'
+         GROUP BY i.id
+         ORDER BY i.updated_at DESC`
+      );
+
+      const issues = (rows as any[]).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        status: row.status,
+        priority: row.priority != null ? Number(row.priority) : undefined,
+        description: row.description || undefined,
+        labels: row.labels ? row.labels.split(',') : [],
+      }));
+
+      console.log(`[Temporal:Orchestration] Found ${issues.length} Beads issues from Dolt`);
+      return issues;
+    } finally {
+      await dolt.disconnect();
     }
-
-    const issues = await beadsClient.listIssues();
-    console.log(`[Temporal:Orchestration] Found ${issues.length} Beads issues`);
-    return issues;
   } catch (error) {
-    console.warn(`[Temporal:Orchestration] Beads fetch failed: ${error}`);
+    console.warn(`[Temporal:Orchestration] Beads Dolt fetch failed: ${error}`);
     return [];
   }
 }

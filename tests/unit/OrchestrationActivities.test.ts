@@ -7,6 +7,18 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// DoltQueryService mock (injected via setDoltQueryServiceClass)
+const mockDoltPool = {
+  execute: vi.fn(),
+  end: vi.fn(),
+};
+
+class MockDoltQueryService {
+  pool = mockDoltPool;
+  connect = vi.fn().mockResolvedValue(undefined);
+  disconnect = vi.fn().mockResolvedValue(undefined);
+}
+
 // Mock external dependencies before importing activities
 vi.mock('../../temporal/lib', () => ({
   createBeadsClient: vi.fn(),
@@ -18,6 +30,16 @@ vi.mock('../../temporal/activities/sync-database', () => ({
 
 vi.mock('../../temporal/lib/httpPool', () => ({
   pooledFetch: vi.fn(),
+}));
+
+vi.mock('../../temporal/lib/memoryBuilders', () => ({
+  buildBoardMetrics: vi.fn(async () => ({ total_tasks: 0, by_status: { open: 0, closed: 0 } })),
+  buildProjectMeta: vi.fn(async () => ({ name: 'Test', identifier: 'TEST' })),
+  buildBoardConfig: vi.fn(async () => ({ workflow: { tool: 'beads' } })),
+  buildHotspots: vi.fn(async () => ({ blocked_items: [], summary: {} })),
+  buildBacklogSummary: vi.fn(async () => ({ total_backlog: 0, top_items: [] })),
+  buildRecentActivity: vi.fn(async () => ({ summary: {} })),
+  buildComponentsSummary: vi.fn(async () => ({ types: [], total_types: 0 })),
 }));
 
 vi.mock('fs', async () => {
@@ -49,6 +71,7 @@ import {
   clearGitRepoPathCache,
   initializeBeads,
   fetchBeadsIssues,
+  setDoltQueryServiceClass,
   updateLettaMemory,
   recordSyncMetrics,
 } from '../../temporal/activities/orchestration';
@@ -198,34 +221,52 @@ describe('Orchestration Activities', () => {
   });
 
   // ============================================================
-  // fetchBeadsIssues Tests
+  // fetchBeadsIssues Tests (Dolt SQL)
   // ============================================================
   describe('fetchBeadsIssues', () => {
-    it('should return empty array if not initialized', async () => {
-      mockBeadsClient.isInitialized.mockReturnValue(false);
+    beforeEach(() => {
+      mockDoltPool.execute.mockReset();
+      mockDoltPool.end.mockReset();
+      // Inject mock DoltQueryService class
+      setDoltQueryServiceClass(MockDoltQueryService);
+    });
+
+    afterEach(() => {
+      // Reset to default (lazy-loaded) state
+      setDoltQueryServiceClass(null);
+    });
+
+    it('should return empty array when Dolt connection fails', async () => {
+      // Create a class whose connect() rejects
+      class FailingDoltQueryService {
+        pool = mockDoltPool;
+        connect = vi.fn().mockRejectedValue(new Error('Connection refused'));
+        disconnect = vi.fn().mockResolvedValue(undefined);
+      }
+      setDoltQueryServiceClass(FailingDoltQueryService);
 
       const result = await fetchBeadsIssues({ gitRepoPath: '/opt/stacks/test' });
 
       expect(result).toEqual([]);
-      expect(mockBeadsClient.listIssues).not.toHaveBeenCalled();
     });
 
-    it('should return issues if initialized', async () => {
-      const issues = [
-        { id: 'bead-1', title: 'Issue 1', status: 'todo' },
-        { id: 'bead-2', title: 'Issue 2', status: 'done' },
+    it('should return issues from Dolt query', async () => {
+      const doltRows = [
+        { id: 'bead-1', title: 'Issue 1', status: 'todo', priority: 2, description: 'Desc 1', labels: 'bug,feature' },
+        { id: 'bead-2', title: 'Issue 2', status: 'done', priority: null, description: null, labels: null },
       ];
-      mockBeadsClient.isInitialized.mockReturnValue(true);
-      mockBeadsClient.listIssues.mockResolvedValue(issues);
+      mockDoltPool.execute.mockResolvedValue([doltRows]);
 
       const result = await fetchBeadsIssues({ gitRepoPath: '/opt/stacks/test' });
 
-      expect(result).toEqual(issues);
+      expect(result).toEqual([
+        { id: 'bead-1', title: 'Issue 1', status: 'todo', priority: 2, description: 'Desc 1', labels: ['bug', 'feature'] },
+        { id: 'bead-2', title: 'Issue 2', status: 'done', priority: undefined, description: undefined, labels: [] },
+      ]);
     });
 
-    it('should return empty array on error', async () => {
-      mockBeadsClient.isInitialized.mockReturnValue(true);
-      mockBeadsClient.listIssues.mockRejectedValue(new Error('Read error'));
+    it('should return empty array on query error', async () => {
+      mockDoltPool.execute.mockRejectedValue(new Error('Query failed'));
 
       const result = await fetchBeadsIssues({ gitRepoPath: '/opt/stacks/test' });
 
@@ -264,22 +305,42 @@ describe('Orchestration Activities', () => {
       process.env.LETTA_BASE_URL = 'https://letta.test.com';
       process.env.LETTA_PASSWORD = 'test-password';
 
-      (pooledFetch as any).mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
+      // Mock: first call fetches agent (GET), subsequent calls update blocks (PATCH)
+      (pooledFetch as any).mockImplementation((url: string, opts?: any) => {
+        if (!opts?.method || opts.method === 'GET') {
+          // Agent fetch — return agent with existing blocks
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              memory: {
+                blocks: [
+                  { id: 'block-1', label: 'board_metrics', value: '{}' },
+                  { id: 'block-2', label: 'project', value: '{}' },
+                  { id: 'block-3', label: 'board_config', value: '{}' },
+                  { id: 'block-4', label: 'hotspots', value: '{}' },
+                  { id: 'block-5', label: 'backlog_summary', value: '{}' },
+                  { id: 'block-6', label: 'components', value: '{}' },
+                ],
+              },
+            }),
+          });
+        }
+        // Block updates (PATCH)
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       const result = await updateLettaMemory({
         agentId: 'agent-1',
         project: { identifier: 'TEST', name: 'Test' },
-        issues: [{ id: 'T-1', identifier: 'T-1', title: 'Issue', description: '', status: 'open', priority: 'medium', createdOn: Date.now(), modifiedOn: Date.now(), component: null, assignee: null, _beads: { raw_status: 'open', raw_priority: 2, closed_at: null, close_reason: null } }],
+        issues: [{ id: 'T-1', title: 'Issue', status: 'open', priority: 2 }],
       });
 
       expect(result.success).toBe(true);
+      expect(result.blocksUpdated).toBeGreaterThan(0);
+      // First call should be agent fetch
       expect(pooledFetch).toHaveBeenCalledWith(
-        'https://letta.test.com/v1/agents/agent-1/memory',
+        'https://letta.test.com/v1/agents/agent-1',
         expect.objectContaining({
-          method: 'POST',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-password',
           }),
@@ -291,6 +352,7 @@ describe('Orchestration Activities', () => {
       process.env.LETTA_BASE_URL = 'https://letta.test.com';
       process.env.LETTA_PASSWORD = 'test-password';
 
+      // Agent fetch fails
       (pooledFetch as any).mockResolvedValue({
         ok: false,
         status: 500,

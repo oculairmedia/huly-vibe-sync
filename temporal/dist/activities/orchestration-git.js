@@ -4,14 +4,55 @@
  *
  * Activities for git repo path resolution and Beads operations.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearGitRepoPathCache = clearGitRepoPathCache;
 exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
+exports.loadDoltQueryService = loadDoltQueryService;
 exports.initializeBeads = initializeBeads;
 exports.fetchBeadsIssues = fetchBeadsIssues;
+const path_1 = __importDefault(require("path"));
 const lib_1 = require("../lib");
 const sync_database_1 = require("./sync-database");
+function appRootModule(modulePath) {
+    return path_1.default.join(process.cwd(), modulePath);
+}
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map();
 /**
@@ -96,6 +137,17 @@ function extractGitRepoPath(input) {
     return null;
 }
 // ============================================================
+// DOLT QUERY SERVICE LOADER
+// ============================================================
+/**
+ * Load DoltQueryService dynamically (ESM module from CJS context).
+ * Exported for test-time mocking.
+ */
+async function loadDoltQueryService() {
+    const mod = await Promise.resolve(`${appRootModule('lib/DoltQueryService.js')}`).then(s => __importStar(require(s)));
+    return mod.DoltQueryService;
+}
+// ============================================================
 // BEADS ACTIVITIES
 // ============================================================
 /**
@@ -121,22 +173,44 @@ async function initializeBeads(input) {
     }
 }
 /**
- * Fetch Beads issues from a repository
+ * Fetch Beads issues from a repository via Dolt SQL.
+ *
+ * Connects to the local Dolt SQL server (port discovered from
+ * `.beads/dolt-server.port`), queries active issues with labels,
+ * and returns them in the canonical shape expected by callers.
  */
 async function fetchBeadsIssues(input) {
     const { gitRepoPath } = input;
-    console.log(`[Temporal:Orchestration] Fetching Beads issues from ${gitRepoPath}`);
+    console.log(`[Temporal:Orchestration] Fetching Beads issues from Dolt: ${gitRepoPath}`);
     try {
-        const beadsClient = (0, lib_1.createBeadsClient)(gitRepoPath);
-        if (!beadsClient.isInitialized()) {
-            return [];
+        const DoltQueryServiceClass = await loadDoltQueryService();
+        const dolt = new DoltQueryServiceClass();
+        await dolt.connect(gitRepoPath);
+        try {
+            // Query active issues (exclude tombstones) with labels joined
+            const [rows] = await dolt.pool.execute(`SELECT i.*, GROUP_CONCAT(l.label) AS labels
+         FROM issues i
+         LEFT JOIN labels l ON i.id = l.issue_id
+         WHERE i.status != 'tombstone'
+         GROUP BY i.id
+         ORDER BY i.updated_at DESC`);
+            const issues = rows.map((row) => ({
+                id: row.id,
+                title: row.title,
+                status: row.status,
+                priority: row.priority != null ? Number(row.priority) : undefined,
+                description: row.description || undefined,
+                labels: row.labels ? row.labels.split(',') : [],
+            }));
+            console.log(`[Temporal:Orchestration] Found ${issues.length} Beads issues from Dolt`);
+            return issues;
         }
-        const issues = await beadsClient.listIssues();
-        console.log(`[Temporal:Orchestration] Found ${issues.length} Beads issues`);
-        return issues;
+        finally {
+            await dolt.disconnect();
+        }
     }
     catch (error) {
-        console.warn(`[Temporal:Orchestration] Beads fetch failed: ${error}`);
+        console.warn(`[Temporal:Orchestration] Beads Dolt fetch failed: ${error}`);
         return [];
     }
 }

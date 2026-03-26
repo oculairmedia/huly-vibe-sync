@@ -23,6 +23,11 @@ export declare function extractGitRepoPath(input: {
     description?: string;
 }): string | null;
 /**
+ * Load DoltQueryService dynamically (ESM module from CJS context).
+ * Exported for test-time mocking.
+ */
+export declare function loadDoltQueryService(): Promise<any>;
+/**
  * Initialize Beads in a git repository
  */
 export declare function initializeBeads(input: {
@@ -31,7 +36,11 @@ export declare function initializeBeads(input: {
     projectIdentifier: string;
 }): Promise<boolean>;
 /**
- * Fetch Beads issues from a repository
+ * Fetch Beads issues from a repository via Dolt SQL.
+ *
+ * Connects to the local Dolt SQL server (port discovered from
+ * `.beads/dolt-server.port`), queries active issues with labels,
+ * and returns them in the canonical shape expected by callers.
  */
 export declare function fetchBeadsIssues(input: {
     gitRepoPath: string;
