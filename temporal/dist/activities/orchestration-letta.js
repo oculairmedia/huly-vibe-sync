@@ -122,45 +122,35 @@ async function buildBlocksFromSQL(gitRepoPath, project, gitUrl, sinceCommit) {
     let dolt = null;
     try {
         dolt = await getOrCreatePool(gitRepoPath);
-        // Run SQL queries in parallel for efficiency
-        const [statusCounts, openByPriority, blockedRows, agingWipRows, highPriorityRows, typeStatsRows] = await Promise.all([
-            // board_metrics: status counts
-            dolt.getStatusCounts(),
-            // backlog_summary: open issues sorted by priority
+        // Run batched SQL queries: 3 queries instead of 6
+        const [boardAndComponentStats, hotspots, openByPriority] = await Promise.all([
+            // Query 1: Combined board metrics + components (single GROUP BY)
+            dolt.getBoardAndComponentStats(),
+            // Query 2: All hotspot categories in one UNION query
+            dolt.getHotspots(),
+            // Query 3: Backlog summary (already optimized)
             dolt.getOpenByPriority(),
-            // hotspots — blocked: keyword search in title/description
-            dolt.pool.execute(`SELECT id, title, status, description, updated_at, priority
-           FROM issues
-           WHERE (LOWER(title) LIKE '%blocked%'
-              OR LOWER(title) LIKE '%blocker%'
-              OR LOWER(title) LIKE '%waiting on%'
-              OR LOWER(title) LIKE '%waiting for%'
-              OR LOWER(title) LIKE '%stuck%'
-              OR LOWER(description) LIKE '%blocked%'
-              OR LOWER(description) LIKE '%blocker%'
-              OR LOWER(description) LIKE '%waiting on%'
-              OR LOWER(description) LIKE '%waiting for%'
-              OR LOWER(description) LIKE '%stuck%')
-             AND status != 'closed'
-           LIMIT 10`).then(([rows]) => rows),
-            // hotspots — aging WIP: in-progress older than 7 days
-            dolt.pool.execute(`SELECT id, title, status, updated_at, priority
-           FROM issues
-           WHERE status = 'in-progress'
-             AND updated_at < DATE_SUB(NOW(), INTERVAL 7 DAY)
-           ORDER BY updated_at ASC
-           LIMIT 10`).then(([rows]) => rows),
-            // hotspots — high priority open (priority 0=urgent, 1=high)
-            dolt.pool.execute(`SELECT id, title, status, priority
-           FROM issues
-           WHERE status = 'open' AND priority <= 1
-           ORDER BY priority ASC
-           LIMIT 10`).then(([rows]) => rows),
-            // components: issue_type × status counts
-            dolt.pool.execute(`SELECT issue_type, status, COUNT(*) AS count
-           FROM issues
-           GROUP BY issue_type, status`).then(([rows]) => rows),
         ]);
+        // Split boardAndComponentStats into status counts and type stats
+        const statusCountsMap = new Map();
+        const typeStatsRows = [];
+        for (const row of boardAndComponentStats) {
+            const status = row.status;
+            const issueType = row.issue_type;
+            const count = Number(row.cnt);
+            // Aggregate by status for board_metrics
+            statusCountsMap.set(status, (statusCountsMap.get(status) || 0) + count);
+            // Keep per-type breakdowns for components
+            typeStatsRows.push({ issue_type: issueType, status, count });
+        }
+        const statusCounts = Array.from(statusCountsMap.entries()).map(([status, count]) => ({
+            status,
+            count,
+        }));
+        // Split hotspots by type
+        const blockedRows = hotspots.filter((r) => r.hotspot_type === 'blocked');
+        const agingWipRows = hotspots.filter((r) => r.hotspot_type === 'aging_wip');
+        const highPriorityRows = hotspots.filter((r) => r.hotspot_type === 'high_priority');
         // Build blocks from pre-aggregated data
         const blocks = [
             {
