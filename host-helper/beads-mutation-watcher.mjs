@@ -3,6 +3,12 @@
 /**
  * Beads Mutation Watcher
  *
+ * @deprecated Replaced by dolt-commit-watcher.mjs which uses Dolt commit-based
+ * change detection instead of the beads SDK polling approach. The Dolt watcher
+ * provides atomic change detection via commit hashes and dolt_diff(), eliminating
+ * the dependency on @herbcaudill/beads-sdk for watching mutations.
+ * See: host-helper/dolt-commit-watcher.mjs
+ *
  * Replaces the bash inotifywait-based beads-watcher.sh with a direct
  * daemon connection via the beads SDK. Polls for mutation events and
  * triggers targeted single-issue syncs instead of full-project syncs.
