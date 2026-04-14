@@ -72,8 +72,7 @@ export function QuickActions() {
           <p className="font-semibold mb-1">What does this do?</p>
           <ul className="list-disc list-inside space-y-1">
             <li>Scans project registry for changes</li>
-            <li>Syncs beads issues across all projects</li>
-            <li>Updates project metadata and beads issue counts</li>
+            <li>Updates project metadata and registry state</li>
             <li>Bypasses scheduled interval for immediate execution</li>
           </ul>
         </div>

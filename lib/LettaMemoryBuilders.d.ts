@@ -2,7 +2,7 @@
  * Type declarations for LettaMemoryBuilders.js
  */
 
-export interface BeadsIssue {
+export interface NormalizedIssue {
   id: string;
   identifier: string;
   title: string;
@@ -13,12 +13,6 @@ export interface BeadsIssue {
   modifiedOn: number;
   component: string | null;
   assignee: string | null;
-  _beads: {
-    raw_status: string;
-    raw_priority: number;
-    closed_at: string | null;
-    close_reason: string | null;
-  };
 }
 
 export interface Project {
@@ -36,18 +30,18 @@ export function buildProjectMeta(
 
 export function buildBoardConfig(): any;
 
-export function buildBoardMetrics(issues: BeadsIssue[]): any;
+export function buildBoardMetrics(issues: NormalizedIssue[]): any;
 
-export function buildHotspots(issues: BeadsIssue[]): any;
+export function buildHotspots(issues: NormalizedIssue[]): any;
 
-export function buildBacklogSummary(issues: BeadsIssue[]): any;
+export function buildBacklogSummary(issues: NormalizedIssue[]): any;
 
 export function buildRecentActivity(activityData: any): any;
 
-export function buildComponentsSummary(issues: BeadsIssue[]): any;
+export function buildComponentsSummary(issues: NormalizedIssue[]): any;
 
 export function buildChangeLog(
-  currentIssues: BeadsIssue[],
+  currentIssues: NormalizedIssue[],
   lastSyncTimestamp: number | null,
   db: any,
   projectIdentifier: string

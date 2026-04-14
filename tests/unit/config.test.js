@@ -32,7 +32,6 @@ describe('config', () => {
       const config = loadConfig();
 
       expect(config).toBeDefined();
-      expect(config.beads).toBeDefined();
       expect(config.sync).toBeDefined();
       expect(config.stacks).toBeDefined();
       expect(config.letta).toBeDefined();
@@ -188,7 +187,6 @@ describe('config', () => {
       const config = loadConfig();
       const summary = getConfigSummary(config);
 
-      expect(summary).toHaveProperty('beadsEnabled');
       expect(summary).toHaveProperty('syncInterval');
       expect(summary).toHaveProperty('dryRun');
     });

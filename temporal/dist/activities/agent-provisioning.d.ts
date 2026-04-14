@@ -96,9 +96,9 @@ export interface UpdateAgentsMdResult {
 /**
  * Resolve the project's filesystem path and regenerate AGENTS.md with
  * current managed sections (project-info, reporting-hierarchy,
- * beads-instructions, session-completion, bookstack-docs, codebase-context).
+ * session-completion, bookstack-docs, codebase-context).
  *
- * This ensures existing agents get up-to-date Beads instructions and other
+ * This ensures existing agents get up-to-date issue-tracking instructions and other
  * managed content even when the agent was not newly created.
  *
  * Idempotent — safe to call on every provisioning run.

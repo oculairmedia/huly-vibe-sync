@@ -1,10 +1,4 @@
 "use strict";
-/**
- * Data Reconciliation Activities
- *
- * Detects stale Beads references in the sync database and
- * optionally marks or deletes stale records.
- */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -12,15 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.reconcileSyncData = reconcileSyncData;
 const path_1 = __importDefault(require("path"));
 const activity_1 = require("@temporalio/activity");
-const lib_1 = require("../lib");
 const { createSyncDatabase } = require(path_1.default.join(process.cwd(), 'lib', 'database.js'));
 function resolveDbPath() {
     return process.env.DB_PATH || path_1.default.join(process.cwd(), 'logs', 'sync-state.db');
-}
-function normalizeId(value) {
-    if (value === null || value === undefined)
-        return '';
-    return String(value);
 }
 function handleReconciliationError(error, context) {
     const message = error instanceof Error ? error.message : String(error);
@@ -34,9 +22,9 @@ async function reconcileSyncData(input = {}) {
         action,
         dryRun,
         projectsProcessed: 0,
-        projectsWithBeadsChecked: 0,
-        staleBeads: [],
-        updated: { markedBeads: 0, deleted: 0 },
+        projectsChecked: 0,
+        staleIssues: [],
+        updated: { markedDeleted: 0, deleted: 0 },
         errors: [],
     };
     const dbPath = resolveDbPath();
@@ -46,48 +34,11 @@ async function reconcileSyncData(input = {}) {
             ? [db.getProject(input.projectIdentifier)].filter(Boolean)
             : db.getAllProjects();
         result.projectsProcessed = projects.length;
-        for (const project of projects) {
-            const projectId = project.identifier;
-            if (project.filesystem_path) {
-                try {
-                    const beadsClient = (0, lib_1.createBeadsClient)(project.filesystem_path);
-                    if (beadsClient.isInitialized()) {
-                        const issues = await beadsClient.listIssues();
-                        const beadsIssueIds = new Set(issues.map(issue => normalizeId(issue.id)));
-                        const dbIssues = db.getIssuesWithBeadsIssueId(projectId);
-                        for (const issue of dbIssues) {
-                            const beadsIssueId = normalizeId(issue.beads_issue_id);
-                            if (!beadsIssueId || beadsIssueIds.has(beadsIssueId))
-                                continue;
-                            result.staleBeads.push({
-                                identifier: issue.identifier,
-                                projectIdentifier: projectId,
-                                beadsIssueId,
-                            });
-                            if (!dryRun) {
-                                if (action === 'hard_delete') {
-                                    db.deleteIssue(issue.identifier);
-                                    result.updated.deleted++;
-                                }
-                                else {
-                                    db.markDeletedFromBeads(issue.identifier);
-                                    result.updated.markedBeads++;
-                                }
-                            }
-                        }
-                        result.projectsWithBeadsChecked++;
-                    }
-                }
-                catch (error) {
-                    const message = error instanceof Error ? error.message : String(error);
-                    result.errors.push(`[${projectId}] Beads reconcile failed: ${message}`);
-                }
-            }
-        }
+        console.log('[Reconcile] Legacy tracker reconciliation skipped; integration removed');
         console.log('[Reconcile] Summary', {
             projectsProcessed: result.projectsProcessed,
-            projectsWithBeadsChecked: result.projectsWithBeadsChecked,
-            staleBeads: result.staleBeads.length,
+            projectsChecked: result.projectsChecked,
+            staleIssues: result.staleIssues.length,
             action: result.action,
             dryRun: result.dryRun,
         });

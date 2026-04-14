@@ -2,7 +2,7 @@
  * Temporal Workflow Triggers
  *
  * Helper functions for external services to trigger bidirectional sync workflows.
- * Used by: BeadsWatcher, HulyWebhookHandler
+ * Used by webhook and external sync handlers.
  */
 
 import { Client, Connection } from '@temporalio/client';
@@ -78,34 +78,6 @@ export async function triggerSyncFromHuly(
   });
 
   console.log(`[Temporal] Started SyncFromHulyWorkflow: ${workflowId}`);
-  return { workflowId };
-}
-
-/**
- * Trigger sync when Beads issue changes
- */
-export async function triggerSyncFromBeads(
-  beadsIssueId: string,
-  context: SyncContext,
-  linkedIds?: LinkedIds
-): Promise<{ workflowId: string }> {
-  const temporal = await getClient();
-  const workflowId = `sync-beads-${beadsIssueId}-${Date.now()}`;
-
-  await temporal.workflow.start('SyncFromBeadsWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId,
-    workflowExecutionTimeout: '5 minutes',
-    args: [
-      {
-        beadsIssueId,
-        context,
-        linkedIds,
-      },
-    ],
-  });
-
-  console.log(`[Temporal] Started SyncFromBeadsWorkflow: ${workflowId}`);
   return { workflowId };
 }
 

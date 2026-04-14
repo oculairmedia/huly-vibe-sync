@@ -4,16 +4,16 @@
  * Main dashboard displaying registry status, health metrics, and controls
  */
 
-'use client'
+'use client';
 
-import { SyncStatusCard } from '@/components/dashboard/SyncStatusCard'
-import { HealthMetrics } from '@/components/dashboard/HealthMetrics'
-import { QuickActions } from '@/components/dashboard/QuickActions'
-import { ConnectionStatus } from '@/components/dashboard/ConnectionStatus'
-import { DatabaseStats } from '@/components/dashboard/DatabaseStats'
-import { ProjectsList } from '@/components/dashboard/ProjectsList'
-import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
-import { TemporalMonitor } from '@/components/dashboard/TemporalMonitor'
+import { SyncStatusCard } from '@/components/dashboard/SyncStatusCard';
+import { HealthMetrics } from '@/components/dashboard/HealthMetrics';
+import { QuickActions } from '@/components/dashboard/QuickActions';
+import { ConnectionStatus } from '@/components/dashboard/ConnectionStatus';
+import { DatabaseStats } from '@/components/dashboard/DatabaseStats';
+import { ProjectsList } from '@/components/dashboard/ProjectsList';
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { TemporalMonitor } from '@/components/dashboard/TemporalMonitor';
 
 export default function DashboardPage() {
   return (
@@ -23,12 +23,8 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                VibeSync Dashboard
-              </h1>
-              <p className="text-sm text-gray-600">
-                Project Registry & System Monitor
-              </p>
+              <h1 className="text-2xl font-bold text-gray-900">VibeSync Dashboard</h1>
+              <p className="text-sm text-gray-600">Project Registry & System Monitor</p>
             </div>
             <ConnectionStatus />
           </div>
@@ -77,8 +73,8 @@ export default function DashboardPage() {
           <h2 className="mb-4 text-lg font-semibold">About</h2>
           <div className="space-y-2 text-sm text-gray-600">
             <p>
-              This dashboard monitors the VibeSync registry — a centralized system for
-              managing project metadata, beads issues, and synchronization state.
+              This dashboard monitors the VibeSync registry — a centralized system for managing
+              project metadata and synchronization state.
             </p>
             <p>
               <strong>Features:</strong>
@@ -93,5 +89,5 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

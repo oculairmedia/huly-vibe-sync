@@ -3,7 +3,6 @@
 
 FROM node:20-slim
 
-# Install git (required for Beads operations)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -20,7 +19,6 @@ RUN npm ci --omit=dev
 COPY temporal/dist ./temporal/dist
 COPY temporal/package.json ./temporal/
 
-# Copy Beads CLI binary from repository root
 COPY bd-binary /usr/local/bin/bd
 RUN chmod +x /usr/local/bin/bd
 

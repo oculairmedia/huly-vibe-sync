@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react';
 
-type SortField = 'identifier' | 'name' | 'tech_stack' | 'letta_agent_id' | 'beads_issue_count' | 'status';
+type SortField = 'identifier' | 'name' | 'tech_stack' | 'letta_agent_id' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 const COLUMNS: { key: SortField; label: string }[] = [
@@ -33,7 +33,6 @@ const COLUMNS: { key: SortField; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'tech_stack', label: 'Tech Stack' },
   { key: 'letta_agent_id', label: 'Agent' },
-  { key: 'beads_issue_count', label: 'Beads Issues' },
   { key: 'status', label: 'Status' },
 ];
 
@@ -105,9 +104,7 @@ export function ProjectsList() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       projects = projects.filter(
-        p =>
-          p.name.toLowerCase().includes(q) ||
-          p.identifier.toLowerCase().includes(q)
+        p => p.name.toLowerCase().includes(q) || p.identifier.toLowerCase().includes(q)
       );
     }
 
@@ -131,10 +128,6 @@ export function ProjectsList() {
         case 'letta_agent_id':
           aVal = a.letta_agent_id ? 1 : 0;
           bVal = b.letta_agent_id ? 1 : 0;
-          break;
-        case 'beads_issue_count':
-          aVal = a.beads_issue_count ?? 0;
-          bVal = b.beads_issue_count ?? 0;
           break;
         case 'status':
           aVal = (a.status || '').toLowerCase();
@@ -244,7 +237,11 @@ export function ProjectsList() {
                   >
                     <span className="inline-flex items-center">
                       {col.label}
-                      <SortIcon field={col.key} sortField={sortField} sortDirection={sortDirection} />
+                      <SortIcon
+                        field={col.key}
+                        sortField={sortField}
+                        sortDirection={sortDirection}
+                      />
                     </span>
                   </th>
                 ))}
@@ -253,7 +250,10 @@ export function ProjectsList() {
             <tbody className="divide-y">
               {filteredAndSorted.length === 0 ? (
                 <tr>
-                  <td colSpan={COLUMNS.length} className="px-3 py-8 text-center text-muted-foreground">
+                  <td
+                    colSpan={COLUMNS.length}
+                    className="px-3 py-8 text-center text-muted-foreground"
+                  >
                     {searchQuery ? 'No projects match your filter.' : 'No projects found.'}
                   </td>
                 </tr>
@@ -269,12 +269,15 @@ export function ProjectsList() {
                         {project.identifier}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2.5 font-medium">
-                      {project.name}
-                    </td>
+                    <td className="px-3 py-2.5 font-medium">{project.name}</td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       {project.tech_stack ? (
-                        <span className={'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' + getTechStackColor(project.tech_stack)}>
+                        <span
+                          className={
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' +
+                            getTechStackColor(project.tech_stack)
+                          }
+                        >
                           {project.tech_stack}
                         </span>
                       ) : (
@@ -283,20 +286,16 @@ export function ProjectsList() {
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       {project.letta_agent_id ? (
-                        <span className="inline-flex items-center text-green-600" title={project.letta_agent_id}>
+                        <span
+                          className="inline-flex items-center text-green-600"
+                          title={project.letta_agent_id}
+                        >
                           <Check className="h-4 w-4" />
                         </span>
                       ) : (
                         <span className="inline-flex items-center text-red-400">
                           <X className="h-4 w-4" />
                         </span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums">
-                      {(project.beads_issue_count ?? 0) > 0 ? (
-                        <span className="font-medium text-amber-600">{project.beads_issue_count}</span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">

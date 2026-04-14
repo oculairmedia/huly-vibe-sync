@@ -21,16 +21,20 @@ import {
   Clock,
   HardDrive,
   RefreshCw,
-  Activity,
 } from 'lucide-react';
 
 function getStatusBadgeVariant(status: string): 'success' | 'warning' | 'error' | 'secondary' {
   switch (status.toLowerCase()) {
-    case 'active': return 'success';
-    case 'inactive': return 'secondary';
-    case 'error': return 'error';
-    case 'pending': return 'warning';
-    default: return 'secondary';
+    case 'active':
+      return 'success';
+    case 'inactive':
+      return 'secondary';
+    case 'error':
+      return 'error';
+    case 'pending':
+      return 'warning';
+    default:
+      return 'secondary';
   }
 }
 
@@ -176,7 +180,9 @@ export default function ProjectDetailPage() {
                   )}
                 </DetailRow>
                 <DetailRow label="Description">
-                  {project.description || <span className="text-muted-foreground italic">None</span>}
+                  {project.description || (
+                    <span className="text-muted-foreground italic">None</span>
+                  )}
                 </DetailRow>
                 <DetailRow label="Total Issues">
                   <span className="font-medium tabular-nums">{project.issue_count ?? 0}</span>
@@ -251,35 +257,6 @@ export default function ProjectDetailPage() {
                   ) : (
                     <span className="text-muted-foreground italic">No agent linked</span>
                   )}
-                </DetailRow>
-              </dl>
-            </CardContent>
-          </Card>
-
-          {/* Beads */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Activity className="h-5 w-5" />
-                Beads
-              </CardTitle>
-              <CardDescription>Beads integration details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-3">
-                <DetailRow label="Beads Prefix">
-                  {project.beads_prefix ? (
-                    <code className="rounded bg-muted px-2 py-0.5 text-xs font-mono">
-                      {project.beads_prefix}
-                    </code>
-                  ) : (
-                    <span className="text-muted-foreground italic">Not set</span>
-                  )}
-                </DetailRow>
-                <DetailRow label="Beads Issues">
-                  <span className={`font-medium tabular-nums ${(project.beads_issue_count ?? 0) > 0 ? 'text-amber-600' : ''}`}>
-                    {project.beads_issue_count ?? 0}
-                  </span>
                 </DetailRow>
               </dl>
             </CardContent>

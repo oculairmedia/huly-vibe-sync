@@ -12,7 +12,10 @@ describe('ProjectRegistry', () => {
   beforeEach(() => {
     testDbPath = path.join(process.env.DB_PATH.replace('.db', `-registry-${Date.now()}.db`));
     db = new SyncDatabase(testDbPath);
-    db.initialize();
+    const initialize = Reflect.get(db, 'initialize');
+    if (typeof initialize === 'function') {
+      initialize.call(db);
+    }
 
     testStacksDir = path.join(process.env.STACKS_DIR, `reg-${Date.now()}`);
     fs.mkdirSync(testStacksDir, { recursive: true });
@@ -77,14 +80,14 @@ describe('ProjectRegistry', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should discover directories with .beads', () => {
+    it('should skip directories with only .beads', () => {
       createDir('my-beads-project', { beads: true });
 
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
       const result = registry.scanProjects();
 
-      expect(result.discovered).toBe(1);
-      expect(result.updated).toBe(1);
+      expect(result.discovered).toBe(0);
+      expect(result.updated).toBe(0);
     });
 
     it('should discover directories with both .git and .beads', () => {
@@ -97,7 +100,7 @@ describe('ProjectRegistry', () => {
       expect(result.updated).toBe(1);
     });
 
-    it('should skip directories without .git or .beads', () => {
+    it('should skip directories without .git', () => {
       createDir('no-markers');
 
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
@@ -142,8 +145,8 @@ describe('ProjectRegistry', () => {
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
       const result = registry.scanProjects();
 
-      expect(result.discovered).toBe(3);
-      expect(result.updated).toBe(3);
+      expect(result.discovered).toBe(2);
+      expect(result.updated).toBe(2);
     });
 
     it('should upsert projects into the database', () => {
@@ -273,64 +276,6 @@ describe('ProjectRegistry', () => {
     });
   });
 
-  describe('beads detection', () => {
-    it('should count beads issues from issues.jsonl', () => {
-      const issuesJsonl = [
-        JSON.stringify({ id: '1', title: 'Issue 1', status: 'open' }),
-        JSON.stringify({ id: '2', title: 'Issue 2', status: 'closed' }),
-        JSON.stringify({ id: '3', title: 'Issue 3', status: 'open' }),
-      ].join('\n');
-
-      createDir('beads-proj', {
-        beads: true,
-        files: [
-          { name: '.beads/issues.jsonl', content: issuesJsonl },
-        ],
-      });
-
-      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      registry.scanProjects();
-
-      const project = db.getProject('beads-proj');
-      expect(project.beads_issue_count).toBe(3);
-    });
-
-    it('should read beads prefix from metadata.json dolt_database', () => {
-      createDir('prefixed-proj', {
-        beads: true,
-        files: [{ name: '.beads/metadata.json', content: JSON.stringify({ dolt_database: 'pfxd_proj' }) }],
-      });
-
-      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      registry.scanProjects();
-
-      const project = db.getProject('prefixed-proj');
-      // dolt_database underscores are converted to hyphens
-      expect(project.beads_prefix).toBe('pfxd-proj');
-    });
-
-    it('should fallback to directory name when metadata.json missing', () => {
-      createDir('no-config-proj', { beads: true });
-
-      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      registry.scanProjects();
-
-      const project = db.getProject('no-config-proj');
-      // Falls back to directory name
-      expect(project.beads_prefix).toBe('no-config-proj');
-    });
-
-    it('should set beads_issue_count to 0 for non-beads projects', () => {
-      createDir('git-only', { git: true });
-
-      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      registry.scanProjects();
-
-      const project = db.getProject('git-only');
-      expect(project.beads_issue_count).toBe(0);
-    });
-  });
-
   describe('git URL detection', () => {
     it('should read git remote URL', () => {
       const dirPath = createDir('git-url-proj', { git: true });
@@ -391,14 +336,6 @@ describe('ProjectRegistry', () => {
 
       expect(nodeProjects.length).toBe(1);
       expect(nodeProjects[0].tech_stack).toBe('node');
-    });
-
-    it('should filter by has_beads', () => {
-      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      const beadsProjects = registry.getProjects({ has_beads: true });
-
-      expect(beadsProjects.length).toBe(1);
-      expect(beadsProjects[0].beads_prefix).toBe('proj-a');
     });
 
     it('should filter by status', () => {
@@ -469,14 +406,89 @@ describe('ProjectRegistry', () => {
       expect(() => registry.registerProject('/nonexistent/dir')).toThrow('does not exist');
     });
 
-    it('should work for directory without .git or .beads', () => {
+    it('should reject a directory without .git', () => {
       const dirPath = createDir('plain-reg');
 
       const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
-      const project = registry.registerProject(dirPath);
+      expect(() => registry.registerProject(dirPath)).toThrow('not a git repository');
+    });
+  });
 
-      expect(project).toBeTruthy();
-      expect(project.filesystem_path).toBe(dirPath);
+  describe('updateProject', () => {
+    it('should update filesystem_path and git_url', () => {
+      const originalPath = createDir('original-proj', { git: true });
+      const updatedPath = createDir('updated-proj', {
+        git: true,
+        files: [{ name: 'go.mod', content: '' }],
+      });
+
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      registry.registerProject(originalPath);
+
+      const project = registry.updateProject('original-proj', {
+        filesystem_path: updatedPath,
+        git_url: 'https://github.com/oculairmedia/updated-proj.git',
+      });
+
+      expect(project.filesystem_path).toBe(updatedPath);
+      expect(project.git_url).toBe('https://github.com/oculairmedia/updated-proj.git');
+      expect(project.tech_stack).toBe('go');
+    });
+
+    it('should return null for unknown project', () => {
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      expect(
+        registry.updateProject('UNKNOWN', { git_url: 'https://example.com/repo.git' })
+      ).toBeNull();
+    });
+
+    it('should throw when updated filesystem path does not exist', () => {
+      const originalPath = createDir('existing-proj', { git: true });
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      registry.registerProject(originalPath);
+
+      expect(() =>
+        registry.updateProject('existing-proj', { filesystem_path: '/nonexistent/path' })
+      ).toThrow('does not exist');
+    });
+
+    it('should update project status for archiving', () => {
+      const originalPath = createDir('archive-proj', { git: true });
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      registry.registerProject(originalPath);
+
+      const project = registry.updateProject('archive-proj', { status: 'archived' });
+
+      expect(project.status).toBe('archived');
+    });
+  });
+
+  describe('archiveProject and deleteProject', () => {
+    it('should archive an existing project', () => {
+      const dirPath = createDir('archivable-proj', { git: true });
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      registry.registerProject(dirPath);
+
+      const project = registry.archiveProject('archivable-proj');
+
+      expect(project.status).toBe('archived');
+      expect(registry.getProject('archivable-proj').status).toBe('archived');
+    });
+
+    it('should delete an existing project', () => {
+      const dirPath = createDir('deletable-proj', { git: true });
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      registry.registerProject(dirPath);
+
+      const deleted = registry.deleteProject('deletable-proj');
+
+      expect(deleted).toBe(true);
+      expect(registry.getProject('deletable-proj')).toBeNull();
+    });
+
+    it('should return false when deleting an unknown project', () => {
+      const registry = new ProjectRegistry({ db, baseDir: testStacksDir });
+      expect(registry.deleteProject('UNKNOWN')).toBe(false);
     });
   });
 

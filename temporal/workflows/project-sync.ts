@@ -228,9 +228,6 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
                 title: issue.title,
                 description: issue.description,
                 status: issue.status,
-                beadsIssueId: issue.id,
-                beadsStatus: issue.status,
-                beadsModifiedAt: Date.now(),
               };
             }
           );
@@ -267,30 +264,16 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           });
 
           if (agentCheck.exists && agentCheck.agentId) {
-            // Prefer SQL path when gitRepoPath is available (Dolt aggregation).
-            // Falls back to array path inside updateLettaMemory if SQL fails.
-            if (beadsInitialized && gitRepoPath) {
-              const memResult = await updateLettaMemory({
-                agentId: agentCheck.agentId,
-                project: project,
-                gitRepoPath: gitRepoPath,
-                gitUrl: undefined,
-              });
-              result.lettaUpdated = memResult.success;
-            } else {
-              // No Dolt available — fetch issues array as fallback
-              const beadsIssues = beadsInitialized && gitRepoPath
-                ? await fetchBeadsIssues({ gitRepoPath })
-                : [];
-              const memResult = await updateLettaMemory({
-                agentId: agentCheck.agentId,
-                project: project,
-                issues: beadsIssues as any,
-                gitRepoPath: gitRepoPath || undefined,
-                gitUrl: undefined,
-              });
-              result.lettaUpdated = memResult.success;
-            }
+            const beadsIssues =
+              beadsInitialized && gitRepoPath ? await fetchBeadsIssues({ gitRepoPath }) : [];
+            const memResult = await updateLettaMemory({
+              agentId: agentCheck.agentId,
+              project: project,
+              issues: beadsIssues as any,
+              gitRepoPath: gitRepoPath || undefined,
+              gitUrl: undefined,
+            });
+            result.lettaUpdated = memResult.success;
           }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);

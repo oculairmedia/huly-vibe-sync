@@ -42,6 +42,8 @@ if (projectPath) {
 
 Created `recreate-project-letta-files.js` to recreate all missing `.letta/settings.local.json` files for existing agents.
 
+> Historical note: this was a one-off recovery script used during the repair session and it has since been removed from the repository.
+
 **Script features**:
 
 - Reads agent IDs from database
@@ -53,7 +55,8 @@ Created `recreate-project-letta-files.js` to recreate all missing `.letta/settin
 ### 3. Executed Recreation
 
 ```bash
-node recreate-project-letta-files.js
+# Historical command from the recovery session:
+# node recreate-project-letta-files.js
 ```
 
 **Results**:
@@ -127,7 +130,7 @@ All 40 project-specific settings files verified to match their corresponding Let
 
 ### New Files
 
-1. **`recreate-project-letta-files.js`** - Script to recreate project settings files
+1. **`recreate-project-letta-files.js`** - one-off recovery script used during this repair and later removed
 2. **40 × `.letta/settings.local.json`** - Project-specific agent settings
 3. **40 × `.letta/.gitignore`** - Exclude settings from git
 
@@ -153,7 +156,7 @@ Each project now has:
 2. **Project Isolation**: Each project tracks its own agent independently
 3. **Git Safe**: `.gitignore` prevents committing agent IDs to version control
 4. **Automatic Creation**: Future agents will have settings files created automatically
-5. **Easy Recovery**: Recreation script can rebuild all settings from database
+5. **Easy Recovery**: the documented recovery approach can be recreated if needed, even though the one-off script is no longer kept in-tree
 
 ## Usage
 
@@ -166,10 +169,7 @@ letta  # Automatically resumes agent-c8487d94-c01e-4bb8-be27-2d976bd735c1
 
 ### Recreate All Files
 
-```bash
-cd /opt/stacks/huly-vibe-sync
-node recreate-project-letta-files.js
-```
+The original recovery used a one-off script that is no longer present. If this recovery path is needed again, rebuild it from the documented behavior in this file rather than expecting the script to exist.
 
 ## Skipped Projects
 
@@ -183,7 +183,7 @@ These can be recreated manually once the project directories exist.
 ## Future Considerations
 
 1. **New Projects**: Will automatically get `.letta/settings.local.json` created on first agent creation
-2. **Re-run Script**: Safe to re-run recreation script - will update existing files
+2. **Re-run Script**: the original one-off script was safe to re-run while it existed
 3. **Manual Cleanup**: If deleting an agent, also delete the project's `.letta/settings.local.json`
 4. **Backup**: Consider backing up `.letta` folders before cleanup operations
 
@@ -198,4 +198,4 @@ These can be recreated manually once the project directories exist.
 ✅ All 40 accessible project directories now have correct `.letta/settings.local.json` files  
 ✅ Agent IDs verified to match Letta server  
 ✅ Future agent creations will automatically create project files  
-✅ Recreation script available for recovery if needed
+✅ Recovery approach documented if it needs to be recreated later

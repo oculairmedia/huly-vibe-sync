@@ -3,7 +3,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
+import * as builders from '../../lib/LettaMemoryBuilders.js';
+
+const {
   buildProjectMeta,
   buildBoardConfig,
   buildBoardMetrics,
@@ -14,21 +16,21 @@ import {
   buildChangeLog,
   buildScratchpad,
   buildExpression,
-  buildBoardMetricsFromSQL,
-  buildBacklogSummaryFromSQL,
-  buildHotspotsFromSQL,
-  buildComponentsSummaryFromSQL,
-  buildRecentActivityFromSQL,
-} from '../../lib/LettaMemoryBuilders.js';
+} = builders;
 
-// Helper to create beads-format test issues
-function createBeadsIssue(overrides = {}) {
+const buildBoardMetricsFromSQL = Reflect.get(builders, 'buildBoardMetricsFromSQL');
+const buildBacklogSummaryFromSQL = Reflect.get(builders, 'buildBacklogSummaryFromSQL');
+const buildHotspotsFromSQL = Reflect.get(builders, 'buildHotspotsFromSQL');
+const buildComponentsSummaryFromSQL = Reflect.get(builders, 'buildComponentsSummaryFromSQL');
+const buildRecentActivityFromSQL = Reflect.get(builders, 'buildRecentActivityFromSQL');
+
+function createIssue(overrides = {}) {
   const defaults = {
     id: 'test-' + Math.random().toString(36).substring(7),
     identifier: 'TEST-1',
     title: 'Test Issue',
     description: '',
-    status: 'Todo', // Normalized status
+    status: 'open',
     priority: 'medium', // Normalized priority
     createdOn: Date.now(),
     modifiedOn: Date.now(),
@@ -41,7 +43,13 @@ function createBeadsIssue(overrides = {}) {
       close_reason: null,
     },
   };
-  return { ...defaults, ...overrides };
+
+  const issue = { ...defaults, ...overrides };
+  if (overrides.status === undefined && overrides._beads?.raw_status) {
+    issue.status = overrides._beads.raw_status;
+  }
+
+  return issue;
 }
 
 describe('Letta Memory Block Builders', () => {
@@ -68,12 +76,12 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should handle missing optional fields', () => {
-      const project = { name: 'Minimal Project' };
+      const project = { identifier: 'MINIMAL', name: 'Minimal Project' };
 
       const result = buildProjectMeta(project, null, null);
 
       expect(result.name).toBe('Minimal Project');
-      expect(result.identifier).toBe('Minimal Project'); // Falls back to name
+      expect(result.identifier).toBe('MINIMAL');
       expect(result.description).toBe('');
       expect(result.repository.filesystem_path).toBeNull();
     });
@@ -83,7 +91,7 @@ describe('Letta Memory Block Builders', () => {
   // buildBoardConfig Tests
   // ============================================================
   describe('buildBoardConfig', () => {
-    it('should return beads workflow configuration', () => {
+    it('should return workflow configuration', () => {
       const result = buildBoardConfig();
 
       expect(result.statuses.open).toBeDefined();
@@ -91,7 +99,7 @@ describe('Letta Memory Block Builders', () => {
       expect(result.statuses.closed).toBeDefined();
       expect(result.priorities.P0).toContain('Urgent');
       expect(result.priorities.P4).toContain('Backlog');
-      expect(result.workflow.description).toContain('Beads');
+      expect(result.workflow.description).toContain('issue workflow');
       expect(result.workflow.status_flow).toBe('open → in-progress → closed');
     });
   });
@@ -100,13 +108,13 @@ describe('Letta Memory Block Builders', () => {
   // buildBoardMetrics Tests
   // ============================================================
   describe('buildBoardMetrics', () => {
-    it('should calculate metrics from beads issues', () => {
+    it('should calculate metrics from normalized issue statuses', () => {
       const issues = [
-        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
-        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
-        createBeadsIssue({ _beads: { raw_status: 'in-progress', raw_priority: 1 } }),
-        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
-        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
+        createIssue({ status: 'open' }),
+        createIssue({ status: 'open' }),
+        createIssue({ status: 'in-progress' }),
+        createIssue({ status: 'closed' }),
+        createIssue({ status: 'closed' }),
       ];
 
       const result = buildBoardMetrics(issues);
@@ -134,21 +142,21 @@ describe('Letta Memory Block Builders', () => {
   describe('buildHotspots', () => {
     it('should identify blocked items by keywords', () => {
       const issues = [
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-1',
           title: 'Normal task',
-          _beads: { raw_status: 'open' },
+          status: 'open',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-2',
           title: 'Blocked by API',
-          _beads: { raw_status: 'in-progress' },
+          status: 'in-progress',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-3',
           title: 'Waiting on review',
           description: '',
-          _beads: { raw_status: 'in-progress' },
+          status: 'in-progress',
         }),
       ];
 
@@ -162,10 +170,10 @@ describe('Letta Memory Block Builders', () => {
     it('should identify ageing WIP items', () => {
       const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
       const issues = [
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-1',
           title: 'Old task',
-          _beads: { raw_status: 'in-progress' },
+          status: 'in-progress',
           modifiedOn: tenDaysAgo,
         }),
       ];
@@ -178,16 +186,16 @@ describe('Letta Memory Block Builders', () => {
 
     it('should identify high priority open items', () => {
       const issues = [
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-1',
           title: 'Urgent fix',
-          _beads: { raw_status: 'open' },
+          status: 'open',
           priority: 'urgent',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-2',
           title: 'Normal task',
-          _beads: { raw_status: 'open' },
+          status: 'open',
           priority: 'medium',
         }),
       ];
@@ -205,28 +213,28 @@ describe('Letta Memory Block Builders', () => {
   describe('buildBacklogSummary', () => {
     it('should summarize backlog by priority', () => {
       const issues = [
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-1',
           title: 'Urgent',
-          _beads: { raw_status: 'open' },
+          status: 'open',
           priority: 'urgent',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-2',
           title: 'High',
-          _beads: { raw_status: 'open' },
+          status: 'open',
           priority: 'high',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-3',
           title: 'Medium',
-          _beads: { raw_status: 'open' },
+          status: 'open',
           priority: 'medium',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-4',
           title: 'Done',
-          _beads: { raw_status: 'closed' },
+          status: 'closed',
           priority: 'high',
         }),
       ];
@@ -243,10 +251,10 @@ describe('Letta Memory Block Builders', () => {
 
     it('should limit to top 15 items', () => {
       const issues = Array.from({ length: 20 }, (_, i) =>
-        createBeadsIssue({
+        createIssue({
           identifier: `TEST-${i}`,
           title: `Task ${i}`,
-          _beads: { raw_status: 'open' },
+          status: 'open',
         })
       );
 
@@ -390,22 +398,22 @@ describe('Letta Memory Block Builders', () => {
   describe('buildComponentsSummary', () => {
     it('should build issue type summary with counts', () => {
       const issues = [
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-1',
           component: 'task',
-          _beads: { raw_status: 'closed' },
+          status: 'closed',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-2',
           component: 'task',
-          _beads: { raw_status: 'open' },
+          status: 'open',
         }),
-        createBeadsIssue({
+        createIssue({
           identifier: 'TEST-3',
           component: 'bug',
-          _beads: { raw_status: 'in-progress' },
+          status: 'in-progress',
         }),
-        createBeadsIssue({ identifier: 'TEST-4', component: null, _beads: { raw_status: 'open' } }), // Untyped
+        createIssue({ identifier: 'TEST-4', component: null, status: 'open' }),
       ];
 
       const result = buildComponentsSummary(issues);
@@ -438,13 +446,25 @@ describe('Letta Memory Block Builders', () => {
 
     it('should calculate status breakdown per type', () => {
       const issues = [
-        createBeadsIssue({ identifier: 'TEST-1', component: 'feature', _beads: { raw_status: 'open' } }),
-        createBeadsIssue({ identifier: 'TEST-2', component: 'feature', _beads: { raw_status: 'open' } }),
-        createBeadsIssue({ identifier: 'TEST-3', component: 'feature', _beads: { raw_status: 'closed' } }),
-        createBeadsIssue({
+        createIssue({
+          identifier: 'TEST-1',
+          component: 'feature',
+          status: 'open',
+        }),
+        createIssue({
+          identifier: 'TEST-2',
+          component: 'feature',
+          status: 'open',
+        }),
+        createIssue({
+          identifier: 'TEST-3',
+          component: 'feature',
+          status: 'closed',
+        }),
+        createIssue({
           identifier: 'TEST-4',
           component: 'feature',
-          _beads: { raw_status: 'in-progress' },
+          status: 'in-progress',
         }),
       ];
 
@@ -464,8 +484,16 @@ describe('Letta Memory Block Builders', () => {
   describe('buildChangeLog', () => {
     it('should mark all issues as new on first sync', () => {
       const currentIssues = [
-        createBeadsIssue({ identifier: 'TEST-1', title: 'Issue 1', _beads: { raw_status: 'open' } }),
-        createBeadsIssue({ identifier: 'TEST-2', title: 'Issue 2', _beads: { raw_status: 'closed' } }),
+        createIssue({
+          identifier: 'TEST-1',
+          title: 'Issue 1',
+          status: 'open',
+        }),
+        createIssue({
+          identifier: 'TEST-2',
+          title: 'Issue 2',
+          status: 'closed',
+        }),
       ];
       const mockDb = { getProjectIssues: () => [] };
 
@@ -478,12 +506,24 @@ describe('Letta Memory Block Builders', () => {
 
     it('should detect new issues', () => {
       const currentIssues = [
-        createBeadsIssue({ identifier: 'TEST-1', title: 'Existing', _beads: { raw_status: 'open' } }),
-        createBeadsIssue({ identifier: 'TEST-2', title: 'New Issue', _beads: { raw_status: 'open' } }),
+        createIssue({
+          identifier: 'TEST-1',
+          title: 'Existing',
+          status: 'open',
+        }),
+        createIssue({
+          identifier: 'TEST-2',
+          title: 'New Issue',
+          status: 'open',
+        }),
       ];
       const mockDb = {
         getProjectIssues: () => [
-          createBeadsIssue({ identifier: 'TEST-1', title: 'Existing', _beads: { raw_status: 'open' } }),
+          createIssue({
+            identifier: 'TEST-1',
+            title: 'Existing',
+            status: 'open',
+          }),
         ],
       };
 
@@ -496,14 +536,18 @@ describe('Letta Memory Block Builders', () => {
 
     it('should detect status transitions', () => {
       const currentIssues = [
-        createBeadsIssue({ identifier: 'TEST-1', title: 'Issue 1', _beads: { raw_status: 'closed' } }),
+        createIssue({
+          identifier: 'TEST-1',
+          title: 'Issue 1',
+          status: 'closed',
+        }),
       ];
       const mockDb = {
         getProjectIssues: () => [
-          createBeadsIssue({
+          createIssue({
             identifier: 'TEST-1',
             title: 'Issue 1',
-            _beads: { raw_status: 'in-progress' },
+            status: 'in-progress',
           }),
         ],
       };
@@ -519,7 +563,11 @@ describe('Letta Memory Block Builders', () => {
       const currentIssues = [];
       const mockDb = {
         getProjectIssues: () => [
-          createBeadsIssue({ identifier: 'TEST-1', title: 'Removed Issue', _beads: { raw_status: 'open' } }),
+          createIssue({
+            identifier: 'TEST-1',
+            title: 'Removed Issue',
+            status: 'open',
+          }),
         ],
       };
 
@@ -531,11 +579,19 @@ describe('Letta Memory Block Builders', () => {
 
     it('should detect title changes', () => {
       const currentIssues = [
-        createBeadsIssue({ identifier: 'TEST-1', title: 'Updated Title', _beads: { raw_status: 'open' } }),
+        createIssue({
+          identifier: 'TEST-1',
+          title: 'Updated Title',
+          status: 'open',
+        }),
       ];
       const mockDb = {
         getProjectIssues: () => [
-          createBeadsIssue({ identifier: 'TEST-1', title: 'Old Title', _beads: { raw_status: 'open' } }),
+          createIssue({
+            identifier: 'TEST-1',
+            title: 'Old Title',
+            status: 'open',
+          }),
         ],
       };
 
@@ -547,10 +603,10 @@ describe('Letta Memory Block Builders', () => {
 
     it('should limit results to prevent large blocks', () => {
       const currentIssues = Array.from({ length: 20 }, (_, i) =>
-        createBeadsIssue({
+        createIssue({
           identifier: `TEST-${i}`,
           title: `Issue ${i}`,
-          _beads: { raw_status: 'open' },
+          status: 'open',
         })
       );
       const mockDb = { getProjectIssues: () => [] };
@@ -690,10 +746,7 @@ describe('Letta Memory Block Builders', () => {
     });
 
     it('should produce same shape as buildBoardMetrics', () => {
-      const issues = [
-        createBeadsIssue({ _beads: { raw_status: 'open', raw_priority: 2 } }),
-        createBeadsIssue({ _beads: { raw_status: 'closed', raw_priority: 2 } }),
-      ];
+      const issues = [createIssue({ status: 'open' }), createIssue({ status: 'closed' })];
       const arrayResult = buildBoardMetrics(issues);
       const sqlResult = buildBoardMetricsFromSQL([
         { status: 'open', count: 1 },
@@ -756,12 +809,8 @@ describe('Letta Memory Block Builders', () => {
           { id: 'b-1', title: 'Blocked by API', status: 'in-progress' },
           { id: 'b-2', title: 'Waiting on review', status: 'open' },
         ],
-        agingWip: [
-          { id: 'a-1', title: 'Old task', status: 'in-progress', updated_at: tenDaysAgo },
-        ],
-        highPriority: [
-          { id: 'h-1', title: 'Urgent fix', priority: 0 },
-        ],
+        agingWip: [{ id: 'a-1', title: 'Old task', status: 'in-progress', updated_at: tenDaysAgo }],
+        highPriority: [{ id: 'h-1', title: 'Urgent fix', priority: 0 }],
       });
 
       expect(result.blocked_items).toHaveLength(2);
@@ -790,7 +839,9 @@ describe('Letta Memory Block Builders', () => {
 
     it('should limit each category to 10 items', () => {
       const blocked = Array.from({ length: 15 }, (_, i) => ({
-        id: `b-${i}`, title: `Blocked ${i}`, status: 'open',
+        id: `b-${i}`,
+        title: `Blocked ${i}`,
+        status: 'open',
       }));
 
       const result = buildHotspotsFromSQL({
@@ -806,8 +857,16 @@ describe('Letta Memory Block Builders', () => {
       const result = buildHotspotsFromSQL({
         blocked: [],
         agingWip: [
-          { id: 'a-1', title: 'Newer', updated_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: 'a-2', title: 'Older', updated_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString() },
+          {
+            id: 'a-1',
+            title: 'Newer',
+            updated_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+          {
+            id: 'a-2',
+            title: 'Older',
+            updated_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+          },
         ],
         highPriority: [],
       });
@@ -873,10 +932,42 @@ describe('Letta Memory Block Builders', () => {
     it('should build activity from Dolt diff changes', () => {
       const doltChanges = {
         changes: [
-          { action: 'created', id: 'i-1', title: 'New issue', from_status: null, to_status: 'open', updated_at: '2025-06-01T10:00:00Z', diff_type: 'added' },
-          { action: 'updated', id: 'i-2', title: 'Updated issue', from_status: 'open', to_status: 'in-progress', updated_at: '2025-06-01T11:00:00Z', diff_type: 'modified' },
-          { action: 'closed', id: 'i-3', title: 'Closed issue', from_status: 'in-progress', to_status: 'closed', updated_at: '2025-06-01T12:00:00Z', diff_type: 'modified' },
-          { action: 'deleted', id: 'i-4', title: 'Deleted issue', from_status: 'open', to_status: null, updated_at: '2025-06-01T13:00:00Z', diff_type: 'removed' },
+          {
+            action: 'created',
+            id: 'i-1',
+            title: 'New issue',
+            from_status: null,
+            to_status: 'open',
+            updated_at: '2025-06-01T10:00:00Z',
+            diff_type: 'added',
+          },
+          {
+            action: 'updated',
+            id: 'i-2',
+            title: 'Updated issue',
+            from_status: 'open',
+            to_status: 'in-progress',
+            updated_at: '2025-06-01T11:00:00Z',
+            diff_type: 'modified',
+          },
+          {
+            action: 'closed',
+            id: 'i-3',
+            title: 'Closed issue',
+            from_status: 'in-progress',
+            to_status: 'closed',
+            updated_at: '2025-06-01T12:00:00Z',
+            diff_type: 'modified',
+          },
+          {
+            action: 'deleted',
+            id: 'i-4',
+            title: 'Deleted issue',
+            from_status: 'open',
+            to_status: null,
+            updated_at: '2025-06-01T13:00:00Z',
+            diff_type: 'removed',
+          },
         ],
         summary: { created: 1, updated: 1, closed: 1, deleted: 1, total: 4 },
         byStatus: { open: 1, 'in-progress': 1, closed: 1 },
@@ -1023,7 +1114,15 @@ describe('Letta Memory Block Builders', () => {
     it('should produce same output shape as buildRecentActivity', () => {
       const doltResult = buildRecentActivityFromSQL({
         changes: [
-          { action: 'created', id: 'i-1', title: 'Issue', from_status: null, to_status: 'open', updated_at: new Date().toISOString(), diff_type: 'added' },
+          {
+            action: 'created',
+            id: 'i-1',
+            title: 'Issue',
+            from_status: null,
+            to_status: 'open',
+            updated_at: new Date().toISOString(),
+            diff_type: 'added',
+          },
         ],
         summary: { created: 1, updated: 0, closed: 0, deleted: 0, total: 1 },
         byStatus: { open: 1 },
@@ -1031,7 +1130,15 @@ describe('Letta Memory Block Builders', () => {
       });
 
       const arrayResult = buildRecentActivity({
-        activities: [{ type: 'issue.created', issue: 'i-1', title: 'Issue', status: 'open', timestamp: new Date().toISOString() }],
+        activities: [
+          {
+            type: 'issue.created',
+            issue: 'i-1',
+            title: 'Issue',
+            status: 'open',
+            timestamp: new Date().toISOString(),
+          },
+        ],
         summary: { created: 1, updated: 0, total: 1 },
         byStatus: { open: 1 },
         since: '2025-05-31T10:00:00Z',

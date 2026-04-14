@@ -1,8 +1,3 @@
-/**
- * Sync Service Activities for Temporal
- *
- * Beads git commit activity. Huly-specific sync functions removed in Phase 4.
- */
 export interface SyncContext {
     projectIdentifier: string;
     gitRepoPath?: string;

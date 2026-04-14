@@ -3,7 +3,7 @@
  *
  * Re-exports all activities from sub-modules:
  *   - orchestration-projects: Registry-based project fetching
- *   - orchestration-git: Git repo path resolution, Beads operations
+ *   - orchestration-git: Git repo path resolution and tracker compatibility shims
  *   - orchestration-letta: Letta memory updates, metrics, error handling
  */
 export interface HulyProject {
@@ -27,6 +27,6 @@ export interface ProjectSyncContext {
     hulyIssues: HulyIssue[];
 }
 export { fetchRegistryProjects } from './orchestration-projects';
-export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, setDoltQueryServiceClass, } from './orchestration-git';
+export { resolveGitRepoPath, extractGitRepoPath, clearGitRepoPathCache, initializeBeads, fetchBeadsIssues, } from './orchestration-git';
 export { updateLettaMemory, recordSyncMetrics, handleOrchestratorError, } from './orchestration-letta';
 //# sourceMappingURL=orchestration.d.ts.map

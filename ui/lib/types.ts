@@ -9,145 +9,145 @@
 // ============================================================================
 
 export interface HealthResponse {
-  status: string
-  service: string
-  version: string
+  status: string;
+  service: string;
+  version: string;
   uptime: {
-    milliseconds: number
-    seconds: number
-    human: string
-  }
+    milliseconds: number;
+    seconds: number;
+    human: string;
+  };
   sync: {
-    lastSyncTime: string | null
-    lastSyncDuration: string | null
-    totalSyncs: number
-    errorCount: number
-    successRate: string
-  }
+    lastSyncTime: string | null;
+    lastSyncDuration: string | null;
+    totalSyncs: number;
+    errorCount: number;
+    successRate: string;
+  };
   lastError: {
-    message: string
-    timestamp: string
-    age: string
-  } | null
+    message: string;
+    timestamp: string;
+    age: string;
+  } | null;
   config: {
-    syncInterval: string
-    apiDelay: string
-    parallelSync: boolean
-    maxWorkers: number
-    dryRun: boolean
-    lettaEnabled: boolean
-  }
+    syncInterval: string;
+    apiDelay: string;
+    parallelSync: boolean;
+    maxWorkers: number;
+    dryRun: boolean;
+    lettaEnabled: boolean;
+  };
   memory: {
-    rss: string
-    heapUsed: string
-    heapTotal: string
-  }
+    rss: string;
+    heapUsed: string;
+    heapTotal: string;
+  };
   connectionPool: {
-    http: { sockets: number; freeSockets: number }
-    https: { sockets: number; freeSockets: number }
-  }
+    http: { sockets: number; freeSockets: number };
+    https: { sockets: number; freeSockets: number };
+  };
 }
 
 export interface StatsResponse {
-  uptime: HealthResponse['uptime']
-  sync: HealthResponse['sync']
-  memory: HealthResponse['memory']
-  connectionPool: HealthResponse['connectionPool']
-  sseClients: number
+  uptime: HealthResponse['uptime'];
+  sync: HealthResponse['sync'];
+  memory: HealthResponse['memory'];
+  connectionPool: HealthResponse['connectionPool'];
+  sseClients: number;
   syncHistory: {
-    total: number
-    mappings: number
-  }
+    total: number;
+    mappings: number;
+  };
   database?: {
-    totalProjects: number
-    activeProjects: number
-    emptyProjects: number
-    totalIssues: number
-    lastSync: string
-  }
+    totalProjects: number;
+    activeProjects: number;
+    emptyProjects: number;
+    totalIssues: number;
+    lastSync: string;
+  };
 }
 
 export interface ConfigResponse {
-  config: Configuration
-  updatedAt: string
+  config: Configuration;
+  updatedAt: string;
 }
 
 export interface Configuration {
   huly: {
-    apiUrl: string
-    useRestApi: boolean
-  }
+    apiUrl: string;
+    useRestApi: boolean;
+  };
   vibeKanban: {
-    apiUrl: string
-    useRestApi: boolean
-  }
+    apiUrl: string;
+    useRestApi: boolean;
+  };
   sync: {
-    interval: number
-    dryRun: boolean
-    incremental: boolean
-    parallel: boolean
-    maxWorkers: number
-    skipEmpty: boolean
-    apiDelay: number
-  }
+    interval: number;
+    dryRun: boolean;
+    incremental: boolean;
+    parallel: boolean;
+    maxWorkers: number;
+    skipEmpty: boolean;
+    apiDelay: number;
+  };
   stacks: {
-    baseDir: string
-  }
+    baseDir: string;
+  };
   letta: {
-    enabled: boolean
-    baseURL: string
-  }
+    enabled: boolean;
+    baseURL: string;
+  };
 }
 
 export interface ConfigUpdateRequest {
-  syncInterval?: number
-  maxWorkers?: number
-  apiDelay?: number
-  dryRun?: boolean
-  incremental?: boolean
-  parallel?: boolean
-  skipEmpty?: boolean
+  syncInterval?: number;
+  maxWorkers?: number;
+  apiDelay?: number;
+  dryRun?: boolean;
+  incremental?: boolean;
+  parallel?: boolean;
+  skipEmpty?: boolean;
 }
 
 export interface SyncTriggerRequest {
-  projectId?: string
+  projectId?: string;
 }
 
 export interface SyncTriggerResponse {
-  message: string
-  eventId: string
-  status: string
+  message: string;
+  eventId: string;
+  status: string;
 }
 
 export interface SyncEvent {
-  id: string
-  timestamp: string
-  type: string
-  projectId?: string
-  source?: string
-  duration?: number
-  status?: string
-  error?: string
+  id: string;
+  timestamp: string;
+  type: string;
+  projectId?: string;
+  source?: string;
+  duration?: number;
+  status?: string;
+  error?: string;
 }
 
 export interface SyncHistoryResponse {
-  total: number
-  limit: number
-  offset: number
-  entries: SyncEvent[]
-  hasMore: boolean
+  total: number;
+  limit: number;
+  offset: number;
+  entries: SyncEvent[];
+  hasMore: boolean;
 }
 
 export interface IssueMapping {
-  hulyIdentifier: string
-  vibeTaskId: string
-  lastSynced: string
-  [key: string]: any
+  hulyIdentifier: string;
+  vibeTaskId: string;
+  lastSynced: string;
+  [key: string]: any;
 }
 
 export interface MappingsResponse {
-  total: number
-  mappings: IssueMapping[]
+  total: number;
+  mappings: IssueMapping[];
 }
 
 // ============================================================================
@@ -155,58 +155,58 @@ export interface MappingsResponse {
 // ============================================================================
 
 export interface SSEEvent {
-  type: string
-  data: any
-  timestamp: string
+  type: string;
+  data: any;
+  timestamp: string;
 }
 
 export interface SSEConnectedEvent extends SSEEvent {
-  type: 'connected'
+  type: 'connected';
   data: {
-    clientId: string
-    timestamp: string
-  }
+    clientId: string;
+    timestamp: string;
+  };
 }
 
 export interface SSESyncStartedEvent extends SSEEvent {
-  type: 'sync:started'
+  type: 'sync:started';
   data: {
-    projectId?: string
-    timestamp: string
-  }
+    projectId?: string;
+    timestamp: string;
+  };
 }
 
 export interface SSESyncCompletedEvent extends SSEEvent {
-  type: 'sync:completed'
+  type: 'sync:completed';
   data: {
-    projectId?: string
-    duration: number
-    status: string
-    timestamp: string
-  }
+    projectId?: string;
+    duration: number;
+    status: string;
+    timestamp: string;
+  };
 }
 
 export interface SSESyncErrorEvent extends SSEEvent {
-  type: 'sync:error'
+  type: 'sync:error';
   data: {
-    projectId?: string
-    error: string
-    timestamp: string
-  }
+    projectId?: string;
+    error: string;
+    timestamp: string;
+  };
 }
 
 export interface SSEConfigUpdatedEvent extends SSEEvent {
-  type: 'config:updated'
+  type: 'config:updated';
   data: {
-    updates: ConfigUpdateRequest
-    config: Configuration
-    timestamp: string
-  }
+    updates: ConfigUpdateRequest;
+    config: Configuration;
+    timestamp: string;
+  };
 }
 
 export interface SSEHealthUpdatedEvent extends SSEEvent {
-  type: 'health:updated'
-  data: HealthResponse
+  type: 'health:updated';
+  data: HealthResponse;
 }
 
 export type SSEEventType =
@@ -215,17 +215,17 @@ export type SSEEventType =
   | SSESyncCompletedEvent
   | SSESyncErrorEvent
   | SSEConfigUpdatedEvent
-  | SSEHealthUpdatedEvent
+  | SSEHealthUpdatedEvent;
 
 // ============================================================================
 // Error Types
 // ============================================================================
 
 export interface ApiError {
-  error: string
-  statusCode: number
-  timestamp: string
-  details?: any
+  error: string;
+  statusCode: number;
+  timestamp: string;
+  details?: any;
 }
 
 // ============================================================================
@@ -233,15 +233,15 @@ export interface ApiError {
 // ============================================================================
 
 export interface UIState {
-  sidebarOpen: boolean
-  selectedProjectId: string | null
+  sidebarOpen: boolean;
+  selectedProjectId: string | null;
   filters: {
-    status?: string
+    status?: string;
     dateRange?: {
-      start: Date
-      end: Date
-    }
-  }
+      start: Date;
+      end: Date;
+    };
+  };
 }
 
 // ============================================================================
@@ -249,48 +249,46 @@ export interface UIState {
 // ============================================================================
 
 export interface Project {
-  id: string
-  name: string
-  description?: string
-  status: string
+  id: string;
+  name: string;
+  description?: string;
+  status: string;
 }
 
 export interface Issue {
-  identifier: string
-  title: string
-  description: string
-  status: string
-  priority: string
-  projectId: string
+  identifier: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  projectId: string;
 }
 
 export interface Task {
-  id: string
-  title: string
-  description: string
-  status: string
-  projectId: string
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  projectId: string;
 }
 
 export interface ProjectSummary {
-  identifier: string
-  name: string
-  tech_stack?: string
-  letta_agent_id?: string | null
-  beads_issue_count?: number
-  beads_prefix?: string
-  status?: string
-  last_scan_at?: string
-  issue_count?: number
-  filesystem_path?: string
-  git_url?: string
-  description?: string
-  last_sync_at?: string | null
-  [key: string]: any
+  identifier: string;
+  name: string;
+  tech_stack?: string;
+  letta_agent_id?: string | null;
+  status?: string;
+  last_scan_at?: string;
+  issue_count?: number;
+  filesystem_path?: string;
+  git_url?: string;
+  description?: string;
+  last_sync_at?: string | null;
+  [key: string]: any;
 }
 
 export interface ProjectsResponse {
-  total: number
-  projects: ProjectSummary[]
-  timestamp?: string
+  total: number;
+  projects: ProjectSummary[];
+  timestamp?: string;
 }

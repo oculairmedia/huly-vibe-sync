@@ -12,7 +12,7 @@ const connection_1 = require("./connection");
 /**
  * Schedule an issue sync workflow (fire-and-forget)
  *
- * Syncs an issue across Huly, VibeKanban, and Beads atomically.
+ * Syncs an issue across Huly, VibeKanban, and the legacy tracker shim atomically.
  * Returns immediately; workflow runs in background with retry.
  */
 async function scheduleIssueSync(input) {

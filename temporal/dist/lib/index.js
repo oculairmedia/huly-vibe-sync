@@ -1,9 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.clearVibeSyncClientCache = exports.createVibeSyncClient = exports.VibeSyncClient = exports.clearVibeClientCache = exports.createVibeClient = exports.VibeClient = exports.createBeadsClient = exports.BeadsClient = void 0;
-var BeadsClient_1 = require("./BeadsClient");
-Object.defineProperty(exports, "BeadsClient", { enumerable: true, get: function () { return BeadsClient_1.BeadsClient; } });
-Object.defineProperty(exports, "createBeadsClient", { enumerable: true, get: function () { return BeadsClient_1.createBeadsClient; } });
+exports.clearVibeSyncClientCache = exports.createVibeSyncClient = exports.VibeSyncClient = exports.clearVibeClientCache = exports.createVibeClient = exports.VibeClient = void 0;
 var VibeClient_1 = require("./VibeClient");
 Object.defineProperty(exports, "VibeClient", { enumerable: true, get: function () { return VibeClient_1.VibeClient; } });
 Object.defineProperty(exports, "createVibeClient", { enumerable: true, get: function () { return VibeClient_1.createVibeClient; } });

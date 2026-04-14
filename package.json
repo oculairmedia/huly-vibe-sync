@@ -40,7 +40,6 @@
   "author": "Oculair Media",
   "license": "MIT",
   "dependencies": {
-    "@herbcaudill/beads-sdk": "^1.0.0",
     "@letta-ai/letta-client": "^0.0.68665",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@temporalio/activity": "^1.11.0",

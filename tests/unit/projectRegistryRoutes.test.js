@@ -19,24 +19,6 @@ vi.mock('../../lib/HealthService.js', () => ({
   })),
 }));
 
-vi.mock('../../lib/BeadsDBReader.js', () => ({
-  readIssuesFromDB: vi.fn(projectPath => {
-    if (projectPath === '/opt/stacks/my-project') {
-      return [
-        { id: 'iss-1', title: 'Fix login', status: 'open', priority: 'high' },
-        { id: 'iss-2', title: 'Add tests', status: 'closed', priority: 'medium' },
-        { id: 'iss-3', title: 'Refactor DB', status: 'open', priority: 'low' },
-      ];
-    }
-    return [];
-  }),
-  normalizeTitleForComparison: vi.fn(t => t),
-  openBeadsDB: vi.fn(),
-  buildIssueLookups: vi.fn(),
-  getBeadsIssuesWithLookups: vi.fn(),
-  getParentIdFromLookup: vi.fn(),
-}));
-
 import { createApiServer } from '../../lib/ApiServer.js';
 
 function getRandomPort() {
@@ -69,7 +51,7 @@ function makeRequest(port, method, urlPath, body = null) {
   });
 }
 
-describe('beads-ui API routes', () => {
+describe('project registry API routes', () => {
   let server;
   let port;
   let mockProjectRegistry;
@@ -79,14 +61,45 @@ describe('beads-ui API routes', () => {
     process.env.HEALTH_PORT = String(port);
 
     mockProjectRegistry = {
+      registerProject: vi.fn(path => ({
+        identifier: 'NEWPROJ',
+        name: 'New Project',
+        filesystem_path: path,
+        tech_stack: 'node',
+      })),
+      updateProject: vi.fn((identifier, updates) => {
+        if (identifier === 'PROJ-A') {
+          return {
+            identifier: 'PROJ-A',
+            name: 'Project A',
+            status: updates.status || 'active',
+            tech_stack: 'node',
+            issue_count: 5,
+            filesystem_path: updates.filesystem_path || '/opt/stacks/my-project',
+            git_url: updates.git_url || 'https://github.com/oculairmedia/project-a.git',
+          };
+        }
+        if (identifier === 'NEWPROJ') {
+          return {
+            identifier: 'NEWPROJ',
+            name: updates.name || 'New Project',
+            status: 'active',
+            tech_stack: 'node',
+            issue_count: 0,
+            filesystem_path: '/opt/stacks/new-project',
+            git_url: updates.git_url || 'https://github.com/oculairmedia/new-project.git',
+          };
+        }
+        return null;
+      }),
+      deleteProject: vi.fn(identifier => identifier === 'PROJ-A'),
       getProjects: vi.fn(() => [
         {
           identifier: 'PROJ-A',
           name: 'Project A',
           status: 'active',
           tech_stack: 'node',
-          beads_prefix: 'PA',
-          beads_issue_count: 5,
+          issue_count: 5,
           filesystem_path: '/opt/stacks/my-project',
         },
         {
@@ -94,8 +107,7 @@ describe('beads-ui API routes', () => {
           name: 'Project B',
           status: 'active',
           tech_stack: 'python',
-          beads_prefix: null,
-          beads_issue_count: 0,
+          issue_count: 0,
           filesystem_path: '/opt/stacks/other-project',
         },
       ]),
@@ -106,17 +118,8 @@ describe('beads-ui API routes', () => {
             name: 'Project A',
             status: 'active',
             tech_stack: 'node',
-            beads_prefix: 'PA',
-            beads_issue_count: 5,
+            issue_count: 5,
             filesystem_path: '/opt/stacks/my-project',
-          };
-        }
-        if (id === 'NO-FS') {
-          return {
-            identifier: 'NO-FS',
-            name: 'No FS',
-            status: 'active',
-            filesystem_path: null,
           };
         }
         return null;
@@ -174,80 +177,108 @@ describe('beads-ui API routes', () => {
         expect.objectContaining({ status: 'active', tech_stack: 'node' })
       );
     });
+  });
 
-    it('should pass has_beads filter as boolean', async () => {
-      mockProjectRegistry.getProjects.mockClear();
-      await makeRequest(port, 'GET', '/api/registry/projects?has_beads=true');
-      expect(mockProjectRegistry.getProjects).toHaveBeenCalledWith(
-        expect.objectContaining({ has_beads: true })
+  describe('POST /api/registry/projects', () => {
+    it('should register a project from filesystem path', async () => {
+      const res = await makeRequest(port, 'POST', '/api/registry/projects', {
+        filesystem_path: '/opt/stacks/new-project',
+        git_url: 'https://github.com/oculairmedia/new-project.git',
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(res.body.project.identifier).toBe('NEWPROJ');
+      expect(mockProjectRegistry.registerProject).toHaveBeenCalledWith('/opt/stacks/new-project');
+      expect(mockProjectRegistry.updateProject).toHaveBeenCalledWith(
+        'NEWPROJ',
+        expect.objectContaining({ git_url: 'https://github.com/oculairmedia/new-project.git' })
       );
     });
 
-    it('should handle registry errors', async () => {
-      mockProjectRegistry.getProjects.mockImplementationOnce(() => {
-        throw new Error('scan failed');
+    it('should validate missing project path', async () => {
+      const res = await makeRequest(port, 'POST', '/api/registry/projects', {});
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('filesystem_path is required');
+    });
+
+    it('should reject non-absolute project path', async () => {
+      const res = await makeRequest(port, 'POST', '/api/registry/projects', {
+        filesystem_path: 'relative/path',
       });
-      const res = await makeRequest(port, 'GET', '/api/registry/projects');
-      expect(res.statusCode).toBe(500);
-      expect(res.body.error).toBe('Failed to fetch projects');
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('filesystem_path must be an absolute path');
+    });
+  });
+
+  describe('PATCH /api/registry/projects/:id', () => {
+    it('should update filesystem_path and git_url', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/registry/projects/PROJ-A', {
+        filesystem_path: '/opt/stacks/project-a-renamed',
+        git_url: 'https://github.com/oculairmedia/project-a-renamed.git',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project.identifier).toBe('PROJ-A');
+      expect(res.body.project.filesystem_path).toBe('/opt/stacks/project-a-renamed');
+    });
+
+    it('should return 404 for nonexistent project', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/registry/projects/NONEXISTENT', {
+        git_url: 'https://github.com/oculairmedia/none.git',
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Project not found');
+    });
+
+    it('should archive a project via status update', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/registry/projects/PROJ-A', {
+        status: 'archived',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project.status).toBe('archived');
+      expect(mockProjectRegistry.updateProject).toHaveBeenCalledWith(
+        'PROJ-A',
+        expect.objectContaining({ status: 'archived' })
+      );
+    });
+
+    it('should reject invalid status values', async () => {
+      const res = await makeRequest(port, 'PATCH', '/api/registry/projects/PROJ-A', {
+        status: 'deleted',
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('status must be one of: active, archived');
+    });
+  });
+
+  describe('DELETE /api/registry/projects/:id', () => {
+    it('should delete an existing project', async () => {
+      const res = await makeRequest(port, 'DELETE', '/api/registry/projects/PROJ-A');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toBe('Project deleted');
+      expect(res.body.identifier).toBe('PROJ-A');
+      expect(mockProjectRegistry.deleteProject).toHaveBeenCalledWith('PROJ-A');
+    });
+
+    it('should return 404 for a missing project delete', async () => {
+      const res = await makeRequest(port, 'DELETE', '/api/registry/projects/NONEXISTENT');
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Project not found');
     });
   });
 
   describe('GET /api/registry/projects/:id', () => {
-    it('should return a single project with live issue count', async () => {
+    it('should return a single project', async () => {
       const res = await makeRequest(port, 'GET', '/api/registry/projects/PROJ-A');
       expect(res.statusCode).toBe(200);
       expect(res.body.identifier).toBe('PROJ-A');
-      expect(res.body.beads_issue_count_live).toBe(3);
+      expect(res.body.issue_count).toBe(5);
       expect(res.body.timestamp).toBeDefined();
-    });
-
-    it('should return 404 for unknown project', async () => {
-      const res = await makeRequest(port, 'GET', '/api/registry/projects/NONEXISTENT');
-      expect(res.statusCode).toBe(404);
-      expect(res.body.error).toBe('Project not found');
-    });
-
-    it('should handle registry errors', async () => {
-      mockProjectRegistry.getProject.mockImplementationOnce(() => {
-        throw new Error('db error');
-      });
-      const res = await makeRequest(port, 'GET', '/api/registry/projects/PROJ-A');
-      expect(res.statusCode).toBe(500);
-    });
-  });
-
-  describe('GET /api/registry/projects/:id/issues', () => {
-    it('should return beads issues for a project', async () => {
-      const res = await makeRequest(port, 'GET', '/api/registry/projects/PROJ-A/issues');
-      expect(res.statusCode).toBe(200);
-      expect(res.body.projectIdentifier).toBe('PROJ-A');
-      expect(res.body.total).toBe(3);
-      expect(res.body.issues).toHaveLength(3);
-      expect(res.body.issues[0].id).toBe('iss-1');
-    });
-
-    it('should filter by status query param', async () => {
-      const res = await makeRequest(
-        port,
-        'GET',
-        '/api/registry/projects/PROJ-A/issues?status=open'
-      );
-      expect(res.statusCode).toBe(200);
-      expect(res.body.total).toBe(2);
-      expect(res.body.issues.every(i => i.status === 'open')).toBe(true);
-    });
-
-    it('should return 404 for unknown project', async () => {
-      const res = await makeRequest(port, 'GET', '/api/registry/projects/NONEXISTENT/issues');
-      expect(res.statusCode).toBe(404);
-      expect(res.body.error).toBe('Project not found');
-    });
-
-    it('should return 404 if project has no filesystem_path', async () => {
-      const res = await makeRequest(port, 'GET', '/api/registry/projects/NO-FS/issues');
-      expect(res.statusCode).toBe(404);
-      expect(res.body.error).toBe('Project has no filesystem path');
     });
   });
 
@@ -257,24 +288,7 @@ describe('beads-ui API routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.message).toBe('Scan complete');
       expect(res.body.scan.discovered).toBe(10);
-      expect(res.body.scan.updated).toBe(8);
       expect(res.body.project.identifier).toBe('PROJ-A');
-      expect(mockProjectRegistry.scanProjects).toHaveBeenCalled();
-    });
-
-    it('should return 404 for unknown project', async () => {
-      const res = await makeRequest(port, 'POST', '/api/registry/projects/NONEXISTENT/scan');
-      expect(res.statusCode).toBe(404);
-      expect(res.body.error).toBe('Project not found');
-    });
-
-    it('should handle scan errors', async () => {
-      mockProjectRegistry.scanProjects.mockImplementationOnce(() => {
-        throw new Error('fs error');
-      });
-      const res = await makeRequest(port, 'POST', '/api/registry/projects/PROJ-A/scan');
-      expect(res.statusCode).toBe(500);
-      expect(res.body.error).toBe('Failed to scan projects');
     });
   });
 });

@@ -1,9 +1,3 @@
-/**
- * Data Reconciliation Activities
- *
- * Detects stale Beads references in the sync database and
- * optionally marks or deletes stale records.
- */
 export type ReconciliationAction = 'mark_deleted' | 'hard_delete';
 export interface ReconciliationInput {
     projectIdentifier?: string;
@@ -15,14 +9,14 @@ export interface ReconciliationResult {
     action: ReconciliationAction;
     dryRun: boolean;
     projectsProcessed: number;
-    projectsWithBeadsChecked: number;
-    staleBeads: Array<{
+    projectsChecked: number;
+    staleIssues: Array<{
         identifier: string;
         projectIdentifier: string;
-        beadsIssueId: string;
+        issueId: string;
     }>;
     updated: {
-        markedBeads: number;
+        markedDeleted: number;
         deleted: number;
     };
     errors: string[];

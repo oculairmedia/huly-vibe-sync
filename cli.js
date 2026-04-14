@@ -2,7 +2,6 @@
 import { program } from 'commander';
 import chalk from 'chalk';
 import fetch from 'node-fetch';
-import { execSync } from 'child_process';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -68,6 +67,17 @@ function die(msg) {
   process.exit(1);
 }
 
+function toRecord(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  return {};
+}
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 // ── Program ────────────────────────────────────────────────────────
 
 program
@@ -97,15 +107,15 @@ program
 
     // Registry projects
     try {
-      const data = await fetchJson('/api/registry/projects');
-      checks.push(['Registry', chalk.green('OK'), `${data.total} projects`]);
+      const data = toRecord(await fetchJson('/api/registry/projects'));
+      checks.push(['Registry', chalk.green('OK'), `${data.total ?? 0} projects`]);
     } catch (err) {
       checks.push(['Registry', chalk.red('FAIL'), err.message]);
     }
 
     // Temporal
     try {
-      const data = await fetchJson('/api/temporal/schedule');
+      const data = toRecord(await fetchJson('/api/temporal/schedule'));
       const detail = data.available
         ? data.active
           ? 'Schedule active'
@@ -114,14 +124,6 @@ program
       checks.push(['Temporal', chalk.green('OK'), detail]);
     } catch (err) {
       checks.push(['Temporal', chalk.red('FAIL'), err.message]);
-    }
-
-    // Beads binary
-    try {
-      const ver = execSync('bd --version', { encoding: 'utf8' }).trim();
-      checks.push(['Beads (bd)', chalk.green('OK'), ver]);
-    } catch {
-      checks.push(['Beads (bd)', chalk.red('FAIL'), 'Not found in PATH']);
     }
 
     // UI proxy
@@ -179,8 +181,8 @@ program
     }
 
     try {
-      const data = await fetchJson(path);
-      const projects = data.projects || [];
+      const data = toRecord(await fetchJson(path));
+      const projects = toArray(data.projects);
 
       if (jsonOut) {
         console.log(JSON.stringify(data, null, 2));
@@ -197,7 +199,7 @@ program
         p.name || '',
         p.tech_stack || '',
         p.letta_agent_id ? chalk.green('✓') : chalk.red('✗'),
-        String(p.beads_issue_count ?? p.issue_count ?? ''),
+        String(p.issue_count ?? ''),
       ]);
       console.log(formatTable(['Identifier', 'Name', 'Tech Stack', 'Agent', 'Issues'], rows));
     } catch (err) {
@@ -213,10 +215,14 @@ program
   .action(async identifier => {
     const { json: jsonOut } = getGlobalOpts();
     try {
-      const project = await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}`);
-      const issueData = await fetchJson(
-        `/api/registry/projects/${encodeURIComponent(identifier)}/issues`
-      ).catch(() => null);
+      const project = toRecord(
+        await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}`)
+      );
+      const issueData = toRecord(
+        await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}/issues`).catch(
+          () => null
+        )
+      );
 
       if (jsonOut) {
         console.log(JSON.stringify({ project, issues: issueData }, null, 2));
@@ -232,8 +238,8 @@ program
         ['Status', project.status],
         ['Filesystem Path', project.filesystem_path],
         ['Letta Agent ID', project.letta_agent_id || chalk.yellow('none')],
-        ['Beads Issues (live)', project.beads_issue_count_live],
-        ['Git Remote', project.git_remote],
+        ['Issues', project.issue_count],
+        ['Git URL', project.git_url],
       ];
       for (const [k, v] of meta) {
         if (v !== undefined && v !== null) {
@@ -241,10 +247,11 @@ program
         }
       }
 
-      if (issueData && issueData.issues) {
+      if (issueData.issues) {
         const byStatus = {};
-        for (const issue of issueData.issues) {
-          const s = issue.status || 'unknown';
+        for (const issue of toArray(issueData.issues)) {
+          const safeIssue = toRecord(issue);
+          const s = safeIssue.status || 'unknown';
           byStatus[s] = (byStatus[s] || 0) + 1;
         }
         console.log(chalk.bold(`\n  Issues (${issueData.total}):`));
@@ -253,6 +260,85 @@ program
         }
       }
       console.log();
+    } catch (err) {
+      die(err.message);
+    }
+  });
+
+program
+  .command('project-register <filesystemPath>')
+  .description('Register a project from an absolute filesystem path')
+  .option('--name <name>', 'Override project display name')
+  .option('--git-url <url>', 'Set git URL after registration')
+  .action(async (filesystemPath, opts) => {
+    const { json: jsonOut } = getGlobalOpts();
+    try {
+      const data = toRecord(
+        await fetchJson('/api/registry/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filesystem_path: filesystemPath,
+            name: opts.name,
+            git_url: opts.gitUrl,
+          }),
+        })
+      );
+      const project = toRecord(data.project);
+
+      if (jsonOut) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      console.log(chalk.green(`Project registered: ${project.identifier}`));
+      console.log(`  Path: ${project.filesystem_path}`);
+      if (project.git_url) {
+        console.log(`  Git URL: ${project.git_url}`);
+      }
+    } catch (err) {
+      die(err.message);
+    }
+  });
+
+program
+  .command('project-update <identifier>')
+  .description('Update a registered project path or git URL')
+  .option('--filesystem-path <path>', 'New absolute filesystem path')
+  .option('--git-url <url>', 'New git URL')
+  .action(async (identifier, opts) => {
+    const { json: jsonOut } = getGlobalOpts();
+    const updates = {};
+
+    if (opts.filesystemPath !== undefined) {
+      updates.filesystem_path = opts.filesystemPath;
+    }
+    if (opts.gitUrl !== undefined) {
+      updates.git_url = opts.gitUrl;
+    }
+
+    if (!Object.keys(updates).length) {
+      die('Provide --filesystem-path and/or --git-url');
+    }
+
+    try {
+      const data = toRecord(
+        await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        })
+      );
+      const project = toRecord(data.project);
+
+      if (jsonOut) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      console.log(chalk.green(`Project updated: ${project.identifier}`));
+      console.log(`  Path: ${project.filesystem_path || chalk.yellow('none')}`);
+      console.log(`  Git URL: ${project.git_url || chalk.yellow('none')}`);
     } catch (err) {
       die(err.message);
     }
@@ -268,13 +354,14 @@ program
     try {
       let data;
       if (identifier) {
-        data = await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}/scan`, {
-          method: 'POST',
-        });
+        data = toRecord(
+          await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}/scan`, {
+            method: 'POST',
+          })
+        );
       } else {
-        // Full registry scan — hit an arbitrary scan endpoint; the API scans all projects
-        data = await fetchJson('/api/registry/projects/ALL/scan', { method: 'POST' }).catch(
-          () => null
+        data = toRecord(
+          await fetchJson('/api/registry/projects/ALL/scan', { method: 'POST' }).catch(() => null)
         );
         if (!data) {
           die('No identifier given and full scan endpoint not available.');
@@ -289,13 +376,14 @@ program
 
       console.log(chalk.bold('\nScan complete\n'));
       if (data.scan) {
-        const s = data.scan;
+        const s = toRecord(data.scan);
         console.log(`  Discovered: ${s.discovered ?? s.total ?? '—'}`);
         console.log(`  Updated:    ${s.updated ?? '—'}`);
         console.log(`  Errors:     ${s.errors ?? 0}`);
       }
       if (data.project) {
-        console.log(`  Project:    ${data.project.identifier}`);
+        const project = toRecord(data.project);
+        console.log(`  Project:    ${project.identifier}`);
       }
       console.log();
     } catch (err) {
@@ -312,11 +400,14 @@ program
   .action(async opts => {
     const { json: jsonOut } = getGlobalOpts();
     try {
-      const data = await fetchJson('/api/agents');
-      let agents = data.agents || [];
+      const data = toRecord(await fetchJson('/api/agents'));
+      let agents = toArray(data.agents);
 
       if (opts.orphaned) {
-        agents = agents.filter(a => !a.identifier && !a.project_identifier);
+        agents = agents.filter(agent => {
+          const a = toRecord(agent);
+          return !a.identifier && !a.project_identifier;
+        });
       }
 
       if (jsonOut) {
@@ -329,11 +420,14 @@ program
         return;
       }
 
-      const rows = agents.map(a => [
-        a.letta_agent_name || a.name || '',
-        a.letta_agent_id || a.agent_id || '',
-        a.identifier || a.project_identifier || chalk.yellow('—'),
-      ]);
+      const rows = agents.map(agent => {
+        const a = toRecord(agent);
+        return [
+          a.letta_agent_name || a.name || '',
+          a.letta_agent_id || a.agent_id || '',
+          a.identifier || a.project_identifier || chalk.yellow('—'),
+        ];
+      });
       console.log(formatTable(['Agent Name', 'Agent ID', 'Project'], rows));
     } catch (err) {
       die(err.message);
@@ -350,11 +444,13 @@ program
     const { apiUrl, json: jsonOut } = getGlobalOpts();
     try {
       const body = opts.project ? { projectId: opts.project } : {};
-      const trigger = await fetchJson('/api/sync/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const trigger = toRecord(
+        await fetchJson('/api/sync/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      );
 
       if (jsonOut) {
         console.log(JSON.stringify(trigger, null, 2));
@@ -439,41 +535,32 @@ program
 
     // 2. Registry populated
     await check('Registry populated', async () => {
-      const data = await fetchJson('/api/registry/projects');
+      const data = toRecord(await fetchJson('/api/registry/projects'));
       if (!data.total || data.total === 0) throw new Error('No projects in registry');
       return `${data.total} projects`;
     });
 
     // 3. Sample project has agent
     await check('Sample project has agent', async () => {
-      const data = await fetchJson('/api/registry/projects');
-      const projects = data.projects || [];
+      const data = toRecord(await fetchJson('/api/registry/projects'));
+      const projects = toArray(data.projects);
       if (!projects.length) throw new Error('No projects available');
-      const first = projects[0];
+      const first = toRecord(projects[0]);
       if (!first.letta_agent_id) throw new Error(`${first.identifier} has no agent`);
       return `${first.identifier} → ${first.letta_agent_id.slice(0, 12)}...`;
     });
 
-    // 4. Beads binary
-    await check('Beads binary', async () => {
-      const ver = execSync('bd --version', { encoding: 'utf8' }).trim();
-      return ver;
-    });
-
-    // 5. Temporal reachable
     await check('Temporal reachable', async () => {
-      const data = await fetchJson('/api/temporal/schedule');
+      const data = toRecord(await fetchJson('/api/temporal/schedule'));
       return data.available ? 'Available' : 'Not configured';
     });
 
-    // 6. UI proxy
     await check('UI proxy', async () => {
       const r = await probe('http://localhost:3110');
       if (!r.ok) throw new Error(r.error || `HTTP ${r.status}`);
       return 'Reachable';
     });
 
-    // 7. External URL
     await check('External URL', async () => {
       const r = await probe('https://vibesync.oculair.ca/api/health');
       if (!r.ok) throw new Error(r.error || `HTTP ${r.status}`);
@@ -517,9 +604,11 @@ program
           error: err.message,
         })),
       ]);
+      const workflowData = toRecord(workflows);
+      const scheduleData = toRecord(schedule);
 
       if (jsonOut) {
-        console.log(JSON.stringify({ workflows, schedule }, null, 2));
+        console.log(JSON.stringify({ workflows: workflowData, schedule: scheduleData }, null, 2));
         return;
       }
 
@@ -527,26 +616,31 @@ program
 
       // Schedule
       console.log(chalk.bold('  Schedule:'));
-      if (schedule.available) {
-        console.log(`    Active: ${schedule.active ? chalk.green('yes') : chalk.yellow('no')}`);
-        if (schedule.schedule) {
-          const s = schedule.schedule;
+      if (scheduleData.available) {
+        console.log(`    Active: ${scheduleData.active ? chalk.green('yes') : chalk.yellow('no')}`);
+        if (scheduleData.schedule) {
+          const s = toRecord(scheduleData.schedule);
           if (s.workflowId) console.log(`    Workflow ID: ${s.workflowId}`);
           if (s.intervalMinutes) console.log(`    Interval: ${s.intervalMinutes}m`);
         }
       } else {
-        console.log(`    ${chalk.yellow(schedule.message || schedule.error || 'Not available')}`);
+        console.log(
+          `    ${chalk.yellow(scheduleData.message || scheduleData.error || 'Not available')}`
+        );
       }
 
       // Workflows
       console.log(chalk.bold('\n  Active Workflows:'));
-      if (workflows.available && workflows.workflows?.length) {
-        const rows = workflows.workflows.map(w => [
-          w.workflowId || w.id || '',
-          w.type || w.workflowType || '',
-          w.status || '',
-          w.startTime || '',
-        ]);
+      if (workflowData.available && toArray(workflowData.workflows).length) {
+        const rows = toArray(workflowData.workflows).map(workflow => {
+          const w = toRecord(workflow);
+          return [
+            w.workflowId || w.id || '',
+            w.type || w.workflowType || '',
+            w.status || '',
+            w.startTime || '',
+          ];
+        });
         console.log(
           formatTable(['Workflow ID', 'Type', 'Status', 'Started'], rows)
             .split('\n')

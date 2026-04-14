@@ -3,14 +3,9 @@
  *
  * Activities for Letta memory updates, metrics recording, and shared error handling.
  *
- * Supports two paths for building memory blocks:
- * 1. **SQL path** (preferred): Uses DoltQueryService to run pre-aggregated queries
- *    directly against the Dolt database, avoiding full issue array normalization.
- * 2. **Legacy array path**: Accepts raw/normalized issue arrays and passes them
- *    through the original builders (backward compatible with existing callers).
+ * Builds Letta memory blocks from raw or normalized issue arrays.
  */
-/** Raw beads issue as returned by fetchBeadsIssues activity */
-interface RawBeadsIssue {
+interface RawTrackerIssue {
     id: string;
     title: string;
     status: string;
@@ -24,7 +19,6 @@ interface RawBeadsIssue {
     closed_at?: string;
     close_reason?: string;
 }
-/** Normalized issue format expected by LettaMemoryBuilders */
 interface NormalizedIssue {
     id: string;
     identifier: string;
@@ -36,12 +30,6 @@ interface NormalizedIssue {
     modifiedOn: number;
     component: string | null;
     assignee: string | null;
-    _beads: {
-        raw_status: string;
-        raw_priority: number;
-        closed_at: string | null;
-        close_reason: string | null;
-    };
 }
 interface Project {
     name: string;
@@ -50,22 +38,6 @@ interface Project {
     status?: string;
 }
 /**
- * Disconnect all cached pools (for graceful shutdown).
- */
-export declare function disconnectAllPools(): Promise<void>;
-/**
- * Update Letta agent memory with project state from beads data.
- *
- * Supports two modes:
- * 1. **SQL mode** (gitRepoPath provided, issues omitted or empty): Builds blocks
- *    directly from Dolt SQL aggregations — more efficient, no issue array needed.
- * 2. **Legacy array mode** (issues provided): Normalizes and loops over the array
- *    using the original builders.
- *
- * When gitRepoPath is provided, the SQL path is attempted first. If it fails
- * (e.g. Dolt server not running), falls back to the array path if issues are
- * available.
- *
  * Builds ALL memory blocks (board_metrics, project, board_config, hotspots,
  * backlog_summary, recent_activity, components) and upserts them via the
  * Letta block modify API.
@@ -73,11 +45,10 @@ export declare function disconnectAllPools(): Promise<void>;
 export declare function updateLettaMemory(input: {
     agentId: string;
     project: Project;
-    issues?: RawBeadsIssue[] | NormalizedIssue[];
+    issues?: RawTrackerIssue[] | NormalizedIssue[];
     gitRepoPath?: string;
     gitUrl?: string;
     activityData?: any;
-    sinceCommit?: string;
 }): Promise<{
     success: boolean;
     error?: string;

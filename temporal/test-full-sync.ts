@@ -41,7 +41,6 @@ async function main() {
           context: {
             projectIdentifier: 'TEST',
           },
-          syncToBeads: false,
         },
       ],
     });

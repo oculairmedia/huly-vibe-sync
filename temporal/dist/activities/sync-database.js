@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDb = getDb;
 exports.resetDb = resetDb;
 exports.getIssueSyncTimestamps = getIssueSyncTimestamps;
-exports.hasBeadsIssueChanged = hasBeadsIssueChanged;
+exports.hasIssueContentChanged = hasIssueContentChanged;
 exports.getIssueSyncState = getIssueSyncState;
 exports.getIssueSyncStateBatch = getIssueSyncStateBatch;
 exports.persistIssueSyncState = persistIssueSyncState;
@@ -143,10 +143,9 @@ async function getIssueSyncTimestamps(input) {
     return {
         huly_modified_at: normalizeModifiedAt(issue.huly_modified_at),
         vibe_modified_at: normalizeModifiedAt(issue.vibe_modified_at),
-        beads_modified_at: normalizeModifiedAt(issue.beads_modified_at),
     };
 }
-async function hasBeadsIssueChanged(input) {
+async function hasIssueContentChanged(input) {
     try {
         const db = await getDb();
         const existing = db.getIssue(input.hulyIdentifier);
@@ -172,7 +171,7 @@ async function getIssueSyncState(input) {
     const issue = db.getIssue(input.hulyIdentifier);
     if (!issue)
         return null;
-    return { status: issue.status, beadsStatus: issue.beads_status };
+    return { status: issue.status };
 }
 async function getIssueSyncStateBatch(input) {
     const db = await getDb();
@@ -180,7 +179,7 @@ async function getIssueSyncStateBatch(input) {
     for (const id of input.hulyIdentifiers) {
         const issue = db.getIssue(id);
         if (issue) {
-            result[id] = { status: issue.status, beadsStatus: issue.beads_status };
+            result[id] = { status: issue.status };
         }
     }
     return result;
@@ -208,7 +207,6 @@ async function persistIssueSyncStateBatch(input) {
                 project_identifier: issue.projectIdentifier,
                 huly_id: issue.hulyId || existing?.huly_id || defaultHulyId(issue.identifier),
                 vibe_task_id: issue.vibeTaskId || existing?.vibe_task_id || null,
-                beads_issue_id: issue.beadsIssueId || existing?.beads_issue_id || null,
                 title: issue.title || existing?.title || issue.identifier,
                 description: issue.description ?? existing?.description ?? '',
                 status: issue.status || existing?.status || 'unknown',
@@ -217,13 +215,9 @@ async function persistIssueSyncStateBatch(input) {
                     normalizeModifiedAt(existing?.huly_modified_at),
                 vibe_modified_at: normalizeModifiedAt(issue.vibeModifiedAt) ??
                     normalizeModifiedAt(existing?.vibe_modified_at),
-                beads_modified_at: normalizeModifiedAt(issue.beadsModifiedAt) ??
-                    normalizeModifiedAt(existing?.beads_modified_at),
                 vibe_status: issue.vibeStatus || existing?.vibe_status || null,
-                beads_status: issue.beadsStatus || existing?.beads_status || null,
                 parent_huly_id: issue.parentHulyId ?? existing?.parent_huly_id ?? null,
                 parent_vibe_id: issue.parentVibeId ?? existing?.parent_vibe_id ?? null,
-                parent_beads_id: issue.parentBeadsId ?? existing?.parent_beads_id ?? null,
                 sub_issue_count: issue.subIssueCount ?? existing?.sub_issue_count ?? 0,
             });
             updated++;

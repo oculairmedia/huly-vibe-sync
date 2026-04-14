@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * migrate-pm-agents.js — Update all PM agent memory blocks and descriptions
- * to align with the new beads CLI-based workflow.
+ * to align with the current bd CLI-based workflow.
  *
  * Usage:
  *   node migrate-pm-agents.js              # dry-run (default)
@@ -14,21 +14,49 @@ import 'dotenv/config';
 const LETTA_BASE = process.env.LETTA_BASE_URL || 'http://192.168.50.90:8283';
 const LETTA_TOKEN = process.env.LETTA_PASSWORD || 'letta-token';
 const DRY_RUN = !process.argv.includes('--apply');
-const SINGLE_AGENT = process.argv.find((a, i) => process.argv[i - 1] === '--agent-id');
+const SINGLE_AGENT = process.argv.find((_, i) => process.argv[i - 1] === '--agent-id');
+
+/**
+ * @typedef {Object} MemoryBlock
+ * @property {string} id
+ * @property {string} label
+ * @property {string} value
+ */
+
+/**
+ * @typedef {Object} AgentMemory
+ * @property {MemoryBlock[]=} blocks
+ */
+
+/**
+ * @typedef {Object} AgentRecord
+ * @property {string} id
+ * @property {string=} name
+ * @property {string[]=} tags
+ * @property {AgentMemory=} memory
+ */
+
+/**
+ * @typedef {{ skipped: true, reason: string } | { updated: true }} UpdateBlockResult
+ */
+
+/**
+ * @typedef {{ skipped: true, reason: string } | { deleted: true }} DeleteBlockResult
+ */
 
 // ─── New Block Content ──────────────────────────────────────────────
 
 const NEW_PERSONA = `You are a PM agent — a focused, autonomous project manager for a single codebase.
 
 Your job:
-- Track issues via Beads (the \`bd\` CLI tool in your project's repo)
+- Track issues via the \`bd\` CLI tool in your project's repo
 - Triage incoming work: bugs, features, chores, tests
 - Break epics into actionable tasks with clear acceptance criteria
 - Maintain the backlog: prioritize, estimate, label, close stale issues
 - Coordinate with developers (human or AI) via Matrix
 - Report status when asked — concise, data-driven, no fluff
 
-How you work with Beads:
+How you work with bd:
 - \`bd list\` — show open issues (your board)
 - \`bd list --all\` — include closed issues
 - \`bd create "title" -t task -p 2 -d "description"\` — create issues
@@ -36,7 +64,7 @@ How you work with Beads:
 - \`bd edit <id> --priority 1\` — reprioritize
 - \`bd show <id>\` — inspect an issue
 - Issues live in \`.beads/\` inside the project repo — they're git-tracked
-- Beads is the single source of truth. No external trackers.
+- The git-tracked issue data is the single source of truth. No external trackers.
 
 Decision framework:
 - P0: Production broken, data loss risk → immediate action
@@ -52,7 +80,7 @@ Communication:
 
 const NEW_BOARD_CONFIG = `{
   "workflow": {
-    "tool": "beads (bd CLI)",
+    "tool": "bd CLI",
     "statuses": ["open", "closed"],
     "priorities": ["P0 (critical)", "P1 (high)", "P2 (medium)", "P3 (low)", "P4 (backlog)"],
     "issue_types": ["bug", "feature", "task", "epic", "chore", "decision"],
@@ -107,7 +135,7 @@ const NEW_EXPRESSION = `## PM Agent Communication Style
 // Blocks to remove (stale Huly-era data)
 const BLOCKS_TO_REMOVE = [
   'board_metrics',
-  'hotspots', 
+  'hotspots',
   'backlog_summary',
   'recent_activity',
   'components',
@@ -115,12 +143,17 @@ const BLOCKS_TO_REMOVE = [
 
 // ─── API Helpers ────────────────────────────────────────────────────
 
+/**
+ * @param {string} path
+ * @param {RequestInit & { headers?: Record<string, string> }} [options]
+ * @returns {Promise<unknown>}
+ */
 async function fetchApi(path, options = {}) {
   const url = `${LETTA_BASE}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${LETTA_TOKEN}`,
+      Authorization: `Bearer ${LETTA_TOKEN}`,
       'Content-Type': 'application/json',
       ...options.headers,
     },
@@ -134,12 +167,33 @@ async function fetchApi(path, options = {}) {
 }
 
 async function getAgents() {
-  return fetchApi('/v1/agents/?limit=200');
+  return /** @type {Promise<AgentRecord[]>} */ (fetchApi('/v1/agents/?limit=200'));
 }
 
+/**
+ * @param {string} agentId
+ * @returns {Promise<AgentRecord>}
+ */
+async function getAgent(agentId) {
+  return /** @type {Promise<AgentRecord>} */ (fetchApi(`/v1/agents/${agentId}/`));
+}
+
+function toAgentRecord(agent) {
+  return agent;
+}
+
+function toAgentRecords(agents) {
+  return agents;
+}
+
+/**
+ * @param {string} agentId
+ * @param {string} blockLabel
+ * @param {string} newValue
+ * @returns {Promise<UpdateBlockResult>}
+ */
 async function updateBlock(agentId, blockLabel, newValue) {
-  // First get the block to find its ID
-  const agent = await fetchApi(`/v1/agents/${agentId}/`);
+  const agent = toAgentRecord(await getAgent(agentId));
   const block = agent.memory?.blocks?.find(b => b.label === blockLabel);
   if (!block) return { skipped: true, reason: 'block not found' };
 
@@ -152,8 +206,13 @@ async function updateBlock(agentId, blockLabel, newValue) {
   return { updated: true };
 }
 
+/**
+ * @param {string} agentId
+ * @param {string} blockLabel
+ * @returns {Promise<DeleteBlockResult>}
+ */
 async function deleteBlock(agentId, blockLabel) {
-  const agent = await fetchApi(`/v1/agents/${agentId}/`);
+  const agent = toAgentRecord(await getAgent(agentId));
   const block = agent.memory?.blocks?.find(b => b.label === blockLabel);
   if (!block) return { skipped: true, reason: 'block not found' };
 
@@ -164,8 +223,12 @@ async function deleteBlock(agentId, blockLabel) {
   return { deleted: true };
 }
 
+/**
+ * @param {string} agentId
+ * @param {string} projectName
+ */
 async function updateAgentDescription(agentId, projectName) {
-  const newDesc = `PM agent for ${projectName} — manages beads issues, coordinates development, and tracks project health.`;
+  const newDesc = `PM agent for ${projectName} — manages git-tracked issues, coordinates development, and tracks project health.`;
   await fetchApi(`/v1/agents/${agentId}/`, {
     method: 'PATCH',
     body: JSON.stringify({ description: newDesc }),
@@ -180,7 +243,7 @@ async function main() {
   console.log(`PM Agent Migration — ${DRY_RUN ? 'DRY RUN' : 'APPLYING CHANGES'}`);
   console.log(`${'='.repeat(60)}\n`);
 
-  const allAgents = await getAgents();
+  const allAgents = toAgentRecords(await getAgents());
   let pmAgents = allAgents.filter(a => a.name?.startsWith('Huly - '));
 
   if (SINGLE_AGENT) {
@@ -220,18 +283,24 @@ async function main() {
     try {
       // Update persona
       const personaResult = await updateBlock(agent.id, 'persona', NEW_PERSONA);
-      if (personaResult.updated) stats.persona_updated++;
-      console.log(`  persona: ${personaResult.updated ? 'UPDATED' : personaResult.reason}`);
+      if ('updated' in personaResult) {
+        stats.persona_updated++;
+      }
+      console.log(`  persona: ${'updated' in personaResult ? 'UPDATED' : personaResult.reason}`);
 
       // Update board_config
       const boardResult = await updateBlock(agent.id, 'board_config', NEW_BOARD_CONFIG);
-      if (boardResult.updated) stats.board_config_updated++;
-      console.log(`  board_config: ${boardResult.updated ? 'UPDATED' : boardResult.reason}`);
+      if ('updated' in boardResult) {
+        stats.board_config_updated++;
+      }
+      console.log(`  board_config: ${'updated' in boardResult ? 'UPDATED' : boardResult.reason}`);
 
       // Update expression
       const exprResult = await updateBlock(agent.id, 'expression', NEW_EXPRESSION);
-      if (exprResult.updated) stats.expression_updated++;
-      console.log(`  expression: ${exprResult.updated ? 'UPDATED' : exprResult.reason}`);
+      if ('updated' in exprResult) {
+        stats.expression_updated++;
+      }
+      console.log(`  expression: ${'updated' in exprResult ? 'UPDATED' : exprResult.reason}`);
 
       // Update description
       await updateAgentDescription(agent.id, projectName);
@@ -242,7 +311,7 @@ async function main() {
       for (const blockLabel of BLOCKS_TO_REMOVE) {
         try {
           const delResult = await deleteBlock(agent.id, blockLabel);
-          if (delResult.deleted) {
+          if ('deleted' in delResult) {
             stats.blocks_removed++;
             console.log(`  ${blockLabel}: REMOVED`);
           }
