@@ -154,8 +154,8 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
     for (const agent of existingAgents) {
       if (!agent.id || !agent.name) continue;
 
-      // Store by name for fallback matching
-      if (agent.name.startsWith('Huly - ')) {
+      // Store by name for fallback matching (accept both legacy 'Huly - ' and new 'PM - ')
+      if (agent.name.startsWith('PM - ') || agent.name.startsWith('Huly - ')) {
         agentByName.set(agent.name, agent.id);
       }
 
@@ -176,10 +176,14 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
 
     for (const project of projects) {
       const sanitizedName = project.name.replace(/[/\\:*?"<>|]/g, '-');
-      const agentName = `Huly - ${sanitizedName}`;
+      const agentName = `PM - ${sanitizedName}`;
+      const legacyAgentName = `Huly - ${sanitizedName}`;
 
-      // Prefer project ID match, fallback to name match
-      const existingAgentId = agentByProject.get(project.identifier) || agentByName.get(agentName);
+      // Prefer project ID match, fallback to name match (new then legacy)
+      const existingAgentId =
+        agentByProject.get(project.identifier) ||
+        agentByName.get(agentName) ||
+        agentByName.get(legacyAgentName);
 
       agentsToProvision.push({
         projectIdentifier: project.identifier,
@@ -222,7 +226,7 @@ export async function provisionSingleAgent(
   console.log(`[Activity:ProvisionAgent] Provisioning agent for ${projectIdentifier}...`);
 
   const sanitizedName = projectName.replace(/[/\\:*?"<>|]/g, '-');
-  const agentName = `Huly - ${sanitizedName}`;
+  const agentName = `PM - ${sanitizedName}`;
 
   try {
     // First check if agent already exists using precise tag matching

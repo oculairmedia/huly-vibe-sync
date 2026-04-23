@@ -4,9 +4,11 @@
  * to align with the current bd CLI-based workflow.
  *
  * Usage:
- *   node migrate-pm-agents.js              # dry-run (default)
- *   node migrate-pm-agents.js --apply      # actually apply changes
+ *   node migrate-pm-agents.js                # dry-run (default)
+ *   node migrate-pm-agents.js --apply        # actually apply changes
  *   node migrate-pm-agents.js --apply --agent-id agent-xxx  # single agent
+ *   node migrate-pm-agents.js --rename       # dry-run for 'Huly - X' → 'PM - X' rename
+ *   node migrate-pm-agents.js --rename --apply  # execute the rename
  */
 
 import 'dotenv/config';
@@ -14,7 +16,11 @@ import 'dotenv/config';
 const LETTA_BASE = process.env.LETTA_BASE_URL || 'http://192.168.50.90:8283';
 const LETTA_TOKEN = process.env.LETTA_PASSWORD || 'letta-token';
 const DRY_RUN = !process.argv.includes('--apply');
+const RENAME_ONLY = process.argv.includes('--rename');
 const SINGLE_AGENT = process.argv.find((_, i) => process.argv[i - 1] === '--agent-id');
+
+const LEGACY_PREFIX = 'Huly - ';
+const NEW_PREFIX = 'PM - ';
 
 /**
  * @typedef {Object} MemoryBlock
@@ -167,7 +173,7 @@ async function fetchApi(path, options = {}) {
 }
 
 async function getAgents() {
-  return /** @type {Promise<AgentRecord[]>} */ (fetchApi('/v1/agents/?limit=200'));
+  return /** @type {Promise<AgentRecord[]>} */ (fetchApi('/v1/agents/?limit=1000'));
 }
 
 /**
@@ -236,15 +242,87 @@ async function updateAgentDescription(agentId, projectName) {
   return { updated: true };
 }
 
+/**
+ * @param {string} agentId
+ * @param {string} newName
+ */
+async function renameAgent(agentId, newName) {
+  await fetchApi(`/v1/agents/${agentId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name: newName }),
+  });
+  return { updated: true };
+}
+
+/**
+ * Rename all agents with the legacy 'Huly - ' prefix to 'PM - '.
+ */
+async function runRenamePass() {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`PM Agent Rename — ${DRY_RUN ? 'DRY RUN' : 'APPLYING CHANGES'}`);
+  console.log(`  ${LEGACY_PREFIX}X  →  ${NEW_PREFIX}X`);
+  console.log(`${'='.repeat(60)}\n`);
+
+  const allAgents = toAgentRecords(await getAgents());
+  const legacyAgents = allAgents.filter(a => a.name?.startsWith(LEGACY_PREFIX));
+
+  console.log(`Found ${legacyAgents.length} agents with '${LEGACY_PREFIX}' prefix\n`);
+
+  const stats = { total: legacyAgents.length, renamed: 0, errors: [] };
+
+  for (const agent of legacyAgents) {
+    const oldName = agent.name;
+    const newName = NEW_PREFIX + oldName.slice(LEGACY_PREFIX.length);
+    const idx = legacyAgents.indexOf(agent) + 1;
+
+    if (DRY_RUN) {
+      console.log(`[${idx}/${legacyAgents.length}] ${agent.id}`);
+      console.log(`  ${oldName}`);
+      console.log(`    → ${newName}`);
+      continue;
+    }
+
+    try {
+      await renameAgent(agent.id, newName);
+      stats.renamed++;
+      console.log(`[${idx}/${legacyAgents.length}] ${agent.id}  ${oldName}  →  ${newName}`);
+    } catch (err) {
+      console.error(`[${idx}/${legacyAgents.length}] ${agent.id}  FAILED: ${err.message}`);
+      stats.errors.push({ agent: oldName, error: err.message });
+    }
+
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('Rename Summary');
+  console.log(`${'='.repeat(60)}`);
+  console.log(`Total agents:   ${stats.total}`);
+  console.log(`Renamed:        ${stats.renamed}`);
+  if (stats.errors.length > 0) {
+    console.log(`\nErrors (${stats.errors.length}):`);
+    stats.errors.forEach(e => console.log(`  ${e.agent}: ${e.error}`));
+  }
+  console.log();
+}
+
 // ─── Main ───────────────────────────────────────────────────────────
 
 async function main() {
+  if (RENAME_ONLY) {
+    await runRenamePass();
+    return;
+  }
+
   console.log(`\n${'='.repeat(60)}`);
   console.log(`PM Agent Migration — ${DRY_RUN ? 'DRY RUN' : 'APPLYING CHANGES'}`);
   console.log(`${'='.repeat(60)}\n`);
 
   const allAgents = toAgentRecords(await getAgents());
-  let pmAgents = allAgents.filter(a => a.name?.startsWith('Huly - '));
+  // Accept both new 'PM - ' and legacy 'Huly - ' agents during the transition window.
+  let pmAgents = allAgents.filter(
+    a => a.name?.startsWith(NEW_PREFIX) || a.name?.startsWith(LEGACY_PREFIX)
+  );
 
   if (SINGLE_AGENT) {
     pmAgents = pmAgents.filter(a => a.id === SINGLE_AGENT);
@@ -267,7 +345,9 @@ async function main() {
   };
 
   for (const agent of pmAgents) {
-    const projectName = agent.name.replace('Huly - ', '');
+    const projectName = agent.name.startsWith(NEW_PREFIX)
+      ? agent.name.slice(NEW_PREFIX.length)
+      : agent.name.slice(LEGACY_PREFIX.length);
     console.log(`[${pmAgents.indexOf(agent) + 1}/${pmAgents.length}] ${agent.name} (${agent.id})`);
 
     if (DRY_RUN) {

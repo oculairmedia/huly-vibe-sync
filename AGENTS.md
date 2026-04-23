@@ -20,7 +20,7 @@
 
 ## PM Agent Communication
 
-**Project PM Agent:** `Huly - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
+**Project PM Agent:** `PM - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
 
 ### Reporting Hierarchy
 
@@ -41,7 +41,7 @@ You (Developer Agent - experienced)
 ```json
 {
   "operation": "talk_to_agent",
-  "agent": "Huly - Huly-Vibe Sync Service",
+  "agent": "PM - Huly-Vibe Sync Service",
   "message": "<your report>",
   "caller_directory": "/opt/stacks/huly-vibe-sync"
 }
