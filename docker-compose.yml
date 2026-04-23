@@ -113,9 +113,6 @@ services:
       # Access to stacks directory (read-write for state persistence)
       - /opt/stacks:/opt/stacks:rw
 
-      # Host bd binary (needs glibc compat — installed in image)
-      - /usr/local/bin/bd:/usr/local/bin/bd:ro
-
     network_mode: host
     user: '1000:1000'
 
