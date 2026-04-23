@@ -1,19 +1,16 @@
 /**
- * Project Sync Workflow — Simplified 4-Phase Pipeline
+ * Project Sync Workflow — Simplified 2-Phase Pipeline
  *
- * Handles syncing a single project with continueAsNew for large issue counts.
+ * Handles syncing a single project.
  *
- * Phases: init → sync → agent → done
- *   init:  Discover project in registry, init beads, provision/reconcile agent
- *   sync:  Read beads issues, persist to registry DB (for MCP queries)
- *   agent: Update Letta agent memory with latest issue summary
- *   done:  Record metrics, commit beads changes if any
+ * Phases: init → agent
+ *   init:   Discover project in registry, provision/reconcile agent
+ *   agent:  Update Letta agent memory with latest project snapshot
  */
 
 import { proxyActivities, executeChild, log, continueAsNew } from '@temporalio/workflow';
 
 import type * as orchestrationActivities from '../activities/orchestration';
-import type * as syncDatabaseActivities from '../activities/sync-database';
 import type * as agentProvisioningActivities from '../activities/agent-provisioning';
 import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 
@@ -21,34 +18,12 @@ import { ProvisionSingleAgentWorkflow } from './agent-provisioning';
 // ACTIVITY PROXIES
 // ============================================================
 
-const { initializeBeads, fetchBeadsIssues, updateLettaMemory } = proxyActivities<
-  typeof orchestrationActivities
->({
+const { updateLettaMemory } = proxyActivities<typeof orchestrationActivities>({
   startToCloseTimeout: '120 seconds',
   retry: {
     initialInterval: '2 seconds',
     backoffCoefficient: 2,
     maximumInterval: '60 seconds',
-    maximumAttempts: 3,
-  },
-});
-
-const { commitBeadsToGit } = proxyActivities<typeof import('../activities/sync-services')>({
-  startToCloseTimeout: '120 seconds',
-  retry: {
-    initialInterval: '2 seconds',
-    backoffCoefficient: 2,
-    maximumInterval: '60 seconds',
-    maximumAttempts: 3,
-  },
-});
-
-const { persistIssueSyncStateBatch } = proxyActivities<typeof syncDatabaseActivities>({
-  startToCloseTimeout: '60 seconds',
-  retry: {
-    initialInterval: '1 second',
-    backoffCoefficient: 2,
-    maximumInterval: '20 seconds',
     maximumAttempts: 3,
   },
 });
@@ -94,7 +69,6 @@ export interface ProjectSyncResult {
   projectIdentifier: string;
   projectName: string;
   success: boolean;
-  beadsSync: { synced: number; skipped: number; errors: number };
   lettaUpdated: boolean;
   error?: string;
 }
@@ -102,28 +76,23 @@ export interface ProjectSyncResult {
 export interface ProjectSyncInput {
   project: { identifier: string; name: string; description?: string };
   batchSize: number;
-  enableBeads: boolean;
   enableLetta: boolean;
   dryRun: boolean;
 
   // Internal continuation state
-  _phase?: 'init' | 'sync' | 'agent' | 'done';
+  _phase?: 'init' | 'agent' | 'done';
   _accumulatedResult?: ProjectSyncResult;
   _gitRepoPath?: string | null;
-  _beadsInitialized?: boolean;
 }
 
 export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<ProjectSyncResult> {
   const {
     project,
-    batchSize,
-    enableBeads,
     enableLetta,
     dryRun,
     _phase = 'init',
     _accumulatedResult,
     _gitRepoPath,
-    _beadsInitialized = false,
   } = input;
 
   log.info(`[ProjectSync] Processing: ${project.identifier}`, { phase: _phase });
@@ -132,25 +101,15 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
     projectIdentifier: project.identifier,
     projectName: project.name,
     success: false,
-    beadsSync: { synced: 0, skipped: 0, errors: 0 },
     lettaUpdated: false,
   };
 
   let gitRepoPath = _gitRepoPath;
-  let beadsInitialized = _beadsInitialized;
 
   try {
-    // ── INIT: discover project, init beads, provision agent ──
+    // ── INIT: discover project, provision agent ──
     if (_phase === 'init') {
       gitRepoPath = extractGitRepoPath(project.description);
-
-      if (enableBeads && gitRepoPath) {
-        beadsInitialized = await initializeBeads({
-          gitRepoPath,
-          projectName: project.name,
-          projectIdentifier: project.identifier,
-        });
-      }
 
       if (enableLetta && gitRepoPath) {
         try {
@@ -194,68 +153,13 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
 
       return await continueAsNew<typeof ProjectSyncWorkflow>({
         ...input,
-        _phase: 'sync',
-        _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
-        _accumulatedResult: result,
-      });
-    }
-
-    // ── SYNC: read beads issues, persist to registry DB ──
-    if (_phase === 'sync') {
-      if (enableBeads && beadsInitialized && gitRepoPath) {
-        log.info(`[ProjectSync] Sync phase: reading beads issues`);
-
-        const beadsIssues = await fetchBeadsIssues({ gitRepoPath });
-
-        if (beadsIssues.length > 0 && !dryRun) {
-          const persistenceBatch = beadsIssues.map(
-            (issue: {
-              id: string;
-              title: string;
-              status: string;
-              priority?: number;
-              description?: string;
-              labels?: string[];
-            }) => {
-              const hulyLabel = issue.labels?.find((l: string) => l.startsWith('huly:'));
-              const hulyIdentifier =
-                hulyLabel?.replace('huly:', '') || `${project.identifier}-${issue.id}`;
-
-              return {
-                identifier: hulyIdentifier,
-                projectIdentifier: project.identifier,
-                title: issue.title,
-                description: issue.description,
-                status: issue.status,
-              };
-            }
-          );
-
-          await persistIssueSyncStateBatch({ issues: persistenceBatch });
-          result.beadsSync.synced = beadsIssues.length;
-        } else {
-          result.beadsSync.skipped = beadsIssues.length;
-        }
-
-        log.info(`[ProjectSync] Sync phase complete`, {
-          synced: result.beadsSync.synced,
-          skipped: result.beadsSync.skipped,
-        });
-      } else {
-        log.info(`[ProjectSync] Sync phase: skipped (beads not initialized or disabled)`);
-      }
-
-      return await continueAsNew<typeof ProjectSyncWorkflow>({
-        ...input,
         _phase: 'agent',
         _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
         _accumulatedResult: result,
       });
     }
 
-    // ── AGENT: update Letta agent memory with latest issue summary ──
+    // ── AGENT: update Letta agent memory ──
     if (_phase === 'agent') {
       if (enableLetta && !dryRun) {
         try {
@@ -264,12 +168,10 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
           });
 
           if (agentCheck.exists && agentCheck.agentId) {
-            const beadsIssues =
-              beadsInitialized && gitRepoPath ? await fetchBeadsIssues({ gitRepoPath }) : [];
             const memResult = await updateLettaMemory({
               agentId: agentCheck.agentId,
               project: project,
-              issues: beadsIssues as any,
+              issues: [],
               gitRepoPath: gitRepoPath || undefined,
               gitUrl: undefined,
             });
@@ -281,31 +183,9 @@ export async function ProjectSyncWorkflow(input: ProjectSyncInput): Promise<Proj
         }
       }
 
-      return await continueAsNew<typeof ProjectSyncWorkflow>({
-        ...input,
-        _phase: 'done',
-        _gitRepoPath: gitRepoPath,
-        _beadsInitialized: beadsInitialized,
-        _accumulatedResult: result,
-      });
-    }
-
-    // ── DONE: commit beads changes, finalize ──
-    if (_phase === 'done') {
-      if (!dryRun && beadsInitialized && gitRepoPath && result.beadsSync.synced > 0) {
-        await commitBeadsToGit({
-          context: {
-            projectIdentifier: project.identifier,
-            gitRepoPath,
-          },
-          message: `Sync from VibeSync: ${result.beadsSync.synced} issues`,
-        });
-      }
-
       result.success = true;
 
       log.info(`[ProjectSync] Complete: ${project.identifier}`, {
-        beadsSync: result.beadsSync,
         lettaUpdated: result.lettaUpdated,
       });
 

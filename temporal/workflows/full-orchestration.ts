@@ -22,9 +22,8 @@ import {
 } from '@temporalio/workflow';
 
 import type * as orchestrationActivities from '../activities/orchestration';
-import type * as agentProvisioningActivities from '../activities/agent-provisioning';
 import { ProjectSyncWorkflow } from './project-sync';
-import type { ProjectSyncResult, ProjectSyncInput } from './project-sync';
+import type { ProjectSyncResult } from './project-sync';
 
 // ============================================================
 // ACTIVITY PROXIES
@@ -38,16 +37,6 @@ const { fetchRegistryProjects, recordSyncMetrics } = proxyActivities<
     initialInterval: '2 seconds',
     backoffCoefficient: 2,
     maximumInterval: '60 seconds',
-    maximumAttempts: 3,
-  },
-});
-
-const { checkAgentExists } = proxyActivities<typeof agentProvisioningActivities>({
-  startToCloseTimeout: '60 seconds',
-  retry: {
-    initialInterval: '2 seconds',
-    backoffCoefficient: 2,
-    maximumInterval: '30 seconds',
     maximumAttempts: 3,
   },
 });
@@ -66,7 +55,6 @@ export const progressQuery = defineQuery<SyncProgress>('progress');
 export interface FullSyncInput {
   projectIdentifier?: string;
   batchSize?: number;
-  enableBeads?: boolean;
   enableLetta?: boolean;
   dryRun?: boolean;
   circuitBreakerThreshold?: number;
@@ -111,7 +99,6 @@ export async function FullOrchestrationWorkflow(
   const {
     projectIdentifier,
     batchSize = 5,
-    enableBeads = true,
     enableLetta = true,
     dryRun = false,
     circuitBreakerThreshold = 3,
@@ -149,7 +136,7 @@ export async function FullOrchestrationWorkflow(
   const result: FullSyncResult = {
     success: false,
     projectsProcessed: _accumulatedResults.length,
-    issuesSynced: _accumulatedResults.reduce((sum, r) => sum + (r.beadsSync?.synced || 0), 0),
+    issuesSynced: 0,
     durationMs: 0,
     errors: [..._accumulatedErrors],
     projectResults: [..._accumulatedResults],
@@ -158,7 +145,6 @@ export async function FullOrchestrationWorkflow(
   try {
     log.info('[FullOrchestration] Starting full sync', {
       projectIdentifier,
-      enableBeads,
       enableLetta,
       dryRun,
       continueIndex: _continueIndex,
@@ -212,7 +198,6 @@ export async function FullOrchestrationWorkflow(
           projectIdentifier: project.identifier,
           projectName: project.name,
           success: false,
-          beadsSync: { synced: 0, skipped: 0, errors: 0 },
           lettaUpdated: false,
           error: `Circuit breaker: skipped after ${failureCount} consecutive failures`,
         };
@@ -235,7 +220,6 @@ export async function FullOrchestrationWorkflow(
               description: project.description,
             },
             batchSize,
-            enableBeads,
             enableLetta,
             dryRun,
           },
@@ -245,7 +229,6 @@ export async function FullOrchestrationWorkflow(
       result.projectResults.push(projectResult);
       result.projectsProcessed++;
       progress.projectsCompleted++;
-      progress.issuesSynced += projectResult.beadsSync?.synced || 0;
 
       if (!projectResult.success) {
         progress.errors++;
@@ -273,7 +256,6 @@ export async function FullOrchestrationWorkflow(
         await continueAsNew<typeof FullOrchestrationWorkflow>({
           projectIdentifier,
           batchSize,
-          enableBeads,
           enableLetta,
           dryRun,
           circuitBreakerThreshold,

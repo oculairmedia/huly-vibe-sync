@@ -1,7 +1,7 @@
 /**
  * Issue Sync Workflow
  *
- * Handles atomic synchronization of issues across Huly, VibeKanban, and Beads.
+ * Handles atomic synchronization of issues across Huly and VibeKanban.
  * Uses Temporal's durable execution for reliability and visibility.
  */
 export interface IssueSyncInput {
@@ -16,17 +16,10 @@ export interface IssueSyncInput {
         projectIdentifier?: string;
         hulyId?: string;
         vibeId?: string;
-        beadsId?: string;
         modifiedAt?: number;
     };
     operation: 'create' | 'update' | 'delete';
-    source: 'huly' | 'vibe' | 'beads';
-    /**
-     * Beads sync behavior:
-     * - atomic (default): Beads failures fail workflow and trigger compensation for creates.
-     * - best_effort: Beads failures are logged and workflow continues.
-     */
-    beadsSyncMode?: 'atomic' | 'best_effort';
+    source: 'huly' | 'vibe';
     agentId?: string;
 }
 export interface IssueSyncResult {
@@ -37,11 +30,6 @@ export interface IssueSyncResult {
         error?: string;
     };
     vibeResult?: {
-        success: boolean;
-        systemId?: string;
-        error?: string;
-    };
-    beadsResult?: {
         success: boolean;
         systemId?: string;
         error?: string;

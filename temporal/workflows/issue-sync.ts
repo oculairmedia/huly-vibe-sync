@@ -1,7 +1,7 @@
 /**
  * Issue Sync Workflow
  *
- * Handles atomic synchronization of issues across Huly, VibeKanban, and Beads.
+ * Handles atomic synchronization of issues across Huly and VibeKanban.
  * Uses Temporal's durable execution for reliability and visibility.
  */
 
@@ -12,11 +12,9 @@ import type * as activities from '../activities/issue-sync';
 const {
   syncToHuly,
   syncToVibe,
-  syncToBeads,
   updateLettaMemory,
   compensateHulyCreate,
   compensateVibeCreate,
-  compensateBeadsCreate,
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: '120 seconds',
   retry: {
@@ -29,7 +27,6 @@ const {
       'HulyValidationError',
       'VibeNotFoundError',
       'VibeValidationError',
-      'BeadsValidationError',
     ],
   },
 });
@@ -47,17 +44,10 @@ export interface IssueSyncInput {
     projectIdentifier?: string;
     hulyId?: string;
     vibeId?: string;
-    beadsId?: string;
     modifiedAt?: number;
   };
   operation: 'create' | 'update' | 'delete';
-  source: 'huly' | 'vibe' | 'beads';
-  /**
-   * Beads sync behavior:
-   * - atomic (default): Beads failures fail workflow and trigger compensation for creates.
-   * - best_effort: Beads failures are logged and workflow continues.
-   */
-  beadsSyncMode?: 'atomic' | 'best_effort';
+  source: 'huly' | 'vibe';
   agentId?: string; // Optional Letta agent to update
 }
 
@@ -65,7 +55,6 @@ export interface IssueSyncResult {
   success: boolean;
   hulyResult?: { success: boolean; systemId?: string; error?: string };
   vibeResult?: { success: boolean; systemId?: string; error?: string };
-  beadsResult?: { success: boolean; systemId?: string; error?: string };
   lettaResult?: { success: boolean; error?: string };
   error?: string;
   duration?: number;
@@ -86,7 +75,6 @@ export interface IssueSyncResult {
 export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyncResult> {
   const startTime = Date.now();
   const { issue, operation, source, agentId } = input;
-  const beadsSyncMode = input.beadsSyncMode || 'atomic';
 
   log.info(`[IssueSyncWorkflow] Starting: ${operation} from ${source}`, {
     identifier: issue.identifier,
@@ -133,28 +121,7 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
       result.vibeResult = { success: true, systemId: issue.vibeId };
     }
 
-    // Step 3: Sync to Beads (skip if source is Beads)
-    if (source !== 'beads') {
-      log.info(`[IssueSyncWorkflow] Syncing to Beads...`, { mode: beadsSyncMode });
-
-      if (beadsSyncMode === 'best_effort') {
-        try {
-          result.beadsResult = await syncToBeads({ issue, operation, source });
-        } catch (beadsError) {
-          log.warn(`[IssueSyncWorkflow] Beads sync failed (best-effort): ${beadsError}`);
-          result.beadsResult = { success: false, error: String(beadsError) };
-        }
-      } else {
-        result.beadsResult = await syncToBeads({ issue, operation, source });
-        if (!result.beadsResult.success) {
-          throw new Error(`Beads sync failed: ${result.beadsResult.error || 'Unknown error'}`);
-        }
-      }
-    } else {
-      result.beadsResult = { success: true, systemId: issue.beadsId };
-    }
-
-    // Step 4: Update Letta memory (optional, non-fatal)
+    // Step 3: Update Letta memory (optional, non-fatal)
     if (agentId) {
       log.info(`[IssueSyncWorkflow] Updating Letta memory...`);
       try {
@@ -163,7 +130,6 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
           syncResult: {
             hulyId: result.hulyResult?.systemId,
             vibeId: result.vibeResult?.systemId,
-            beadsId: result.beadsResult?.systemId,
             operation,
             timestamp: Date.now(),
           },
@@ -183,17 +149,13 @@ export async function IssueSyncWorkflow(input: IssueSyncInput): Promise<IssueSyn
       duration: result.duration,
       huly: result.hulyResult?.success,
       vibe: result.vibeResult?.success,
-      beads: result.beadsResult?.success,
     });
 
     return result;
   } catch (error) {
     // Compensation for atomic create operations: roll back systems in reverse order.
-    if (operation === 'create' && beadsSyncMode === 'atomic') {
+    if (operation === 'create') {
       try {
-        if (result.beadsResult?.systemId) {
-          await compensateBeadsCreate({ beadsId: result.beadsResult.systemId });
-        }
         if (result.vibeResult?.systemId) {
           await compensateVibeCreate({ vibeId: result.vibeResult.systemId });
         }
