@@ -53,8 +53,9 @@ logs/*.db
 # SQLite WAL sidecars (runtime state)
 *.db-wal
 *.db-shm
-.beads/bd.sock.startlock
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-.beads-credential-key
+# Build cache (generated)
+.vibesync-cache/
+
+# Rust analyzer output (IDE)
+target/

@@ -46,7 +46,6 @@ const createMockIssue = (
   projectIdentifier: 'PROJ',
   hulyId: 'huly-123',
   vibeId: 'vibe-456',
-  beadsId: 'beads-789',
   modifiedAt: Date.now(),
   ...overrides,
 });
@@ -58,11 +57,9 @@ const createMockIssue = (
 const createMockActivities = () => ({
   syncToHuly: vi.fn().mockResolvedValue({ success: true, systemId: 'PROJ-123' }),
   syncToVibe: vi.fn().mockResolvedValue({ success: true, systemId: 'vibe-task-id' }),
-  syncToBeads: vi.fn().mockResolvedValue({ success: true, systemId: 'beads-id' }),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
   compensateHulyCreate: vi.fn().mockResolvedValue({ success: true }),
   compensateVibeCreate: vi.fn().mockResolvedValue({ success: true }),
-  compensateBeadsCreate: vi.fn().mockResolvedValue({ success: true }),
 });
 
 // ============================================================
@@ -164,7 +161,6 @@ describe('IssueSyncWorkflow', () => {
       expect(result.success).toBe(true);
       expect(mockActivities.syncToHuly).not.toHaveBeenCalled();
       expect(mockActivities.syncToVibe).toHaveBeenCalled();
-      expect(mockActivities.syncToBeads).toHaveBeenCalled();
       expect(result.hulyResult?.success).toBe(true);
       expect(result.hulyResult?.systemId).toBe('PROJ-123'); // Uses existing identifier
     }, 30000);
@@ -181,26 +177,8 @@ describe('IssueSyncWorkflow', () => {
       expect(result.success).toBe(true);
       expect(mockActivities.syncToHuly).toHaveBeenCalled();
       expect(mockActivities.syncToVibe).not.toHaveBeenCalled();
-      expect(mockActivities.syncToBeads).toHaveBeenCalled();
       expect(result.vibeResult?.success).toBe(true);
       expect(result.vibeResult?.systemId).toBe('vibe-456'); // Uses existing vibeId
-    }, 30000);
-
-    it('should skip Beads sync when source is beads', async () => {
-      const input: IssueSyncInput = {
-        issue: createMockIssue(),
-        operation: 'create',
-        source: 'beads',
-      };
-
-      const result = await runIssueSyncWorkflowTest(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(mockActivities.syncToHuly).toHaveBeenCalled();
-      expect(mockActivities.syncToVibe).toHaveBeenCalled();
-      expect(mockActivities.syncToBeads).not.toHaveBeenCalled();
-      expect(result.beadsResult?.success).toBe(true);
-      expect(result.beadsResult?.systemId).toBe('beads-789'); // Uses existing beadsId
     }, 30000);
   });
 
@@ -210,7 +188,7 @@ describe('IssueSyncWorkflow', () => {
   describe('Operations', () => {
     it('should handle create operation from Huly source', async () => {
       const input: IssueSyncInput = {
-        issue: createMockIssue({ hulyId: undefined, vibeId: undefined, beadsId: undefined }),
+        issue: createMockIssue({ hulyId: undefined, vibeId: undefined }),
         operation: 'create',
         source: 'huly',
       };
@@ -277,36 +255,6 @@ describe('IssueSyncWorkflow', () => {
       await expect(runIssueSyncWorkflowTest(input, mockActivities)).rejects.toThrow();
     }, 30000);
 
-    it('should fail when Beads sync fails in atomic mode (default)', async () => {
-      mockActivities.syncToBeads.mockRejectedValue(new Error('Beads sync error'));
-
-      const input: IssueSyncInput = {
-        issue: createMockIssue(),
-        operation: 'create',
-        source: 'huly', // Not beads, so syncToBeads will be called
-      };
-
-      await expect(runIssueSyncWorkflowTest(input, mockActivities)).rejects.toThrow();
-      expect(mockActivities.compensateVibeCreate).toHaveBeenCalled();
-    }, 30000);
-
-    it('should continue when Beads sync fails in best-effort mode', async () => {
-      mockActivities.syncToBeads.mockRejectedValue(new Error('Beads sync error'));
-
-      const input: IssueSyncInput = {
-        issue: createMockIssue(),
-        operation: 'create',
-        source: 'huly',
-        beadsSyncMode: 'best_effort',
-      };
-
-      const result = await runIssueSyncWorkflowTest(input, mockActivities);
-
-      expect(result.success).toBe(true);
-      expect(result.beadsResult?.success).toBe(false);
-      expect(result.beadsResult?.error).toContain('ActivityFailure');
-      expect(mockActivities.compensateVibeCreate).not.toHaveBeenCalled();
-    }, 30000);
   });
 
   // ============================================================
@@ -573,11 +521,11 @@ describe('Issue Sync Workflow Logic', () => {
       const input: IssueSyncInput = {
         issue: createMockIssue(),
         operation: 'delete',
-        source: 'beads',
+        source: 'huly',
       };
 
       expect(input.operation).toBe('delete');
-      expect(input.source).toBe('beads');
+      expect(input.source).toBe('huly');
     });
   });
 
@@ -587,7 +535,6 @@ describe('Issue Sync Workflow Logic', () => {
         success: true,
         hulyResult: { success: true, systemId: 'PROJ-123' },
         vibeResult: { success: true, systemId: 'vibe-456' },
-        beadsResult: { success: true, systemId: 'beads-789' },
         lettaResult: { success: true },
         duration: 1500,
       };
@@ -595,7 +542,6 @@ describe('Issue Sync Workflow Logic', () => {
       expect(result.success).toBe(true);
       expect(result.hulyResult?.systemId).toBe('PROJ-123');
       expect(result.vibeResult?.systemId).toBe('vibe-456');
-      expect(result.beadsResult?.systemId).toBe('beads-789');
       expect(result.duration).toBe(1500);
     });
 
@@ -615,23 +561,14 @@ describe('Issue Sync Workflow Logic', () => {
 
   describe('Source system determination', () => {
     it('should correctly identify source systems', () => {
-      const sources: Array<'huly' | 'vibe' | 'beads'> = ['huly', 'vibe', 'beads'];
+      const sources: Array<'huly' | 'vibe'> = ['huly', 'vibe'];
 
       sources.forEach(source => {
-        const input: IssueSyncInput = {
-          issue: createMockIssue(),
-          operation: 'create',
-          source,
-        };
-
-        // Source system should be skipped in sync
         const shouldSkipHuly = source === 'huly';
         const shouldSkipVibe = source === 'vibe';
-        const shouldSkipBeads = source === 'beads';
 
         expect(shouldSkipHuly).toBe(source === 'huly');
         expect(shouldSkipVibe).toBe(source === 'vibe');
-        expect(shouldSkipBeads).toBe(source === 'beads');
       });
     });
   });

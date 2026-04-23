@@ -1,7 +1,7 @@
 /**
- * Database Stats Component
+ * Registry Stats Component
  *
- * Displays database statistics (projects, issues, sync status)
+ * Displays registry statistics (projects, issues, sync status)
  */
 
 'use client'
@@ -19,8 +19,8 @@ export function DatabaseStats() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Database Statistics</CardTitle>
-          <CardDescription>Project and issue metrics</CardDescription>
+          <CardTitle>Registry Overview</CardTitle>
+          <CardDescription>Project registry metrics</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -37,13 +37,13 @@ export function DatabaseStats() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Database Statistics</CardTitle>
-          <CardDescription>Project and issue metrics</CardDescription>
+          <CardTitle>Registry Overview</CardTitle>
+          <CardDescription>Project registry metrics</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-4 w-4" />
-            <span>Failed to load database statistics</span>
+            <span>Failed to load registry statistics</span>
           </div>
         </CardContent>
       </Card>
@@ -59,12 +59,12 @@ export function DatabaseStats() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Database Statistics</CardTitle>
-            <CardDescription>Project and issue metrics</CardDescription>
+            <CardTitle>Registry Overview</CardTitle>
+            <CardDescription>Project registry metrics</CardDescription>
           </div>
           <Badge variant="secondary">
             <Database className="mr-1 h-3 w-3" />
-            SQLite
+            Registry
           </Badge>
         </div>
       </CardHeader>

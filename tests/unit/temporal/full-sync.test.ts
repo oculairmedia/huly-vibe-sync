@@ -25,9 +25,7 @@ const mockContext = {
   gitRepoPath: '/opt/stacks/test-repo',
 };
 
-const createMockActivities = () => ({
-  commitBeadsToGit: vi.fn().mockResolvedValue({ success: true }),
-});
+const createMockActivities = () => ({});
 
 let testEnv: TestWorkflowEnvironment;
 
@@ -73,7 +71,6 @@ async function runProjectWorkflow(
     issues: SyncIssueInput[];
     context: typeof mockContext;
     batchSize?: number;
-    commitAfterSync?: boolean;
   },
   mockActivities: ReturnType<typeof createMockActivities>
 ): Promise<{
@@ -126,33 +123,6 @@ describe('SyncProjectWorkflow (legacy)', () => {
   beforeEach(() => {
     mockActivities = createMockActivities();
   });
-
-  it('should commit Beads when commitAfterSync=true', async () => {
-    const issues: SyncIssueInput[] = [{ issue: mockIssue, context: mockContext }];
-
-    await runProjectWorkflow(
-      { issues, context: mockContext, commitAfterSync: true },
-      mockActivities
-    );
-
-    expect(mockActivities.commitBeadsToGit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: mockContext,
-        message: expect.stringContaining('Sync'),
-      })
-    );
-  }, 30000);
-
-  it('should not commit when commitAfterSync=false', async () => {
-    const issues: SyncIssueInput[] = [{ issue: mockIssue, context: mockContext }];
-
-    await runProjectWorkflow(
-      { issues, context: mockContext, commitAfterSync: false },
-      mockActivities
-    );
-
-    expect(mockActivities.commitBeadsToGit).not.toHaveBeenCalled();
-  }, 30000);
 
   it('should handle empty issues array', async () => {
     const result = await runProjectWorkflow({ issues: [], context: mockContext }, mockActivities);

@@ -1,9 +1,4 @@
 /**
- * Orchestration Activities — Git & Beads
- *
- * Activities for git repo path resolution and Beads operations.
- */
-/**
  * Test-only helper to reset module-level cache between test runs.
  */
 export declare function clearGitRepoPathCache(): void;
@@ -22,25 +17,4 @@ export declare function resolveGitRepoPath(input: {
 export declare function extractGitRepoPath(input: {
     description?: string;
 }): string | null;
-/**
- * Initialize Beads in a git repository
- */
-export declare function initializeBeads(input: {
-    gitRepoPath: string;
-    projectName: string;
-    projectIdentifier: string;
-}): Promise<boolean>;
-/**
- * Fetch Beads issues from a repository
- */
-export declare function fetchBeadsIssues(input: {
-    gitRepoPath: string;
-}): Promise<Array<{
-    id: string;
-    title: string;
-    status: string;
-    priority?: number;
-    description?: string;
-    labels?: string[];
-}>>;
 //# sourceMappingURL=orchestration-git.d.ts.map

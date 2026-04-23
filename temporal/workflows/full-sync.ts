@@ -2,21 +2,10 @@
  * Full Sync Workflows
  *
  * Legacy workflows kept for backward compatibility.
- * Main orchestration now uses ProjectSyncWorkflow with 4-phase pipeline.
+ * Main orchestration now uses ProjectSyncWorkflow with a simplified pipeline.
  */
 
-import { proxyActivities, log } from '@temporalio/workflow';
-import type * as syncActivities from '../activities/sync-services';
-
-const { commitBeadsToGit } = proxyActivities<typeof syncActivities>({
-  startToCloseTimeout: '120 seconds',
-  retry: {
-    initialInterval: '2 seconds',
-    backoffCoefficient: 2,
-    maximumInterval: '60 seconds',
-    maximumAttempts: 5,
-  },
-});
+import { log } from '@temporalio/workflow';
 
 export interface SyncIssueInput {
   issue: {
@@ -31,13 +20,10 @@ export interface SyncIssueInput {
     projectIdentifier: string;
     gitRepoPath?: string;
   };
-  existingBeadsIssues?: Array<{ id: string; title: string; status: string }>;
-  syncToBeads?: boolean;
 }
 
 export interface SyncIssueResult {
   success: boolean;
-  beadsResult?: { success: boolean; id?: string; skipped?: boolean; error?: string };
   error?: string;
 }
 
@@ -58,7 +44,6 @@ export async function SyncProjectWorkflow(input: {
     gitRepoPath?: string;
   };
   batchSize?: number;
-  commitAfterSync?: boolean;
 }): Promise<{
   success: boolean;
   total: number;
@@ -66,18 +51,11 @@ export async function SyncProjectWorkflow(input: {
   failed: number;
   results: SyncIssueResult[];
 }> {
-  const { issues, context, commitAfterSync = true } = input;
+  const { issues, context } = input;
 
   log.info(`[SyncProject] Starting: ${context.projectIdentifier}`, {
     issueCount: issues.length,
   });
-
-  if (commitAfterSync && context.gitRepoPath) {
-    await commitBeadsToGit({
-      context,
-      message: `Sync ${issues.length} issues from VibeSync`,
-    });
-  }
 
   log.info(`[SyncProject] Complete: ${context.projectIdentifier}`);
 

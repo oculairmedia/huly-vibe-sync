@@ -2,7 +2,7 @@
  * Temporal Workflow Triggers
  *
  * Helper functions for external services to trigger bidirectional sync workflows.
- * Used by: BeadsWatcher, HulyWebhookHandler
+ * Used by webhook and external sync handlers.
  */
 /**
  * Check if Temporal is available
@@ -20,12 +20,6 @@ export interface LinkedIds {
  * Trigger sync when Huly issue changes
  */
 export declare function triggerSyncFromHuly(hulyIdentifier: string, context: SyncContext, linkedIds?: LinkedIds): Promise<{
-    workflowId: string;
-}>;
-/**
- * Trigger sync when Beads issue changes
- */
-export declare function triggerSyncFromBeads(beadsIssueId: string, context: SyncContext, linkedIds?: LinkedIds): Promise<{
     workflowId: string;
 }>;
 /**

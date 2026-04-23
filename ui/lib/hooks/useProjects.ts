@@ -1,35 +1,41 @@
 /**
  * useProjects Hook
  *
- * React Query hook for fetching project list and stats
+ * React Query hook for fetching project list from the registry
  */
 
 import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { ProjectsResponse } from '../types'
+import { ProjectsResponse, ProjectSummary } from '../types'
 import { z } from 'zod'
 
-// Schema for validation
+// Schema for validation — permissive with .passthrough()
+// Only identifier and name are required; everything else is optional
+const ProjectSummarySchema = z.object({
+  identifier: z.string(),
+  name: z.string(),
+}).passthrough()
+
 const ProjectsResponseSchema = z.object({
   total: z.number(),
-  projects: z.array(
-    z.object({
-      identifier: z.string(),
-      name: z.string(),
-      issue_count: z.number(),
-      last_sync_at: z.number(),
-      last_checked_at: z.number(),
-    })
-  ),
-  timestamp: z.string(),
-})
+  projects: z.array(ProjectSummarySchema),
+}).passthrough()
 
 /**
- * Fetch projects data from /api/projects endpoint
+ * Fetch projects data from /api/registry/projects endpoint
  */
 async function fetchProjects(): Promise<ProjectsResponse> {
-  return api.get<ProjectsResponse>('/api/projects', {
+  return api.get<ProjectsResponse>('/api/registry/projects', {
     schema: ProjectsResponseSchema,
+  })
+}
+
+/**
+ * Fetch a single project by identifier
+ */
+async function fetchProject(identifier: string): Promise<ProjectSummary> {
+  return api.get<ProjectSummary>(`/api/registry/projects/${identifier}`, {
+    schema: ProjectSummarySchema,
   })
 }
 
@@ -45,6 +51,25 @@ export function useProjects(
   return useQuery<ProjectsResponse, Error>({
     queryKey: ['projects'],
     queryFn: fetchProjects,
+    ...options,
+  })
+}
+
+/**
+ * Hook for fetching a single project by identifier
+ *
+ * @param identifier - Project identifier
+ * @param options - React Query options
+ * @returns Query result with project data
+ */
+export function useProject(
+  identifier: string,
+  options?: Omit<UseQueryOptions<ProjectSummary, Error>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery<ProjectSummary, Error>({
+    queryKey: ['project', identifier],
+    queryFn: () => fetchProject(identifier),
+    enabled: !!identifier,
     ...options,
   })
 }

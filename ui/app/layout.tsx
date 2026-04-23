@@ -6,8 +6,8 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Huly-Vibe Sync Dashboard',
-  description: 'Management dashboard for Huly-Vibe synchronization service',
+  title: 'VibeSync Dashboard',
+  description: 'Project registry and system monitor for VibeSync',
 }
 
 export default function RootLayout({

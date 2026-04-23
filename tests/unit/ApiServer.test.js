@@ -1529,30 +1529,6 @@ describe('createApiServer - HTTP Routes', () => {
     });
   });
 
-  // --------------------------------------------------------
-  // 12. POST /api/beads/label
-  // --------------------------------------------------------
-  describe('POST /api/beads/label', () => {
-    it('should add a label to a beads issue', async () => {
-      const res = await makeRequest(port, 'POST', '/api/beads/label', {
-        repoPath: '/opt/stacks/test',
-        issueId: 'issue-1',
-        label: 'bug',
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should return 400 if required fields missing', async () => {
-      const res = await makeRequest(port, 'POST', '/api/beads/label', { repoPath: '/test' });
-      expect(res.statusCode).toBe(400);
-      expect(res.body.error).toContain('Missing required fields');
-    });
-  });
-
-  // --------------------------------------------------------
-  // 13. GET /api/sync/history
-  // --------------------------------------------------------
   describe('GET /api/sync/history', () => {
     it('should return sync history', async () => {
       const res = await makeRequest(port, 'GET', '/api/sync/history');
@@ -1569,9 +1545,6 @@ describe('createApiServer - HTTP Routes', () => {
     });
   });
 
-  // --------------------------------------------------------
-  // 14. GET /api/sync/history/:id
-  // --------------------------------------------------------
   describe('GET /api/sync/history/:id', () => {
     it('should return 404 for non-existent event', async () => {
       const res = await makeRequest(port, 'GET', '/api/sync/history/nonexistent');
@@ -1590,9 +1563,6 @@ describe('createApiServer - HTTP Routes', () => {
     });
   });
 
-  // --------------------------------------------------------
-  // 15. GET /api/sync/mappings
-  // --------------------------------------------------------
   describe('GET /api/sync/mappings', () => {
     it('should return all mappings', async () => {
       const res = await makeRequest(port, 'GET', '/api/sync/mappings');

@@ -59,6 +59,10 @@ services:
       - CODE_PERCEPTION_ENABLED=${CODE_PERCEPTION_ENABLED:-false}
       - CODE_PERCEPTION_DEBOUNCE_MS=${CODE_PERCEPTION_DEBOUNCE_MS:-2000}
       - CODE_PERCEPTION_BATCH_SIZE=${CODE_PERCEPTION_BATCH_SIZE:-50}
+      - CODE_PERCEPTION_EXCLUDE_PATTERNS=${CODE_PERCEPTION_EXCLUDE_PATTERNS:-}
+      - CODE_PERCEPTION_SOURCE_ROOTS=${CODE_PERCEPTION_SOURCE_ROOTS:-}
+      - CODE_PERCEPTION_ALLOWLIST_MODE=${CODE_PERCEPTION_ALLOWLIST_MODE:-false}
+      - AST_EXCLUDE_PATTERNS=${AST_EXCLUDE_PATTERNS:-}
 
       # Node Environment
       - NODE_ENV=production
@@ -66,7 +70,6 @@ services:
       # Temporal Orchestration
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-localhost:7233}
       - USE_TEMPORAL_ORCHESTRATION=${USE_TEMPORAL_ORCHESTRATION:-true}
-      - USE_TEMPORAL_BEADS=${USE_TEMPORAL_BEADS:-false}
       - USE_TEMPORAL_VIBE=${USE_TEMPORAL_VIBE:-false}
       - USE_TEMPORAL_HULY_WEBHOOK=${USE_TEMPORAL_HULY_WEBHOOK:-false}
 
@@ -91,6 +94,18 @@ services:
       - ./node_modules/@js-sdsl:/app/node_modules/@js-sdsl:ro
       - ./node_modules/abort-controller:/app/node_modules/abort-controller:ro
       - ./node_modules/uuid:/app/node_modules/uuid:ro
+
+      # Dolt SQL client (mysql2 + deps)
+      - ./node_modules/mysql2:/app/node_modules/mysql2:ro
+      - ./node_modules/aws-ssl-profiles:/app/node_modules/aws-ssl-profiles:ro
+      - ./node_modules/denque:/app/node_modules/denque:ro
+      - ./node_modules/generate-function:/app/node_modules/generate-function:ro
+      - ./node_modules/iconv-lite:/app/node_modules/iconv-lite:ro
+      - ./node_modules/lru.min:/app/node_modules/lru.min:ro
+      - ./node_modules/named-placeholders:/app/node_modules/named-placeholders:ro
+      - ./node_modules/sql-escaper:/app/node_modules/sql-escaper:ro
+      - ./node_modules/safer-buffer:/app/node_modules/safer-buffer:ro
+      - ./node_modules/is-property:/app/node_modules/is-property:ro
 
       # Letta agent persistence (read-write for storing agent IDs)
       - ./.letta:/app/.letta
@@ -139,7 +154,6 @@ services:
       - STACKS_DIR=/opt/stacks
       - NODE_ENV=production
     volumes:
-      # Access to stacks directory for Beads operations
       - /opt/stacks:/opt/stacks:rw
       # Mount local compiled Temporal code
       - ./temporal/dist:/app/temporal/dist:ro
@@ -147,6 +161,8 @@ services:
       - ./lib:/app/lib:ro
       # Mount logs directory for database access
       - ./logs:/app/logs:rw
+      # Dolt SQL client (mysql2 + deps) — bundled in image via npm ci
+      # No individual mounts needed; image node_modules already contains these
     network_mode: host
     depends_on:
       - huly-vibe-sync
@@ -165,7 +181,7 @@ services:
     command: ['node', 'server.js']
     environment:
       - API_URL=${API_URL:-http://192.168.50.90:3099}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://192.168.50.90:3099}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
       - PORT=3000
@@ -205,9 +221,6 @@ services:
       - '${UI_PORT:-3110}:80'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      huly-vibe-sync-ui:
-        condition: service_healthy
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost/']
       interval: 30s

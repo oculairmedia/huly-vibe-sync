@@ -12,7 +12,11 @@
     "model": "anthropic/sonnet-4-5",
     "embedding": "letta/letta-free",
     "tools": {
-      "huly": ["huly_query", "huly_issue_ops", "huly_entity"],
+      "huly": [
+        "huly_query",
+        "huly_issue_ops",
+        "huly_entity"
+      ],
       "vibe": [
         "list_projects",
         "list_tasks",
@@ -133,9 +137,21 @@
       "Bash(sleep 300 && docker stats huly-vibe-sync --no-stream 2>/dev/null)",
       "Bash(npm search:*)",
       "Bash(sleep 60 && docker stats huly-vibe-sync --no-stream 2>/dev/null)",
-      "Bash(curl -s \"http://192.168.50.90:3458/projects/HVSYN/issues?limit=1\" | jq 'keys')"
+      "Bash(curl -s \"http://192.168.50.90:3458/projects/HVSYN/issues?limit=1\" | jq 'keys')",
+      "Bash(# Stop the manually-started bdui first, then enable the systemd service\nbdui stop 2>&1 && systemctl daemon-reload && systemctl enable beads-ui && systemctl start beads-ui 2>&1)",
+      "Bash(sleep 3 && systemctl status beads-ui 2>&1 | head -15)",
+      "Bash(curl:*)",
+      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose restart vibesync-nginx 2>&1)",
+      "Bash(# Verify it's actually beads-ui content, not Next.js\ncurl -s http://localhost:3110/ 2>&1 | head -15)",
+      "Bash(# Also verify API routes still work through nginx\ncurl -s http://localhost:3110/health 2>&1 | head -5)",
+      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose stop huly-vibe-sync-ui 2>&1)",
+      "Bash(letta-teams daemon stop 2>&1; sleep 1; LETTA_MODEL=anthropic-claude-max/sonnet-4-5 letta-teams daemon start 2>&1)",
+      "Bash(letta-teams daemon stop 2>&1; sleep 2; letta-teams daemon status 2>&1)"
     ],
-    "deny": ["filesystem_write_file(*)", "filesystem_delete_file(*)"],
+    "deny": [
+      "filesystem_write_file(*)",
+      "filesystem_delete_file(*)"
+    ],
     "default_mode": "prompt"
   },
   "localSharedBlockIds": {

@@ -28,15 +28,6 @@ const { fetchRegistryProjects, recordSyncMetrics } = (0, workflow_1.proxyActivit
         maximumAttempts: 3,
     },
 });
-const { checkAgentExists } = (0, workflow_1.proxyActivities)({
-    startToCloseTimeout: '60 seconds',
-    retry: {
-        initialInterval: '2 seconds',
-        backoffCoefficient: 2,
-        maximumInterval: '30 seconds',
-        maximumAttempts: 3,
-    },
-});
 // ============================================================
 // SIGNALS AND QUERIES
 // ============================================================
@@ -47,7 +38,7 @@ exports.progressQuery = (0, workflow_1.defineQuery)('progress');
 // ============================================================
 const MAX_PROJECTS_PER_CONTINUATION = 3;
 async function FullOrchestrationWorkflow(input = {}) {
-    const { projectIdentifier, batchSize = 5, enableBeads = true, enableLetta = true, dryRun = false, circuitBreakerThreshold = 3, _continueIndex = 0, _accumulatedResults = [], _accumulatedErrors = [], _originalStartTime, _projectFailures = {}, } = input;
+    const { projectIdentifier, batchSize = 5, enableLetta = true, dryRun = false, circuitBreakerThreshold = 3, _continueIndex = 0, _accumulatedResults = [], _accumulatedErrors = [], _originalStartTime, _projectFailures = {}, } = input;
     const startTime = _originalStartTime || Date.now();
     let cancelled = false;
     const projectFailures = { ..._projectFailures };
@@ -71,7 +62,7 @@ async function FullOrchestrationWorkflow(input = {}) {
     const result = {
         success: false,
         projectsProcessed: _accumulatedResults.length,
-        issuesSynced: _accumulatedResults.reduce((sum, r) => sum + (r.beadsSync?.synced || 0), 0),
+        issuesSynced: 0,
         durationMs: 0,
         errors: [..._accumulatedErrors],
         projectResults: [..._accumulatedResults],
@@ -79,7 +70,6 @@ async function FullOrchestrationWorkflow(input = {}) {
     try {
         workflow_1.log.info('[FullOrchestration] Starting full sync', {
             projectIdentifier,
-            enableBeads,
             enableLetta,
             dryRun,
             continueIndex: _continueIndex,
@@ -116,7 +106,6 @@ async function FullOrchestrationWorkflow(input = {}) {
                     projectIdentifier: project.identifier,
                     projectName: project.name,
                     success: false,
-                    beadsSync: { synced: 0, skipped: 0, errors: 0 },
                     lettaUpdated: false,
                     error: `Circuit breaker: skipped after ${failureCount} consecutive failures`,
                 };
@@ -138,7 +127,6 @@ async function FullOrchestrationWorkflow(input = {}) {
                             description: project.description,
                         },
                         batchSize,
-                        enableBeads,
                         enableLetta,
                         dryRun,
                     },
@@ -147,7 +135,6 @@ async function FullOrchestrationWorkflow(input = {}) {
             result.projectResults.push(projectResult);
             result.projectsProcessed++;
             progress.projectsCompleted++;
-            progress.issuesSynced += projectResult.beadsSync?.synced || 0;
             if (!projectResult.success) {
                 progress.errors++;
                 projectFailures[project.identifier] = (projectFailures[project.identifier] || 0) + 1;
@@ -171,7 +158,6 @@ async function FullOrchestrationWorkflow(input = {}) {
                 await (0, workflow_1.continueAsNew)({
                     projectIdentifier,
                     batchSize,
-                    enableBeads,
                     enableLetta,
                     dryRun,
                     circuitBreakerThreshold,

@@ -23,9 +23,9 @@ export interface DataReconciliationResult {
   action: ReconciliationAction;
   dryRun: boolean;
   projectsProcessed: number;
-  projectsWithBeadsChecked: number;
-  staleBeads: Array<{ identifier: string; projectIdentifier: string; beadsIssueId: string }>;
-  updated: { markedBeads: number; deleted: number };
+  projectsChecked: number;
+  staleIssues: Array<{ identifier: string; projectIdentifier: string; issueId: string }>;
+  updated: { markedDeleted: number; deleted: number };
   errors: string[];
 }
 

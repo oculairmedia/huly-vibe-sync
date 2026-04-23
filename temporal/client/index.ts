@@ -56,12 +56,3 @@ export {
   provisionSingleAgent,
   cleanupFailedProvisions,
 } from './agent-provisioning';
-
-export type { BeadsSyncInput } from './beads-sync';
-export {
-  scheduleBeadsSync,
-  executeBeadsSync,
-  scheduleBatchBeadsSync,
-  scheduleBeadsFileChange,
-  executeBeadsFileChange,
-} from './beads-sync';

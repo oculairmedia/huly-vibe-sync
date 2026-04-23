@@ -15,15 +15,11 @@ export interface PersistIssueStateInput {
   priority?: string;
   hulyId?: string;
   vibeTaskId?: string;
-  beadsIssueId?: string;
   hulyModifiedAt?: NullableNumber;
   vibeModifiedAt?: NullableNumber;
-  beadsModifiedAt?: NullableNumber;
   vibeStatus?: string;
-  beadsStatus?: string;
   parentHulyId?: string | null;
   parentVibeId?: string | null;
-  parentBeadsId?: string | null;
   subIssueCount?: number;
 }
 
@@ -145,7 +141,6 @@ function defaultHulyId(identifier: string): string | null {
 export interface IssueSyncTimestamps {
   huly_modified_at: number | null;
   vibe_modified_at: number | null;
-  beads_modified_at: number | null;
 }
 
 export async function getIssueSyncTimestamps(input: {
@@ -158,11 +153,10 @@ export async function getIssueSyncTimestamps(input: {
   return {
     huly_modified_at: normalizeModifiedAt(issue.huly_modified_at),
     vibe_modified_at: normalizeModifiedAt(issue.vibe_modified_at),
-    beads_modified_at: normalizeModifiedAt(issue.beads_modified_at),
   };
 }
 
-export async function hasBeadsIssueChanged(input: {
+export async function hasIssueContentChanged(input: {
   hulyIdentifier: string;
   title: string;
   description?: string;
@@ -191,22 +185,22 @@ export async function hasBeadsIssueChanged(input: {
 
 export async function getIssueSyncState(input: {
   hulyIdentifier: string;
-}): Promise<{ status?: string; beadsStatus?: string } | null> {
+}): Promise<{ status?: string } | null> {
   const db = await getDb();
   const issue = db.getIssue(input.hulyIdentifier);
   if (!issue) return null;
-  return { status: issue.status, beadsStatus: issue.beads_status };
+  return { status: issue.status };
 }
 
 export async function getIssueSyncStateBatch(input: {
   hulyIdentifiers: string[];
-}): Promise<Record<string, { status?: string; beadsStatus?: string }>> {
+}): Promise<Record<string, { status?: string }>> {
   const db = await getDb();
-  const result: Record<string, { status?: string; beadsStatus?: string }> = {};
+  const result: Record<string, { status?: string }> = {};
   for (const id of input.hulyIdentifiers) {
     const issue = db.getIssue(id);
     if (issue) {
-      result[id] = { status: issue.status, beadsStatus: issue.beads_status };
+      result[id] = { status: issue.status };
     }
   }
   return result;
@@ -245,7 +239,6 @@ export async function persistIssueSyncStateBatch(
         project_identifier: issue.projectIdentifier,
         huly_id: issue.hulyId || existing?.huly_id || defaultHulyId(issue.identifier),
         vibe_task_id: issue.vibeTaskId || existing?.vibe_task_id || null,
-        beads_issue_id: issue.beadsIssueId || existing?.beads_issue_id || null,
         title: issue.title || existing?.title || issue.identifier,
         description: issue.description ?? existing?.description ?? '',
         status: issue.status || existing?.status || 'unknown',
@@ -256,14 +249,9 @@ export async function persistIssueSyncStateBatch(
         vibe_modified_at:
           normalizeModifiedAt(issue.vibeModifiedAt) ??
           normalizeModifiedAt(existing?.vibe_modified_at),
-        beads_modified_at:
-          normalizeModifiedAt(issue.beadsModifiedAt) ??
-          normalizeModifiedAt(existing?.beads_modified_at),
         vibe_status: issue.vibeStatus || existing?.vibe_status || null,
-        beads_status: issue.beadsStatus || existing?.beads_status || null,
         parent_huly_id: issue.parentHulyId ?? existing?.parent_huly_id ?? null,
         parent_vibe_id: issue.parentVibeId ?? existing?.parent_vibe_id ?? null,
-        parent_beads_id: issue.parentBeadsId ?? existing?.parent_beads_id ?? null,
         sub_issue_count: issue.subIssueCount ?? existing?.sub_issue_count ?? 0,
       });
 

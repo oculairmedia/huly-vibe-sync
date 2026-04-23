@@ -15,7 +15,6 @@ export declare const progressQuery: import("@temporalio/workflow").QueryDefiniti
 export interface FullSyncInput {
     projectIdentifier?: string;
     batchSize?: number;
-    enableBeads?: boolean;
     enableLetta?: boolean;
     dryRun?: boolean;
     circuitBreakerThreshold?: number;

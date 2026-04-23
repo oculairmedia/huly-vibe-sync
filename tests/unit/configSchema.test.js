@@ -7,18 +7,6 @@ import { configSchema } from '../../lib/configSchema.js';
 
 function validConfig(overrides = {}) {
   return {
-    vibeKanban: {
-      mcpUrl: 'http://vibe.local/mcp',
-      apiUrl: 'http://vibe.local/api',
-      useRestApi: true,
-    },
-    beads: {
-      enabled: true,
-      syncInterval: 60000,
-      operationDelay: 50,
-      batchDelay: 200,
-      maxConcurrent: 1,
-    },
     sync: {
       interval: 300000,
       dryRun: false,

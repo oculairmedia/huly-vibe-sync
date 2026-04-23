@@ -48,27 +48,7 @@ describe('persistIssueSyncState activity', () => {
     expect(issue.parent_vibe_id).toBe('vibe-parent-001');
   });
 
-  it('should persist parentBeadsId to database', async () => {
-    const { createSyncDatabase } = await import('../../../lib/database.js');
-    const setupDb = createSyncDatabase(tempDbPath) as any;
-    setupDb.upsertProject({ identifier: 'TEST', name: 'Test Project' });
-    setupDb.close();
-
-    await persistIssueSyncState({
-      identifier: 'TEST-2',
-      projectIdentifier: 'TEST',
-      title: 'Test Issue 2',
-      parentBeadsId: 'beads-parent-002',
-    });
-
-    const verifyDb = createSyncDatabase(tempDbPath) as any;
-    const issue = verifyDb.getIssue('TEST-2');
-    verifyDb.close();
-
-    expect(issue.parent_beads_id).toBe('beads-parent-002');
-  });
-
-  it('should persist all parent IDs together', async () => {
+  it('should persist supported parent IDs together', async () => {
     const { createSyncDatabase } = await import('../../../lib/database.js');
     const setupDb = createSyncDatabase(tempDbPath) as any;
     setupDb.upsertProject({ identifier: 'TEST', name: 'Test Project' });
@@ -80,7 +60,6 @@ describe('persistIssueSyncState activity', () => {
       title: 'Test Issue 3',
       parentHulyId: 'TEST-0',
       parentVibeId: 'vibe-parent-003',
-      parentBeadsId: 'beads-parent-003',
     });
 
     const verifyDb = createSyncDatabase(tempDbPath) as any;
@@ -89,7 +68,6 @@ describe('persistIssueSyncState activity', () => {
 
     expect(issue.parent_huly_id).toBe('TEST-0');
     expect(issue.parent_vibe_id).toBe('vibe-parent-003');
-    expect(issue.parent_beads_id).toBe('beads-parent-003');
   });
 });
 

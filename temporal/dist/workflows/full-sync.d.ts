@@ -2,7 +2,7 @@
  * Full Sync Workflows
  *
  * Legacy workflows kept for backward compatibility.
- * Main orchestration now uses ProjectSyncWorkflow with 4-phase pipeline.
+ * Main orchestration now uses ProjectSyncWorkflow with a simplified pipeline.
  */
 export interface SyncIssueInput {
     issue: {
@@ -17,21 +17,9 @@ export interface SyncIssueInput {
         projectIdentifier: string;
         gitRepoPath?: string;
     };
-    existingBeadsIssues?: Array<{
-        id: string;
-        title: string;
-        status: string;
-    }>;
-    syncToBeads?: boolean;
 }
 export interface SyncIssueResult {
     success: boolean;
-    beadsResult?: {
-        success: boolean;
-        id?: string;
-        skipped?: boolean;
-        error?: string;
-    };
     error?: string;
 }
 export declare function SyncSingleIssueWorkflow(input: SyncIssueInput): Promise<SyncIssueResult>;
@@ -42,7 +30,6 @@ export declare function SyncProjectWorkflow(input: {
         gitRepoPath?: string;
     };
     batchSize?: number;
-    commitAfterSync?: boolean;
 }): Promise<{
     success: boolean;
     total: number;

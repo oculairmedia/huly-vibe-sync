@@ -3,7 +3,7 @@
  *
  * Re-exports all activities from sub-modules:
  *   - orchestration-projects: Registry-based project fetching
- *   - orchestration-git: Git repo path resolution, Beads operations
+ *   - orchestration-git: Git repo path resolution and tracker compatibility shims
  *   - orchestration-letta: Letta memory updates, metrics, error handling
  */
 
@@ -44,14 +44,10 @@ export {
   resolveGitRepoPath,
   extractGitRepoPath,
   clearGitRepoPathCache,
-  initializeBeads,
-  fetchBeadsIssues,
 } from './orchestration-git';
 
 export {
   updateLettaMemory,
   recordSyncMetrics,
-  buildBoardMetrics,
-  buildProjectMeta,
   handleOrchestratorError,
 } from './orchestration-letta';

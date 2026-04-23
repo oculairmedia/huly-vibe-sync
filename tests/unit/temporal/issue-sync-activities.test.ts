@@ -1,42 +1,26 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../temporal/lib', () => ({
   createVibeClient: vi.fn(),
-  createVibeSyncClient: vi.fn(),
 }));
 
 vi.mock('../../../temporal/activities/huly-dedupe', () => ({
   findMappedIssueByTitle: vi.fn().mockResolvedValue(null),
 }));
 
-import { createVibeClient, createVibeSyncClient } from '../../../temporal/lib';
+import { createVibeClient } from '../../../temporal/lib';
 import {
-  compensateBeadsCreate,
   compensateHulyCreate,
   compensateVibeCreate,
-  syncToBeads,
   syncToHuly,
   syncToVibe,
   type IssueSyncInput,
 } from '../../../temporal/activities/issue-sync';
 
-const originalBeadsSyncEnabled = process.env.BEADS_SYNC_ENABLED;
-
-const mockHulyClient = {
-  createIssue: vi.fn(),
-  updateIssue: vi.fn(),
-  deleteIssue: vi.fn(),
-};
-
 const mockVibeClient = {
   createTask: vi.fn(),
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
-};
-
-const mockVibeSyncClient = {
-  syncBeads: vi.fn(),
-  deleteBeads: vi.fn(),
 };
 
 function makeInput(overrides: Partial<IssueSyncInput> = {}): IssueSyncInput {
@@ -57,25 +41,10 @@ function makeInput(overrides: Partial<IssueSyncInput> = {}): IssueSyncInput {
 describe('issue-sync activities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.BEADS_SYNC_ENABLED = 'true';
     (createVibeClient as any).mockReturnValue(mockVibeClient);
-    (createVibeSyncClient as any).mockReturnValue(mockVibeSyncClient);
     mockVibeClient.createTask.mockResolvedValue({ id: 'vibe-123' });
     mockVibeClient.updateTask.mockResolvedValue({ id: 'vibe-123' });
     mockVibeClient.deleteTask.mockResolvedValue(true);
-    mockVibeSyncClient.syncBeads.mockResolvedValue({
-      results: [{ project: 'project-1', workflowId: 'workflow-123' }],
-    });
-    mockVibeSyncClient.deleteBeads.mockResolvedValue({ success: true });
-  });
-
-  afterEach(() => {
-    if (originalBeadsSyncEnabled === undefined) {
-      delete process.env.BEADS_SYNC_ENABLED;
-      return;
-    }
-
-    process.env.BEADS_SYNC_ENABLED = originalBeadsSyncEnabled;
   });
 
   it('routes Huly create (returns skipped stub)', async () => {
@@ -138,25 +107,10 @@ describe('issue-sync activities', () => {
     });
   });
 
-  it('routes Beads sync through VibeSyncClient', async () => {
-    const result = await syncToBeads(makeInput());
-
-    expect(result).toEqual({ success: true, systemId: 'workflow-123' });
-    expect(createVibeSyncClient).toHaveBeenCalled();
-    expect(mockVibeSyncClient.syncBeads).toHaveBeenCalledWith({ projectId: 'project-1' });
-  });
-
   it('routes Vibe compensation deletes through VibeClient', async () => {
     const result = await compensateVibeCreate({ vibeId: 'vibe-123' });
 
     expect(result).toEqual({ success: true });
     expect(mockVibeClient.deleteTask).toHaveBeenCalledWith('vibe-123');
-  });
-
-  it('routes Beads compensation deletes through VibeSyncClient', async () => {
-    const result = await compensateBeadsCreate({ beadsId: 'beads-123' });
-
-    expect(result).toEqual({ success: true });
-    expect(mockVibeSyncClient.deleteBeads).toHaveBeenCalledWith({ beadsId: 'beads-123' });
   });
 });

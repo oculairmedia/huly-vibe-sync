@@ -38,7 +38,6 @@ async function main() {
           context: {
             projectIdentifier: 'VIBESYNC',
           },
-          syncToBeads: false,
         },
       ],
     });

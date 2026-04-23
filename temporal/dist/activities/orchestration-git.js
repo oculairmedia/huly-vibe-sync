@@ -1,16 +1,8 @@
 "use strict";
-/**
- * Orchestration Activities — Git & Beads
- *
- * Activities for git repo path resolution and Beads operations.
- */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearGitRepoPathCache = clearGitRepoPathCache;
 exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
-exports.initializeBeads = initializeBeads;
-exports.fetchBeadsIssues = fetchBeadsIssues;
-const lib_1 = require("../lib");
 const sync_database_1 = require("./sync-database");
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map();
@@ -94,50 +86,5 @@ function extractGitRepoPath(input) {
         }
     }
     return null;
-}
-// ============================================================
-// BEADS ACTIVITIES
-// ============================================================
-/**
- * Initialize Beads in a git repository
- */
-async function initializeBeads(input) {
-    const { gitRepoPath, projectName } = input;
-    console.log(`[Temporal:Orchestration] Initializing Beads in ${gitRepoPath}`);
-    try {
-        const beadsClient = (0, lib_1.createBeadsClient)(gitRepoPath);
-        if (beadsClient.isInitialized()) {
-            console.log(`[Temporal:Orchestration] Beads already initialized`);
-            return true;
-        }
-        await beadsClient.initialize();
-        console.log(`[Temporal:Orchestration] Beads initialized for ${projectName}`);
-        return true;
-    }
-    catch (error) {
-        // Non-fatal - log and continue
-        console.warn(`[Temporal:Orchestration] Beads init failed: ${error}`);
-        return false;
-    }
-}
-/**
- * Fetch Beads issues from a repository
- */
-async function fetchBeadsIssues(input) {
-    const { gitRepoPath } = input;
-    console.log(`[Temporal:Orchestration] Fetching Beads issues from ${gitRepoPath}`);
-    try {
-        const beadsClient = (0, lib_1.createBeadsClient)(gitRepoPath);
-        if (!beadsClient.isInitialized()) {
-            return [];
-        }
-        const issues = await beadsClient.listIssues();
-        console.log(`[Temporal:Orchestration] Found ${issues.length} Beads issues`);
-        return issues;
-    }
-    catch (error) {
-        console.warn(`[Temporal:Orchestration] Beads fetch failed: ${error}`);
-        return [];
-    }
 }
 //# sourceMappingURL=orchestration-git.js.map

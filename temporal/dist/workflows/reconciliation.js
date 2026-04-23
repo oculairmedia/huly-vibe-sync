@@ -25,7 +25,7 @@ async function DataReconciliationWorkflow(input = {}) {
     const result = await reconcileSyncData(input);
     workflow_1.log.info('[Reconcile] Completed data reconciliation', {
         success: result.success,
-        staleBeads: result.staleBeads.length,
+        staleIssues: result.staleIssues.length,
         action: result.action,
         dryRun: result.dryRun,
     });

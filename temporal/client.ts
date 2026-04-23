@@ -34,11 +34,6 @@ export {
   cancelProvisioning,
   provisionSingleAgent,
   cleanupFailedProvisions,
-  scheduleBeadsSync,
-  executeBeadsSync,
-  scheduleBatchBeadsSync,
-  scheduleBeadsFileChange,
-  executeBeadsFileChange,
 } from './client/index';
 
 export type {
@@ -48,5 +43,4 @@ export type {
   ProvisioningInput,
   ProvisioningResult,
   ProvisioningProgress,
-  BeadsSyncInput,
 } from './client/index';

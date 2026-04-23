@@ -14,14 +14,14 @@ export interface DataReconciliationResult {
     action: ReconciliationAction;
     dryRun: boolean;
     projectsProcessed: number;
-    projectsWithBeadsChecked: number;
-    staleBeads: Array<{
+    projectsChecked: number;
+    staleIssues: Array<{
         identifier: string;
         projectIdentifier: string;
-        beadsIssueId: string;
+        issueId: string;
     }>;
     updated: {
-        markedBeads: number;
+        markedDeleted: number;
         deleted: number;
     };
     errors: string[];

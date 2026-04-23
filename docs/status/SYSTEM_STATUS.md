@@ -15,9 +15,9 @@
    - Logs show "No changes needed" for unchanged blocks
 
 3. **Agent Management**
-   - `manage-agents.js` CLI for operations without recreation
-   - Bulk update capabilities
-   - Full CRUD for memory blocks and tools
+   - Active agent lifecycle work flows through the running sync service and current Letta integration
+   - Earlier one-off maintenance scripts have been retired after their migrations completed
+   - Use the current docs under `docs/guides/agents/` for supported workflows
 
 4. **Memory Blocks (8 per agent)**
    - persona - Agent role
@@ -166,8 +166,8 @@ curl -s https://letta.oculair.ca/v1/agents \
 # Check memory optimization
 docker-compose logs --tail=100 huly-vibe-sync | grep "No changes needed" | wc -l
 
-# Verify agent memory blocks
-npm run manage show-agent GRAPH | grep "MEMORY BLOCKS"
+# Verify project agent linkage
+test -f /opt/stacks/graphiti/.letta/settings.local.json && jq . /opt/stacks/graphiti/.letta/settings.local.json
 
 # Check sync service health
 docker-compose ps
@@ -176,6 +176,7 @@ docker-compose ps
 ## Configuration
 
 ### Current Settings (OPTIMIZED Nov 2-3, 2025)
+
 ```env
 SYNC_INTERVAL=30000              # 30 seconds (was 3s - 10x optimization)
 SKIP_EMPTY_PROJECTS=true         # Skip 0-issue projects (was false)
@@ -185,6 +186,7 @@ LETTA_EMBEDDING=letta/letta-free
 ```
 
 ### Performance Impact
+
 - **CPU Reduction**: 90% overall system improvement
   - huly-vibe-sync: 29% → 5% (83% reduction)
   - letta-letta-1: 100% → 17% (83% reduction)
@@ -218,7 +220,7 @@ LETTA_EMBEDDING=letta/letta-free
 
 ## Resources
 
-- **Documentation**: See AGENT_MANAGEMENT.md, SCRATCHPAD_AND_HUMAN_BLOCK.md
-- **Scripts**: manage-agents.js, add-scratchpads.js, attach-human-block.js
+- **Documentation**: See `docs/guides/agents/README.md` and `docs/features/letta-integration/SCRATCHPAD_AND_HUMAN_BLOCK.md`
+- **Operational note**: historical one-off migration scripts mentioned in older docs have been removed
 - **Database**: ./logs/sync-state.db
 - **Logs**: docker-compose logs huly-vibe-sync

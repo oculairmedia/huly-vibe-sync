@@ -154,8 +154,8 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
     for (const agent of existingAgents) {
       if (!agent.id || !agent.name) continue;
 
-      // Store by name for fallback matching
-      if (agent.name.startsWith('Huly - ')) {
+      // Store by name for fallback matching (accept both legacy 'Huly - ' and new 'PM - ')
+      if (agent.name.startsWith('PM - ') || agent.name.startsWith('Huly - ')) {
         agentByName.set(agent.name, agent.id);
       }
 
@@ -176,10 +176,14 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
 
     for (const project of projects) {
       const sanitizedName = project.name.replace(/[/\\:*?"<>|]/g, '-');
-      const agentName = `Huly - ${sanitizedName}`;
+      const agentName = `PM - ${sanitizedName}`;
+      const legacyAgentName = `Huly - ${sanitizedName}`;
 
-      // Prefer project ID match, fallback to name match
-      const existingAgentId = agentByProject.get(project.identifier) || agentByName.get(agentName);
+      // Prefer project ID match, fallback to name match (new then legacy)
+      const existingAgentId =
+        agentByProject.get(project.identifier) ||
+        agentByName.get(agentName) ||
+        agentByName.get(legacyAgentName);
 
       agentsToProvision.push({
         projectIdentifier: project.identifier,
@@ -222,7 +226,7 @@ export async function provisionSingleAgent(
   console.log(`[Activity:ProvisionAgent] Provisioning agent for ${projectIdentifier}...`);
 
   const sanitizedName = projectName.replace(/[/\\:*?"<>|]/g, '-');
-  const agentName = `Huly - ${sanitizedName}`;
+  const agentName = `PM - ${sanitizedName}`;
 
   try {
     // First check if agent already exists using precise tag matching
@@ -554,9 +558,9 @@ export interface UpdateAgentsMdResult {
 /**
  * Resolve the project's filesystem path and regenerate AGENTS.md with
  * current managed sections (project-info, reporting-hierarchy,
- * beads-instructions, session-completion, bookstack-docs, codebase-context).
+ * session-completion, bookstack-docs, codebase-context).
  *
- * This ensures existing agents get up-to-date Beads instructions and other
+ * This ensures existing agents get up-to-date issue-tracking instructions and other
  * managed content even when the agent was not newly created.
  *
  * Idempotent — safe to call on every provisioning run.
@@ -596,7 +600,6 @@ export async function updateProjectAgentsMd(
       sections: [
         'project-info',
         'reporting-hierarchy',
-        'beads-instructions',
         'bookstack-docs',
         'session-completion',
         'codebase-context',

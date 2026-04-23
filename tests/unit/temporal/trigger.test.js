@@ -42,12 +42,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
       const linkedIds = {
         hulyId: 'PROJ-123',
         vibeId: 'vibe-task-123',
-        beadsId: 'beads-123',
       };
 
       expect(linkedIds.hulyId).toBeDefined();
       expect(linkedIds.vibeId).toBeDefined();
-      expect(linkedIds.beadsId).toBeDefined();
     });
 
     it('should work with partial fields', () => {
@@ -57,7 +55,6 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
 
       expect(linkedIds.hulyId).toBeDefined();
       expect(linkedIds.vibeId).toBeUndefined();
-      expect(linkedIds.beadsId).toBeUndefined();
     });
 
     it('should allow empty object', () => {
@@ -89,12 +86,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         },
         linkedIds: {
           hulyId: 'PROJ-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.hulyId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
 
     it('should return workflowId', () => {
@@ -136,12 +131,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         },
         linkedIds: {
           vibeId: 'vibe-task-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.vibeId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
 
     it('should return workflowId', () => {
@@ -156,45 +149,6 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
 
       expect(workflowId).toContain('sync-huly');
       expect(workflowId).toContain(identifier);
-    });
-  });
-
-  describe('triggerSyncFromBeads', () => {
-    it('should accept beadsIssueId and context', () => {
-      const params = {
-        beadsIssueId: 'beads-123',
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
-          gitRepoPath: '/path/to/repo',
-        },
-      };
-
-      expect(params.beadsIssueId).toBeDefined();
-      expect(params.context).toBeDefined();
-    });
-
-    it('should accept optional linkedIds', () => {
-      const params = {
-        beadsIssueId: 'beads-123',
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
-          gitRepoPath: '/path/to/repo',
-        },
-        linkedIds: {
-          hulyId: 'PROJ-123',
-          vibeId: 'vibe-task-123',
-        },
-      };
-
-      expect(params.linkedIds.hulyId).toBeDefined();
-      expect(params.linkedIds.vibeId).toBeDefined();
-    });
-
-    it('should return workflowId', () => {
-      const result = { workflowId: 'sync-beads-beads-123-1234567890' };
-      expect(result.workflowId).toContain('sync-beads');
     });
   });
 
@@ -221,21 +175,16 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
 
     it('should accept vibe as source', () => {
       const params = { source: 'vibe' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
+      expect(['vibe', 'huly']).toContain(params.source);
     });
 
     it('should accept huly as source', () => {
       const params = { source: 'huly' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
-    });
-
-    it('should accept beads as source', () => {
-      const params = { source: 'beads' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
+      expect(['vibe', 'huly']).toContain(params.source);
     });
 
     it('should return workflowId with source prefix', () => {
-      const sources = ['vibe', 'huly', 'beads'];
+      const sources = ['vibe', 'huly'];
       sources.forEach(source => {
         const issueId = 'issue-123';
         const timestamp = Date.now();
@@ -260,20 +209,20 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         linkedIds: {
           hulyId: 'PROJ-123',
           vibeId: 'vibe-task-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.hulyId).toBeDefined();
       expect(params.linkedIds.vibeId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
   });
 
   describe('closeConnection', () => {
     it('should be callable', () => {
       // closeConnection should be a function that returns void/Promise<void>
-      const closeConnection = async () => { /* noop */ };
+      const closeConnection = async () => {
+        /* noop */
+      };
       expect(typeof closeConnection).toBe('function');
     });
   });
@@ -307,7 +256,7 @@ describe('Environment Configuration', () => {
 
 describe('Workflow ID Generation', () => {
   it('should include source type', () => {
-    const sources = ['vibe', 'huly', 'beads'];
+    const sources = ['vibe', 'huly'];
     sources.forEach(source => {
       const workflowId = `sync-${source}-issue-123-${Date.now()}`;
       expect(workflowId).toContain(`sync-${source}`);
@@ -337,14 +286,16 @@ describe('Workflow ID Generation', () => {
 describe('Workflow Start Parameters', () => {
   describe('SyncFromVibeWorkflow', () => {
     it('should pass correct args structure', () => {
-      const args = [{
-        vibeTaskId: 'task-123',
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
+      const args = [
+        {
+          vibeTaskId: 'task-123',
+          context: {
+            projectIdentifier: 'PROJ',
+            vibeProjectId: 'vibe-proj-1',
+          },
+          linkedIds: undefined,
         },
-        linkedIds: undefined,
-      }];
+      ];
 
       expect(args).toHaveLength(1);
       expect(args[0].vibeTaskId).toBeDefined();
@@ -354,14 +305,16 @@ describe('Workflow Start Parameters', () => {
 
   describe('SyncFromHulyWorkflow', () => {
     it('should pass correct args structure', () => {
-      const args = [{
-        hulyIdentifier: 'PROJ-123',
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
+      const args = [
+        {
+          hulyIdentifier: 'PROJ-123',
+          context: {
+            projectIdentifier: 'PROJ',
+            vibeProjectId: 'vibe-proj-1',
+          },
+          linkedIds: undefined,
         },
-        linkedIds: undefined,
-      }];
+      ];
 
       expect(args).toHaveLength(1);
       expect(args[0].hulyIdentifier).toBeDefined();
@@ -369,40 +322,24 @@ describe('Workflow Start Parameters', () => {
     });
   });
 
-  describe('SyncFromBeadsWorkflow', () => {
-    it('should pass correct args structure', () => {
-      const args = [{
-        beadsIssueId: 'beads-123',
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
-          gitRepoPath: '/path/to/repo',
-        },
-        linkedIds: undefined,
-      }];
-
-      expect(args).toHaveLength(1);
-      expect(args[0].beadsIssueId).toBeDefined();
-      expect(args[0].context).toBeDefined();
-    });
-  });
-
   describe('BidirectionalSyncWorkflow', () => {
     it('should pass correct args structure', () => {
-      const args = [{
-        source: 'huly',
-        issueData: {
-          id: 'PROJ-123',
-          title: 'Test',
-          status: 'Done',
-          modifiedAt: Date.now(),
+      const args = [
+        {
+          source: 'huly',
+          issueData: {
+            id: 'PROJ-123',
+            title: 'Test',
+            status: 'Done',
+            modifiedAt: Date.now(),
+          },
+          context: {
+            projectIdentifier: 'PROJ',
+            vibeProjectId: 'vibe-proj-1',
+          },
+          linkedIds: undefined,
         },
-        context: {
-          projectIdentifier: 'PROJ',
-          vibeProjectId: 'vibe-proj-1',
-        },
-        linkedIds: undefined,
-      }];
+      ];
 
       expect(args).toHaveLength(1);
       expect(args[0].source).toBeDefined();

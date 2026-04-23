@@ -1,7 +1,6 @@
 import { Worker, NativeConnection } from '@temporalio/worker';
 import * as lettaActivities from './activities/letta';
 import * as issueSyncActivities from './activities/issue-sync';
-import * as syncServiceActivities from './activities/sync-services';
 import * as orchestrationActivities from './activities/orchestration';
 import * as agentProvisioningActivities from './activities/agent-provisioning';
 import * as reconciliationActivities from './activities/reconciliation';
@@ -13,7 +12,6 @@ const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
 const activities = {
   ...lettaActivities,
   ...issueSyncActivities,
-  ...syncServiceActivities,
   ...orchestrationActivities,
   ...agentProvisioningActivities,
   ...reconciliationActivities,

@@ -17,9 +17,10 @@
 <!-- VIBESYNC:project-info:END -->
 
 <!-- VIBESYNC:reporting-hierarchy:START -->
+
 ## PM Agent Communication
 
-**Project PM Agent:** `Huly - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
+**Project PM Agent:** `PM - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
 
 ### Reporting Hierarchy
 
@@ -40,7 +41,7 @@ You (Developer Agent - experienced)
 ```json
 {
   "operation": "talk_to_agent",
-  "agent": "Huly - Huly-Vibe Sync Service",
+  "agent": "PM - Huly-Vibe Sync Service",
   "message": "<your report>",
   "caller_directory": "/opt/stacks/huly-vibe-sync"
 }
@@ -64,13 +65,14 @@ You (Developer Agent - experienced)
 **Files Changed**: [List if applicable]
 **Next Steps**: [If any]
 ```
+
 <!-- VIBESYNC:reporting-hierarchy:END -->
 
 <!-- VIBESYNC:beads-instructions:START -->
 
-## Beads Issue Tracking
+## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+This project uses **bd** for issue tracking. Run `bd onboard` to get started.
 
 ### Quick Reference
 
@@ -82,9 +84,9 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
-### Beads Sync Flow (Hybrid System)
+### bd Sync Flow (Hybrid System)
 
-Beads uses a **hybrid sync** approach for reliability:
+bd uses a **hybrid sync** approach for reliability:
 
 #### Automatic Sync (Real-time)
 
@@ -109,6 +111,7 @@ bd sync                # Git backup (recommended before session end)
 <!-- VIBESYNC:beads-instructions:END -->
 
 <!-- VIBESYNC:bookstack-docs:START -->
+
 ## BookStack Documentation
 
 - **Source of truth**: [BookStack](https://knowledge.oculair.ca)
@@ -168,9 +171,10 @@ Ask the PM agent for architectural guidance before making significant changes.
 <!-- VIBESYNC:codebase-context:END -->
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
 
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+## Issue Tracker
+
+This project uses **bd** for issue tracking. Run `bd prime` to see full workflow context and commands.
 
 ### Quick Reference
 
@@ -208,6 +212,7 @@ bd close <id>         # Complete work
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push

@@ -30,9 +30,9 @@ export interface DataReconciliationResult {
   action: ReconciliationAction;
   dryRun: boolean;
   projectsProcessed: number;
-  projectsWithBeadsChecked: number;
-  staleBeads: Array<{ identifier: string; projectIdentifier: string; beadsIssueId: string }>;
-  updated: { markedBeads: number; deleted: number };
+  projectsChecked: number;
+  staleIssues: Array<{ identifier: string; projectIdentifier: string; issueId: string }>;
+  updated: { markedDeleted: number; deleted: number };
   errors: string[];
 }
 
@@ -46,7 +46,7 @@ export async function DataReconciliationWorkflow(
   const result = await reconcileSyncData(input);
   log.info('[Reconcile] Completed data reconciliation', {
     success: result.success,
-    staleBeads: result.staleBeads.length,
+    staleIssues: result.staleIssues.length,
     action: result.action,
     dryRun: result.dryRun,
   });
