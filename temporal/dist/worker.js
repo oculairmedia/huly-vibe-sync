@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const worker_1 = require("@temporalio/worker");
 const lettaActivities = __importStar(require("./activities/letta"));
 const issueSyncActivities = __importStar(require("./activities/issue-sync"));
-const syncServiceActivities = __importStar(require("./activities/sync-services"));
 const orchestrationActivities = __importStar(require("./activities/orchestration"));
 const agentProvisioningActivities = __importStar(require("./activities/agent-provisioning"));
 const reconciliationActivities = __importStar(require("./activities/reconciliation"));
@@ -46,7 +45,6 @@ const TASK_QUEUE = process.env.TEMPORAL_TASK_QUEUE || 'vibesync-queue';
 const activities = {
     ...lettaActivities,
     ...issueSyncActivities,
-    ...syncServiceActivities,
     ...orchestrationActivities,
     ...agentProvisioningActivities,
     ...reconciliationActivities,

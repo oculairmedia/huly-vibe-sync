@@ -8,23 +8,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncToHuly = syncToHuly;
 exports.syncToVibe = syncToVibe;
-exports.syncToBeads = syncToBeads;
 exports.updateLettaMemory = updateLettaMemory;
 exports.compensateHulyCreate = compensateHulyCreate;
 exports.compensateVibeCreate = compensateVibeCreate;
-exports.compensateBeadsCreate = compensateBeadsCreate;
 const activity_1 = require("@temporalio/activity");
 const lib_1 = require("../lib");
 const VIBE_API_URL = process.env.VIBE_API_URL || 'http://localhost:3105/api';
-const VIBESYNC_API_URL = process.env.VIBESYNC_API_URL || 'http://localhost:3456';
 const TIMEOUT = 30000;
 function getVibeClient() {
     return (0, lib_1.createVibeClient)(process.env.VIBE_API_URL || VIBE_API_URL, { timeout: TIMEOUT });
-}
-function getVibeSyncClient() {
-    return (0, lib_1.createVibeSyncClient)(process.env.VIBESYNC_API_URL || VIBESYNC_API_URL, {
-        timeout: TIMEOUT,
-    });
 }
 // Status mapping between systems
 const STATUS_HULY_TO_VIBE = {
@@ -76,30 +68,6 @@ async function syncToVibe(input) {
     }
 }
 /**
- * Sync issue to Beads (via CLI)
- * Note: In atomic workflow mode, failures are fatal and retried by Temporal.
- */
-async function syncToBeads(input) {
-    const { issue, operation } = input;
-    console.log(`[Beads Activity] ${operation} issue: ${issue.identifier || issue.title}`);
-    const BEADS_SYNC_ENABLED = process.env.BEADS_SYNC_ENABLED === 'true';
-    if (!BEADS_SYNC_ENABLED) {
-        console.log(`[Beads Activity] Beads sync disabled, skipping`);
-        return { success: true };
-    }
-    try {
-        const result = await getVibeSyncClient().syncBeads({
-            projectId: issue.projectId,
-        });
-        const workflowId = result.results?.[0]?.workflowId;
-        console.log(`[Beads Activity] Synced: ${workflowId || 'ok'}`);
-        return { success: true, systemId: workflowId };
-    }
-    catch (error) {
-        return handleActivityError(error, 'Beads');
-    }
-}
-/**
  * Update Letta agent memory with sync result
  */
 async function updateLettaMemory(input) {
@@ -125,24 +93,6 @@ async function compensateVibeCreate(input) {
         return { success: true, skipped: true };
     try {
         await getVibeClient().deleteTask(input.vibeId);
-        return { success: true };
-    }
-    catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-        };
-    }
-}
-/**
- * Best-effort compensation: remove newly created Beads issue.
- * Uses optional VibeSync endpoint if available.
- */
-async function compensateBeadsCreate(input) {
-    if (!input.beadsId)
-        return { success: true, skipped: true };
-    try {
-        await getVibeSyncClient().deleteBeads({ beadsId: input.beadsId });
         return { success: true };
     }
     catch (error) {

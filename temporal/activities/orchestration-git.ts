@@ -1,4 +1,3 @@
-import path from 'path';
 import { getDb } from './sync-database';
 
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
@@ -107,36 +106,3 @@ export function extractGitRepoPath(input: { description?: string }): string | nu
   return null;
 }
 
-// ============================================================
-export async function initializeBeads(input: {
-  gitRepoPath: string;
-  projectName: string;
-  projectIdentifier: string;
-}): Promise<boolean> {
-  const { gitRepoPath, projectIdentifier } = input;
-
-  console.log(
-    `[Temporal:Orchestration] Tracker initialization skipped for ${projectIdentifier}; beads integration removed (${gitRepoPath})`
-  );
-
-  return false;
-}
-
-export async function fetchBeadsIssues(input: { gitRepoPath: string }): Promise<
-  Array<{
-    id: string;
-    title: string;
-    status: string;
-    priority?: number;
-    description?: string;
-    labels?: string[];
-  }>
-> {
-  const { gitRepoPath } = input;
-
-  console.log(
-    `[Temporal:Orchestration] Tracker issue fetch skipped for ${gitRepoPath}; beads integration removed`
-  );
-
-  return [];
-}

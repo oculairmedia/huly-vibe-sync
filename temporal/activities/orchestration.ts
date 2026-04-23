@@ -44,8 +44,6 @@ export {
   resolveGitRepoPath,
   extractGitRepoPath,
   clearGitRepoPathCache,
-  initializeBeads,
-  fetchBeadsIssues,
 } from './orchestration-git';
 
 export {

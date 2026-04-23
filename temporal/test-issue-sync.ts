@@ -48,7 +48,6 @@ async function main() {
       console.log('\n✅ SUCCESS! IssueSyncWorkflow completed.');
       console.log(`   Huly: ${result.hulyResult?.success ? 'skipped (source)' : 'synced'}`);
       console.log(`   Vibe: ${result.vibeResult?.success ? 'synced' : 'failed'}`);
-      console.log(`   Legacy tracker: ${result.beadsResult?.success ? 'synced' : 'skipped'}`);
     } else {
       console.log('\n❌ FAILED!');
       console.log(`   Error: ${result.error}`);

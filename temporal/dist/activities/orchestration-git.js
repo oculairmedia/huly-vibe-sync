@@ -3,8 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.clearGitRepoPathCache = clearGitRepoPathCache;
 exports.resolveGitRepoPath = resolveGitRepoPath;
 exports.extractGitRepoPath = extractGitRepoPath;
-exports.initializeBeads = initializeBeads;
-exports.fetchBeadsIssues = fetchBeadsIssues;
 const sync_database_1 = require("./sync-database");
 const GIT_PATH_CACHE_TTL_MS = Number(process.env.TEMPORAL_GIT_PATH_CACHE_TTL_MS || 30000);
 const gitRepoPathCache = new Map();
@@ -88,16 +86,5 @@ function extractGitRepoPath(input) {
         }
     }
     return null;
-}
-// ============================================================
-async function initializeBeads(input) {
-    const { gitRepoPath, projectIdentifier } = input;
-    console.log(`[Temporal:Orchestration] Tracker initialization skipped for ${projectIdentifier}; beads integration removed (${gitRepoPath})`);
-    return false;
-}
-async function fetchBeadsIssues(input) {
-    const { gitRepoPath } = input;
-    console.log(`[Temporal:Orchestration] Tracker issue fetch skipped for ${gitRepoPath}; beads integration removed`);
-    return [];
 }
 //# sourceMappingURL=orchestration-git.js.map

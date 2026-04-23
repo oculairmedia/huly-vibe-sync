@@ -17,19 +17,4 @@ export declare function resolveGitRepoPath(input: {
 export declare function extractGitRepoPath(input: {
     description?: string;
 }): string | null;
-export declare function initializeBeads(input: {
-    gitRepoPath: string;
-    projectName: string;
-    projectIdentifier: string;
-}): Promise<boolean>;
-export declare function fetchBeadsIssues(input: {
-    gitRepoPath: string;
-}): Promise<Array<{
-    id: string;
-    title: string;
-    status: string;
-    priority?: number;
-    description?: string;
-    labels?: string[];
-}>>;
 //# sourceMappingURL=orchestration-git.d.ts.map
