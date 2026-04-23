@@ -11,7 +11,7 @@ vi.mock('../../temporal/lib/httpPool', () => ({
 vi.mock('../../temporal/lib/memoryBuilders', () => ({
   buildBoardMetrics: vi.fn(async () => ({ total_tasks: 0, by_status: { open: 0, closed: 0 } })),
   buildProjectMeta: vi.fn(async () => ({ name: 'Test', identifier: 'TEST' })),
-  buildBoardConfig: vi.fn(async () => ({ workflow: { tool: 'beads' } })),
+  buildBoardConfig: vi.fn(async () => ({ workflow: {} })),
   buildHotspots: vi.fn(async () => ({ blocked_items: [], summary: {} })),
   buildBacklogSummary: vi.fn(async () => ({ total_backlog: 0, top_items: [] })),
   buildRecentActivity: vi.fn(async () => ({ summary: {} })),
@@ -44,8 +44,6 @@ import {
   extractGitRepoPath,
   resolveGitRepoPath,
   clearGitRepoPathCache,
-  initializeBeads,
-  fetchBeadsIssues,
   updateLettaMemory,
   recordSyncMetrics,
 } from '../../temporal/activities/orchestration';
@@ -97,24 +95,6 @@ describe('Orchestration Activities', () => {
 
     it('returns null when sync DB has no filesystem_path', async () => {
       await expect(resolveGitRepoPath({ projectIdentifier: 'HVSYN' })).resolves.toBeNull();
-    });
-  });
-
-  describe('initializeBeads', () => {
-    it('returns false and skips legacy tracker initialization', async () => {
-      await expect(
-        initializeBeads({
-          gitRepoPath: '/opt/stacks/test',
-          projectName: 'Test',
-          projectIdentifier: 'TEST',
-        })
-      ).resolves.toBe(false);
-    });
-  });
-
-  describe('fetchBeadsIssues', () => {
-    it('returns empty array as a legacy no-op', async () => {
-      await expect(fetchBeadsIssues({ gitRepoPath: '/opt/stacks/test' })).resolves.toEqual([]);
     });
   });
 

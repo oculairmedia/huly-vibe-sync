@@ -14,7 +14,6 @@ import * as path from 'path';
 import type {
   FullSyncInput,
   FullSyncResult,
-  SyncProgress,
 } from '../../temporal/workflows/orchestration';
 
 // ============================================================
@@ -26,36 +25,16 @@ const mockHulyProjects = [
   { identifier: 'TEST2', name: 'Test Project 2', description: 'No filesystem path' },
 ];
 
-const mockHulyIssues = [
-  {
-    identifier: 'TEST1-1',
-    title: 'Issue 1',
-    description: 'First issue',
-    status: 'Backlog',
-    priority: 'Medium',
-  },
-  {
-    identifier: 'TEST1-2',
-    title: 'Issue 2',
-    description: 'Second issue',
-    status: 'Done',
-    priority: 'High',
-  },
-];
-
 // ============================================================
 // MOCK ACTIVITIES FACTORY
 // ============================================================
 
 const createMockActivities = () => ({
   fetchRegistryProjects: vi.fn().mockResolvedValue(mockHulyProjects),
-  initializeBeads: vi.fn().mockResolvedValue(true),
-  fetchBeadsIssues: vi.fn().mockResolvedValue([]),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
   recordSyncMetrics: vi.fn().mockResolvedValue(undefined),
   checkAgentExists: vi.fn().mockResolvedValue({ exists: false }),
   updateProjectAgent: vi.fn().mockResolvedValue({ success: true }),
-  commitBeadsToGit: vi.fn().mockResolvedValue({ success: true }),
   persistIssueSyncStateBatch: vi.fn().mockResolvedValue(undefined),
 });
 
@@ -129,17 +108,14 @@ describe('FullOrchestrationWorkflow', () => {
   });
 
   describe('Project execution', () => {
-    it('should run with Beads enabled and registry-based pipeline', async () => {
+    it('should run the registry-based pipeline end to end', async () => {
       const result = await runWorkflowTest(
-        { projectIdentifier: 'TEST1', enableBeads: true },
+        { projectIdentifier: 'TEST1' },
         mockActivities
       );
 
       expect(result.success).toBe(true);
       expect(result.projectResults[0].projectIdentifier).toBe('TEST1');
-      expect(mockActivities.initializeBeads).toHaveBeenCalledWith(
-        expect.objectContaining({ gitRepoPath: '/opt/stacks/test1' })
-      );
       expect(mockActivities.recordSyncMetrics).toHaveBeenCalledWith(
         expect.objectContaining({ projectsProcessed: 1 })
       );

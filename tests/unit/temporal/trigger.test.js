@@ -42,12 +42,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
       const linkedIds = {
         hulyId: 'PROJ-123',
         vibeId: 'vibe-task-123',
-        beadsId: 'beads-123',
       };
 
       expect(linkedIds.hulyId).toBeDefined();
       expect(linkedIds.vibeId).toBeDefined();
-      expect(linkedIds.beadsId).toBeDefined();
     });
 
     it('should work with partial fields', () => {
@@ -57,7 +55,6 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
 
       expect(linkedIds.hulyId).toBeDefined();
       expect(linkedIds.vibeId).toBeUndefined();
-      expect(linkedIds.beadsId).toBeUndefined();
     });
 
     it('should allow empty object', () => {
@@ -89,12 +86,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         },
         linkedIds: {
           hulyId: 'PROJ-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.hulyId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
 
     it('should return workflowId', () => {
@@ -136,12 +131,10 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         },
         linkedIds: {
           vibeId: 'vibe-task-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.vibeId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
 
     it('should return workflowId', () => {
@@ -182,21 +175,16 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
 
     it('should accept vibe as source', () => {
       const params = { source: 'vibe' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
+      expect(['vibe', 'huly']).toContain(params.source);
     });
 
     it('should accept huly as source', () => {
       const params = { source: 'huly' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
-    });
-
-    it('should accept beads as source', () => {
-      const params = { source: 'beads' };
-      expect(['vibe', 'huly', 'beads']).toContain(params.source);
+      expect(['vibe', 'huly']).toContain(params.source);
     });
 
     it('should return workflowId with source prefix', () => {
-      const sources = ['vibe', 'huly', 'beads'];
+      const sources = ['vibe', 'huly'];
       sources.forEach(source => {
         const issueId = 'issue-123';
         const timestamp = Date.now();
@@ -221,13 +209,11 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
         linkedIds: {
           hulyId: 'PROJ-123',
           vibeId: 'vibe-task-123',
-          beadsId: 'beads-123',
         },
       };
 
       expect(params.linkedIds.hulyId).toBeDefined();
       expect(params.linkedIds.vibeId).toBeDefined();
-      expect(params.linkedIds.beadsId).toBeDefined();
     });
   });
 
@@ -270,7 +256,7 @@ describe('Environment Configuration', () => {
 
 describe('Workflow ID Generation', () => {
   it('should include source type', () => {
-    const sources = ['vibe', 'huly', 'beads'];
+    const sources = ['vibe', 'huly'];
     sources.forEach(source => {
       const workflowId = `sync-${source}-issue-123-${Date.now()}`;
       expect(workflowId).toContain(`sync-${source}`);
