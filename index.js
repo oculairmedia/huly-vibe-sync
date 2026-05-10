@@ -124,6 +124,15 @@ if (config.doltHub?.enabled || config.doltHub?.dryRun) {
   logger.info('DoltHub Beads remote provisioning disabled');
 }
 
+let beadsIssueService = null;
+try {
+  const { createBeadsIssueService } = await import('./lib/beads/BeadsIssueService.js');
+  beadsIssueService = createBeadsIssueService({ db, logger });
+  logger.info('Beads issue mutation service initialized');
+} catch (beadsIssueError) {
+  logger.warn({ err: beadsIssueError }, 'Failed to initialize Beads issue mutation service');
+}
+
 let lettaService = null;
 if (isLettaEnabled(config)) {
   try {
@@ -270,6 +279,7 @@ async function main() {
     codePerceptionWatcher,
     projectRegistry,
     doltHubProvisioner,
+    beadsIssueService,
   });
 
   await syncController.runSyncWithTimeout();
