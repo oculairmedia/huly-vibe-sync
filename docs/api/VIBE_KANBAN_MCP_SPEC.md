@@ -222,7 +222,7 @@ async fn tool_name(
     let result: ResponseType = self.send_json(
         self.client.post(&url).json(&payload)
     ).await?;
-    
+
     TaskServer::success(&result)
 }
 ```
@@ -273,7 +273,7 @@ From conversation:
 
 > **Core execution cycle (you have this):**
 > - ✅ list_tasks - See what work is available
-> - ✅ get_task - Get task details  
+> - ✅ get_task - Get task details
 > - ✅ start_task_attempt - Begin work
 > - ✅ update_task - Report progress/completion
 

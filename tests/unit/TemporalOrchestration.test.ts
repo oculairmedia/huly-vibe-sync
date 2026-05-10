@@ -20,7 +20,7 @@ import type {
 // MOCK DATA
 // ============================================================
 
-const mockHulyProjects = [
+const mockRegistryProjects = [
   { identifier: 'TEST1', name: 'Test Project 1', description: 'Filesystem: /opt/stacks/test1' },
   { identifier: 'TEST2', name: 'Test Project 2', description: 'No filesystem path' },
 ];
@@ -30,7 +30,7 @@ const mockHulyProjects = [
 // ============================================================
 
 const createMockActivities = () => ({
-  fetchRegistryProjects: vi.fn().mockResolvedValue(mockHulyProjects),
+  fetchRegistryProjects: vi.fn().mockResolvedValue(mockRegistryProjects),
   updateLettaMemory: vi.fn().mockResolvedValue({ success: true }),
   recordSyncMetrics: vi.fn().mockResolvedValue(undefined),
   checkAgentExists: vi.fn().mockResolvedValue({ exists: false }),

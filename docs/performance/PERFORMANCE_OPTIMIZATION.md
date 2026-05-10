@@ -17,8 +17,8 @@
 ```bash
 SKIP_EMPTY_PROJECTS=true
 ```
-**Expected sync time**: 7-10 seconds  
-**Expected response time**: 3-10 seconds  
+**Expected sync time**: 7-10 seconds
+**Expected response time**: 3-10 seconds
 **Risk**: Very low (empty projects have no data to sync)
 
 #### 2. Reduce Sync Interval
@@ -26,7 +26,7 @@ After skipping empty projects, we can safely reduce the interval:
 ```bash
 SYNC_INTERVAL=3000  # 3 seconds
 ```
-**Expected response time**: 3-6 seconds  
+**Expected response time**: 3-6 seconds
 **Risk**: Low (CPU/network usage still minimal with only 9 projects)
 
 ### Phase 2: Medium-Risk Optimizations (Test After Phase 1)
@@ -36,9 +36,9 @@ Only syncs projects that changed since last sync:
 ```bash
 INCREMENTAL_SYNC=true
 ```
-**Expected sync time**: 1-5 seconds (most cycles)  
-**Expected response time**: 1-5 seconds  
-**Risk**: Medium (requires proper change detection)  
+**Expected sync time**: 1-5 seconds (most cycles)
+**Expected response time**: 1-5 seconds
+**Risk**: Medium (requires proper change detection)
 **Note**: May occasionally do full sync for consistency
 
 #### 4. Enable Parallel Processing
@@ -47,8 +47,8 @@ Syncs multiple projects concurrently:
 PARALLEL_SYNC=true
 MAX_WORKERS=3  # Conservative for 9 active projects
 ```
-**Expected sync time**: 3-5 seconds  
-**Expected response time**: 1-5 seconds  
+**Expected sync time**: 3-5 seconds
+**Expected response time**: 1-5 seconds
 **Risk**: Medium (more API load, potential for race conditions)
 
 ### Phase 3: Aggressive Optimizations (Advanced)
@@ -61,20 +61,20 @@ INCREMENTAL_SYNC=true
 PARALLEL_SYNC=true
 MAX_WORKERS=5
 ```
-**Expected sync time**: 1-3 seconds  
-**Expected response time**: 1-3 seconds  
+**Expected sync time**: 1-3 seconds
+**Expected response time**: 1-3 seconds
 **Risk**: Higher (complex interactions between features)
 
 ## Recommended Approach
 
 ### Step 1: Apply Phase 1 Optimizations (NOW)
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 cp .env .env.backup
 cat > .env << 'EOF'
-# Huly API Configuration
-HULY_API_URL=http://192.168.50.90:3458/api
-HULY_USE_REST=true
+# Legacy API Configuration
+REMOVED_API_URL=http://192.168.50.90:3458/api
+REMOVED_USE_REST=true
 
 # Vibe Kanban Configuration
 VIBE_MCP_URL=http://192.168.50.90:9717/mcp
@@ -162,14 +162,14 @@ docker-compose logs --tail=50 | grep "Stats:"
 
 ### Watch real-time sync
 ```bash
-docker-compose logs --follow | grep -E "Phase 1|Phase 2|Huly→Vibe|Vibe→Huly"
+docker-compose logs --follow | grep -E "Phase 1|Phase 2|Legacy→Vibe|Vibe→Legacy"
 ```
 
 ## Rollback Plan
 
 If issues occur:
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 cp .env.backup .env
 docker-compose down && docker-compose up -d
 ```
@@ -178,8 +178,8 @@ docker-compose down && docker-compose up -d
 
 After each optimization phase:
 - [ ] Wait 30 minutes
-- [ ] Test Huly → Vibe sync (change status in Huly, verify in Vibe)
-- [ ] Test Vibe → Huly sync (change status in Vibe, verify in Huly)
+- [ ] Test Legacy → Vibe sync (change status in Legacy, verify in Vibe)
+- [ ] Test Vibe → Legacy sync (change status in Vibe, verify in Legacy)
 - [ ] Check for error logs
 - [ ] Verify sync duration < expected time
 - [ ] Verify no status reverts
@@ -200,7 +200,7 @@ After each optimization phase:
 
 ```bash
 # Quick command to apply Phase 1:
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 sed -i 's/SKIP_EMPTY_PROJECTS=false/SKIP_EMPTY_PROJECTS=true/' .env
 sed -i 's/SYNC_INTERVAL=8000/SYNC_INTERVAL=3000/' .env
 docker-compose restart

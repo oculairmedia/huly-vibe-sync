@@ -1,7 +1,7 @@
 # Project .letta Files Recreation Summary
 
-**Date**: 2025-11-05  
-**Issue**: Project-specific `.letta/settings.local.json` files missing after cleanup  
+**Date**: 2025-11-05
+**Issue**: Project-specific `.letta/settings.local.json` files missing after cleanup
 **Status**: ✅ **RESOLVED**
 
 ## Problem
@@ -13,7 +13,7 @@ After clearing all agent state and creating fresh agents, the project-specific `
 During the cleanup phase, we deleted all `.letta` folders from project directories:
 
 ```bash
-find /opt/stacks -type d -name ".letta" ! -path "*/huly-vibe-sync/*" -exec rm -rf {} +
+find /opt/stacks -type d -name ".letta" ! -path "*/vibe-sync/*" -exec rm -rf {} +
 ```
 
 The SyncOrchestrator was calling `lettaService.saveAgentId()` to save to the central file, but not `lettaService.saveAgentIdToProjectFolder()` to save to project-specific locations.
@@ -30,7 +30,7 @@ db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
 lettaService.saveAgentId(projectIdentifier, agent.id);
 
 // Save to project-specific .letta folder
-const projectPath = determineGitRepoPath(hulyProject);
+const projectPath = determineGitRepoPath(legacyProject);
 if (projectPath) {
   lettaService.saveAgentIdToProjectFolder(projectPath, agent.id);
 }
@@ -101,7 +101,7 @@ cat /opt/stacks/bookstack-mcp/.letta/settings.local.json
 curl -s "http://192.168.50.90:8289/v1/agents/agent-c8487d94-c01e-4bb8-be27-2d976bd735c1" \
   -H "Authorization: Bearer lettaSecurePass123" | jq '{name, id}'
 {
-  "name": "Huly - BookStack MCP",
+  "name": "Legacy - BookStack MCP",
   "id": "agent-c8487d94-c01e-4bb8-be27-2d976bd735c1"
 }
 ```
@@ -117,7 +117,7 @@ cat /opt/stacks/letta-MCP-server/.letta/settings.local.json
 
 # Agent in Letta
 {
-  "name": "Huly - Letta MCP Server",
+  "name": "Legacy - Letta MCP Server",
   "id": "agent-13eb4426-b06f-4d35-ae5a-5d6ca80409f5"
 }
 ```
@@ -195,7 +195,7 @@ These can be recreated manually once the project directories exist.
 
 ## Conclusion
 
-✅ All 40 accessible project directories now have correct `.letta/settings.local.json` files  
-✅ Agent IDs verified to match Letta server  
-✅ Future agent creations will automatically create project files  
+✅ All 40 accessible project directories now have correct `.letta/settings.local.json` files
+✅ Agent IDs verified to match Letta server
+✅ Future agent creations will automatically create project files
 ✅ Recovery approach documented if it needs to be recreated later

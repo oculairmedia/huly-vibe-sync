@@ -1,7 +1,7 @@
 # Session Summary: Sleeptime Control via Environment Variable
 
-**Date**: 2025-11-05  
-**Issue**: Make sleeptime agent configuration controllable via environment variable  
+**Date**: 2025-11-05
+**Issue**: Make sleeptime agent configuration controllable via environment variable
 **Status**: ✅ **COMPLETED**
 
 ## Objectives Accomplished
@@ -55,7 +55,7 @@ body: JSON.stringify({
   embedding: this.embedding,
   enable_sleeptime: this.enableSleeptime, // Controlled by LETTA_ENABLE_SLEEPTIME
   sleeptime_agent_frequency: this.sleeptimeFrequency, // Controlled by LETTA_SLEEPTIME_FREQUENCY
-  tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+  tags: ['vibe-sync', `project:${projectIdentifier}`],
 }),
 ```
 
@@ -84,7 +84,7 @@ if (lettaService && !config.sync.dryRun) {
     // Create agent if it doesn't exist
     if (!lettaInfo || !lettaInfo.letta_agent_id) {
       log.info({ project: projectIdentifier }, 'Creating Letta PM agent');
-      const agent = await lettaService.ensureAgent(projectIdentifier, hulyProject.name);
+      const agent = await lettaService.ensureAgent(projectIdentifier, legacyProject.name);
 
       // Persist to database
       db.setProjectLettaAgent(projectIdentifier, { agentId: agent.id });
@@ -108,7 +108,7 @@ if (lettaService && !config.sync.dryRun) {
 ### 1. Deleted Project `.letta` Folders
 
 ```bash
-find /opt/stacks -type d -name ".letta" ! -path "*/huly-vibe-sync/*" -exec rm -rf {} +
+find /opt/stacks -type d -name ".letta" ! -path "*/vibe-sync/*" -exec rm -rf {} +
 ```
 
 **Result**: 45 folders deleted
@@ -129,7 +129,7 @@ WHERE letta_agent_id IS NOT NULL;
 ### 3. Deleted Letta Agents
 
 ```bash
-# Deleted all 84 Huly agents (42 primary + 42 sleeptime from previous runs)
+# Deleted all 84 Legacy agents (42 primary + 42 sleeptime from previous runs)
 curl -X DELETE "http://192.168.50.90:8289/v1/agents/{agent_id}"
 ```
 
@@ -150,7 +150,7 @@ curl -X DELETE "http://192.168.50.90:8289/v1/agents/{agent_id}"
 ### Agent Creation
 
 - **Total Agents Created**: 42
-- **Agent Naming**: `Huly - {Project Name}` (e.g., "Huly - BookStack MCP")
+- **Agent Naming**: `Legacy - {Project Name}` (e.g., "Legacy - BookStack MCP")
 - **Sleeptime Status**: All 42 agents have `enable_sleeptime: false`
 - **No Sleeptime Agents**: 0 agents with sleeptime enabled
 
@@ -166,7 +166,7 @@ curl -X DELETE "http://192.168.50.90:8289/v1/agents/{agent_id}"
 
 ```json
 {
-  "name": "Huly - Claude API Gateway",
+  "name": "Legacy - Claude API Gateway",
   "id": "agent-4527bcab-1b11-47f4-bb5d-2a4f44ca9ca2",
   "enable_sleeptime": false
 }
@@ -176,7 +176,7 @@ curl -X DELETE "http://192.168.50.90:8289/v1/agents/{agent_id}"
 
 ```json
 {
-  "name": "Huly - BookStack MCP",
+  "name": "Legacy - BookStack MCP",
   "id": "agent-c8487d94-c01e-4bb8-be27-2d976bd735c1",
   "enable_sleeptime": false
 }
@@ -254,7 +254,7 @@ curl -s "http://192.168.50.90:8289/v1/agents/{agent_id}" \
 ```bash
 curl -s "http://192.168.50.90:8289/v1/agents?limit=100" \
   -H "Authorization: Bearer lettaSecurePass123" | \
-  jq '[.[] | select(.name | startswith("Huly -"))] | length'
+  jq '[.[] | select(.name | startswith("Legacy -"))] | length'
 ```
 
 ### Verify Database State

@@ -1,9 +1,9 @@
 # Product Requirements Document: Vibe Kanban Review Loop Integration
 
-**Version:** 1.0.0  
-**Date:** November 17, 2025  
-**Status:** Draft - Ready for Implementation  
-**Author:** System Architecture Team  
+**Version:** 1.0.0
+**Date:** November 17, 2025
+**Status:** Draft - Ready for Implementation
+**Author:** System Architecture Team
 **Stakeholders:** Development Team, Project Management, DevOps
 
 ---
@@ -42,7 +42,7 @@ This PRD defines the implementation of a **real-time review notification system*
 
 ### Current State
 
-The huly-vibe-sync service currently provides **bidirectional synchronization** between Huly and Vibe Kanban:
+The vibe-sync service currently provides **bidirectional synchronization** between Legacy and Vibe Kanban:
 
 - ✅ Task status changes sync in both directions
 - ✅ Task creation and updates propagate automatically
@@ -101,7 +101,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 
 - ❌ Code review AI/automation (handled by PM agents)
 - ❌ Direct GitHub PR integration (future enhancement)
-- ❌ UI for review workflow (uses existing Huly/Vibe interfaces)
+- ❌ UI for review workflow (uses existing Legacy/Vibe interfaces)
 - ❌ Multi-agent review consensus (future enhancement)
 
 ---
@@ -136,7 +136,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
                                          │ EventSource Connection
                                          ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│                     Huly-Vibe-Sync Service                       │
+│                     Vibe Sync Service                       │
 │  ┌────────────────────────────────────────────────────┐         │
 │  │           Review Loop Notification Module          │         │
 │  │  ┌──────────────────────────────────────────────┐ │         │
@@ -171,7 +171,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 │  │  │ "Task 'Feature X' is ready for review"      │ │         │
 │  │  │                                              │ │         │
 │  │  │ - Check Vibe Kanban API for task details    │ │         │
-│  │  │ - Check Huly API for issue context          │ │         │
+│  │  │ - Check Legacy API for issue context          │ │         │
 │  │  │ - Review git diff (via tools)               │ │         │
 │  │  │ - Provide feedback or approval              │ │         │
 │  │  └──────────────────────────────────────────────┘ │         │
@@ -180,7 +180,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 │                                     │ Update Issue Status        │
 │                                     ↓                            │
 │  ┌────────────────────────────────────────────────────┐         │
-│  │  Huly Issue Updated                                │         │
+│  │  Legacy Issue Updated                                │         │
 │  │  - Status: Done (if approved)                      │         │
 │  │  - Comments: Feedback from PM agent                │         │
 │  └────────────────────────────────────────────────────┘         │
@@ -223,7 +223,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 **Data Sources:**
 - Vibe Kanban API (`/api/tasks/{id}`)
 - Vibe Kanban API (`/api/task-attempts/{id}`)
-- Huly API (for issue context)
+- Legacy API (for issue context)
 - Internal database (for agent mappings)
 
 #### 3.2.3 Notification Queue
@@ -293,7 +293,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 ### Phase 4: Integration (Week 3)
 
 **Deliverables:**
-- [ ] Integrate with existing huly-vibe-sync service
+- [ ] Integrate with existing vibe-sync service
 - [ ] Add configuration options to `.env`
 - [ ] Update `index.js` to start review loop service
 - [ ] Add health check endpoints
@@ -383,9 +383,9 @@ describe('ReviewLoopService', () => {
         description: 'Description',
         project_id: 'proj-456'
       };
-      
+
       vibeApi.getTask.mockResolvedValue(mockTask);
-      
+
       const context = await enrichTaskContext('task-123');
       expect(context.task).toEqual(mockTask);
     });
@@ -396,16 +396,16 @@ describe('ReviewLoopService', () => {
         branch: 'vk/123-feature',
         executor: 'CLAUDE_CODE'
       };
-      
+
       vibeApi.getLatestAttempt.mockResolvedValue(mockAttempt);
-      
+
       const context = await enrichTaskContext('task-123');
       expect(context.attempt).toEqual(mockAttempt);
     });
 
     it('should handle missing attempt gracefully', async () => {
       vibeApi.getLatestAttempt.mockResolvedValue(null);
-      
+
       const context = await enrichTaskContext('task-123');
       expect(context.attempt).toBeNull();
     });
@@ -420,13 +420,13 @@ describe('ReviewLoopService', () => {
     it('should cache agent lookups', async () => {
       await findAgentForProject('proj-456');
       await findAgentForProject('proj-456');
-      
+
       expect(lettaApi.listAgents).toHaveBeenCalledTimes(1);
     });
 
     it('should create agent if not found', async () => {
       lettaApi.findAgent.mockResolvedValue(null);
-      
+
       const agentId = await findAgentForProject('proj-789');
       expect(lettaApi.createAgent).toHaveBeenCalled();
     });
@@ -436,23 +436,23 @@ describe('ReviewLoopService', () => {
     it('should enqueue notifications', () => {
       const notification = { taskId: '123', agentId: '456' };
       queue.enqueue(notification);
-      
+
       expect(queue.size()).toBe(1);
     });
 
     it('should retry failed notifications', async () => {
       lettaApi.sendMessage.mockRejectedValueOnce(new Error('Timeout'));
-      
+
       await queue.process();
-      
+
       expect(lettaApi.sendMessage).toHaveBeenCalledTimes(2);
     });
 
     it('should move to DLQ after max retries', async () => {
       lettaApi.sendMessage.mockRejectedValue(new Error('Fatal'));
-      
+
       await queue.process();
-      
+
       expect(queue.deadLetterQueue.size()).toBe(1);
     });
   });
@@ -473,12 +473,12 @@ describe('Review Loop Integration', () => {
     // Start mock servers
     mockVibeServer = await startMockVibeServer();
     mockLettaServer = await startMockLettaServer();
-    
+
     reviewService = new ReviewLoopService({
       vibeApiUrl: mockVibeServer.url,
       lettaApiUrl: mockLettaServer.url
     });
-    
+
     await reviewService.start();
   });
 
@@ -502,7 +502,7 @@ describe('Review Loop Integration', () => {
     });
 
     // Wait for notification to be sent
-    await waitFor(() => 
+    await waitFor(() =>
       mockLettaServer.receivedMessages.length > 0
     );
 
@@ -515,9 +515,9 @@ describe('Review Loop Integration', () => {
   it('should reconnect after SSE failure', async () => {
     // Simulate connection failure
     await mockVibeServer.disconnect();
-    
+
     // Wait for reconnection
-    await waitFor(() => 
+    await waitFor(() =>
       reviewService.isConnected()
     );
 
@@ -563,7 +563,7 @@ describe('Review Loop E2E', () => {
 
     // 5. Verify notification in Letta
     const messages = await lettaApi.getAgentMessages(pmAgentId);
-    const reviewMessage = messages.find(m => 
+    const reviewMessage = messages.find(m =>
       m.content.includes(task.title)
     );
 
@@ -831,15 +831,15 @@ interface ReviewLoopConfig {
   // Retry settings
   maxRetries: number;
   retryBackoffMs: number[];
-  
+
   // Queue settings
   queuePersistencePath: string;
   queueFlushInterval: number;
-  
+
   // Feature flags
   enabled: boolean;
   dryRun: boolean;
-  
+
   // Monitoring
   metricsEnabled: boolean;
   loggingLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -883,9 +883,9 @@ async function sendNotificationWithRetry(notification, attempt = 0) {
 
     const backoff = RETRY_CONFIG.backoffMs[attempt];
     const jitter = Math.random() * RETRY_CONFIG.jitterMs;
-    
+
     logger.warn({ attempt, backoff, error }, 'Retrying notification');
-    
+
     await sleep(backoff + jitter);
     return sendNotificationWithRetry(notification, attempt + 1);
   }
@@ -931,7 +931,7 @@ class CircuitBreaker {
   onFailure() {
     this.failures++;
     this.lastFailureTime = Date.now();
-    
+
     if (this.failures >= this.failureThreshold) {
       this.state = 'OPEN';
       logger.error('Circuit breaker opened');
@@ -970,13 +970,13 @@ const metrics = {
     help: 'Total review notifications sent successfully',
     labelNames: ['project_id', 'agent_id']
   }),
-  
+
   notificationLatency: new promClient.Histogram({
     name: 'notification_latency_seconds',
     help: 'Time from task status change to notification sent',
     buckets: [0.1, 0.5, 1, 2, 5, 10]
   }),
-  
+
   queueDepth: new promClient.Gauge({
     name: 'notification_queue_depth',
     help: 'Current number of pending notifications'
@@ -1205,11 +1205,11 @@ SSE_MAX_RECONNECT_ATTEMPTS=10
 # Notification Queue
 NOTIFICATION_MAX_RETRIES=5
 NOTIFICATION_RETRY_BACKOFF_MS=1000,2000,4000,8000,16000
-NOTIFICATION_QUEUE_PERSISTENCE_PATH=/opt/stacks/huly-vibe-sync/logs/notification-queue.json
+NOTIFICATION_QUEUE_PERSISTENCE_PATH=/opt/stacks/vibe-sync/logs/notification-queue.json
 NOTIFICATION_QUEUE_FLUSH_INTERVAL_MS=5000
 
 # Agent Routing
-LETTA_PM_AGENT_PREFIX=Huly-PM-
+LETTA_PM_AGENT_PREFIX=Legacy-PM-
 
 # Monitoring
 REVIEW_LOOP_METRICS_ENABLED=true
@@ -1222,7 +1222,7 @@ REVIEW_LOOP_DRY_RUN=false
 ### Appendix B: File Structure
 
 ```
-/opt/stacks/huly-vibe-sync/
+/opt/stacks/vibe-sync/
 ├── lib/
 │   ├── ReviewLoopService.js           # Main service module
 │   ├── SSEEventConsumer.js            # SSE connection handler
@@ -1298,7 +1298,7 @@ REVIEW_LOOP_DRY_RUN=false
 **Next Steps:**
 
 1. Review and approve this PRD
-2. Create implementation tickets in Huly/Vibe Kanban
+2. Create implementation tickets in Legacy/Vibe Kanban
 3. Assign development resources
 4. Begin Phase 1 implementation
 5. Schedule weekly sync meetings

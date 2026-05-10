@@ -7,7 +7,7 @@ import type { IssueSyncInput, IssueSyncResult } from '../workflows/issue-sync';
 /**
  * Schedule an issue sync workflow (fire-and-forget)
  *
- * Syncs an issue across Huly, VibeKanban, and the legacy tracker shim atomically.
+  * Syncs issue state through the configured issue-sync workflow.
  * Returns immediately; workflow runs in background with retry.
  */
 export declare function scheduleIssueSync(input: IssueSyncInput): Promise<{

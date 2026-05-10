@@ -1,5 +1,5 @@
-# Huly-Vibe-Sync File Upload Status
-**Date:** 2025-11-04  
+# Vibe Sync File Upload Status
+**Date:** 2025-11-04
 **Issue:** Agents missing project files/folders
 
 ---
@@ -15,7 +15,7 @@ The file upload code only runs during "first-time agent setup" (when agent is ne
 
 **Fix Applied:** Cleared state files to trigger first-time setup
 
-### 2. **Environment Variables Missing** 
+### 2. **Environment Variables Missing**
 The critical environment variables weren't passed to the Docker container:
 - `LETTA_UPLOAD_PROJECT_FILES`
 - `LETTA_ATTACH_REPO_DOCS`
@@ -49,7 +49,7 @@ File upload is running but hitting errors:
 ### Example Success
 ```bash
 # OpenCode Project agent now has folder attached:
-Folder: Huly-OPCDE-root (source-d40d0d70-10fc-45e9-98cb-64ad725db000)
+Folder: Legacy-OPCDE-root (source-d40d0d70-10fc-45e9-98cb-64ad725db000)
 ```
 
 ---
@@ -62,13 +62,13 @@ Added Letta environment variables:
 # Letta Integration
 - LETTA_BASE_URL=${LETTA_BASE_URL}
 - LETTA_PASSWORD=${LETTA_PASSWORD}
-- HULY_MCP_URL=${HULY_MCP_URL:-http://192.168.50.90:3457/mcp}
+- REMOVED_MCP_URL=${REMOVED_MCP_URL:-http://192.168.50.90:3457/mcp}
 - LETTA_MODEL=${LETTA_MODEL:-anthropic/sonnet-4-5}
 - LETTA_EMBEDDING=${LETTA_EMBEDDING:-letta/letta-free}
 - LETTA_ATTACH_REPO_DOCS=${LETTA_ATTACH_REPO_DOCS:-true}
 - LETTA_UPLOAD_PROJECT_FILES=${LETTA_UPLOAD_PROJECT_FILES:-true}
 - LETTA_SEND_MESSAGES=${LETTA_SEND_MESSAGES:-false}
-- LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-Huly-PM-Control}
+- LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-Legacy-PM-Control}
 ```
 
 ---
@@ -101,7 +101,7 @@ Added Letta environment variables:
 ## Code Locations
 
 ### Where File Upload Happens
-**File:** `/opt/stacks/huly-vibe-sync/index.js`  
+**File:** `/opt/stacks/vibe-sync/index.js`
 **Lines:** 1126-1136
 
 ```javascript
@@ -119,7 +119,7 @@ if (process.env.LETTA_UPLOAD_PROJECT_FILES === 'true') {
 ```
 
 ### Where Errors Need Fixing
-**File:** `/opt/stacks/huly-vibe-sync/lib/LettaService.js`  
+**File:** `/opt/stacks/vibe-sync/lib/LettaService.js`
 **Methods:**
 - `uploadReadme()` - README file upload
 - `uploadProjectFiles()` - Bulk file upload
@@ -135,7 +135,7 @@ export LETTA_BASE_URL=http://192.168.50.90:8289
 export LETTA_PASSWORD=lettaSecurePass123
 
 # Get agent ID
-AGENT_ID=$(curl -s "${LETTA_BASE_URL}/v1/agents?tags=huly-vibe-sync&limit=1" \
+AGENT_ID=$(curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibe-sync&limit=1" \
   -H "Authorization: Bearer ${LETTA_PASSWORD}" | jq -r '.[0].id')
 
 # List folders attached to agent
@@ -156,7 +156,7 @@ curl -s "${LETTA_BASE_URL}/v1/folders/${FOLDER_ID}/files?limit=10" \
 
 ### Check Upload Logs
 ```bash
-docker logs huly-vibe-sync 2>&1 | grep -E "uploading|uploaded|Discovering.*files"
+docker logs vibe-sync 2>&1 | grep -E "uploading|uploaded|Discovering.*files"
 ```
 
 ---

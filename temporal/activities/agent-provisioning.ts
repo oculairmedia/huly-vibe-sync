@@ -586,7 +586,7 @@ export async function updateProjectAgentsMd(
 
     const { agentsMdGenerator } = await import(appRootModule('lib/AgentsMdGenerator.js'));
     const agentsMdPath = path.join(projectPath, 'AGENTS.md');
-    const agentName = `Huly - ${projectName}`;
+    const agentName = `PM - ${projectName}`;
 
     const vars = {
       identifier: projectIdentifier,
@@ -600,6 +600,7 @@ export async function updateProjectAgentsMd(
       sections: [
         'project-info',
         'reporting-hierarchy',
+        'beads-instructions',
         'bookstack-docs',
         'session-completion',
         'codebase-context',

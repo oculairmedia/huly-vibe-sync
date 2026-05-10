@@ -1,163 +1,158 @@
-# Huly-Vibe Sync Service
+# Vibe Sync Service
 
-[![Build and Push Docker Image](https://github.com/oculairmedia/huly-vibe-sync/actions/workflows/docker-build.yml/badge.svg)](https://github.com/oculairmedia/huly-vibe-sync/actions/workflows/docker-build.yml)
+Project registry, Beads issue workflow guidance, and PM-agent coordination service for Oculair project workspaces.
 
-Bidirectional synchronization service between [Huly](https://huly.io) and [Vibe Kanban](https://github.com/oculairmedia/vibe-kanban) using the Model Context Protocol (MCP).
+## Current Scope
 
-## Features
-
-- ✅ **Bidirectional Sync**: Huly ↔ Vibe Kanban for project and task state
-- ✅ **REST API Integration**: Fast, efficient Huly REST API client for optimal performance
-- ✅ **Incremental Sync**: Only fetches issues modified since last sync (timestamp-based)
-- ⚡ **Parallel Processing**: Concurrent project sync with configurable workers (default: 5)
-- 🚀 **Smart Caching**: Skips empty projects to reduce API load
-- ⏱️ **Fast Sync**: 10-second intervals for near real-time updates (~3-5s per cycle)
-- ✅ **Full Description Support**: Multi-line issue descriptions preserved with all formatting
-- ✅ **Status Synchronization**: Task status changes sync both ways (Huly and Vibe)
-- ✅ **Filesystem Path Mapping**: Automatic project path detection from Huly descriptions
-- ✅ **Configurable Intervals**: Run once, continuous sync, or on-demand
-- ✅ **Docker Support**: Fully containerized with health checks
-- ✅ **MCP Fallback**: Optional MCP protocol support for backwards compatibility
-
-## Performance
-
-**Current Configuration (Optimized):**
-
-- **Sync Interval**: 10 seconds (configurable)
-- **Incremental Sync Time**: 3-5 seconds (only fetches changed issues)
-- **Active Projects**: Processes only ~8-10 projects with issues (skips 30+ empty)
-- **Parallel Workers**: 5 concurrent project syncs
-- **Near Real-Time**: Changes sync within 10-15 seconds
-
-**Previous (Sequential):**
-
-- Sync Interval: 30 seconds
-- Full Sync Time: 25-30 seconds
-- All 44 projects processed sequentially
+- Project registry API for discovering and managing workspace projects.
+- Android-friendly project summary endpoints for lightweight mobile clients.
+- Generic work-item API surfaces backed by the repository state database.
+- Beads (`bd`) as the source of truth for local issue tracking.
+- Letta PM-agent metadata and reporting integrations.
+- Dockerized runtime with health checks and optional Temporal workers.
 
 ## Quick Start
 
-### Using Pre-built Docker Image (Recommended)
-
 ```bash
-# Pull the latest image from GitHub Container Registry
-docker pull ghcr.io/oculairmedia/huly-vibe-sync:latest
-
-# Or use docker-compose with the pre-built image
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 cp .env.example .env
-# Edit docker-compose.yml to use: image: ghcr.io/oculairmedia/huly-vibe-sync:latest
 docker-compose up -d
 docker-compose logs -f
 ```
-
-### Building from Source
-
-```bash
-cd /opt/stacks/huly-vibe-sync
-cp .env.example .env
-docker-compose build
-docker-compose up -d
-docker-compose logs -f
-```
-
-## Docker Images
-
-Pre-built Docker images are automatically published to GitHub Container Registry:
-
-- **Latest (main branch)**: `ghcr.io/oculairmedia/huly-vibe-sync:latest`
-- **Develop branch**: `ghcr.io/oculairmedia/huly-vibe-sync:develop`
-- **Tagged releases**: `ghcr.io/oculairmedia/huly-vibe-sync:v1.0.0`
-- **Commit SHA**: `ghcr.io/oculairmedia/huly-vibe-sync:main-<sha>`
-
-Images are built for both `linux/amd64` and `linux/arm64` platforms.
 
 ## Configuration
 
-### Environment Variables
-
-See `.env.example` for all available options. Key settings:
+See `.env.example` for supported settings. Core settings include:
 
 ```bash
-# Core Settings
-HULY_API_URL=http://192.168.50.90:3457/api
-HULY_USE_REST=true
 VIBE_MCP_URL=http://192.168.50.90:9717/mcp
-
-# Sync Behavior
-SYNC_INTERVAL=10000           # 10 seconds (default: 10000ms)
-INCREMENTAL_SYNC=true         # Only fetch changed issues
-PARALLEL_SYNC=true            # Process projects concurrently
-MAX_WORKERS=5                 # Max concurrent API calls
-SKIP_EMPTY_PROJECTS=true      # Skip projects with 0 issues
-
-# Dry Run Mode
-DRY_RUN=false                 # Set to true for testing
+SYNC_INTERVAL=10000
+PARALLEL_SYNC=true
+MAX_WORKERS=5
+DRY_RUN=false
 ```
-
-### Performance Tuning
-
-**For faster sync:**
-
-- Reduce `SYNC_INTERVAL` to 5000 (5 seconds) or 3000 (3 seconds)
-- Increase `MAX_WORKERS` to 8-10 (monitor API load)
-- Enable `SKIP_EMPTY_PROJECTS=true` (recommended)
-
-**For lower API load:**
-
-- Increase `SYNC_INTERVAL` to 30000 (30 seconds) or higher
-- Reduce `MAX_WORKERS` to 3
-- Set `PARALLEL_SYNC=false` for sequential processing
-
-**Monitor performance:**
-
-```bash
-docker logs huly-vibe-sync 2>&1 | grep "Slow tool execution"
-docker logs huly-vibe-sync 2>&1 | grep "sync completed"
-```
-
-## Documentation
-
-### 📚 Local Documentation
-
-Comprehensive documentation is organized in the [`docs/`](./docs/) directory:
-
-- **[Documentation Index](./docs/README.md)** - Complete documentation overview
-- **[API Reference](./docs/api/)** - API specifications and integration guides
-- **[Architecture](./docs/architecture/)** - System design and architecture
-- **[Guides](./docs/guides/)** - Deployment, testing, and agent management
-- **[Deployment Guide](./DEPLOYMENT.md)** - Quick deployment reference
-- **[Testing Guide](./TESTING.md)** - Testing documentation
-
-### 🌐 External Documentation
-
-See comprehensive documentation in [BookStack](https://docs.oculair.ca) under "MCP Integration Research" → "Huly-Vibe Bidirectional Sync Service"
 
 ## Project Registry API
+
+### List projects
+
+`GET /api/projects`
+
+Returns lightweight project summaries suitable for mobile first paint, including repo metadata, PM-agent metadata, tracker capabilities, activity timestamps, and version/etag fields.
+
+### Project detail
+
+`GET /api/projects/:id`
+
+Returns a compact project detail summary. Large collections are exposed through separate paginated subresources.
+If tracker/work-item hydration fails, the project detail still returns `200` with the normal project fields and marks only `project.tracker.data_freshness.status` as `"error"`. Error messages in freshness metadata are sanitized for UI display and never expose raw stack traces or low-level exception text.
+
+### Project subresources
+
+- `GET /api/projects/:id/agents`
+- `GET /api/projects/:id/conversations`
+- `GET /api/projects/:id/work-items`
+- `GET /api/projects/:id/activity`
+- `GET /api/projects/:id/issues`
+- `GET /api/projects/:id/ready-work`
+
+Subresources use cursor-style pagination envelopes with `page.next_cursor`, `page.has_more`, and `page.total_known`.
+If a subresource cannot be hydrated, the endpoint returns the project-scoped envelope normally with an empty collection for that subresource and `data_freshness.status = "error"`; the `data_freshness.error` value is a sanitized, user-safe summary.
+
+Project `etag` values change only when project summary/detail fields change. Tracker freshness and subresource availability do not change the project `etag`; each subresource response exposes its own `etag` and `data_freshness.last_sync_at` for cache invalidation and stale/error UI states.
+
+### Android issue/work contract
+
+`GET /api/projects/:id/ready-work` is the Android equivalent of `bd ready`: it returns open, actionable, unblocked work without requiring the client to reconstruct readiness from raw issue lists.
+
+`GET /api/projects/:id/issues` returns compact, paginated issue summaries. It supports Android-friendly filters including `status`, `priority`, `assignee`, `type`, `ready=true|false`, text query via `q`, and incremental refresh via `updatedSince` / `updated_since`. Sorting currently supports `priority`, `updated`, and `created`.
+
+`GET /api/issues/:id` returns full issue detail by stable opaque issue ID, including description, acceptance criteria, labels, normalized status, blocker references, child references, timestamps, and validation warnings.
+
+Mutation endpoints are first-class and conflict-aware. Send either an `If-Match` header or `if_match` body field with the issue `etag`; stale mutations return `409` with a structured `conflict` object. Send `Idempotency-Key` or `idempotency_key` for offline-safe retries.
+
+- `POST /api/issues/:id/claim`
+- `POST /api/issues/:id/unclaim`
+- `PATCH /api/issues/:id/status`
+- `POST /api/issues/:id/notes`
+- `POST /api/issues/:id/close`
+- `POST /api/issues/:id/reopen`
+
+Example mutation request:
+
+```http
+POST /api/issues/letta-mobile-qmbg/claim
+If-Match: letta-mobile-qmbg:1778416496000
+Idempotency-Key: android-queue-42
+Content-Type: application/json
+
+{
+  "assignee": "emmanuel"
+}
+```
+
+Conflict response:
+
+```json
+{
+  "error": "Issue conflict",
+  "statusCode": 409,
+  "conflict": {
+    "reason": "etag_mismatch",
+    "expected": "letta-mobile-qmbg:stale",
+    "current": "letta-mobile-qmbg:1778416496000",
+    "issueId": "letta-mobile-qmbg"
+  }
+}
+```
+
+Issue payloads are deterministic and schema-versioned:
+
+```json
+{
+  "id": "letta-mobile-qmbg",
+  "projectId": "letta-mobile",
+  "provider": "beads",
+  "title": "Define Android Beads data contract for project workspaces",
+  "type": "task",
+  "priority": "high",
+  "status": "open",
+  "statusLabel": "todo",
+  "ready": true,
+  "assignee": null,
+  "blockedBy": [],
+  "blocks": [],
+  "isBlocked": false,
+  "updatedAt": "2026-05-10T12:34:56.000Z",
+  "summary": "Short list-safe summary",
+  "acceptanceCriteria": ["Criterion one"],
+  "labels": ["android", "project-workspace"],
+  "validationWarnings": [],
+  "etag": "letta-mobile-qmbg:1778416496000"
+}
+```
+
+Normalized machine-readable statuses are `open`, `in_progress`, `blocked`, `deferred`, and `closed`; the original tracker status remains available as `statusLabel` for display/debugging.
 
 ### Register a project
 
 `POST /api/registry/projects`
 
-Request body:
-
 ```json
 {
-  "filesystem_path": "/opt/stacks/letta-mobile-bz40.2.8",
+  "filesystem_path": "/opt/stacks/letta-mobile",
   "name": "Letta Mobile",
-  "git_url": "https://github.com/oculairmedia/letta-mobile-bz40.2.8.git"
+  "git_url": "https://github.com/oculairmedia/letta-mobile.git"
 }
 ```
 
-- `filesystem_path` is required and must be an absolute path
-- `name` and `git_url` are optional
-- the path must exist and be a git repository
+- `filesystem_path` is required and must be an absolute path.
+- `name` and `git_url` are optional.
+- The path must exist and be a git repository.
 
 ### Update a project
 
 `PATCH /api/registry/projects/:id`
-
-Request body:
 
 ```json
 {
@@ -166,24 +161,39 @@ Request body:
 }
 ```
 
-- `filesystem_path` must be absolute when provided
-- existing fields are preserved when omitted
-- returns the updated project row
+### Beads/DoltHub remote provisioning
 
-## CLI usage
+`POST /api/projects/:id/beads-remote/provision`
 
-Register a project:
+Creates or reuses a project-scoped DoltHub database, configures the project's Beads remote, and pushes the local Beads database by default. Database names are normalized from the project folder name, for example `/opt/stacks/letta-mobile` becomes `oulair/letta_mobile`.
 
-```bash
-npm run vibesync -- project-register /opt/stacks/letta-mobile-bz40.2.8 \
-  --name "Letta Mobile" \
-  --git-url "https://github.com/oculairmedia/letta-mobile-bz40.2.8.git"
+```json
+{
+  "push": true
+}
 ```
 
-Update project path or git URL:
+Provisioning is idempotent: an already-existing DoltHub database is treated as success, and an existing local or mismatched Beads remote is replaced with the configured DoltHub remote. Use `GET /api/projects/:id/beads-remote` to inspect stored provisioning metadata.
+
+The DoltHub API token is only used for private database creation. Routine `bd dolt push`/`pull` operations use the server's `dolt login` credentials from `~/.dolt/creds`, so keep those credentials provisioned separately.
+
+CLI helpers:
 
 ```bash
-npm run vibesync -- project-update LETTAMOBILE \
-  --filesystem-path /opt/stacks/letta-mobile \
-  --git-url "https://github.com/oculairmedia/letta-mobile.git"
+npm run vibesync -- project-beads-remote HVSYN
+npm run vibesync -- project-provision-beads-remote HVSYN
+npm run vibesync -- project-provision-beads-remote HVSYN --no-push
 ```
+
+## Beads Workflow
+
+Use Beads for issue tracking in this repository:
+
+```bash
+bd ready
+bd show <id>
+bd update <id> --claim
+bd close <id>
+```
+
+Do not route project issue operations through external issue tools.

@@ -2,7 +2,7 @@
 
 ## Optimizations Applied
 
-### 1. ✅ **Local Letta Proxy URL** 
+### 1. ✅ **Local Letta Proxy URL**
 **Problem**: Using `https://letta.oculair.ca` (Cloudflare tunnel at 192.168.50.99)
 - External network round-trips
 - Cloudflare processing overhead
@@ -26,7 +26,7 @@
 - CPU overhead for unchanged data
 
 **Solution**: Cache block content hashes in memory
-- Compute hashes of new block content  
+- Compute hashes of new block content
 - Compare against cached hashes BEFORE calling Letta API
 - Skip API call entirely if ALL blocks match cache
 - Only fetch from Letta if something changed
@@ -74,7 +74,7 @@ vs old way:
 **API Request Reduction** (per sync cycle):
 - **Before**: ~420 requests (42 agents × ~10 operations)
   - 42 GET agents
-  - 252 GET blocks (42 × 6)  
+  - 252 GET blocks (42 × 6)
   - 126 PATCH blocks (42 × 3 avg updates)
 - **After (cache hits)**: ~140 requests
   - 42 GET agents (still needed)
@@ -111,7 +111,7 @@ vs old way:
 - **More hits expected**: As projects stabilize
 
 ### CPU Impact
-- **huly-vibe-sync**: 0-5% (idle most of the time)
+- **vibe-sync**: 0-5% (idle most of the time)
 - **Letta**: 3-62% (much lower baseline, fewer spikes)
 - **Postgres**: Lower load from fewer queries
 
@@ -120,7 +120,7 @@ vs old way:
 ### Cache Hit Scenario (No Changes)
 ```
 1. Compute hashes of 6 blocks locally                     ← 1ms
-2. Compare against cached hashes                          ← 1ms  
+2. Compare against cached hashes                          ← 1ms
 3. All match → skip Letta API entirely                    ← 0ms
 4. Return immediately                                     ← TOTAL: 5-10ms
 ```
@@ -138,7 +138,7 @@ vs old way:
 
 ### Why It's Fast
 - **Hash computation**: O(n) linear in content length, very fast
-- **Cache lookup**: O(1) Map lookup  
+- **Cache lookup**: O(1) Map lookup
 - **Skip network**: No HTTP round-trip for cache hits
 - **Local only**: Everything happens in-process
 
@@ -147,11 +147,11 @@ vs old way:
 ### Check Cache Performance
 ```bash
 # Watch cache hits
-docker logs -f huly-vibe-sync | grep "All blocks match cache"
+docker logs -f vibe-sync | grep "All blocks match cache"
 
 # Count cache hits vs total
-docker logs huly-vibe-sync --since 1m | grep -c "All blocks match cache"
-docker logs huly-vibe-sync --since 1m | grep -c "Upserting 6 memory blocks"
+docker logs vibe-sync --since 1m | grep -c "All blocks match cache"
+docker logs vibe-sync --since 1m | grep -c "Upserting 6 memory blocks"
 
 # Check Letta request rate
 docker logs letta-letta-1 --since 1m | grep -E "GET|PATCH|POST" | wc -l
@@ -185,9 +185,9 @@ docker logs letta-letta-1 --since 1m | grep -E "GET|PATCH|POST" | wc -l
 1. **Batch block updates**: Update multiple blocks in one request
    - Estimated: 20-30% additional reduction
 2. **Connection pooling**: Reuse HTTP connections
-   - Estimated: 10-15% latency improvement  
+   - Estimated: 10-15% latency improvement
 3. **Incremental sync**: Only sync projects with recent changes
-   - Requires change detection at Huly/Vibe level
+   - Requires change detection at Legacy/Vibe level
 
 ### Not Recommended
 - ❌ Increase SYNC_INTERVAL beyond 30s (too slow for PM use case)
@@ -212,6 +212,6 @@ docker logs letta-letta-1 --since 1m | grep -E "GET|PATCH|POST" | wc -l
 
 ---
 
-**Session**: 2025-11-02 20:25 EST  
+**Session**: 2025-11-02 20:25 EST
 **Status**: ✅ Complete - monitoring for steady state
 **Verdict**: Major success - system optimized and stable

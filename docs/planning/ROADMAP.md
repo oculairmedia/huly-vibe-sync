@@ -1,19 +1,19 @@
-# Huly-Vibe Sync - Product Roadmap
+# Vibe Sync - Product Roadmap
 
-**Last Updated**: October 27, 2025  
+**Last Updated**: October 27, 2025
 **Project**: VIBEK (Vibe Kanban)
 
 ## ✅ Completed Features
 
 ### Phase 0: Core Functionality (DONE)
-- [x] **Bidirectional Sync**: Huly ↔ Vibe status synchronization
+- [x] **Bidirectional Sync**: Legacy ↔ Vibe status synchronization
 - [x] **Database Integration**: SQLite for reliable state management
-- [x] **Conflict Resolution**: Huly wins when both systems change
+- [x] **Conflict Resolution**: Legacy wins when both systems change
 - [x] **Performance Optimization**: 3-6s response time (65% faster)
 - [x] **Empty Project Skipping**: Skip 36 projects with no issues
 
-**Status**: Production-ready ✅  
-**Performance**: 3-6s response time, 3s sync duration  
+**Status**: Production-ready ✅
+**Performance**: 3-6s response time, 3s sync duration
 **Reliability**: 100% (no reverts, no data loss)
 
 ---
@@ -23,9 +23,9 @@
 ### Phase 1: Testing & Reliability (High Priority)
 
 #### VIBEK-2: Automated Testing Suite
-**Priority**: HIGH  
-**Effort**: 2-3 days  
-**Dependencies**: None  
+**Priority**: HIGH
+**Effort**: 2-3 days
+**Dependencies**: None
 
 **Deliverables**:
 - Unit tests (>80% coverage)
@@ -39,8 +39,8 @@
 ---
 
 #### VIBEK-4: Retry Logic & Circuit Breaker
-**Priority**: HIGH  
-**Effort**: 1-2 days  
+**Priority**: HIGH
+**Effort**: 1-2 days
 **Dependencies**: None
 
 **Deliverables**:
@@ -54,8 +54,8 @@
 ---
 
 #### VIBEK-7: Configuration Validation
-**Priority**: HIGH  
-**Effort**: 1 day  
+**Priority**: HIGH
+**Effort**: 1 day
 **Dependencies**: None
 
 **Deliverables**:
@@ -71,8 +71,8 @@
 ### Phase 2: Observability (Medium Priority)
 
 #### VIBEK-3: Structured Logging
-**Priority**: MEDIUM  
-**Effort**: 1-2 days  
+**Priority**: MEDIUM
+**Effort**: 1-2 days
 **Dependencies**: None
 
 **Deliverables**:
@@ -86,8 +86,8 @@
 ---
 
 #### VIBEK-5: Prometheus Metrics & Health Checks
-**Priority**: MEDIUM  
-**Effort**: 2-3 days  
+**Priority**: MEDIUM
+**Effort**: 2-3 days
 **Dependencies**: VIBEK-3 (logging)
 
 **Deliverables**:
@@ -101,8 +101,8 @@
 ---
 
 #### VIBEK-11: Admin Dashboard
-**Priority**: MEDIUM  
-**Effort**: 5-7 days  
+**Priority**: MEDIUM
+**Effort**: 5-7 days
 **Dependencies**: VIBEK-5 (metrics)
 
 **Deliverables**:
@@ -119,8 +119,8 @@
 ### Phase 3: Performance (Medium Priority)
 
 #### VIBEK-6: Incremental Sync
-**Priority**: MEDIUM  
-**Effort**: 2-3 days  
+**Priority**: MEDIUM
+**Effort**: 2-3 days
 **Dependencies**: VIBEK-2 (tests)
 
 **Deliverables**:
@@ -134,8 +134,8 @@
 ---
 
 #### VIBEK-10: Parallel Sync
-**Priority**: MEDIUM  
-**Effort**: 2-3 days  
+**Priority**: MEDIUM
+**Effort**: 2-3 days
 **Dependencies**: VIBEK-2 (tests), VIBEK-4 (circuit breaker)
 
 **Deliverables**:
@@ -149,8 +149,8 @@
 ---
 
 #### VIBEK-8: Webhook Support
-**Priority**: MEDIUM  
-**Effort**: 3-4 days  
+**Priority**: MEDIUM
+**Effort**: 3-4 days
 **Dependencies**: VIBEK-4 (retry logic)
 
 **Deliverables**:
@@ -166,8 +166,8 @@
 ### Phase 4: Feature Expansion (Low Priority)
 
 #### VIBEK-9: Comments & Attachments Sync
-**Priority**: LOW  
-**Effort**: 5-7 days  
+**Priority**: LOW
+**Effort**: 5-7 days
 **Dependencies**: VIBEK-2 (tests), VIBEK-6 (incremental)
 
 **Deliverables**:
@@ -261,7 +261,7 @@
 - [ ] Structured logs aggregated
 - [ ] Health checks monitored
 
-### Phase 3 Completion  
+### Phase 3 Completion
 - [ ] Response time <1s (95th percentile)
 - [ ] Sync duration <1s average
 - [ ] Webhooks handle 90%+ of changes

@@ -1,8 +1,8 @@
 # PRD: Tree-sitter AST Integration for Code Perception
 
-**Version**: 1.3  
-**Date**: 2026-01-26  
-**Author**: Developer Agent  
+**Version**: 1.3
+**Date**: 2026-01-26
+**Author**: Developer Agent
 **Status**: Complete - Phases 1-3 Done, Phase 4 In Progress
 
 ---
@@ -238,7 +238,7 @@ Batch Edge Creation (50 per batch)
 | Task    | Description                                                                                | Estimate |
 | ------- | ------------------------------------------------------------------------------------------ | -------- |
 | **4.1** | Performance testing (memory, CPU, sync time)                                               | 3h       |
-| **4.2** | **Stage 1**: Test with huly-vibe-sync project                                              | 2h       |
+| **4.2** | **Stage 1**: Test with vibe-sync project                                              | 2h       |
 | **4.3** | **Stage 2**: Test with 5 projects (graphiti, letta, vibe-kanban, matrix-synapse, context7) | 3h       |
 | **4.4** | **Stage 3**: Full rollout to all 50 projects                                               | 2h       |
 | **4.5** | Documentation                                                                              | 3h       |
@@ -369,7 +369,7 @@ Batch Edge Creation (50 per batch)
 
 ### Rollout
 
-- [ ] Stage 1: huly-vibe-sync project working
+- [ ] Stage 1: vibe-sync project working
 - [ ] Stage 2: 5 test projects working
 - [ ] Stage 3: All 50 projects working
 
@@ -539,7 +539,7 @@ for node in tree.root_node.children:
 
 ### Stage 1: Single Project Validation
 
-- **Project**: huly-vibe-sync
+- **Project**: vibe-sync
 - **Duration**: 1-2 days
 - **Success criteria**: Functions extracted, edges created, incremental updates working
 - **Rollback**: Feature flag OFF

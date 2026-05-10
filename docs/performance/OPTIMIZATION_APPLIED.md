@@ -1,6 +1,6 @@
 # Performance Optimization Applied ✅
 
-**Date**: October 27, 2025  
+**Date**: October 27, 2025
 **Phase**: Phase 1 (Low-Risk Optimizations)
 
 ## Results
@@ -58,7 +58,7 @@ With fewer projects to process, we can safely check more frequently:
 ## Real-World Impact
 
 ### Status Change Propagation
-**Scenario**: Change issue status in Huly
+**Scenario**: Change issue status in Legacy
 
 **Before**:
 - Wait for next sync (0-8s)
@@ -84,7 +84,7 @@ With fewer projects to process, we can safely check more frequently:
 - **After**: ~15 KB/s average
 - **Reduction**: 70%
 
-### API Load on Huly/Vibe
+### API Load on Legacy/Vibe
 - **Before**: 300-400 calls every 8s
 - **After**: 50-100 calls every 3s
 - **Per-second rate**: Similar, but distributed more evenly
@@ -130,17 +130,17 @@ MAX_WORKERS=3
 
 If any issues occur:
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 cp .env.backup-* .env
 docker-compose down && docker-compose up -d
 ```
 
 ## Status
 
-✅ **Phase 1 Complete and Stable**  
-✅ **65% faster response time**  
-✅ **92% faster sync duration**  
-✅ **70% less network usage**  
-✅ **Bidirectional sync still working perfectly**  
+✅ **Phase 1 Complete and Stable**
+✅ **65% faster response time**
+✅ **92% faster sync duration**
+✅ **70% less network usage**
+✅ **Bidirectional sync still working perfectly**
 
 **Recommendation**: Monitor for 24-48 hours before applying Phase 2 optimizations.

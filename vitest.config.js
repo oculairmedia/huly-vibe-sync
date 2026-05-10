@@ -5,6 +5,18 @@ export default defineConfig({
     // Test environment
     environment: 'node',
 
+    // Force process-based workers with explicit caps so large Temporal tests
+    // cannot fan out into dozens of orphaned Node processes.
+    pool: 'forks',
+    fileParallelism: false,
+    poolOptions: {
+      forks: {
+        minForks: 1,
+        maxForks: 2,
+        execArgv: ['--max-old-space-size=2048'],
+      },
+    },
+
     // Coverage configuration
     coverage: {
       provider: 'v8',
@@ -46,9 +58,7 @@ export default defineConfig({
     // Reporter
     reporters: ['verbose', 'html'],
 
-    // Parallel execution
-    maxConcurrency: 5,
-    minThreads: 1,
-    maxThreads: 5,
+    // Keep in-test concurrency low; Temporal test environments are memory-heavy.
+    maxConcurrency: 2,
   },
 });

@@ -1,8 +1,8 @@
 # Systems Engineering Review - Executive Summary
 
-**Project:** Huly-Vibe-Sync  
-**Review Date:** 2025-11-03  
-**Reviewer:** Systems Engineering Analysis  
+**Project:** Vibe Sync
+**Review Date:** 2025-11-03
+**Reviewer:** Systems Engineering Analysis
 **Overall Score:** 7.5/10
 
 ---
@@ -48,11 +48,11 @@
 ## Critical Issues (P0)
 
 ### 1. No Automated Testing ❌
-**Impact:** Production bugs, regression risk  
-**Effort:** 2-3 weeks  
+**Impact:** Production bugs, regression risk
+**Effort:** 2-3 weeks
 **Status:** BLOCKER
 
-**Current:** 0% test coverage, manual test scripts only  
+**Current:** 0% test coverage, manual test scripts only
 **Required:** 60% minimum coverage with unit + integration tests
 
 **Action Items:**
@@ -66,11 +66,11 @@
 ---
 
 ### 2. No Transactional Guarantees ❌
-**Impact:** Data inconsistency, duplicate tasks  
-**Effort:** 1 week  
+**Impact:** Data inconsistency, duplicate tasks
+**Effort:** 1 week
 **Status:** BLOCKER
 
-**Current:** Updates to Huly/Vibe/DB are not atomic  
+**Current:** Updates to Legacy/Vibe/DB are not atomic
 **Required:** Idempotency or Write-Ahead Log pattern
 
 **Example Problem:**
@@ -90,11 +90,11 @@ db.upsertIssue(...);         // Step 2 fails
 ---
 
 ### 3. Swallowed Errors ❌
-**Impact:** Silent failures, data loss  
-**Effort:** 1 week  
+**Impact:** Silent failures, data loss
+**Effort:** 1 week
 **Status:** BLOCKER
 
-**Current:** 40+ instances of errors being caught and ignored  
+**Current:** 40+ instances of errors being caught and ignored
 **Required:** Structured error handling with classification
 
 **Example Problem:**
@@ -119,11 +119,11 @@ try {
 ---
 
 ### 4. No Type Safety ⚠️
-**Impact:** Runtime errors, difficult refactoring  
-**Effort:** 1-2 weeks (JSDoc), 2-3 weeks (TypeScript)  
+**Impact:** Runtime errors, difficult refactoring
+**Effort:** 1-2 weeks (JSDoc), 2-3 weeks (TypeScript)
 **Status:** HIGH PRIORITY
 
-**Current:** No TypeScript, no JSDoc annotations  
+**Current:** No TypeScript, no JSDoc annotations
 **Required:** JSDoc immediately, TypeScript migration planned
 
 **Action Items:**
@@ -210,18 +210,18 @@ if (allMatchCache && cachedHashes.size === newBlockHashes.size) {
 
 ### Bidirectional Sync Strategy
 ```
-Phase 1: Huly → Vibe (Source of Truth)
-  ├─ Fetch changed issues from Huly (incremental)
+Phase 1: Legacy → Vibe (Source of Truth)
+  ├─ Fetch changed issues from Legacy (incremental)
   ├─ Create missing tasks in Vibe
-  └─ Update task status if Huly changed
+  └─ Update task status if Legacy changed
 
-Phase 2: Vibe → Huly (User Updates)
+Phase 2: Vibe → Legacy (User Updates)
   ├─ Fetch all tasks from Vibe
   ├─ Detect status changes in Vibe
-  └─ Update Huly issues if Vibe changed
+  └─ Update Legacy issues if Vibe changed
 ```
 
-**Conflict Resolution:** Last-write-wins with Huly precedence
+**Conflict Resolution:** Last-write-wins with Legacy precedence
 
 ### Control Agent Pattern
 - Template agent manages tool/persona configurations
@@ -245,7 +245,7 @@ Phase 2: Vibe → Huly (User Updates)
 ```sql
 projects (
   identifier PRIMARY KEY,
-  name, huly_id, vibe_id,
+  name, legacy_id, vibe_id,
   letta_agent_id, letta_folder_id,
   description_hash,  -- SHA-256 for metadata changes
   last_sync_at
@@ -255,7 +255,7 @@ issues (
   identifier PRIMARY KEY,
   project_identifier FK,
   title, description, status,
-  huly_id, vibe_task_id,
+  legacy_id, vibe_task_id,
   last_sync_at
 )
 ```
@@ -293,7 +293,7 @@ issues (
 ### Current State: C+
 
 **Good:**
-- ✅ Structured log prefixes (`[Huly]`, `[Vibe]`, `[Letta]`)
+- ✅ Structured log prefixes (`[Legacy]`, `[Vibe]`, `[Letta]`)
 - ✅ Performance logging for slow operations
 - ✅ Health check endpoint
 - ✅ Connection pool statistics
@@ -331,7 +331,7 @@ issues (
 4. Add circuit breakers
 5. Implement rate limiting
 
-**Current Scale:** ✅ Good for 10-50 projects  
+**Current Scale:** ✅ Good for 10-50 projects
 **Future Scale:** ⚠️ Needs work for 100+ projects
 
 ---
@@ -463,6 +463,6 @@ This could become a **reference implementation** for bidirectional sync systems.
 
 ---
 
-**Review Completed:** 2025-11-03  
+**Review Completed:** 2025-11-03
 **Next Review:** 2025-12-01 (after Phase 1 completion)
 

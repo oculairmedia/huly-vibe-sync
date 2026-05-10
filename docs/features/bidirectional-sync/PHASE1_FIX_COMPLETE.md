@@ -1,8 +1,8 @@
-# Phase 1 (Huly→Vibe) Fix - COMPLETE
+# Phase 1 (Legacy→Vibe) Fix - COMPLETE
 
 ## Problem
 
-User reported that changes made in Huly did not reflect in Vibe Kanban.
+User reported that changes made in Legacy did not reflect in Vibe Kanban.
 
 ## Root Cause
 
@@ -44,21 +44,21 @@ CREATE INDEX IF NOT EXISTS idx_issues_vibe_status ON issues(vibe_status);
 
 ## How It Works Now
 
-### Phase 1 Logic (Huly→Vibe):
+### Phase 1 Logic (Legacy→Vibe):
 
 ```javascript
 // Line 409: Get last known Vibe status from database
 const lastKnownVibeStatus = dbIssue?.vibe_status; // NOW WORKS!
 
 // Line 455-456: Detect what changed
-const hulyChanged = hulyIssue.status !== lastKnownHulyStatus;
+const legacyChanged = legacyIssue.status !== lastKnownLegacyStatus;
 const vibeChanged = existingTask.status !== lastKnownVibeStatus; // NOW ACCURATE!
 
-if (hulyChanged && !vibeChanged) {
-  // Only Huly changed - update Vibe ✓
+if (legacyChanged && !vibeChanged) {
+  // Only Legacy changed - update Vibe ✓
   await updateVibeTaskStatus(...);
-} else if (hulyChanged && vibeChanged) {
-  // Both changed - Huly wins (true conflict) ✓
+} else if (legacyChanged && vibeChanged) {
+  // Both changed - Legacy wins (true conflict) ✓
   await updateVibeTaskStatus(...);
 }
 
@@ -73,29 +73,29 @@ db.upsertIssue({
 
 ✅ **23 tests passing** (including 3 new Phase 1 tests):
 
-- `should propagate Huly status changes to Vibe`
-- `should detect Huly changes even after Phase 2 runs`
-- `should update database with Huly timestamp on every Phase 1 run`
+- `should propagate Legacy status changes to Vibe`
+- `should detect Legacy changes even after Phase 2 runs`
+- `should update database with Legacy timestamp on every Phase 1 run`
 
 ## Deployment Status
 
-✅ **Migration Applied**: vibe_status column added  
-✅ **Container Rebuilt**: New code deployed  
-✅ **Service Running**: Healthy  
+✅ **Migration Applied**: vibe_status column added
+✅ **Container Rebuilt**: New code deployed
+✅ **Service Running**: Healthy
 ✅ **Tests Passing**: 23/23
 
 ## Verification
 
 ### To verify the fix is working:
 
-1. **Make a change in Huly**:
+1. **Make a change in Legacy**:
    - Change any issue status (e.g., Backlog → In Progress)
    - Note the issue identifier
 
 2. **Watch logs for Phase 1 update**:
 
    ```bash
-   docker-compose logs -f | grep "Huly→Vibe: Status update"
+   docker-compose logs -f | grep "Legacy→Vibe: Status update"
    ```
 
 3. **Check Vibe Kanban**:
@@ -111,7 +111,7 @@ db.upsertIssue({
 
 ### Expected Log Messages:
 
-**When only Huly changes**:
+**When only Legacy changes**:
 
 ```json
 {
@@ -120,7 +120,7 @@ db.upsertIssue({
   "title": "...",
   "from": "Backlog",
   "to": "inprogress",
-  "msg": "Huly→Vibe: Status update"
+  "msg": "Legacy→Vibe: Status update"
 }
 ```
 
@@ -130,8 +130,8 @@ db.upsertIssue({
 {
   "level": "warn",
   "identifier": "TEST-123",
-  "hulyStatus": "Done",
-  "msg": "Conflict detected - both systems changed, Huly wins"
+  "legacyStatus": "Done",
+  "msg": "Conflict detected - both systems changed, Legacy wins"
 }
 ```
 
@@ -148,27 +148,27 @@ db.upsertIssue({
 **Before Fix**:
 
 - ❌ Phase 1 always detected false conflicts
-- ❌ Logged "Conflict detected" even when only Huly changed
+- ❌ Logged "Conflict detected" even when only Legacy changed
 - ⚠️ Updates still happened but with wrong log messages
 - ❌ Couldn't distinguish true conflicts from single-system changes
 
 **After Fix**:
 
 - ✅ Phase 1 accurately detects what changed
-- ✅ Correct log messages ("Huly→Vibe: Status update" vs "Conflict detected")
+- ✅ Correct log messages ("Legacy→Vibe: Status update" vs "Conflict detected")
 - ✅ True conflicts properly identified
 - ✅ `vibe_status` tracked for next sync comparison
 
 ## What This Fixes
 
-1. **Accurate Conflict Detection**: Now correctly identifies when only Huly changed vs both systems changed
+1. **Accurate Conflict Detection**: Now correctly identifies when only Legacy changed vs both systems changed
 2. **Better Logging**: Proper log messages help debugging and monitoring
-3. **Reliable Sync**: Huly changes now reliably propagate to Vibe
-4. **Complete Tracking**: Both `status` (Huly) and `vibe_status` (Vibe) tracked separately
+3. **Reliable Sync**: Legacy changes now reliably propagate to Vibe
+4. **Complete Tracking**: Both `status` (Legacy) and `vibe_status` (Vibe) tracked separately
 
 ---
 
-**Fix Date**: November 6, 2025  
-**Status**: ✅ **COMPLETE AND DEPLOYED**  
-**Ready**: ✅ **YES - MONITORING PHASE**  
+**Fix Date**: November 6, 2025
+**Status**: ✅ **COMPLETE AND DEPLOYED**
+**Ready**: ✅ **YES - MONITORING PHASE**
 **Tests**: ✅ **23/23 PASSING**

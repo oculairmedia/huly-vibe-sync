@@ -4,33 +4,33 @@
 
 ## Root Cause
 
-The database stores `vibe_status` incorrectly, causing Phase 1 to not update Vibe, while Phase 2 keeps reverting Huly based on stale Vibe data.
+The database stores `vibe_status` incorrectly, causing Phase 1 to not update Vibe, while Phase 2 keeps reverting Legacy based on stale Vibe data.
 
 ### What's Happening
 
-1. Database has: `status=Done`, `vibe_status=todo`  
+1. Database has: `status=Done`, `vibe_status=todo`
 2. Vibe API has: `status=todo` (Backlog)
-3. Huly has: `status=Done`
+3. Legacy has: `status=Done`
 
 4. **Phase 1** checks:
-   - `hulyChanged = Done !== Done = FALSE` (Huly didn't change since last sync)
+   - `legacyChanged = Done !== Done = FALSE` (Legacy didn't change since last sync)
    - `vibeChanged = todo !== todo = FALSE` (Vibe didn't change since last sync)
    - Since neither changed, Phase 1 does NOTHING
 
 5. **Phase 2** runs:
-   - Sees Vibe has `todo`, Huly has `Done`
-   - Updates Huly from Done → Backlog
+   - Sees Vibe has `todo`, Legacy has `Done`
+   - Updates Legacy from Done → Backlog
    - Database now: `status=Backlog`, `vibe_status=todo`
 
 6. Next sync:
-   - Huly now has `Backlog`, database has `Backlog`
-   - Phase 1: `hulyChanged = Backlog !== Done = TRUE`
+   - Legacy now has `Backlog`, database has `Backlog`
+   - Phase 1: `legacyChanged = Backlog !== Done = TRUE`
    - Finds `!vibeChanged`, so updates Vibe to `done`
    - Database: `status=Backlog`, `vibe_status=done`
 
 7. Phase 2 runs again:
-   - Vibe has `done`, Huly has `Backlog`  
-   - Updates Huly from Backlog → Done
+   - Vibe has `done`, Legacy has `Backlog`
+   - Updates Legacy from Backlog → Done
    - Database: `status=Done`, `vibe_status=done`
 
 8. **Repeat from step 4** - infinite oscillation!

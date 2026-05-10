@@ -1,19 +1,19 @@
 # Permission Issues - RESOLVED ✅
 
-**Date**: November 2, 2025  
-**Issue**: Multiple projects unable to write `.letta/settings.local.json` files  
+**Date**: November 2, 2025
+**Issue**: Multiple projects unable to write `.letta/settings.local.json` files
 **Status**: **FULLY RESOLVED**
 
 ## Problem
 
-The huly-vibe-sync service runs as `node` user (UID 1000) in Docker container, but many project `.letta` directories were owned by `root` with `755` permissions, preventing writes.
+The vibe-sync service runs as `node` user (UID 1000) in Docker container, but many project `.letta` directories were owned by `root` with `755` permissions, preventing writes.
 
 ### Affected Projects
 - `/opt/stacks/augment-mcp-tool`
 - `/opt/stacks/bookstack-mcp`
 - `/opt/stacks/claude api gateway`
 - `/opt/stacks/graphiti`
-- `/opt/stacks/huly-selfhost/huly-mcp-server`
+- `/opt/stacks/legacy-selfhost/legacy-mcp-server`
 - `/opt/stacks/letta-MCP-server`
 - `/opt/stacks/letta-opencode-plugin`
 - `/opt/stacks/opencode`
@@ -25,7 +25,7 @@ The huly-vibe-sync service runs as `node` user (UID 1000) in Docker container, b
 Created `fix-letta-permissions.sh` to automatically fix all `.letta` directories:
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 ./fix-letta-permissions.sh
 ```
 
@@ -112,7 +112,7 @@ $ docker-compose logs --tail=50 | grep "permission denied"
 ## Future Prevention
 
 ### For New Projects
-When adding a new Huly project:
+When adding a new Legacy project:
 
 1. Service will auto-create `.letta` directory (now with correct permissions)
 2. If issues occur, run `./fix-letta-permissions.sh`

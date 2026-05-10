@@ -68,7 +68,7 @@ return false;
 // Compute description hashes for ALL projects
 const { SyncDatabase } = await import('./lib/database.js');
 const descriptionHashes = {};
-for (const project of hulyProjects) {
+for (const project of legacyProjects) {
   const identifier = project.identifier || project.name;
   descriptionHashes[identifier] = SyncDatabase.computeDescriptionHash(project.description);
 }
@@ -82,7 +82,7 @@ const projectsNeedingSync = db.getProjectsToSync(300000, descriptionHashes);
 // Store hash with project
 db.upsertProject({
   identifier: projectIdentifier,
-  name: hulyProject.name,
+  name: legacyProject.name,
   filesystem_path: filesystemPath,
   description_hash: descriptionHash,  // NEW
 });
@@ -103,7 +103,7 @@ db.upsertProject({
 - Logged as: `[DB] Project {identifier} metadata changed, forcing sync`
 
 ### 4. Filesystem Path Updates
-- When paths are added/updated in Huly descriptions
+- When paths are added/updated in Legacy descriptions
 - `.letta/settings.local.json` files are created immediately
 
 ## Example Log Output
@@ -114,7 +114,7 @@ db.upsertProject({
 [DB] Project CAGW metadata changed, forcing sync
 [Skip] 38 empty projects (cached in database)
 
---- Processing Huly project: Claude API Gateway ---
+--- Processing Legacy project: Claude API Gateway ---
 [Letta] ✓ Saved agent ID to project: /opt/stacks/claude api gateway/.letta/settings.local.json
 ```
 
@@ -127,7 +127,7 @@ db.upsertProject({
 
 ## Testing
 
-Tested with 44 Huly projects:
+Tested with 44 Legacy projects:
 - ✅ 40 projects correctly synced with initial hashes
 - ✅ Description changes detected and synced immediately
 - ✅ Empty projects still cached when metadata unchanged
@@ -145,4 +145,4 @@ Potential improvements:
 1. Track `filesystem_path` changes separately from description
 2. Add hash for git_url changes
 3. Support manual force-sync via API endpoint
-4. Add webhook support to trigger immediate sync on Huly changes
+4. Add webhook support to trigger immediate sync on Legacy changes

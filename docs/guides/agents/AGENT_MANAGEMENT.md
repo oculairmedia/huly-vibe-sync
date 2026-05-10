@@ -21,7 +21,7 @@ cat /opt/stacks/graphiti/.letta/settings.local.json
 
 # Inspect current service state
 docker-compose ps
-docker-compose logs --tail=100 huly-vibe-sync
+docker-compose logs --tail=100 vibe-sync
 ```
 
 ## Related docs

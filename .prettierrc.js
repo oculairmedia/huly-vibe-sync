@@ -17,7 +17,7 @@ export default {
   quoteProps: 'as-needed',
 
   // Trailing commas
-  trailingComma: 'es5',
+  trailingComma: 'all',
 
   // Semicolons
   semi: true,

@@ -1,6 +1,6 @@
 # Testing Quick Start Guide
 
-Quick reference for running tests in the Huly-Vibe-Sync project.
+Quick reference for running tests in the Vibe Sync project.
 
 ## 🚀 Running Tests
 
@@ -55,16 +55,16 @@ describe('myModule', () => {
 
 ```javascript
 import { describe, it, expect } from 'vitest';
-import { 
-  createMockHulyProject,
+import {
+  createMockLegacyProject,
   createMockVibeTask,
 } from '../setup.js';
 
 describe('myTest', () => {
   it('should work with mock data', () => {
-    const project = createMockHulyProject({ name: 'Test Project' });
+    const project = createMockLegacyProject({ name: 'Test Project' });
     const task = createMockVibeTask({ title: 'Test Task' });
-    
+
     // Your test logic here
   });
 });
@@ -75,11 +75,11 @@ describe('myTest', () => {
 From `tests/setup.js`:
 
 ```javascript
-// Create mock Huly project
-createMockHulyProject({ name: 'My Project', identifier: 'PROJ' })
+// Create mock Legacy project
+createMockLegacyProject({ name: 'My Project', identifier: 'PROJ' })
 
-// Create mock Huly issue
-createMockHulyIssue({ title: 'Bug fix', status: 'In Progress' })
+// Create mock Legacy issue
+createMockLegacyIssue({ title: 'Bug fix', status: 'In Progress' })
 
 // Create mock Vibe task
 createMockVibeTask({ title: 'Feature', status: 'todo' })

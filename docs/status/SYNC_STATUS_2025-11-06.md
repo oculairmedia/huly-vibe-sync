@@ -1,8 +1,8 @@
 # Sync Status - November 6, 2025 ✅
 
-**Container**: Running  
-**Phase 1 (Huly → Vibe)**: ✅ WORKING  
-**Phase 2 (Vibe → Huly)**: ✅ WORKING (with fallback fix)  
+**Container**: Running
+**Phase 1 (Legacy → Vibe)**: ✅ WORKING
+**Phase 2 (Vibe → Legacy)**: ✅ WORKING (with fallback fix)
 **Status**: PRODUCTION READY
 
 ---
@@ -18,7 +18,7 @@
 ### 2. Vibe API Timestamp Bug (NEW DISCOVERY)
 - **Problem**: Vibe `updated_at` timestamps not updating when tasks moved via UI
 - **Evidence**: Tasks from Oct 27 still show `updated_at: 2025-10-27...` even after moving today
-- **Impact**: Timestamp conflict resolution always thought Huly was newer, blocked Phase 2
+- **Impact**: Timestamp conflict resolution always thought Legacy was newer, blocked Phase 2
 - **Fix**: Added 24-hour freshness check - fall back to old logic if Vibe timestamp too old
 - **Result**: ✅ Phase 2 now works even with stale timestamps
 
@@ -29,35 +29,35 @@
 ### LMS-46 Test (Just Completed)
 ```
 User Action: Moved LMS-46 from "In Progress" to "Backlog" in Vibe Kanban UI
-Expected: Should update Huly to "Backlog"
+Expected: Should update Legacy to "Backlog"
 
 BEFORE FIX:
 - Vibe timestamp: 2025-10-27T20:11:57.345Z (10 days old)
-- Huly timestamp: 2025-11-06T07:01:58.453Z (6 minutes old)
-- Result: ❌ Skipped - "Huly change is newer"
+- Legacy timestamp: 2025-11-06T07:01:58.453Z (6 minutes old)
+- Result: ❌ Skipped - "Legacy change is newer"
 
 AFTER FIX:
 - Detected stale Vibe timestamp (240+ hours old)
 - Used fallback logic instead
-- Result: ✅ "Vibe→Huly: Status update" - SUCCESS!
+- Result: ✅ "Vibe→Legacy: Status update" - SUCCESS!
 ```
 
 ---
 
 ## How It Works Now
 
-### Phase 1: Huly → Vibe (Authoritative)
-1. Detect Huly status changes
+### Phase 1: Legacy → Vibe (Authoritative)
+1. Detect Legacy status changes
 2. Update Vibe via PUT method
-3. Store `vibe_status` and `huly_modified_at`
+3. Store `vibe_status` and `legacy_modified_at`
 4. **Status**: ✅ Working perfectly
 
-### Phase 2: Vibe → Huly (User Changes)
-1. Compare Vibe status with Huly status
+### Phase 2: Vibe → Legacy (User Changes)
+1. Compare Vibe status with Legacy status
 2. **NEW**: Check if Vibe timestamp is fresh (< 24 hours old)
-   - If fresh: Use timestamp comparison (Vibe vs Huly)
-   - If stale: Use fallback logic (check if Huly changed since last sync)
-3. If update allowed, sync to Huly
+   - If fresh: Use timestamp comparison (Vibe vs Legacy)
+   - If stale: Use fallback logic (check if Legacy changed since last sync)
+3. If update allowed, sync to Legacy
 4. Store `vibe_modified_at`
 5. **Status**: ✅ Working with fallback
 
@@ -68,7 +68,7 @@ AFTER FIX:
 ### lib/VibeRestClient.js
 - Lines 197, 280, 303: `PATCH` → `PUT`
 
-### lib/SyncOrchestrator.js  
+### lib/SyncOrchestrator.js
 - Lines 113-164: Added 24-hour freshness check for Vibe timestamps
 - Added fallback to old conflict detection when timestamps stale
 - Added comprehensive debug logging
@@ -92,7 +92,7 @@ identifier: LMS-46
 title: [Tracking] Progenitor Migration Status
 status: Backlog (just synced from Vibe!)
 vibe_status: todo
-huly_modified_at: 2025-11-06 07:01:58
+legacy_modified_at: 2025-11-06 07:01:58
 vibe_modified_at: NULL
 ```
 
@@ -101,9 +101,9 @@ vibe_modified_at: NULL
 ## Known Issues & Workarounds
 
 ### Vibe Kanban API Bug
-**Problem**: The Vibe API doesn't update `updated_at` timestamps when you change task status via UI  
-**Impact**: Timestamps remain stale (from initial task creation)  
-**Workaround**: ✅ Implemented - Use 24-hour freshness check, fall back to old logic  
+**Problem**: The Vibe API doesn't update `updated_at` timestamps when you change task status via UI
+**Impact**: Timestamps remain stale (from initial task creation)
+**Workaround**: ✅ Implemented - Use 24-hour freshness check, fall back to old logic
 **Long-term Fix**: Should be fixed in Vibe Kanban codebase
 
 ---
@@ -112,8 +112,8 @@ vibe_modified_at: NULL
 
 ```bash
 # Watch sync logs
-cd /opt/stacks/huly-vibe-sync
-docker-compose logs -f | grep "Vibe→Huly"
+cd /opt/stacks/vibe-sync
+docker-compose logs -f | grep "Vibe→Legacy"
 
 # Check database
 sqlite3 logs/sync-state.db "SELECT identifier, status, vibe_status FROM issues WHERE identifier = 'LMS-46';"
@@ -137,17 +137,17 @@ docker-compose logs | grep -i "405\|error" | grep -v "duplicate project"
 
 ## Production Readiness
 
-✅ Phase 1 (Huly → Vibe) - WORKING  
-✅ Phase 2 (Vibe → Huly) - WORKING  
-✅ HTTP method fix applied  
-✅ Vibe API bug workaround implemented  
-✅ Comprehensive logging added  
-✅ Tested with real user workflow  
+✅ Phase 1 (Legacy → Vibe) - WORKING
+✅ Phase 2 (Vibe → Legacy) - WORKING
+✅ HTTP method fix applied
+✅ Vibe API bug workaround implemented
+✅ Comprehensive logging added
+✅ Tested with real user workflow
 
 **Status**: PRODUCTION READY
 
 ---
 
-**Last Updated**: 2025-11-06 02:09 AM EST  
-**Last Test**: LMS-46 sync successful  
-**Container**: huly-vibe-sync (rebuilt with fixes)
+**Last Updated**: 2025-11-06 02:09 AM EST
+**Last Test**: LMS-46 sync successful
+**Container**: vibe-sync (rebuilt with fixes)

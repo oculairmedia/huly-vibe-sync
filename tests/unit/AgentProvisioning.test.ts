@@ -13,14 +13,14 @@ import * as path from 'path';
 // Mock Data
 // ============================================================================
 
-const mockHulyProjects = [
+const mockProjects = [
   { identifier: 'PROJ1', name: 'Project One' },
   { identifier: 'PROJ2', name: 'Project Two' },
   { identifier: 'PROJ3', name: 'Project Three' },
 ];
 
 const mockLettaAgents = [
-  { id: 'agent-1', name: 'Huly - Project One', tags: ['huly-vibe-sync', 'project:PROJ1'] },
+  { id: 'agent-1', name: 'PM - Project One', tags: ['huly-vibe-sync', 'project:PROJ1'] },
 ];
 
 const mockControlAgent = {
@@ -521,11 +521,11 @@ describe('Provisioning Client Logic', () => {
     it('should build correct agent name', () => {
       const buildAgentName = (projectName: string) => {
         const sanitized = projectName.replace(/[/\\:*?"<>|]/g, '-');
-        return `Huly - ${sanitized}`;
+        return `PM - ${sanitized}`;
       };
 
-      expect(buildAgentName('My Project')).toBe('Huly - My Project');
-      expect(buildAgentName('Test/Project')).toBe('Huly - Test-Project');
+      expect(buildAgentName('My Project')).toBe('PM - My Project');
+      expect(buildAgentName('Test/Project')).toBe('PM - Test-Project');
     });
   });
 

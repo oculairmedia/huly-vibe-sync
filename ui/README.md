@@ -1,6 +1,6 @@
-# Huly-Vibe Sync Dashboard
+# Vibe Sync Dashboard
 
-Modern, real-time web dashboard for monitoring and managing the Huly-Vibe bidirectional synchronization service.
+Modern, real-time web dashboard for monitoring and managing the Vibe Sync service.
 
 ## Features
 
@@ -130,23 +130,28 @@ ui/
 The dashboard connects to the following backend endpoints:
 
 ### Health & Metrics
+
 - `GET /health` - Service health check
 - `GET /metrics` - Prometheus metrics
 - `GET /api/stats` - Human-readable statistics
 
 ### Configuration
+
 - `GET /api/config` - Get current configuration
 - `PATCH /api/config` - Update configuration
 - `POST /api/config/reset` - Reset to defaults
 
 ### Sync Control
+
 - `POST /api/sync/trigger` - Trigger manual sync
 
 ### Sync History
+
 - `GET /api/sync/history` - Get sync history (paginated)
-- `GET /api/sync/mappings` - Get Huly ↔ Vibe mappings
+- `GET /api/sync/mappings` - Get sync mappings
 
 ### Real-time Events (SSE)
+
 - `GET /api/events/stream` - Server-Sent Events stream
 
 ## Real-time Events
@@ -185,7 +190,7 @@ The dashboard uses Server-Sent Events (SSE) for real-time updates:
 NEXT_PUBLIC_API_URL=http://localhost:3099
 
 # Application name (optional)
-NEXT_PUBLIC_APP_NAME="Huly-Vibe Sync Dashboard"
+NEXT_PUBLIC_APP_NAME="Vibe Sync Dashboard"
 
 # Polling interval in milliseconds (optional, default: 5000)
 NEXT_PUBLIC_POLLING_INTERVAL=5000
@@ -197,12 +202,12 @@ NEXT_PUBLIC_POLLING_INTERVAL=5000
 
 ```bash
 # Build Docker image
-docker build -t huly-vibe-sync-ui .
+docker build -t vibe-sync-ui .
 
 # Run container
 docker run -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:3099 \
-  huly-vibe-sync-ui
+  vibe-sync-ui
 ```
 
 ### Vercel
@@ -289,6 +294,7 @@ MIT
 ## Support
 
 For issues or questions:
+
 - Open a GitHub issue
 - Check documentation in `/docs`
 - Review API documentation

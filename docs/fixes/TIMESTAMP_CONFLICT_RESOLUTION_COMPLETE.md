@@ -2,23 +2,23 @@
 
 ## Summary
 
-Successfully implemented "last-write-wins" timestamp-based conflict resolution to prevent the sync service from overwriting manual status changes in Huly with stale data from Vibe.
+Successfully implemented "last-write-wins" timestamp-based conflict resolution to prevent the sync service from overwriting manual status changes in Legacy with stale data from Vibe.
 
 ## Problem Solved
 
-Before this implementation, the bidirectional sync (Phase 2: Vibe→Huly) would override recent manual changes made in Huly because it only checked if "Huly changed since last sync" but didn't compare actual modification timestamps. This meant that:
+Before this implementation, the bidirectional sync (Phase 2: Vibe→Legacy) would override recent manual changes made in Legacy because it only checked if "Legacy changed since last sync" but didn't compare actual modification timestamps. This meant that:
 
-- User changes status to "Done" in Huly at T1
+- User changes status to "Done" in Legacy at T1
 - Sync runs at T2 and sees old Vibe data saying "Backlog" (from T0)
-- Old logic overwrites Huly, changing it back to "Backlog"
+- Old logic overwrites Legacy, changing it back to "Backlog"
 
 ## Solution Implemented
 
-Added timestamp tracking from both Huly and Vibe APIs to enable proper "last-write-wins" conflict resolution.
+Added timestamp tracking from both Legacy and Vibe APIs to enable proper "last-write-wins" conflict resolution.
 
 ### API Timestamp Fields Discovered
 
-- **Huly**: `modifiedOn` field (timestamp in milliseconds)
+- **Legacy**: `modifiedOn` field (timestamp in milliseconds)
 - **Vibe**: `updated_at` field (ISO 8601 timestamp string)
 
 ## Changes Made
@@ -27,7 +27,7 @@ Added timestamp tracking from both Huly and Vibe APIs to enable proper "last-wri
 
 **File**: `migrations/003_add_issue_timestamps.sql`
 
-- Added `huly_modified_at INTEGER` column
+- Added `legacy_modified_at INTEGER` column
 - Added `vibe_modified_at INTEGER` column
 - Created indexes for both timestamp columns
 - Migration applied successfully to production database
@@ -40,23 +40,23 @@ Added timestamp tracking from both Huly and Vibe APIs to enable proper "last-wri
 - Uses `COALESCE` to preserve existing timestamps when not provided
 - Ensures timestamps persist across updates
 
-### 3. Phase 1: Huly→Vibe Timestamp Capture (✅ Complete)
+### 3. Phase 1: Legacy→Vibe Timestamp Capture (✅ Complete)
 
 **File**: `lib/SyncOrchestrator.js`
 
-- Modified Phase 1 sync to capture `hulyIssue.modifiedOn` when creating/updating tasks
-- Stores Huly timestamp in database with fallback to `Date.now()`
+- Modified Phase 1 sync to capture `legacyIssue.modifiedOn` when creating/updating tasks
+- Stores Legacy timestamp in database with fallback to `Date.now()`
 - Location: Lines 397-400 (create) and throughout Phase 1 update logic
 
-### 4. Phase 2: Vibe→Huly Conflict Resolution (✅ Complete)
+### 4. Phase 2: Vibe→Legacy Conflict Resolution (✅ Complete)
 
 **File**: `lib/SyncOrchestrator.js`
 
-- Updated `syncVibeTaskToHuly()` function (lines 105-172)
+- Updated `syncVibeTaskToLegacy()` function (lines 105-172)
 - **New Logic**:
   1. Parse `vibeTask.updated_at` (ISO 8601) to milliseconds
-  2. Compare with `dbIssue.huly_modified_at`
-  3. Only update Huly if `vibeModifiedAt > hulyModifiedAt`
+  2. Compare with `dbIssue.legacy_modified_at`
+  3. Only update Legacy if `vibeModifiedAt > legacyModifiedAt`
   4. Log conflict resolution decisions for visibility
   5. Store `vibe_modified_at` after successful updates
   6. Falls back to old logic if timestamps are missing (backward compatibility)
@@ -69,7 +69,7 @@ Added timestamp tracking from both Huly and Vibe APIs to enable proper "last-wri
 - Test coverage includes:
   - Timestamp column storage and retrieval
   - Timestamp comparison logic
-  - Conflict scenarios (Huly newer vs Vibe newer)
+  - Conflict scenarios (Legacy newer vs Vibe newer)
   - Phase 1 and Phase 2 timestamp capture
   - Integration scenarios preventing overwrites
   - Edge cases (null timestamps, invalid timestamps, equal timestamps, etc.)
@@ -86,26 +86,26 @@ Duration    630ms
 
 1. ✅ Timestamps are stored correctly in database
 2. ✅ ISO 8601 timestamps from Vibe are parsed correctly
-3. ✅ Huly changes are protected when timestamps show Huly is newer
+3. ✅ Legacy changes are protected when timestamps show Legacy is newer
 4. ✅ Vibe updates are allowed when Vibe has newer data
 5. ✅ Fallback logic works when timestamps are missing (legacy data)
 6. ✅ Edge cases handled: null, invalid, equal, very old, and future timestamps
 
 ## Conflict Resolution Algorithm
 
-### Phase 2: Vibe→Huly Update Decision Flow
+### Phase 2: Vibe→Legacy Update Decision Flow
 
 ```
-1. Status differs between Vibe and Huly?
+1. Status differs between Vibe and Legacy?
    ↓ YES
 2. Do both timestamps exist?
    ↓ YES → Compare timestamps
-   │  ├─ hulyModifiedAt > vibeModifiedAt?
-   │  │  ├─ YES → SKIP update (Huly wins)
+   │  ├─ legacyModifiedAt > vibeModifiedAt?
+   │  │  ├─ YES → SKIP update (Legacy wins)
    │  │  └─ NO  → PROCEED with update (Vibe wins)
    │
    ↓ NO → Fallback to old logic
-   └─ Did Huly status change since last sync?
+   └─ Did Legacy status change since last sync?
       ├─ YES → SKIP update
       └─ NO  → PROCEED with update
 
@@ -116,17 +116,17 @@ Duration    630ms
 
 New log entries provide visibility into conflict resolution:
 
-**When Huly wins (skips update)**:
+**When Legacy wins (skips update)**:
 
 ```javascript
 {
   identifier: 'PROJ-123',
   title: 'Task title',
-  hulyModifiedAt: '2025-11-06T10:30:00.000Z',
+  legacyModifiedAt: '2025-11-06T10:30:00.000Z',
   vibeModifiedAt: '2025-11-06T10:25:00.000Z',
   timeDiffMs: 300000 // 5 minutes
 }
-'Skipping Phase 2 - Huly change is newer (timestamp conflict resolution)'
+'Skipping Phase 2 - Legacy change is newer (timestamp conflict resolution)'
 ```
 
 **When Vibe wins (proceeds with update)**:
@@ -135,7 +135,7 @@ New log entries provide visibility into conflict resolution:
 {
   identifier: 'PROJ-123',
   title: 'Task title',
-  hulyModifiedAt: '2025-11-06T10:25:00.000Z',
+  legacyModifiedAt: '2025-11-06T10:25:00.000Z',
   vibeModifiedAt: '2025-11-06T10:30:00.000Z',
   timeDiffMs: 300000 // 5 minutes
 }
@@ -153,14 +153,14 @@ New log entries provide visibility into conflict resolution:
 ### 1. Apply Migration to Production Database
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
-sqlite3 huly-vibe-sync.db < migrations/003_add_issue_timestamps.sql
+cd /opt/stacks/vibe-sync
+sqlite3 vibe-sync.db < migrations/003_add_issue_timestamps.sql
 ```
 
 ### 2. Rebuild and Deploy Docker Container
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 docker-compose build
 docker-compose up -d
 ```
@@ -173,16 +173,16 @@ docker-compose logs -f sync-service | grep "timestamp conflict resolution"
 
 ### 4. Test Scenario
 
-1. Manually change an issue status in Huly (e.g., from "Backlog" to "Done")
+1. Manually change an issue status in Legacy (e.g., from "Backlog" to "Done")
 2. Wait for sync cycle to run
-3. Verify the status remains "Done" in Huly (not overwritten)
-4. Check logs for "Skipping Phase 2 - Huly change is newer" message
+3. Verify the status remains "Done" in Legacy (not overwritten)
+4. Check logs for "Skipping Phase 2 - Legacy change is newer" message
 
-### 5. Verify Vibe→Huly Updates Still Work
+### 5. Verify Vibe→Legacy Updates Still Work
 
 1. Change an issue status in Vibe
 2. Wait for sync cycle
-3. Verify the change propagates to Huly
+3. Verify the change propagates to Legacy
 4. Check logs for "Vibe change is newer - proceeding with Phase 2 update" message
 
 ## Performance Considerations
@@ -204,6 +204,6 @@ All changes are ready to be committed. The implementation is complete, tested, a
 
 ---
 
-**Implementation Date**: November 6, 2025  
+**Implementation Date**: November 6, 2025
 **Status**: ✅ Complete - Ready for Production Deployment
 **Tests**: ✅ 20/20 Passing

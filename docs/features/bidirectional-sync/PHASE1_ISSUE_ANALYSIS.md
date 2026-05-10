@@ -1,30 +1,30 @@
-# Phase 1 (Huly→Vibe) Issue Analysis
+# Phase 1 (Legacy→Vibe) Issue Analysis
 
 ## Problem Report
 
-User reported that when changing a value in Huly, it did not reflect accurately in Vibe Kanban.
+User reported that when changing a value in Legacy, it did not reflect accurately in Vibe Kanban.
 
 ## Investigation Results
 
-### ✅ Phase 2 (Vibe→Huly) Timestamp Protection Working
+### ✅ Phase 2 (Vibe→Legacy) Timestamp Protection Working
 
 Looking at logs, I found evidence that **Phase 2 protection IS working**:
 
 ```
-{"level":"warn","time":"2025-11-06T06:14:32.143Z","identifier":"LMS-28","hulyStatus":"Done","msg":"Conflict detected - both systems changed, Huly wins"}
-{"level":"info","time":"2025-11-06T06:15:02.651Z","identifier":"LMS-28","hulyModifiedAt":"2025-11-06T06:14:15.422Z","vibeModifiedAt":"2025-10-27T20:11:58.321Z","msg":"Skipping Phase 2 - Huly change is newer (timestamp conflict resolution)"}
+{"level":"warn","time":"2025-11-06T06:14:32.143Z","identifier":"LMS-28","legacyStatus":"Done","msg":"Conflict detected - both systems changed, Legacy wins"}
+{"level":"info","time":"2025-11-06T06:15:02.651Z","identifier":"LMS-28","legacyModifiedAt":"2025-11-06T06:14:15.422Z","vibeModifiedAt":"2025-10-27T20:11:58.321Z","msg":"Skipping Phase 2 - Legacy change is newer (timestamp conflict resolution)"}
 ```
 
 This shows:
 
-1. Phase 1 detected conflict and said "Huly wins"
-2. Phase 2 correctly skipped overwriting Huly
+1. Phase 1 detected conflict and said "Legacy wins"
+2. Phase 2 correctly skipped overwriting Legacy
 
-### ❓ Phase 1 (Huly→Vibe) Status Updates
+### ❓ Phase 1 (Legacy→Vibe) Status Updates
 
-**Question**: Did Phase 1 actually UPDATE Vibe with the Huly change?
+**Question**: Did Phase 1 actually UPDATE Vibe with the Legacy change?
 
-**Evidence from logs**: Only seeing conflict warnings, not seeing explicit "Huly→Vibe: Status update" messages.
+**Evidence from logs**: Only seeing conflict warnings, not seeing explicit "Legacy→Vibe: Status update" messages.
 
 ## Root Cause Analysis
 
@@ -44,7 +44,7 @@ const lastKnownVibeStatus = dbIssue?.vibe_status;
 sqlite> PRAGMA table_info(issues);
 ...
 6|status|TEXT|0||0
-11|huly_modified_at|INTEGER|0||0
+11|legacy_modified_at|INTEGER|0||0
 12|vibe_modified_at|INTEGER|0||0
 // NO vibe_status column!
 ```
@@ -54,16 +54,16 @@ sqlite> PRAGMA table_info(issues);
 - `lastKnownVibeStatus` is always `undefined`
 - Line 456: `vibeChanged = existingTask.status !== undefined` is ALWAYS `true`
 - This causes every Phase 1 sync to think "both systems changed" (conflict)
-- Goes into conflict branch (line 458-471) instead of "Huly only changed" branch (line 472-487)
+- Goes into conflict branch (line 458-471) instead of "Legacy only changed" branch (line 472-487)
 
 ### Issue #2: Conflict Branch Still Updates (Mitigating Factor)
 
 **Good news**: Even in the conflict branch (lines 458-471), the code DOES update Vibe if statuses don't match:
 
 ```javascript
-if (hulyChanged && vibeChanged) {
-  // Both changed - conflict! Huly wins
-  log.warn(..., 'Conflict detected - both systems changed, Huly wins');
+if (legacyChanged && vibeChanged) {
+  // Both changed - conflict! Legacy wins
+  log.warn(..., 'Conflict detected - both systems changed, Legacy wins');
   if (!statusesMatch) {
     await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus, config);
     phase1UpdatedTasks.add(existingTask.id);
@@ -90,7 +90,7 @@ const statusesMatch = normalizeStatus(existingTask.status) === normalizeStatus(v
 
 ✅ **Tests Added** (23 tests pass):
 
-- 3 new tests specifically for Phase 1 Huly→Vibe propagation
+- 3 new tests specifically for Phase 1 Legacy→Vibe propagation
 - Tests verify the LOGIC works correctly (database updates, change detection)
 - Tests do NOT cover the actual API calls to Vibe
 
@@ -100,13 +100,13 @@ To confirm Phase 1 is working, we need to:
 
 1. **Check Vibe directly**: Look at the actual task in Vibe Kanban
 2. **Check logs for UPDATE calls**: Search for actual Vibe API update attempts
-3. **Test with a fresh change**: Make a new status change in Huly and monitor logs
+3. **Test with a fresh change**: Make a new status change in Legacy and monitor logs
 
 ### Commands to Verify:
 
 ```bash
 # Watch for Phase 1 updates in real-time
-docker-compose logs -f | grep -E "Huly→Vibe|updateVibeTaskStatus|Conflict detected"
+docker-compose logs -f | grep -E "Legacy→Vibe|updateVibeTaskStatus|Conflict detected"
 
 # Check database vs Vibe for specific issue
 sqlite3 logs/sync-state.db "SELECT identifier, status, vibe_task_id FROM issues WHERE identifier='LMS-28';"
@@ -143,13 +143,13 @@ vibe_status: existingTask.status,  // This line already exists!
 Add more explicit logging in Phase 1 to track what's happening:
 
 ```javascript
-if (hulyChanged && vibeChanged) {
+if (legacyChanged && vibeChanged) {
   log.warn({
-    identifier: hulyIssue.identifier,
-    hulyStatus: hulyIssue.status,
+    identifier: legacyIssue.identifier,
+    legacyStatus: legacyIssue.status,
     vibeStatus: existingTask.status,
     willUpdate: !statusesMatch,
-  }, 'Phase 1: Conflict detected - both systems changed, Huly wins');
+  }, 'Phase 1: Conflict detected - both systems changed, Legacy wins');
 
   if (!statusesMatch) {
     log.info({ from: existingTask.status, to: vibeStatus }, 'Phase 1: Updating Vibe status');
@@ -180,5 +180,5 @@ if (hulyChanged && vibeChanged) {
 
 ---
 
-**Investigation Date**: November 6, 2025  
+**Investigation Date**: November 6, 2025
 **Status**: Issue identified, verification needed, fixes proposed

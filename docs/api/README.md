@@ -1,6 +1,6 @@
 # API Documentation
 
-This directory contains API references, specifications, and integration guides for the Huly Vibe Sync project.
+This directory contains API references, specifications, and integration guides for the Vibe Sync project.
 
 ## Contents
 

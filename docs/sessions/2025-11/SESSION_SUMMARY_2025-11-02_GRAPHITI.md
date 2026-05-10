@@ -1,6 +1,6 @@
 # Session Summary: Graphiti Visualizer CPU Optimization
 
-**Date**: November 2, 2025  
+**Date**: November 2, 2025
 **Focus**: Continuing system-wide CPU optimization after Letta and Matrix-client fixes
 
 ## Objective
@@ -18,7 +18,7 @@ Ran `docker stats` to identify next target:
 ```
 NAME                                        CPU %     MEM USAGE
 graphiti-falkordb-1                         16.06%    1.222GiB / 8GiB      ← TARGET
-huly-vibe-sync                              8.32%     45.59MiB
+vibe-sync                              8.32%     45.59MiB
 graphiti-graphiti-worker-1                  6.41%     215.4MiB
 letta-letta-1                               5.04%     522.2MiB (was 18-20%)
 matrix-synapse-deployment-matrix-client-1   0.00%     68.48MiB (was 14.33%)
@@ -37,7 +37,7 @@ matrix-synapse-deployment-matrix-client-1   0.00%     68.48MiB (was 14.33%)
    MATCH (n) WHERE EXISTS(n.degree_centrality) RETURN MAX(n.degree_centrality)  # 11ms
    MATCH (n) RETURN COALESCE(n.type, labels(n)[0]) as type, count(n)            # 29ms
    ```
-   
+
    **Pattern**: Same centrality queries repeating every few seconds
 
 3. **Traced queries back to source**:
@@ -49,7 +49,7 @@ matrix-synapse-deployment-matrix-client-1   0.00%     68.48MiB (was 14.33%)
    ```rust
    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
    ```
-   
+
    The visualizer polls FalkorDB every **5 seconds** to detect graph changes.
 
 ### Impact Calculation
@@ -64,7 +64,7 @@ matrix-synapse-deployment-matrix-client-1   0.00%     68.48MiB (was 14.33%)
 
 ### Code Change
 
-**File**: `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs`  
+**File**: `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs`
 **Line**: 536
 
 ```rust
@@ -80,7 +80,7 @@ let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
 ### Rationale
 
 **Same pattern as previous optimizations**:
-1. huly-vibe-sync: 3s → 30s (10x reduction)
+1. vibe-sync: 3s → 30s (10x reduction)
 2. matrix-client: 0.5s → 30s (60x reduction)
 3. graph-visualizer: 5s → 30s (6x reduction) ← Current
 
@@ -147,7 +147,7 @@ All three optimizations targeted the **same fundamental issue**:
 
 | Service | Original Interval | New Interval | Reduction |
 |---------|------------------|--------------|-----------|
-| huly-vibe-sync | 3s | 30s | 90% |
+| vibe-sync | 3s | 30s | 90% |
 | matrix-client | 0.5s | 30s | 98% |
 | graph-visualizer | 5s | 30s | 83% |
 
@@ -157,7 +157,7 @@ All three optimizations targeted the **same fundamental issue**:
 - Development: Fast feedback loops, frequent changes
 - Production: Stable resources, infrequent changes
 
-**Original assumption**: "Poll frequently to catch all changes immediately"  
+**Original assumption**: "Poll frequently to catch all changes immediately"
 **Reality**: Most resources don't change that often, aggressive polling wastes CPU
 
 ### Pattern Solution
@@ -175,7 +175,7 @@ All three optimizations targeted the **same fundamental issue**:
 |--------------|--------|-------|-----------|
 | **Letta** (Phase 1) | 100.36% | 30-33% | **70%** |
 | **Postgres** (Phase 1) | 43.53% | 3% | **93%** |
-| **huly-vibe-sync** (Phase 1) | 29.58% | 5-7% | **78%** |
+| **vibe-sync** (Phase 1) | 29.58% | 5-7% | **78%** |
 | **matrix-client** (Phase 2) | 14.33% | 0% | **100%** |
 | **FalkorDB** (Phase 3) | 16.06% | 2-3%* | **85%*** |
 
@@ -183,13 +183,13 @@ All three optimizations targeted the **same fundamental issue**:
 
 ### Total Impact
 
-**Before all optimizations**: ~220% combined CPU  
-**After Phase 3** (projected): ~43% combined CPU  
+**Before all optimizations**: ~220% combined CPU
+**After Phase 3** (projected): ~43% combined CPU
 **Overall reduction**: **~80%**
 
 ## Files Modified
 
-1. `/opt/stacks/huly-vibe-sync/.env` - Phase 1 (Letta/sync intervals)
+1. `/opt/stacks/vibe-sync/.env` - Phase 1 (Letta/sync intervals)
 2. `/opt/stacks/matrix-synapse-deployment/custom_matrix_client.py` - Phase 2
 3. `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs` - Phase 3
 
@@ -215,9 +215,9 @@ All three optimizations targeted the **same fundamental issue**:
 
 | Service | CPU % | Notes |
 |---------|-------|-------|
-| huly-collaborator-1 | 60% | Real-time collaboration - may be legitimate |
+| legacy-collaborator-1 | 60% | Real-time collaboration - may be legitimate |
 | searxng_app | 47% | Meta search - review usage patterns |
-| huly-huly-rest-api-1 | 41% | REST API - likely legitimate |
+| legacy-legacy-rest-api-1 | 41% | REST API - likely legitimate |
 | tesslate-orchestrator | 40% | Review task scheduling frequency |
 
 **Optimization candidates if needed**:

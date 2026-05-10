@@ -1,8 +1,8 @@
-# Huly REST API Documentation
+# Legacy REST API Documentation
 
 ## Overview
 
-The Huly REST API provides high-performance HTTP endpoints for interacting with the Huly platform, bypassing the MCP protocol for better performance in bulk operations and batch issue fetching.
+The Legacy REST API provides high-performance HTTP endpoints for interacting with the Legacy platform, bypassing the MCP protocol for better performance in bulk operations and batch issue fetching.
 
 **Base URL:** `http://192.168.50.90:3458`
 
@@ -33,20 +33,20 @@ The API requires the following environment variables:
 
 ```bash
 PORT=3458                                    # API server port
-HULY_URL=https://pm.oculair.ca              # Huly platform URL
-HULY_EMAIL=your-email@example.com           # Authentication email
-HULY_PASSWORD=your-password                 # Authentication password
-HULY_WORKSPACE=your-workspace               # Target workspace name
+LEGACY_URL=https://pm.oculair.ca              # Legacy platform URL
+LEGACY_EMAIL=your-email@example.com           # Authentication email
+LEGACY_PASSWORD=your-password                 # Authentication password
+LEGACY_WORKSPACE=your-workspace               # Target workspace name
 ```
 
 ### Running the API
 
 ```bash
 # Using Docker Compose (recommended)
-docker-compose up -d huly-rest-api
+docker-compose up -d legacy-rest-api
 
 # Using Node.js directly
-cd huly-rest-api
+cd legacy-rest-api
 npm install
 node server.js
 ```
@@ -57,7 +57,7 @@ node server.js
 
 ### GET /health
 
-Check if the API server is running and connected to Huly.
+Check if the API server is running and connected to Legacy.
 
 **Response:**
 ```json
@@ -89,8 +89,8 @@ List all projects in the workspace.
   "projects": [
     {
       "identifier": "HULLY",
-      "name": "Huly MCP Server",
-      "description": "Model Context Protocol server for Huly integration",
+      "name": "Legacy MCP Server",
+      "description": "Model Context Protocol server for Legacy integration",
       "issueCount": 27,
       "private": false,
       "archived": false
@@ -136,7 +136,7 @@ List all issues in a specific project with optional timestamp filtering for incr
     {
       "identifier": "HULLY-27",
       "title": "Add bidirectional sync support",
-      "description": "Implement status sync from Vibe Kanban back to Huly",
+      "description": "Implement status sync from Vibe Kanban back to Legacy",
       "status": "In Progress",
       "priority": "High",
       "component": "Sync Engine",
@@ -180,7 +180,7 @@ Get detailed information about a single issue.
 {
   "identifier": "HULLY-27",
   "title": "Add bidirectional sync support",
-  "description": "Implement status sync from Vibe Kanban back to Huly",
+  "description": "Implement status sync from Vibe Kanban back to Legacy",
   "status": "In Progress",
   "priority": "High",
   "component": "Sync Engine",
@@ -368,14 +368,14 @@ The API uses standard HTTP status codes and returns error messages in JSON forma
 **500 Internal Server Error:**
 ```json
 {
-  "error": "Failed to connect to Huly platform"
+  "error": "Failed to connect to Legacy platform"
 }
 ```
 
 **503 Service Unavailable:**
 ```json
 {
-  "error": "Huly client not initialized"
+  "error": "Legacy client not initialized"
 }
 ```
 
@@ -488,7 +488,7 @@ Currently, there is no rate limiting implemented. Best practices:
 
 ### Caching
 
-The API fetches fresh data from Huly on each request. For high-frequency reads, consider implementing client-side caching based on the `modifiedOn` timestamp.
+The API fetches fresh data from Legacy on each request. For high-frequency reads, consider implementing client-side caching based on the `modifiedOn` timestamp.
 
 ---
 
@@ -499,17 +499,17 @@ The API fetches fresh data from Huly on each request. For high-frequency reads, 
 ```javascript
 const axios = require('axios');
 
-const HULY_API = 'http://192.168.50.90:3458';
+const LEGACY_API = 'http://192.168.50.90:3458';
 
 async function listProjects() {
-  const response = await axios.get(`${HULY_API}/api/projects`);
+  const response = await axios.get(`${LEGACY_API}/api/projects`);
   return response.data.projects;
 }
 
 async function getIssues(projectId, modifiedAfter = null) {
   const params = modifiedAfter ? { modifiedAfter } : {};
   const response = await axios.get(
-    `${HULY_API}/api/projects/${projectId}/issues`,
+    `${LEGACY_API}/api/projects/${projectId}/issues`,
     { params }
   );
   return response.data.issues;
@@ -517,7 +517,7 @@ async function getIssues(projectId, modifiedAfter = null) {
 
 async function updateIssueStatus(issueId, status) {
   const response = await axios.put(
-    `${HULY_API}/api/issues/${issueId}`,
+    `${LEGACY_API}/api/issues/${issueId}`,
     { field: 'status', value: status }
   );
   return response.data;
@@ -542,23 +542,23 @@ async function updateIssueStatus(issueId, status) {
 import requests
 from datetime import datetime
 
-HULY_API = 'http://192.168.50.90:3458'
+LEGACY_API = 'http://192.168.50.90:3458'
 
 def list_projects():
-    response = requests.get(f'{HULY_API}/api/projects')
+    response = requests.get(f'{LEGACY_API}/api/projects')
     return response.json()['projects']
 
 def get_issues(project_id, modified_after=None):
     params = {'modifiedAfter': modified_after} if modified_after else {}
     response = requests.get(
-        f'{HULY_API}/api/projects/{project_id}/issues',
+        f'{LEGACY_API}/api/projects/{project_id}/issues',
         params=params
     )
     return response.json()['issues']
 
 def update_issue_status(issue_id, status):
     response = requests.put(
-        f'{HULY_API}/api/issues/{issue_id}',
+        f'{LEGACY_API}/api/issues/{issue_id}',
         json={'field': 'status', 'value': status}
     )
     return response.json()
@@ -582,17 +582,17 @@ print('Status updated')
 
 **Problem:** API returns `503 Service Unavailable`
 ```
-Solution: The API client may not be connected to Huly. Check:
-- HULY_URL is correct
-- HULY_EMAIL and HULY_PASSWORD are valid
-- HULY_WORKSPACE exists
-- Huly platform is accessible
+Solution: The API client may not be connected to Legacy. Check:
+- LEGACY_URL is correct
+- LEGACY_EMAIL and LEGACY_PASSWORD are valid
+- LEGACY_WORKSPACE exists
+- Legacy platform is accessible
 ```
 
 **Problem:** Issues have empty descriptions
 ```
-Solution: Descriptions are fetched from Huly's blob storage. Ensure:
-- Network connectivity to Huly platform
+Solution: Descriptions are fetched from Legacy's blob storage. Ensure:
+- Network connectivity to Legacy platform
 - Sufficient permissions to read issue content
 ```
 
@@ -607,18 +607,18 @@ Use the error message's `availableStatuses` field to see valid options.
 Enable debug logging by checking the container logs:
 
 ```bash
-docker-compose logs -f huly-rest-api
+docker-compose logs -f legacy-rest-api
 ```
 
 Look for messages like:
-- `[Huly REST] Successfully connected to Huly platform` - Connection OK
-- `[Huly REST] Fetching issues for project XXX` - API requests
-- `[Huly REST] Error fetching issues:` - Errors with details
+- `[Legacy REST] Successfully connected to Legacy platform` - Connection OK
+- `[Legacy REST] Fetching issues for project XXX` - API requests
+- `[Legacy REST] Error fetching issues:` - Errors with details
 
 ---
 
 ## Support and Feedback
 
-For issues, questions, or feature requests related to the Huly REST API, please contact the development team or file an issue in the project repository.
+For issues, questions, or feature requests related to the Legacy REST API, please contact the development team or file an issue in the project repository.
 
 **Last Updated:** 2025-10-27

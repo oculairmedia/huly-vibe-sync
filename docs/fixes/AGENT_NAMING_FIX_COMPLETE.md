@@ -1,26 +1,26 @@
 # Agent Naming Fix - Complete
 
-**Date**: November 2, 2025  
-**Issue**: Agent reuse and naming mismatches across projects  
+**Date**: November 2, 2025
+**Issue**: Agent reuse and naming mismatches across projects
 **Status**: ✅ FIXED
 
 ## Problem Description
 
 You noticed that the "LMS" project didn't have a visible agent in Letta. Investigation revealed:
 
-1. **Agent Reuse**: 17 out of 21 Huly agents were being reused across different projects
+1. **Agent Reuse**: 17 out of 21 Legacy agents were being reused across different projects
 2. **Naming Mismatch**: Agent names didn't match the project identifiers in their memory blocks
 3. **Root Cause**: Agents created for one project (e.g., TSK) were being reused for another project (e.g., LMS) without renaming
 
 ### Example
 
 ```
-Agent Name: Huly-TSK-PM
+Agent Name: Legacy-TSK-PM
 Agent ID: agent-99edecca-d875-4d9e-b04b-41b74b1c9e6e
 Memory Block shows: Project "LMS" (Letta MCP Server)
 ```
 
-The LMS project WAS syncing, but to an agent named "Huly-TSK-PM" instead of "Huly-LMS-PM".
+The LMS project WAS syncing, but to an agent named "Legacy-TSK-PM" instead of "Legacy-LMS-PM".
 
 ## Solution Applied
 
@@ -29,23 +29,23 @@ The LMS project WAS syncing, but to an agent named "Huly-TSK-PM" instead of "Hul
 Audited all agents to find naming mismatches:
 
 ```
-❌ Huly-SFIN-PM    → Memory shows: SFRLS
-❌ Huly-RSPOC-PM   → Memory shows: SEREN
-❌ Huly-PZMCP-PM   → Memory shows: RDCLE
-❌ Huly-MEILI-PM   → Memory shows: MMCPS
-❌ Huly-MCPIN-PM   → Memory shows: MCPPL
-❌ Huly-MXDSC-PM   → Memory shows: MXWGT
-❌ Huly-MXMGR-PM   → Memory shows: LWBHK
-❌ Huly-TMCP-PM    → Memory shows: MMCP
-❌ Huly-CCUI-PM    → Memory shows: CCMCP
-❌ Huly-CTX7-PM    → Memory shows: CGHOK
-❌ Huly-CCXL-PM    → Memory shows: AUGMT
-❌ Huly-INSTA-PM   → Memory shows: DCKRF
-❌ Huly-GKMCP-PM   → Memory shows: KOMOD
-❌ Huly-HULLY-PM   → Memory shows: LETTA
-❌ Huly-TSK-PM     → Memory shows: LMS
-❌ Huly-SFMCP-PM   → Memory shows: VIBEK
-❌ Huly-GRAPH-PM   → Memory shows: OPCDE
+❌ Legacy-SFIN-PM    → Memory shows: SFRLS
+❌ Legacy-RSPOC-PM   → Memory shows: SEREN
+❌ Legacy-PZMCP-PM   → Memory shows: RDCLE
+❌ Legacy-MEILI-PM   → Memory shows: MMCPS
+❌ Legacy-MCPIN-PM   → Memory shows: MCPPL
+❌ Legacy-MXDSC-PM   → Memory shows: MXWGT
+❌ Legacy-MXMGR-PM   → Memory shows: LWBHK
+❌ Legacy-TMCP-PM    → Memory shows: MMCP
+❌ Legacy-CCUI-PM    → Memory shows: CCMCP
+❌ Legacy-CTX7-PM    → Memory shows: CGHOK
+❌ Legacy-CCXL-PM    → Memory shows: AUGMT
+❌ Legacy-INSTA-PM   → Memory shows: DCKRF
+❌ Legacy-GKMCP-PM   → Memory shows: KOMOD
+❌ Legacy-HULLY-PM   → Memory shows: LETTA
+❌ Legacy-TSK-PM     → Memory shows: LMS
+❌ Legacy-SFMCP-PM   → Memory shows: VIBEK
+❌ Legacy-GRAPH-PM   → Memory shows: OPCDE
 ```
 
 **Total**: 17 primary agents + 17 sleeptime agents = **34 agents renamed**
@@ -56,16 +56,16 @@ Renamed all agents to match their actual project identifiers:
 
 **Primary Agents (17)**:
 ```
-✓ Huly-SFIN-PM → Huly-SFRLS-PM
-✓ Huly-RSPOC-PM → Huly-SEREN-PM
-✓ Huly-PZMCP-PM → Huly-RDCLE-PM
+✓ Legacy-SFIN-PM → Legacy-SFRLS-PM
+✓ Legacy-RSPOC-PM → Legacy-SEREN-PM
+✓ Legacy-PZMCP-PM → Legacy-RDCLE-PM
 ... (and 14 more)
 ```
 
 **Sleeptime Agents (17)**:
 ```
-✓ Huly-SFIN-PM-sleeptime → Huly-SFRLS-PM-sleeptime
-✓ Huly-RSPOC-PM-sleeptime → Huly-SEREN-PM-sleeptime
+✓ Legacy-SFIN-PM-sleeptime → Legacy-SFRLS-PM-sleeptime
+✓ Legacy-RSPOC-PM-sleeptime → Legacy-SEREN-PM-sleeptime
 ... (and 15 more)
 ```
 
@@ -145,23 +145,23 @@ cat .letta/settings.local.json | jq -r '.agents | to_entries | .[] | "\(.value) 
 ## Before and After
 
 ### Before
-- LMS project syncing to agent `Huly-TSK-PM`
+- LMS project syncing to agent `Legacy-TSK-PM`
 - 17 agents with wrong names
 - Confusing to find correct agent for a project
 - Potential data integrity issues
 
 ### After
-- LMS project syncing to agent `Huly-LMS-PM` ✓
+- LMS project syncing to agent `Legacy-LMS-PM` ✓
 - All 21 agents have correct names ✓
 - Easy to find agents by project identifier ✓
 - Each project has dedicated agent ✓
 
 ## Summary
 
-**Problem**: 17 out of 21 Huly agents had naming mismatches due to agent reuse  
-**Solution**: Renamed all 34 agents (primary + sleeptime) to match their project identifiers  
-**Result**: 100% agent name accuracy, each project has dedicated agent  
-**Prevention**: Existing code already prevents new reuse, old mismatches now fixed  
+**Problem**: 17 out of 21 Legacy agents had naming mismatches due to agent reuse
+**Solution**: Renamed all 34 agents (primary + sleeptime) to match their project identifiers
+**Result**: 100% agent name accuracy, each project has dedicated agent
+**Prevention**: Existing code already prevents new reuse, old mismatches now fixed
 
 ✅ **Issue Resolved**
 

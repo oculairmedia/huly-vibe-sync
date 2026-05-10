@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Huly PM Control Agent** serves as a template for all Huly PM agents. By modifying this single control agent, you can control the tools and persona of all PM agents in the system.
+The **Legacy PM Control Agent** serves as a template for all Legacy PM agents. By modifying this single control agent, you can control the tools and persona of all PM agents in the system.
 
 ## Concept
 
@@ -13,8 +13,8 @@ Instead of manually configuring each PM agent individually, all agents sync thei
 
 ## Control Agent Details
 
-**Name**: `Huly-PM-Control`  
-**ID**: `agent-686e0cb2-7862-471d-8e6a-026fcd1626e8`  
+**Name**: `Legacy-PM-Control`
+**ID**: `agent-686e0cb2-7862-471d-8e6a-026fcd1626e8`
 **Location**: https://letta.oculair.ca
 
 ### Current Configuration
@@ -25,9 +25,9 @@ Instead of manually configuring each PM agent individually, all agents sync thei
 - Expert in Agile, Kanban, and pragmatic delivery
 
 **Tools** (10 total):
-1. `huly_query` - Search and query Huly issues
-2. `huly_issue_ops` - Create, update, delete Huly issues
-3. `huly_entity` - Manage Huly entities
+1. `legacy_query` - Search and query Legacy issues
+2. `legacy_issue_ops` - Create, update, delete Legacy issues
+3. `legacy_entity` - Manage Legacy entities
 4. `list_projects` - List Vibe Kanban projects
 5. `list_tasks` - List tasks in a project
 6. `get_task` - Get task details
@@ -41,7 +41,7 @@ Instead of manually configuring each PM agent individually, all agents sync thei
 ### Option 1: Via Letta UI (Recommended)
 
 1. Go to https://letta.oculair.ca
-2. Find agent "Huly-PM-Control"
+2. Find agent "Legacy-PM-Control"
 3. Modify tools or persona as needed
 4. Changes will sync to all PM agents on next creation/restart
 
@@ -90,7 +90,7 @@ The control agent name can be customized via environment variable:
 
 ```bash
 # .env
-LETTA_CONTROL_AGENT=Huly-PM-Control  # Default value
+LETTA_CONTROL_AGENT=Legacy-PM-Control  # Default value
 ```
 
 ## Benefits
@@ -161,7 +161,7 @@ lettaService.clearCache();
 
 ```
 ┌─────────────────────────────────┐
-│   Huly-PM-Control (Template)   │
+│   Legacy-PM-Control (Template)   │
 │                                 │
 │  - Persona Block (PM/Developer) │
 │  - 10 Essential Tools           │
@@ -171,7 +171,7 @@ lettaService.clearCache();
               ├─────────────────────┬──────────────┬──────────────┐
               ▼                     ▼              ▼              ▼
     ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-    │ Huly-GRAPH-PM   │  │ Huly-OPCDE-PM   │  │ Huly-VIBEK-PM   │
+    │ Legacy-GRAPH-PM   │  │ Legacy-OPCDE-PM   │  │ Legacy-VIBEK-PM   │
     │                 │  │                 │  │                 │
     │ Control Tools + │  │ Control Tools + │  │ Control Tools + │
     │ Project Blocks  │  │ Project Blocks  │  │ Project Blocks  │
@@ -193,6 +193,6 @@ lettaService.clearCache();
 
 ---
 
-**Last Updated**: 2025-11-02  
-**Control Agent ID**: `agent-686e0cb2-7862-471d-8e6a-026fcd1626e8`  
+**Last Updated**: 2025-11-02
+**Control Agent ID**: `agent-686e0cb2-7862-471d-8e6a-026fcd1626e8`
 **Status**: Active ✅

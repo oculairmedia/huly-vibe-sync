@@ -2,8 +2,8 @@
 
 ## Problem Identified
 
-**Service**: `graphiti-graph-visualizer-rust-1`  
-**CPU Usage**: Indirectly causing **FalkorDB to use 16% CPU**  
+**Service**: `graphiti-graph-visualizer-rust-1`
+**CPU Usage**: Indirectly causing **FalkorDB to use 16% CPU**
 **Root Cause**: Aggressive polling of FalkorDB every **5 seconds**
 
 ### How It Works
@@ -97,11 +97,11 @@ docker logs graphiti-graph-visualizer-rust-1 | grep "Graph changed" | tail -10
 
 This is the **3rd service** with aggressive polling:
 
-1. ✅ **huly-vibe-sync**: 3s → 30s (89% reduction)
+1. ✅ **vibe-sync**: 3s → 30s (89% reduction)
 2. ✅ **matrix-client**: 0.5s → 30s (98% reduction)
 3. ⏳ **graph-visualizer**: 5s → 30s (83% reduction) - **PENDING REBUILD**
 
-**Common Issue**: All services polling for changes in relatively stable resources  
+**Common Issue**: All services polling for changes in relatively stable resources
 **Common Solution**: Increase polling intervals to 30 seconds
 
 ## Status

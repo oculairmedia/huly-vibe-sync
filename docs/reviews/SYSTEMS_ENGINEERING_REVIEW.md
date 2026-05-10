@@ -1,7 +1,7 @@
-# Systems Engineering Review: Huly-Vibe-Sync
-**Review Date:** 2025-11-03  
-**Reviewer:** Systems Engineering Analysis  
-**Version:** 1.0.0  
+# Systems Engineering Review: Vibe Sync
+**Review Date:** 2025-11-03
+**Reviewer:** Systems Engineering Analysis
+**Version:** 1.0.0
 **Codebase Version:** Latest (main branch)
 
 ---
@@ -11,7 +11,7 @@
 ### Overall Assessment: 7.5/10
 
 This is a **sophisticated bidirectional synchronization service** integrating three complex systems:
-- **Huly** (Project Management)
+- **Legacy** (Project Management)
 - **Vibe Kanban** (Task Board)
 - **Letta** (AI Agent Platform)
 
@@ -40,11 +40,11 @@ This is a **sophisticated bidirectional synchronization service** integrating th
 **Component Overview:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Huly-Vibe-Sync Service                   │
+│                    Vibe Sync Service                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ Huly REST    │  │ Vibe REST    │  │ Letta SDK    │     │
+│  │ Legacy REST    │  │ Vibe REST    │  │ Letta SDK    │     │
 │  │ Client       │  │ Client       │  │ Client       │     │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
 │         │                  │                  │             │
@@ -80,9 +80,9 @@ Refactor into modular structure:
 lib/
   clients/
     MCPClient.js
-    HulyRestClient.js ✓ (exists)
+    LegacyRestClient.js ✓ (exists)
   parsers/
-    HulyTextParser.js
+    LegacyTextParser.js
   services/
     SyncOrchestrator.js
     ConflictResolver.js
@@ -94,20 +94,20 @@ lib/
 
 **Bidirectional Sync Strategy:**
 ```
-Phase 1: Huly → Vibe (Source of Truth)
-  ├─ Fetch changed issues from Huly (incremental)
+Phase 1: Legacy → Vibe (Source of Truth)
+  ├─ Fetch changed issues from Legacy (incremental)
   ├─ Create missing tasks in Vibe
   ├─ Update task descriptions if changed
-  └─ Update task status if Huly changed
+  └─ Update task status if Legacy changed
 
-Phase 2: Vibe → Huly (User Updates)
+Phase 2: Vibe → Legacy (User Updates)
   ├─ Fetch all tasks from Vibe
   ├─ Detect status changes in Vibe
-  ├─ Update Huly issues if Vibe changed
+  ├─ Update Legacy issues if Vibe changed
   └─ Skip if Phase 1 just updated the task
 ```
 
-**Conflict Resolution:** Last-write-wins with Huly precedence
+**Conflict Resolution:** Last-write-wins with Legacy precedence
 
 **Strengths:**
 - ✅ Two-phase approach prevents most conflicts
@@ -116,13 +116,13 @@ Phase 2: Vibe → Huly (User Updates)
 
 **Critical Issues:**
 - ❌ **Race conditions**: No distributed locking for multi-instance
-- ❌ **No atomicity**: Updates to Huly/Vibe/DB are not transactional
+- ❌ **No atomicity**: Updates to Legacy/Vibe/DB are not transactional
 - ❌ **Brittle identifier extraction**: Footer-based parsing is fragile
 
 **Example of Non-Atomic Update:**
 ```javascript
 // PROBLEM: These three operations are not atomic
-await createVibeTask(vibeClient, vibeProject.id, hulyIssue);  // Step 1
+await createVibeTask(vibeClient, vibeProject.id, legacyIssue);  // Step 1
 db.upsertIssue({ identifier, vibe_task_id: task.id });        // Step 2
 
 // If Step 2 fails → Vibe has task, DB doesn't know
@@ -134,9 +134,9 @@ db.upsertIssue({ identifier, vibe_task_id: task.id });        // Step 2
 // Solution 1: Idempotency with unique constraints
 await upsertVibeTask(vibeClient, {
   project_id: vibeProject.id,
-  external_id: hulyIssue.identifier, // Unique constraint
-  title: hulyIssue.title,
-  description: hulyIssue.description
+  external_id: legacyIssue.identifier, // Unique constraint
+  title: legacyIssue.title,
+  description: legacyIssue.description
 });
 
 // Solution 2: Write-Ahead Log pattern
@@ -157,7 +157,7 @@ try {
 -- Core tables
 projects (
   identifier PRIMARY KEY,
-  name, huly_id, vibe_id,
+  name, legacy_id, vibe_id,
   filesystem_path, git_url,
   issue_count, last_sync_at,
   letta_agent_id, letta_folder_id,
@@ -168,7 +168,7 @@ issues (
   identifier PRIMARY KEY,
   project_identifier FK → projects,
   title, description, status, priority,
-  huly_id, vibe_task_id,
+  legacy_id, vibe_task_id,
   last_sync_at
 )
 
@@ -206,7 +206,7 @@ Database Size:     ~5-10 MB (estimated for 1000 issues)
 
 **Current Structure:**
 ```
-huly-vibe-sync/
+vibe-sync/
 ├── index.js (1,652 lines) ⚠️ TOO LARGE
 │   ├── MCPClient class (122 lines)
 │   ├── Text parsers (225 lines)
@@ -214,7 +214,7 @@ huly-vibe-sync/
 │   ├── HTTP server (67 lines)
 │   └── Main entry point (87 lines)
 ├── lib/
-│   ├── HulyRestClient.js (345 lines) ✓
+│   ├── LegacyRestClient.js (345 lines) ✓
 │   ├── LettaService.js (1,732 lines) ⚠️ TOO LARGE
 │   ├── database.js (575 lines) ✓
 │   └── http.js (83 lines) ✓
@@ -229,8 +229,8 @@ huly-vibe-sync/
 **Code Duplication Examples:**
 ```javascript
 // Status mapping appears in 3 places:
-function mapHulyStatusToVibe(status) { ... }  // index.js:648
-function mapVibeStatusToHuly(status) { ... }  // index.js:862
+function mapLegacyStatusToVibe(status) { ... }  // index.js:648
+function mapVibeStatusToLegacy(status) { ... }  // index.js:862
 const statusMapping = { ... }                  // LettaService.js:1353
 
 // Retry logic duplicated:
@@ -242,18 +242,18 @@ const statusMapping = { ... }                  // LettaService.js:1353
 ```javascript
 // lib/utils/StatusMapper.js
 export class StatusMapper {
-  static HULY_TO_VIBE = {
+  static LEGACY_TO_VIBE = {
     'Backlog': 'todo',
     'In Progress': 'inprogress',
     // ...
   };
-  
-  static toVibe(hulyStatus) {
-    return this.HULY_TO_VIBE[hulyStatus] || 'todo';
+
+  static toVibe(legacyStatus) {
+    return this.LEGACY_TO_VIBE[legacyStatus] || 'todo';
   }
-  
-  static toHuly(vibeStatus) {
-    return Object.entries(this.HULY_TO_VIBE)
+
+  static toLegacy(vibeStatus) {
+    return Object.entries(this.LEGACY_TO_VIBE)
       .find(([_, v]) => v === vibeStatus)?.[0] || 'Backlog';
   }
 }
@@ -269,7 +269,7 @@ export class StatusMapper {
 
 ```javascript
 /**
- * @typedef {Object} HulyIssue
+ * @typedef {Object} LegacyIssue
  * @property {string} identifier - Issue ID (e.g., "PROJ-123")
  * @property {string} title - Issue title
  * @property {string} description - Full description
@@ -279,13 +279,13 @@ export class StatusMapper {
  */
 
 /**
- * Create a task in Vibe Kanban from a Huly issue
+ * Create a task in Vibe Kanban from a Legacy issue
  * @param {Object} vibeClient - Vibe API client
  * @param {number} vibeProjectId - Vibe project ID
- * @param {HulyIssue} hulyIssue - Source issue from Huly
+ * @param {LegacyIssue} legacyIssue - Source issue from Legacy
  * @returns {Promise<Object|null>} Created task or null on failure
  */
-async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
+async function createVibeTask(vibeClient, vibeProjectId, legacyIssue) {
   // ...
 }
 ```
@@ -396,7 +396,7 @@ try {
 
 // 3. Implement circuit breaker
 import CircuitBreaker from 'opossum';
-const breaker = new CircuitBreaker(fetchHulyProjects, {
+const breaker = new CircuitBreaker(fetchLegacyProjects, {
   timeout: 30000,
   errorThresholdPercentage: 50,
   resetTimeout: 30000,
@@ -473,7 +473,7 @@ export class SyncError extends Error {
     this.context = context;
     this.cause = cause;
   }
-  
+
   static fromHttpError(error, context) {
     const retryable = [408, 429, 500, 502, 503, 504].includes(error.status);
     return new SyncError(`HTTP ${error.status}: ${error.message}`, {
@@ -487,12 +487,12 @@ export class SyncError extends Error {
 
 // Usage
 try {
-  const issues = await hulyClient.listIssues(projectId);
+  const issues = await legacyClient.listIssues(projectId);
 } catch (error) {
   const syncError = SyncError.fromHttpError(error, { projectId });
-  
+
   if (syncError.retryable) {
-    await retryWithBackoff(() => hulyClient.listIssues(projectId));
+    await retryWithBackoff(() => legacyClient.listIssues(projectId));
   } else {
     logger.error({ error: syncError }, 'Permanent error, skipping project');
     metrics.syncErrors.inc({ project: projectId, type: syncError.code });
@@ -548,7 +548,7 @@ async function getSecret(secretName) {
 function sanitize(obj) {
   const sanitized = { ...obj };
   const sensitiveKeys = ['password', 'token', 'apiKey', 'secret'];
-  
+
   for (const key of Object.keys(sanitized)) {
     if (sensitiveKeys.some(k => key.toLowerCase().includes(k))) {
       sanitized[key] = '***REDACTED***';
@@ -598,7 +598,7 @@ function validatePath(inputPath) {
 ### 6.1 Logging ✅ GOOD
 
 **Strengths:**
-- Structured prefixes (`[Huly]`, `[Vibe]`, `[Letta]`, `[DB]`)
+- Structured prefixes (`[Legacy]`, `[Vibe]`, `[Letta]`, `[DB]`)
 - Performance logging for slow operations
 - Clear success/failure indicators (✓, ✗)
 
@@ -620,12 +620,12 @@ const logger = pino({
 
 // Usage with correlation ID
 const correlationId = crypto.randomUUID();
-logger.info({ 
+logger.info({
   correlationId,
   component: 'sync',
   operation: 'fetch_projects',
   projectCount: projects.length,
-  duration: Date.now() - startTime 
+  duration: Date.now() - startTime
 }, 'Fetched projects successfully');
 ```
 
@@ -690,11 +690,11 @@ describe('StatusMapper', () => {
     it('maps Backlog to todo', () => {
       expect(StatusMapper.toVibe('Backlog')).toBe('todo');
     });
-    
+
     it('maps In Progress to inprogress', () => {
       expect(StatusMapper.toVibe('In Progress')).toBe('inprogress');
     });
-    
+
     it('handles unknown status', () => {
       expect(StatusMapper.toVibe('Unknown')).toBe('todo');
     });
@@ -703,24 +703,24 @@ describe('StatusMapper', () => {
 
 // tests/integration/sync.test.js
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createMockHulyClient, createMockVibeClient } from './mocks';
+import { createMockLegacyClient, createMockVibeClient } from './mocks';
 
 describe('Sync Integration', () => {
-  let hulyClient, vibeClient, db;
-  
+  let legacyClient, vibeClient, db;
+
   beforeEach(() => {
-    hulyClient = createMockHulyClient();
+    legacyClient = createMockLegacyClient();
     vibeClient = createMockVibeClient();
     db = createTestDatabase();
   });
-  
-  it('creates Vibe task for new Huly issue', async () => {
-    hulyClient.mockIssues([
+
+  it('creates Vibe task for new Legacy issue', async () => {
+    legacyClient.mockIssues([
       { identifier: 'TEST-1', title: 'Test Issue', status: 'Backlog' }
     ]);
-    
-    await syncHulyToVibe(hulyClient, vibeClient);
-    
+
+    await syncLegacyToVibe(legacyClient, vibeClient);
+
     const tasks = vibeClient.getTasks();
     expect(tasks).toHaveLength(1);
     expect(tasks[0].title).toBe('Test Issue');
@@ -807,7 +807,7 @@ Despite critical issues, this codebase demonstrates **strong engineering practic
 
 ### Can This Go to Production?
 
-**For Internal Use with Monitoring:** ⚠️ Yes, with caution  
+**For Internal Use with Monitoring:** ⚠️ Yes, with caution
 **For External Customers:** ❌ No, not yet
 
 ### Blockers for Production:
@@ -893,27 +893,27 @@ This could become a **reference implementation** for bidirectional sync systems.
 sync_duration_seconds:
   type: histogram
   labels: [project, phase]
-  
+
 sync_errors_total:
   type: counter
   labels: [project, error_type, retryable]
-  
+
 sync_projects_processed:
   type: counter
   labels: [status]
-  
+
 sync_issues_synced:
   type: counter
   labels: [project, direction]
-  
+
 http_pool_connections:
   type: gauge
   labels: [protocol, state]
-  
+
 database_query_duration:
   type: histogram
   labels: [operation]
-  
+
 letta_api_calls:
   type: counter
   labels: [operation, cached]

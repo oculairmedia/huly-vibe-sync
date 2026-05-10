@@ -49,14 +49,14 @@ const gitUrl = await resolveGitUrl(filesystemPath);
 **Test mock** (`tests/unit/SyncOrchestrator.test.js:59-66`):
 ```js
 vi.mock('../../lib/textParsers.js', () => ({
-  extractHulyIdentifier: vi.fn(desc => {
+  extractLegacyIdentifier: vi.fn(desc => {
     if (!desc) return null;
-    const match = desc.match(/Huly Issue: (\w+-\d+)/);
+    const match = desc.match(/Legacy Issue: (\w+-\d+)/);
     return match ? match[1] : null;
   }),
   determineGitRepoPath: vi.fn(() => '/home/user/project'),
   // MISSING: resolveGitUrl, cleanGitUrl, getGitUrl, validateGitRepoPath,
-  //          extractHulyIdentifierFromDescription, extractFilesystemPath,
+  //          extractLegacyIdentifierFromDescription, extractFilesystemPath,
   //          parseProjectsFromText, parseIssuesFromText, parseIssueCount,
   //          extractFullDescription
 }));
@@ -68,9 +68,9 @@ Add `resolveGitUrl` (and ideally the other missing exports) to the mock:
 
 ```js
 vi.mock('../../lib/textParsers.js', () => ({
-  extractHulyIdentifier: vi.fn(desc => {
+  extractLegacyIdentifier: vi.fn(desc => {
     if (!desc) return null;
-    const match = desc.match(/Huly Issue: (\w+-\d+)/);
+    const match = desc.match(/Legacy Issue: (\w+-\d+)/);
     return match ? match[1] : null;
   }),
   determineGitRepoPath: vi.fn(() => '/home/user/project'),
@@ -81,49 +81,49 @@ vi.mock('../../lib/textParsers.js', () => ({
 
 ### All 51 Affected Tests
 
-#### syncHulyToVibe - basic flow (6 failures)
+#### syncLegacyToVibe - basic flow (6 failures)
 | Line | Test Name |
 |------|-----------|
 | 263 | creates sync run and completes it on success |
-| 270 | fetches Huly projects then Vibe projects |
+| 270 | fetches Legacy projects then Vibe projects |
 | 277 | creates missing Vibe projects |
 | 298 | processes projects sequentially by default |
 | 315 | uses processBatch when parallel enabled |
 | 333 | records sync stats on completion |
 
-#### syncHulyToVibe - project filtering (3 failures)
+#### syncLegacyToVibe - project filtering (3 failures)
 | Line | Test Name |
 |------|-----------|
 | 349 | filters to specific projectId when provided |
 | 372 | matches projectId by filesystem path in description |
 | 385 | skips empty/unchanged projects when skipEmpty is true |
 
-#### syncHulyToVibe - Phase 1 Huly->Vibe (10 failures)
+#### syncLegacyToVibe - Phase 1 Legacy->Vibe (10 failures)
 | Line | Test Name |
 |------|-----------|
-| 421 | creates new Vibe task for unmatched Huly issue |
+| 421 | creates new Vibe task for unmatched Legacy issue |
 | 435 | upserts issue to database after creating task |
 | 451 | does not upsert when createVibeTask returns null |
 | 467 | updates existing task status on first sync when statuses differ |
 | 483 | skips status update when statuses match |
-| 502 | handles conflict (both changed) - Huly wins |
-| 522 | updates when only Huly changed and statuses differ |
-| 541 | does NOT update when only Vibe changed (not Huly) |
-| 560 | updates description when Huly description changed |
+| 502 | handles conflict (both changed) - Legacy wins |
+| 522 | updates when only Legacy changed and statuses differ |
+| 541 | does NOT update when only Vibe changed (not Legacy) |
+| 560 | updates description when Legacy description changed |
 | 591 | always upserts db record for existing task even without status change |
 
-#### syncHulyToVibe - Phase 2 Vibe->Huly (7 failures)
+#### syncLegacyToVibe - Phase 2 Vibe->Legacy (7 failures)
 | Line | Test Name |
 |------|-----------|
 | 629 | skips tasks updated in Phase 1 |
-| 651 | skips tasks without Huly identifier |
-| 666 | skips when Huly issue not found for identifier |
-| 681 | updates Huly status when Vibe status differs |
+| 651 | skips tasks without Legacy identifier |
+| 666 | skips when Legacy issue not found for identifier |
+| 681 | updates Legacy status when Vibe status differs |
 | 700 | skips when Beads has more recent change (timestamp conflict) |
 | 719 | upserts issue to database after successful status update |
 | 735 | does not upsert when status update returns false |
 
-#### syncHulyToVibe - Phase 3 Beads (6 failures)
+#### syncLegacyToVibe - Phase 3 Beads (6 failures)
 | Line | Test Name |
 |------|-----------|
 | 769 | skips Beads sync when disabled |
@@ -133,7 +133,7 @@ vi.mock('../../lib/textParsers.js', () => ({
 | 812 | syncs issues to Beads and calls syncBeadsToGit |
 | 833 | does NOT call syncBeadsToGit in dry run |
 
-#### syncHulyToVibe - Phase 4 BookStack (8 failures)
+#### syncLegacyToVibe - Phase 4 BookStack (8 failures)
 | Line | Test Name |
 |------|-----------|
 | 862 | skips when BookStack disabled |
@@ -145,7 +145,7 @@ vi.mock('../../lib/textParsers.js', () => ({
 | 933 | handles export failure gracefully |
 | 941 | handles import failure gracefully |
 
-#### syncHulyToVibe - Letta integration (5 failures)
+#### syncLegacyToVibe - Letta integration (5 failures)
 | Line | Test Name |
 |------|-----------|
 | 949 | creates Letta agent when not exists |
@@ -154,26 +154,26 @@ vi.mock('../../lib/textParsers.js', () => ({
 | 981 | handles Letta errors gracefully (non-fatal) |
 | 991 | sets Letta sync timestamp after update |
 
-#### syncHulyToVibe - bulk fetch (3 failures)
+#### syncLegacyToVibe - bulk fetch (3 failures)
 | Line | Test Name |
 |------|-----------|
 | 1006 | uses bulk fetch for multi-project sync |
 | 1038 | falls back to individual fetch on bulk failure |
 | 1057 | uses individual fetch for single project |
 
-#### syncHulyToVibe - database (3 failures)
+#### syncLegacyToVibe - database (3 failures)
 | Line | Test Name |
 |------|-----------|
 | 1074 | upserts project metadata with vibe_id |
 | 1087 | updates project activity after sync |
 | 1100 | queries last sync timestamp |
 
-#### syncHulyToVibe - error handling (1 failure)
+#### syncLegacyToVibe - error handling (1 failure)
 | Line | Test Name |
 |------|-----------|
-| 1117 | throws when fetchHulyIssues fails for a project |
+| 1117 | throws when fetchLegacyIssues fails for a project |
 
-**Note:** This last test has a different symptom — it expects an `'Issue fetch failed'` error but gets the `resolveGitUrl` mock error instead, since `resolveGitUrl` blows up before `fetchHulyIssues` is even called.
+**Note:** This last test has a different symptom — it expects an `'Issue fetch failed'` error but gets the `resolveGitUrl` mock error instead, since `resolveGitUrl` blows up before `fetchLegacyIssues` is even called.
 
 ---
 
@@ -258,13 +258,13 @@ These tests pass because they hit code paths that return **before** reaching `re
 
 | Line | Test Name | Why It Passes |
 |------|-----------|---------------|
-| 234 | passes dependencies through to syncHulyToVibe | Tests factory only, no sync call |
+| 234 | passes dependencies through to syncLegacyToVibe | Tests factory only, no sync call |
 | 241 | passes lettaService and bookstackService to sync | Tests factory only, no sync call |
 | 289 | skips project when Vibe project creation fails | Returns before processProject |
-| 339 | throws and propagates error on failure | fetchHulyProjects throws before processProject |
+| 339 | throws and propagates error on failure | fetchLegacyProjects throws before processProject |
 | 405 | handles dry run with no projects to process | Empty project list, no processProject |
-| 1112 | throws when fetchHulyProjects fails | fetchHulyProjects throws before processProject |
-| 1125 | does not call completeSyncRun on error | fetchHulyProjects throws before processProject |
+| 1112 | throws when fetchLegacyProjects fails | fetchLegacyProjects throws before processProject |
+| 1125 | does not call completeSyncRun on error | fetchLegacyProjects throws before processProject |
 | + 3 more | (various createSyncOrchestrator tests) | Factory tests, no actual sync |
 
 ---

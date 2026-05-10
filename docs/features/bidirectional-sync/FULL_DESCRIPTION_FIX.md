@@ -1,13 +1,13 @@
-# Fix: Full Issue Description Sync from Huly to Vibe Kanban
+# Fix: Full Issue Description Sync from Legacy to Vibe Kanban
 
 ## Date: 2025-10-27
 
 ## Problem
 
-When syncing issues from Huly to Vibe Kanban, only the first line of the issue description was being captured, resulting in incomplete task summaries in Vibe Kanban.
+When syncing issues from Legacy to Vibe Kanban, only the first line of the issue description was being captured, resulting in incomplete task summaries in Vibe Kanban.
 
 ### Example
-**Huly Issue LMS-29** had a detailed description with multiple sections:
+**Legacy Issue LMS-29** had a detailed description with multiple sections:
 - ## Summary
 - ## Completed Optimizations ✅
 - ## High Priority Issues 🔴
@@ -28,21 +28,21 @@ else if (trimmed.startsWith('Description: ') && currentIssue) {
 }
 ```
 
-Additionally, the `huly_query` tool's `list` mode returns **truncated descriptions** with "..." for space efficiency.
+Additionally, the `legacy_query` tool's `list` mode returns **truncated descriptions** with "..." for space efficiency.
 
 ## Solution
 
 Implemented a two-step approach:
 
 ### 1. Fetch Full Issue Details
-Modified `fetchHulyIssues()` to:
-1. First call `huly_query` with `mode: 'list'` to get issue identifiers
-2. Then call `huly_query` with `mode: 'get'` for each issue to fetch complete details
+Modified `fetchLegacyIssues()` to:
+1. First call `legacy_query` with `mode: 'list'` to get issue identifiers
+2. Then call `legacy_query` with `mode: 'get'` for each issue to fetch complete details
 
 ```javascript
 // Fetch full details for each issue to get complete descriptions
 for (const issue of issues) {
-  const detailResult = await hulyClient.callTool('huly_query', {
+  const detailResult = await legacyClient.callTool('legacy_query', {
     entity_type: 'issue',
     mode: 'get',
     issue_identifier: issue.identifier,
@@ -97,7 +97,7 @@ function extractFullDescription(detailText) {
 ## Key Design Decisions
 
 ### Why Not Stop at Every `##` Header?
-The issue descriptions in Huly contain **subsections** like:
+The issue descriptions in Legacy contain **subsections** like:
 - `## Summary`
 - `## Completed Optimizations ✅`
 - `## High Priority Issues 🔴`
@@ -129,9 +129,9 @@ Extracted description length: 491 characters
 
 ## Files Modified
 
-1. `/opt/stacks/vibe-kanban/huly-sync/index.js`
+1. `/opt/stacks/vibe-kanban/legacy-sync/index.js`
    - Added `extractFullDescription()` function (lines 310-346)
-   - Modified `fetchHulyIssues()` to fetch full details (lines 368-425)
+   - Modified `fetchLegacyIssues()` to fetch full details (lines 368-425)
 
 ## Impact
 
@@ -151,7 +151,7 @@ Extracted description length: 491 characters
 - **Acceptable overhead**: For typical projects with 10-50 issues, this adds ~2-5 seconds to sync
 
 ### Future Optimization Options
-1. **Batch detail fetching** - If Huly MCP adds bulk get endpoint
+1. **Batch detail fetching** - If Legacy MCP adds bulk get endpoint
 2. **Selective detail fetch** - Only fetch details when description is truncated
 3. **Caching** - Cache issue details to avoid re-fetching unchanged issues
 
@@ -161,21 +161,21 @@ To verify the fix is working:
 
 ```bash
 # Run sync in dry-run mode
-cd /opt/stacks/vibe-kanban/huly-sync
+cd /opt/stacks/vibe-kanban/legacy-sync
 DRY_RUN=true SYNC_INTERVAL=0 node index.js | grep -A 10 "LMS-29"
 
 # Check logs for "Fetching full details" messages
-# Should see: "[Huly] ✓ Fetched details for LMS-29"
+# Should see: "[Legacy] ✓ Fetched details for LMS-29"
 ```
 
 ## Related Issues
 
-- Original issue: "project summaries generate from huly issues should include the entire issue summary"
+- Original issue: "project summaries generate from legacy issues should include the entire issue summary"
 - Example case: LMS-29 "Optimize MCP Tool Response Token Efficiency"
 
 ## Success Criteria
 
-✅ Full multi-line descriptions extracted from Huly
+✅ Full multi-line descriptions extracted from Legacy
 ✅ Subsections (## Summary, etc.) preserved
 ✅ Proper termination at end sections (## Recent Comments)
 ✅ Tested with real-world issue (LMS-29)

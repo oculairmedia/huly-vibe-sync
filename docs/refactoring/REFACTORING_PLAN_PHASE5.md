@@ -1,7 +1,7 @@
 # Refactoring Plan Phase 5 - Service Layer Extraction
 
-**Date:** November 3, 2025  
-**Current State:** 316 tests passing, 87.97% coverage, VibeRestClient deployed  
+**Date:** November 3, 2025
+**Current State:** 316 tests passing, 87.97% coverage, VibeRestClient deployed
 **Goal:** Extract service layers from index.js with full test coverage
 
 ---
@@ -18,7 +18,7 @@ index.js:           1,589 lines (26 functions) ← TOO LARGE
 LettaService.js:    1,923 lines (focused, acceptable)
 database.js:          574 lines (good)
 VibeRestClient.js:    538 lines (good, 100% coverage)
-HulyRestClient.js:    344 lines (good)
+LegacyRestClient.js:    344 lines (good)
 textParsers.js:       233 lines (good)
 http.js:               82 lines (good)
 statusMapper.js:       82 lines (good)
@@ -27,11 +27,11 @@ statusMapper.js:       82 lines (good)
 ### Functions in index.js (26)
 Grouped by responsibility:
 1. **Utilities (6):** withTimeout, formatDuration, parseProjectsFromText, parseIssuesFromText, extractFilesystemPath, getGitUrl
-2. **Status Mapping (2):** mapHulyStatusToVibe, mapVibeStatusToHuly  
-3. **Parsing (3):** extractFullDescription, extractHulyIdentifier, determineGitRepoPath
-4. **Huly Operations (4):** fetchHulyProjects, fetchHulyIssues, updateHulyIssueStatus, updateHulyIssueDescription
+2. **Status Mapping (2):** mapLegacyStatusToVibe, mapVibeStatusToLegacy
+3. **Parsing (3):** extractFullDescription, extractLegacyIdentifier, determineGitRepoPath
+4. **Legacy Operations (4):** fetchLegacyProjects, fetchLegacyIssues, updateLegacyIssueStatus, updateLegacyIssueDescription
 5. **Vibe Operations (6):** listVibeProjects, createVibeProject, listVibeTasks, createVibeTask, updateVibeTaskStatus, updateVibeTaskDescription
-6. **Sync Logic (3):** syncVibeTaskToHuly, syncHulyToVibe, processBatch
+6. **Sync Logic (3):** syncVibeTaskToLegacy, syncLegacyToVibe, processBatch
 7. **Infrastructure (2):** startHealthServer, main
 
 ---
@@ -88,7 +88,7 @@ export function extractUrlsFromText(text) { /* ... */ }
 export function parseProjectsFromText(text) { /* ... */ }
 export function parseIssuesFromText(text, projectId) { /* ... */ }
 export function extractFullDescription(detailText) { /* ... */ }
-export function extractHulyIdentifier(description) { /* ... */ }
+export function extractLegacyIdentifier(description) { /* ... */ }
 export function getGitUrl(repoPath) { /* ... */ }
 ```
 
@@ -114,20 +114,20 @@ export function getGitUrl(repoPath) { /* ... */ }
 
 **Currently in statusMapper.js:**
 ```javascript
-export function mapVibeToHuly(vibeStatus) { /* ... */ }
+export function mapVibeToLegacy(vibeStatus) { /* ... */ }
 export function normalizeStatus(status) { /* ... */ }
 export function areStatusesEquivalent(status1, status2) { /* ... */ }
 ```
 
 **ADD from index.js:**
 ```javascript
-export function mapHulyStatusToVibe(hulyStatus) { /* ... */ }
-export function mapVibeStatusToHuly(vibeStatus) { /* ... */ }
+export function mapLegacyStatusToVibe(legacyStatus) { /* ... */ }
+export function mapVibeStatusToLegacy(vibeStatus) { /* ... */ }
 ```
 
 **Clean up:**
-- Consolidate `mapVibeToHuly` and `mapVibeStatusToHuly` (they do the same thing)
-- Rename for clarity: `mapVibeToHuly` → `mapVibeStatusToHuly`
+- Consolidate `mapVibeToLegacy` and `mapVibeStatusToLegacy` (they do the same thing)
+- Rename for clarity: `mapVibeToLegacy` → `mapVibeStatusToLegacy`
 
 **Benefits:**
 - All status mapping in one place
@@ -144,47 +144,47 @@ export function mapVibeStatusToHuly(vibeStatus) { /* ... */ }
 
 ## Phase 5D: Create Service Layer (MODERATE RISK)
 
-### Create `lib/services/HulyService.js`
+### Create `lib/services/LegacyService.js`
 
-**Purpose:** High-level Huly operations (wraps HulyRestClient)
+**Purpose:** High-level Legacy operations (wraps LegacyRestClient)
 
 **Structure:**
 ```javascript
-export class HulyService {
+export class LegacyService {
   constructor(client, config) {
     this.client = client;
     this.config = config;
   }
 
   async fetchProjects() {
-    // Move fetchHulyProjects() logic here
+    // Move fetchLegacyProjects() logic here
   }
 
   async fetchIssues(projectIdentifier, lastSyncTime = null) {
-    // Move fetchHulyIssues() logic here
+    // Move fetchLegacyIssues() logic here
   }
 
   async updateIssueStatus(issueIdentifier, status) {
-    // Move updateHulyIssueStatus() logic here
+    // Move updateLegacyIssueStatus() logic here
   }
 
   async updateIssueDescription(issueIdentifier, description) {
-    // Move updateHulyIssueDescription() logic here
+    // Move updateLegacyIssueDescription() logic here
   }
 }
 
-export function createHulyService(client, config) {
-  return new HulyService(client, config);
+export function createLegacyService(client, config) {
+  return new LegacyService(client, config);
 }
 ```
 
 **Dependencies:**
-- `HulyRestClient` (already exists)
+- `LegacyRestClient` (already exists)
 - `textParsers` (for parsing responses)
 - Config object
 
 **Testing:**
-- ✅ HulyRestClient.test.js already tests API calls (42 tests)
+- ✅ LegacyRestClient.test.js already tests API calls (42 tests)
 - ✅ Service layer just orchestrates existing tested functions
 - ✅ All 316 tests should pass unchanged
 
@@ -210,7 +210,7 @@ export class VibeService {
     // Move listVibeProjects() logic here
   }
 
-  async createProject(hulyProject) {
+  async createProject(legacyProject) {
     // Move createVibeProject() logic here
     // Include determineGitRepoPath logic
   }
@@ -219,7 +219,7 @@ export class VibeService {
     // Move listVibeTasks() logic here
   }
 
-  async createTask(vibeProjectId, hulyIssue) {
+  async createTask(vibeProjectId, legacyIssue) {
     // Move createVibeTask() logic here
   }
 
@@ -260,8 +260,8 @@ export function createVibeService(client, statusMapper, stacksDir, config) {
 **Structure:**
 ```javascript
 export class SyncOrchestrator {
-  constructor(hulyService, vibeService, db, lettaService, statusMapper, config) {
-    this.hulyService = hulyService;
+  constructor(legacyService, vibeService, db, lettaService, statusMapper, config) {
+    this.legacyService = legacyService;
     this.vibeService = vibeService;
     this.db = db;
     this.lettaService = lettaService;
@@ -270,15 +270,15 @@ export class SyncOrchestrator {
   }
 
   async performSync() {
-    // Move main syncHulyToVibe() logic here
+    // Move main syncLegacyToVibe() logic here
     const syncId = this.db.startSyncRun();
-    
+
     try {
-      const hulyProjects = await this.hulyService.fetchProjects();
+      const legacyProjects = await this.legacyService.fetchProjects();
       const vibeProjects = await this.vibeService.listProjects();
-      
+
       // ... orchestration logic ...
-      
+
       this.db.completeSyncRun(syncId, stats);
       return stats;
     } catch (error) {
@@ -287,22 +287,22 @@ export class SyncOrchestrator {
     }
   }
 
-  async syncTaskToHuly(vibeTask, hulyIssues, projectIdentifier, phase1UpdatedTasks) {
-    // Move syncVibeTaskToHuly() logic here
+  async syncTaskToLegacy(vibeTask, legacyIssues, projectIdentifier, phase1UpdatedTasks) {
+    // Move syncVibeTaskToLegacy() logic here
   }
 
-  async processProject(hulyProject, vibeProject) {
+  async processProject(legacyProject, vibeProject) {
     // Extract project processing logic
   }
 }
 
-export function createSyncOrchestrator(hulyService, vibeService, db, lettaService, statusMapper, config) {
-  return new SyncOrchestrator(hulyService, vibeService, db, lettaService, statusMapper, config);
+export function createSyncOrchestrator(legacyService, vibeService, db, lettaService, statusMapper, config) {
+  return new SyncOrchestrator(legacyService, vibeService, db, lettaService, statusMapper, config);
 }
 ```
 
 **Dependencies:**
-- `HulyService` (created in Phase 5D)
+- `LegacyService` (created in Phase 5D)
 - `VibeService` (created in Phase 5D)
 - `database` (already exists)
 - `LettaService` (already exists)
@@ -327,7 +327,7 @@ export function createSyncOrchestrator(hulyService, vibeService, db, lettaServic
 ```javascript
 export class Config {
   constructor(env = process.env) {
-    this.huly = this.parseHulyConfig(env);
+    this.legacy = this.parseLegacyConfig(env);
     this.vibeKanban = this.parseVibeConfig(env);
     this.sync = this.parseSyncConfig(env);
     this.stacks = this.parseStacksConfig(env);
@@ -335,24 +335,24 @@ export class Config {
     this.validate();
   }
 
-  parseHulyConfig(env) {
+  parseLegacyConfig(env) {
     return {
-      apiUrl: env.HULY_API_URL || env.HULY_MCP_URL || 'http://192.168.50.90:3457/api',
-      useRestApi: env.HULY_USE_REST !== 'false',
+      apiUrl: env.REMOVED_API_URL || env.REMOVED_MCP_URL || 'http://192.168.50.90:3457/api',
+      useRestApi: env.REMOVED_USE_REST !== 'false',
     };
   }
 
   parseSyncConfig(env) {
     const interval = parseInt(env.SYNC_INTERVAL || '300000');
     const maxWorkers = parseInt(env.MAX_WORKERS || '5');
-    
+
     if (isNaN(interval) || interval < 0) {
       throw new Error('SYNC_INTERVAL must be a positive number');
     }
     if (maxWorkers < 1 || maxWorkers > 50) {
       throw new Error('MAX_WORKERS must be between 1 and 50');
     }
-    
+
     return {
       interval,
       dryRun: env.DRY_RUN === 'true',
@@ -366,10 +366,10 @@ export class Config {
 
   validate() {
     const required = [
-      ['HULY_API_URL', this.huly.apiUrl],
+      ['REMOVED_API_URL', this.legacy.apiUrl],
       ['VIBE_API_URL', this.vibeKanban.apiUrl],
     ];
-    
+
     const missing = required.filter(([name, value]) => !value);
     if (missing.length > 0) {
       throw new Error(`Missing required config: ${missing.map(([name]) => name).join(', ')}`);
@@ -378,8 +378,8 @@ export class Config {
 
   toJSON() {
     return {
-      hulyApi: this.huly.apiUrl,
-      hulyMode: this.huly.useRestApi ? 'REST API' : 'MCP',
+      legacyApi: this.legacy.apiUrl,
+      legacyMode: this.legacy.useRestApi ? 'REST API' : 'MCP',
       vibeApi: this.vibeKanban.apiUrl,
       vibeMode: this.vibeKanban.useRestApi ? 'REST API' : 'MCP',
       stacksDir: this.stacks.baseDir,
@@ -429,7 +429,7 @@ lib/textParsers.js: ~350 lines (ENHANCED)
 lib/statusMapper.js: ~120 lines (ENHANCED)
 lib/config.js:       ~120 lines (NEW)
 lib/services/
-  HulyService.js:    ~250 lines (NEW)
+  LegacyService.js:    ~250 lines (NEW)
   VibeService.js:    ~300 lines (NEW)
   SyncOrchestrator.js: ~500 lines (NEW)
 
@@ -485,10 +485,10 @@ Coverage:    88%+ (maintain or improve)
 5. Verify: All tests pass (331+ total)
 ```
 
-### Step 5: HulyService (45 mins) ⚠️ MODERATE
+### Step 5: LegacyService (45 mins) ⚠️ MODERATE
 ```bash
-1. Create lib/services/HulyService.js
-2. Move Huly operations from index.js
+1. Create lib/services/LegacyService.js
+2. Move Legacy operations from index.js
 3. Update index.js to use service
 4. Run: npm test
 5. Verify: All tests pass

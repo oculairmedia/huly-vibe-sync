@@ -1,8 +1,8 @@
 # Actionable Improvement Plan
-## Huly-Vibe-Sync with Letta PM Agent Integration
+## Vibe Sync with Letta PM Agent Integration
 
-**Created**: 2025-11-01  
-**Status**: Updated based on current implementation review  
+**Created**: 2025-11-01
+**Status**: Updated based on current implementation review
 **Priority**: Critical items first, then performance, then quality of life
 
 ---
@@ -25,9 +25,9 @@ The review document `COMPREHENSIVE_REVIEW_AND_IMPROVEMENTS.md` contains several 
 ## 🔴 Critical Issues (P0 - Must Fix)
 
 ### Issue 1: Cache Not Being Cleared Between Syncs
-**Status**: Method exists but not called  
-**Impact**: Memory leak over time  
-**Effort**: 5 minutes  
+**Status**: Method exists but not called
+**Impact**: Memory leak over time
+**Effort**: 5 minutes
 **Fix Location**: `index.js` main sync loop
 
 ```javascript
@@ -40,9 +40,9 @@ if (lettaService) {
 ---
 
 ### Issue 2: MCP Tools Not Attached
-**Status**: Stubbed out (line 106)  
-**Impact**: Agents cannot read/write Huly or Vibe data  
-**Effort**: 4-6 hours  
+**Status**: Stubbed out (line 106)
+**Impact**: Agents cannot read/write Legacy or Vibe data
+**Effort**: 4-6 hours
 **Priority**: Critical for agent functionality
 
 **Root Cause**: Letta SDK v0.0.68665 doesn't support `tools.mcp.*` endpoints
@@ -51,9 +51,9 @@ if (lettaService) {
 
 #### Option A: Direct REST API (Recommended)
 ```javascript
-async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
+async attachMcpTools(agentId, legacyMcpUrl, vibeMcpUrl) {
   console.log(`[Letta] Attaching MCP tools to agent ${agentId}`);
-  
+
   try {
     // Use direct REST API instead of SDK
     const response = await fetch(`${this.client.baseUrl}/api/v1/agents/${agentId}/tools/attach-mcp`, {
@@ -64,21 +64,21 @@ async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
       },
       body: JSON.stringify({
         mcp_servers: [
-          { name: 'huly-mcp', url: hulyMcpUrl, transport: 'http' },
+          { name: 'legacy-mcp', url: legacyMcpUrl, transport: 'http' },
           { name: 'vibe-mcp', url: vibeMcpUrl, transport: 'http' }
         ]
       })
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       throw new Error(`Failed to attach MCP tools: ${error}`);
     }
-    
+
     const result = await response.json();
     console.log(`[Letta] MCP tools attached successfully`);
     return result;
-    
+
   } catch (error) {
     console.error(`[Letta] Error attaching MCP tools:`, error.message);
     // Don't throw - allow agent to function without MCP tools
@@ -93,15 +93,15 @@ If REST API doesn't work, document manual process:
 2. Select agent from list
 3. Go to Tools tab
 4. Click "Attach MCP Server"
-5. Add Huly MCP: `http://192.168.50.90:3457/mcp`
+5. Add Legacy MCP: `http://192.168.50.90:3457/mcp`
 6. Add Vibe MCP: `http://192.168.50.90:3456/mcp` (or correct URL)
 
 ---
 
 ### Issue 3: No HTTP Connection Pooling
-**Status**: Not implemented  
-**Impact**: 1200+ TCP connections per sync  
-**Effort**: 2 hours  
+**Status**: Not implemented
+**Impact**: 1200+ TCP connections per sync
+**Effort**: 2 hours
 **Fix Location**: Create new `lib/http.js` module
 
 ```javascript
@@ -135,7 +135,7 @@ export function fetchWithPool(url, options = {}) {
 
 **Then update all fetch calls:**
 ```javascript
-// In HulyRestClient.js, lib/LettaService.js, etc.
+// In LegacyRestClient.js, lib/LettaService.js, etc.
 import { fetchWithPool } from './http.js';
 
 // Replace:
@@ -147,27 +147,27 @@ const response = await fetchWithPool(url, options);
 ---
 
 ### Issue 4: No Database Transaction Batching
-**Status**: Individual INSERT/UPDATE per issue  
-**Impact**: 50+ seconds of DB time at scale  
-**Effort**: 4 hours  
+**Status**: Individual INSERT/UPDATE per issue
+**Impact**: 50+ seconds of DB time at scale
+**Effort**: 4 hours
 **Fix Location**: `lib/database.js`
 
 ```javascript
 // Add to SyncDatabase class
 upsertIssuesBatch(issues) {
   const stmt = this.db.prepare(`
-    INSERT INTO issues (identifier, project_id, title, status, priority, huly_id, vibe_id, last_sync_at, updated_at)
+    INSERT INTO issues (identifier, project_id, title, status, priority, legacy_id, vibe_id, last_sync_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(identifier) DO UPDATE SET
       title = excluded.title,
       status = excluded.status,
       priority = excluded.priority,
-      huly_id = excluded.huly_id,
+      legacy_id = excluded.legacy_id,
       vibe_id = excluded.vibe_id,
       last_sync_at = excluded.last_sync_at,
       updated_at = excluded.updated_at
   `);
-  
+
   const transaction = this.db.transaction((issues) => {
     for (const issue of issues) {
       stmt.run(
@@ -176,14 +176,14 @@ upsertIssuesBatch(issues) {
         issue.title,
         issue.status,
         issue.priority,
-        issue.huly_id,
+        issue.legacy_id,
         issue.vibe_id,
         issue.last_sync_at,
         Date.now()
       );
     }
   });
-  
+
   return transaction(issues);
 }
 ```
@@ -206,30 +206,30 @@ db.upsertIssuesBatch(issuesBatch);
 ## 🟡 High Priority Issues (P1 - Performance)
 
 ### Issue 5: Artificial Delays Too High
-**Status**: Hardcoded 50ms delays  
-**Impact**: Adds 5-10 seconds per sync  
-**Effort**: 30 minutes  
+**Status**: Hardcoded 50ms delays
+**Impact**: Adds 5-10 seconds per sync
+**Effort**: 30 minutes
 **Fix**: Make configurable, reduce to 10-20ms
 
 ```javascript
 // In .env
-HULY_API_DELAY=10
+LEGACY_API_DELAY=10
 VIBE_API_DELAY=10
 
 // In index.js
-const HULY_DELAY = parseInt(process.env.HULY_API_DELAY) || 10;
+const LEGACY_DELAY = parseInt(process.env.LEGACY_API_DELAY) || 10;
 const VIBE_DELAY = parseInt(process.env.VIBE_API_DELAY) || 10;
 
 // Replace hardcoded 50ms with env vars
-await new Promise(r => setTimeout(r, HULY_DELAY));
+await new Promise(r => setTimeout(r, LEGACY_DELAY));
 ```
 
 ---
 
 ### Issue 6: No Retry Logic with Backoff
-**Status**: Not implemented  
-**Impact**: Transient failures cause sync to fail  
-**Effort**: 4 hours  
+**Status**: Not implemented
+**Impact**: Transient failures cause sync to fail
+**Effort**: 4 hours
 **Fix Location**: Create `lib/retry.js`
 
 ```javascript
@@ -242,38 +242,38 @@ export async function retryWithBackoff(fn, options = {}) {
     backoffMultiplier = 2,
     retryableErrors = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND']
   } = options;
-  
+
   let lastError;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      
+
       // Don't retry on last attempt
       if (attempt === maxRetries) break;
-      
+
       // Check if error is retryable
-      const isRetryable = retryableErrors.some(e => 
+      const isRetryable = retryableErrors.some(e =>
         error.code === e || error.message.includes(e)
       );
-      
+
       if (!isRetryable) {
         throw error; // Don't retry non-retryable errors
       }
-      
+
       // Calculate delay with exponential backoff
       const delay = Math.min(
         initialDelay * Math.pow(backoffMultiplier, attempt),
         maxDelay
       );
-      
+
       console.log(`[Retry] Attempt ${attempt + 1}/${maxRetries} failed, retrying in ${delay}ms...`);
       await new Promise(r => setTimeout(r, delay));
     }
   }
-  
+
   throw lastError;
 }
 ```
@@ -283,17 +283,17 @@ export async function retryWithBackoff(fn, options = {}) {
 import { retryWithBackoff } from './lib/retry.js';
 
 // Wrap API calls
-const hulyIssues = await retryWithBackoff(() => 
-  hulyClient.listIssues(project.identifier)
+const legacyIssues = await retryWithBackoff(() =>
+  legacyClient.listIssues(project.identifier)
 );
 ```
 
 ---
 
 ### Issue 7: Missing Input Validation
-**Status**: No validation on external API data  
-**Impact**: Risk of crashes on malformed data  
-**Effort**: 6 hours  
+**Status**: No validation on external API data
+**Impact**: Risk of crashes on malformed data
+**Effort**: 6 hours
 **Fix**: Add Zod schema validation
 
 ```javascript
@@ -331,9 +331,9 @@ export function validateProject(data) {
 ## 🟢 Quality of Life Improvements (P2)
 
 ### Issue 8: No Structured Logging
-**Status**: console.log everywhere  
-**Impact**: Hard to debug, no log levels  
-**Effort**: 1 day  
+**Status**: console.log everywhere
+**Impact**: Hard to debug, no log levels
+**Effort**: 1 day
 **Fix**: Use Pino for structured logging
 
 ```javascript
@@ -355,15 +355,15 @@ export const logger = pino({
 // Usage
 logger.info({ projectId: 'VIBEK' }, 'Starting project sync');
 logger.error({ error: err.message }, 'Sync failed');
-logger.debug({ issues: issues.length }, 'Fetched issues from Huly');
+logger.debug({ issues: issues.length }, 'Fetched issues from Legacy');
 ```
 
 ---
 
 ### Issue 9: No Health Check Endpoint
-**Status**: No monitoring integration  
-**Impact**: Can't monitor service health  
-**Effort**: 2 hours  
+**Status**: No monitoring integration
+**Impact**: Can't monitor service health
+**Effort**: 2 hours
 **Fix**: Add simple HTTP health endpoint
 
 ```javascript
@@ -381,7 +381,7 @@ const healthServer = http.createServer((req, res) => {
       errors: errorCount,
       version: process.env.npm_package_version || '1.0.0'
     };
-    
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(health, null, 2));
   } else {
@@ -399,9 +399,9 @@ healthServer.listen(HEALTH_PORT, () => {
 ---
 
 ### Issue 10: No Prometheus Metrics
-**Status**: No metrics exported  
-**Impact**: Can't monitor performance trends  
-**Effort**: 1 day  
+**Status**: No metrics exported
+**Impact**: Can't monitor performance trends
+**Effort**: 1 day
 **Fix**: Add prom-client
 
 ```javascript
@@ -411,22 +411,22 @@ import promClient from 'prom-client';
 const register = new promClient.Registry();
 
 export const syncDuration = new promClient.Histogram({
-  name: 'huly_vibe_sync_duration_seconds',
+  name: 'vibe_sync_duration_seconds',
   help: 'Time taken for sync operations',
   labelNames: ['type'], // 'full', 'project', 'issues'
   buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60]
 });
 
 export const syncErrors = new promClient.Counter({
-  name: 'huly_vibe_sync_errors_total',
+  name: 'vibe_sync_errors_total',
   help: 'Total number of sync errors',
-  labelNames: ['source', 'type'] // 'huly'/'vibe', error type
+  labelNames: ['source', 'type'] // 'legacy'/'vibe', error type
 });
 
 export const issuesSynced = new promClient.Counter({
-  name: 'huly_vibe_issues_synced_total',
+  name: 'legacy_vibe_issues_synced_total',
   help: 'Total number of issues synced',
-  labelNames: ['direction'] // 'huly_to_vibe', 'vibe_to_huly'
+  labelNames: ['direction'] // 'legacy_to_vibe', 'vibe_to_legacy'
 });
 
 register.registerMetric(syncDuration);
@@ -550,6 +550,6 @@ The `COMPREHENSIVE_REVIEW_AND_IMPROVEMENTS.md` document was **partially outdated
 
 ---
 
-**Last Updated**: 2025-11-01  
-**Status**: Ready for implementation  
+**Last Updated**: 2025-11-01
+**Status**: Ready for implementation
 **Estimated Total Effort**: 7-10 days for all improvements

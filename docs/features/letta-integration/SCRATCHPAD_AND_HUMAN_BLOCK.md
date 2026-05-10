@@ -2,7 +2,7 @@
 
 ## Overview
 
-All 42 Huly PM agents now have two new memory blocks:
+All 42 Legacy PM agents now have two new memory blocks:
 
 1. **Scratchpad** - Agent working memory for notes and observations
 2. **Human** - Information about Emmanuel from Meridian agent
@@ -11,7 +11,7 @@ All 42 Huly PM agents now have two new memory blocks:
 
 ### Complete Block Structure (8 total)
 
-Each Huly PM agent now has:
+Each Legacy PM agent now has:
 
 | #   | Block           | Purpose                       | Updated By                   | Size        |
 | --- | --------------- | ----------------------------- | ---------------------------- | ----------- |
@@ -96,7 +96,7 @@ Imported from **Meridian** agent's human block:
 - Tools: Adobe, Houdini, Davinci Resolve, Figma, Webflow, Notion, Jira
 - Languages: Dutch (native), English (fluent)
 - Location: Georgetown, Ontario
-- Current focus: Graphiti integration, BookStack, Huly
+- Current focus: Graphiti integration, BookStack, Legacy
 - Preferences: Natural conversational responses, concise summaries
 
 ### Implementation
@@ -141,7 +141,7 @@ The rollout commands below are preserved as historical context only. They are no
 # Count memory blocks across agents
 curl -s https://letta.oculair.ca/v1/agents \
   -H "Authorization: Bearer lettaSecurePass123" | \
-  jq '.[] | select(.name | startswith("Huly-")) | .name'
+  jq '.[] | select(.name | startswith("Legacy-")) | .name'
 ```
 
 ## Migration Timeline
@@ -154,7 +154,7 @@ curl -s https://letta.oculair.ca/v1/agents \
 
 2. **Human Block Addition** (commit 715fe75)
    - Extracted from Meridian agent
-   - Attached to all 42 Huly PM agents
+   - Attached to all 42 Legacy PM agents
    - Result: 7→8 memory blocks per agent
 
 ## Verification

@@ -18,7 +18,7 @@ Replace the fragile JSON file state management with a proper SQLite database for
 ## 🔧 Step 1: Install Dependencies
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 npm install
 ```
 
@@ -30,7 +30,7 @@ The `better-sqlite3` package requires native compilation. Update the Dockerfile:
 FROM node:20-alpine
 
 LABEL maintainer="Oculair Media"
-LABEL description="Huly to Vibe Kanban bidirectional sync service"
+LABEL description="Legacy to Vibe Kanban bidirectional sync service"
 
 # Install build dependencies for better-sqlite3
 RUN apk add --no-cache \
@@ -85,7 +85,7 @@ if (fs.existsSync(JSON_STATE_FILE) && !fs.existsSync(DB_PATH)) {
   console.log('[Migration] Importing data from JSON state file...');
   const oldState = JSON.parse(fs.readFileSync(JSON_STATE_FILE, 'utf8'));
   db.importFromJSON(oldState);
-  
+
   // Backup old file
   fs.renameSync(JSON_STATE_FILE, `${JSON_STATE_FILE}.backup`);
   console.log('[Migration] ✓ Migration complete, old file backed up');
@@ -99,10 +99,10 @@ if (fs.existsSync(JSON_STATE_FILE) && !fs.existsSync(DB_PATH)) {
 // REPLACE with database calls (examples below)
 ```
 
-### Update: syncHulyToVibe Function
+### Update: syncLegacyToVibe Function
 
 ```javascript
-async function syncHulyToVibe(hulyClient, vibeClient) {
+async function syncLegacyToVibe(legacyClient, vibeClient) {
   console.log('\n='.repeat(60));
   console.log(`Starting bidirectional sync at ${new Date().toISOString()}`);
   console.log('='.repeat(60));
@@ -117,16 +117,16 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
   }, 30000);
 
   try {
-    // Fetch Huly projects
-    const hulyProjects = await fetchHulyProjects(hulyClient);
-    if (hulyProjects.length === 0) {
-      console.log('No Huly projects found. Skipping sync.');
+    // Fetch Legacy projects
+    const legacyProjects = await fetchLegacyProjects(legacyClient);
+    if (legacyProjects.length === 0) {
+      console.log('No Legacy projects found. Skipping sync.');
       clearInterval(heartbeatInterval);
       db.completeSyncRun(syncId, { projectsProcessed: 0, projectsFailed: 0 });
       return;
     }
 
-    console.log(`[Huly] Found ${hulyProjects.length} projects\n`);
+    console.log(`[Legacy] Found ${legacyProjects.length} projects\n`);
 
     // Get existing Vibe projects
     const vibeProjects = await listVibeProjects(vibeClient);
@@ -134,106 +134,106 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
     const vibeProjectsByName = new Map(vibeProjects.map(p => [p.name.toLowerCase(), p]));
 
     // Filter projects using database
-    let projectsToProcess = hulyProjects;
+    let projectsToProcess = legacyProjects;
     if (config.sync.skipEmpty) {
       projectsToProcess = db.getProjectsToSync(300000); // 5 minute cache
-      console.log(`[DB] Processing ${projectsToProcess.length}/${hulyProjects.length} projects (skipping cached empty)`);
+      console.log(`[DB] Processing ${projectsToProcess.length}/${legacyProjects.length} projects (skipping cached empty)`);
     }
 
     // Function to process a single project
-    const processProject = async (hulyProject) => {
+    const processProject = async (legacyProject) => {
       try {
-        console.log(`\n--- Processing Huly project: ${hulyProject.name} ---`);
+        console.log(`\n--- Processing Legacy project: ${legacyProject.name} ---`);
 
         // Upsert project to database
         db.upsertProject({
-          identifier: hulyProject.identifier,
-          name: hulyProject.name,
-          filesystem_path: extractFilesystemPath(hulyProject.description),
+          identifier: legacyProject.identifier,
+          name: legacyProject.name,
+          filesystem_path: extractFilesystemPath(legacyProject.description),
         });
 
         // Check if project exists in Vibe
-        let vibeProject = vibeProjectsByName.get(hulyProject.name.toLowerCase());
+        let vibeProject = vibeProjectsByName.get(legacyProject.name.toLowerCase());
 
         if (!vibeProject) {
-          console.log(`[Vibe] Project not found, attempting to create: ${hulyProject.name}`);
-          const createdProject = await createVibeProject(hulyProject);
+          console.log(`[Vibe] Project not found, attempting to create: ${legacyProject.name}`);
+          const createdProject = await createVibeProject(legacyProject);
 
           if (createdProject) {
             vibeProject = createdProject;
-            vibeProjectsByName.set(hulyProject.name.toLowerCase(), vibeProject);
-            
+            vibeProjectsByName.set(legacyProject.name.toLowerCase(), vibeProject);
+
             // Update database with Vibe ID
             db.upsertProject({
-              identifier: hulyProject.identifier,
+              identifier: legacyProject.identifier,
               vibe_id: vibeProject.id,
             });
           } else {
-            console.log(`[Skip] Could not create project: ${hulyProject.name}`);
-            return { success: false, project: hulyProject.name };
+            console.log(`[Skip] Could not create project: ${legacyProject.name}`);
+            return { success: false, project: legacyProject.name };
           }
         } else {
-          console.log(`[Vibe] ✓ Found existing project: ${hulyProject.name}`);
-          
+          console.log(`[Vibe] ✓ Found existing project: ${legacyProject.name}`);
+
           // Update database with Vibe ID
           db.upsertProject({
-            identifier: hulyProject.identifier,
+            identifier: legacyProject.identifier,
             vibe_id: vibeProject.id,
           });
         }
 
         // Fetch issues (use last sync from database)
-        const projectIdentifier = hulyProject.identifier || hulyProject.name;
+        const projectIdentifier = legacyProject.identifier || legacyProject.name;
         const dbProject = db.getProject(projectIdentifier);
         const lastProjectSync = dbProject?.last_sync_at || null;
-        
-        const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
+
+        const legacyIssues = await fetchLegacyIssues(legacyClient, projectIdentifier, lastProjectSync);
         const vibeTasks = await listVibeTasks(vibeProject.id);
 
         // Update project activity in database
-        db.updateProjectActivity(projectIdentifier, hulyIssues.length);
+        db.updateProjectActivity(projectIdentifier, legacyIssues.length);
 
-        console.log(`\n[Sync] Huly: ${hulyIssues.length} issues, Vibe: ${vibeTasks.length} tasks`);
+        console.log(`\n[Sync] Legacy: ${legacyIssues.length} issues, Vibe: ${vibeTasks.length} tasks`);
 
-        // Phase 1: Sync Huly → Vibe
-        console.log('[Phase 1] Syncing Huly → Vibe...');
+        // Phase 1: Sync Legacy → Vibe
+        console.log('[Phase 1] Syncing Legacy → Vibe...');
         const vibeTasksByTitle = new Map(vibeTasks.map(t => [t.title.toLowerCase(), t]));
 
-        for (const hulyIssue of hulyIssues) {
+        for (const legacyIssue of legacyIssues) {
           // Save issue to database
           db.upsertIssue({
-            identifier: hulyIssue.identifier,
+            identifier: legacyIssue.identifier,
             project_identifier: projectIdentifier,
-            title: hulyIssue.title,
-            description: hulyIssue.description,
-            status: hulyIssue.status,
-            priority: hulyIssue.priority,
+            title: legacyIssue.title,
+            description: legacyIssue.description,
+            status: legacyIssue.status,
+            priority: legacyIssue.priority,
           });
 
-          const existingTask = vibeTasksByTitle.get(hulyIssue.title.toLowerCase());
+          const existingTask = vibeTasksByTitle.get(legacyIssue.title.toLowerCase());
 
           if (!existingTask) {
-            const createdTask = await createVibeTask(vibeClient, vibeProject.id, hulyIssue);
-            
+            const createdTask = await createVibeTask(vibeClient, vibeProject.id, legacyIssue);
+
             if (createdTask) {
               // Update database with Vibe task ID
               db.upsertIssue({
-                identifier: hulyIssue.identifier,
+                identifier: legacyIssue.identifier,
                 project_identifier: projectIdentifier,
                 vibe_task_id: createdTask.id,
               });
             }
           } else {
             // Update status if changed
-            const vibeStatus = mapHulyStatusToVibe(hulyIssue.status);
+            const vibeStatus = mapLegacyStatusToVibe(legacyIssue.status);
             if (vibeStatus !== existingTask.status) {
               console.log(`[Vibe] Updating task "${existingTask.title}" status: ${existingTask.status} → ${vibeStatus}`);
               await updateVibeTaskStatus(vibeClient, existingTask.id, vibeStatus);
             }
-            
+
             // Update database with Vibe task ID
             db.upsertIssue({
-              identifier: hulyIssue.identifier,
+              identifier: legacyIssue.identifier,
               project_identifier: projectIdentifier,
               vibe_task_id: existingTask.id,
             });
@@ -242,17 +242,17 @@ async function syncHulyToVibe(hulyClient, vibeClient) {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        // Phase 2: Sync Vibe → Huly
-        console.log('[Phase 2] Syncing Vibe → Huly...');
+        // Phase 2: Sync Vibe → Legacy
+        console.log('[Phase 2] Syncing Vibe → Legacy...');
         for (const vibeTask of vibeTasks) {
-          await syncVibeTaskToHuly(hulyClient, vibeTask, hulyIssues);
+          await syncVibeTaskToLegacy(legacyClient, vibeTask, legacyIssues);
           await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        return { success: true, project: hulyProject.name };
+        return { success: true, project: legacyProject.name };
       } catch (error) {
-        console.error(`\n[ERROR] Failed to process project ${hulyProject.name}:`, error.message);
-        return { success: false, project: hulyProject.name, error: error.message };
+        console.error(`\n[ERROR] Failed to process project ${legacyProject.name}:`, error.message);
+        return { success: false, project: legacyProject.name, error: error.message };
       }
     };
 

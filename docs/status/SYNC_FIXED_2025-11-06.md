@@ -1,14 +1,14 @@
 # Bidirectional Sync - FIXED (Nov 6, 2025) ✅
 
-**Status**: PRODUCTION READY  
-**Both Directions Working**: ✅  
+**Status**: PRODUCTION READY
+**Both Directions Working**: ✅
 **Method**: October 27 simple logic restored + HTTP PUT fix
 
 ---
 
 ## What Was Wrong
 
-After adding timestamp-based conflict resolution, Vibe→Huly sync broke because:
+After adding timestamp-based conflict resolution, Vibe→Legacy sync broke because:
 1. **Vibe API Bug**: The `updated_at` timestamp doesn't update when you change task status via UI
 2. **Complex Logic**: Timestamp comparisons with fallbacks made the code fragile
 3. **Over-Engineering**: The October 27 version was simpler and worked perfectly
@@ -26,12 +26,12 @@ After adding timestamp-based conflict resolution, Vibe→Huly sync broke because
 ### Before (Broken)
 ```javascript
 // Complex timestamp logic with 24-hour freshness checks
-if (vibeModifiedAt && hulyModifiedAt) {
+if (vibeModifiedAt && legacyModifiedAt) {
   const vibeAge = now - vibeModifiedAt;
   if (vibeAge > ONE_DAY_MS) {
     // Fallback logic...
   } else {
-    if (hulyModifiedAt > vibeModifiedAt) {
+    if (legacyModifiedAt > vibeModifiedAt) {
       return; // Skip
     }
   }
@@ -42,9 +42,9 @@ if (vibeModifiedAt && hulyModifiedAt) {
 ### After (Working)
 ```javascript
 // Simple status comparison (Oct 27 version)
-if (vibeStatusMapped !== hulyStatusNormalized) {
-  log.info('Vibe→Huly: Status update');
-  await updateHulyIssueStatus(hulyClient, hulyIdentifier, vibeStatusMapped);
+if (vibeStatusMapped !== legacyStatusNormalized) {
+  log.info('Vibe→Legacy: Status update');
+  await updateLegacyIssueStatus(legacyClient, legacyIdentifier, vibeStatusMapped);
 }
 ```
 
@@ -52,10 +52,10 @@ if (vibeStatusMapped !== hulyStatusNormalized) {
 
 ## What's Working Now
 
-✅ **Phase 1 (Huly → Vibe)**: Changes in Huly sync to Vibe  
-✅ **Phase 2 (Vibe → Huly)**: Changes in Vibe sync to Huly  
-✅ **HTTP Methods**: All using PUT (no more 405 errors)  
-✅ **Simple Logic**: Easy to understand and maintain  
+✅ **Phase 1 (Legacy → Vibe)**: Changes in Legacy sync to Vibe
+✅ **Phase 2 (Vibe → Legacy)**: Changes in Vibe sync to Legacy
+✅ **HTTP Methods**: All using PUT (no more 405 errors)
+✅ **Simple Logic**: Easy to understand and maintain
 
 ---
 
@@ -111,14 +111,14 @@ DRY_RUN=false
 
 ```bash
 # Watch sync logs
-docker-compose logs -f | grep "Vibe→Huly"
+docker-compose logs -f | grep "Vibe→Legacy"
 
 # Test: Move a task in Vibe Kanban UI
-# Expected: Should see "Vibe→Huly: Status update" within 30 seconds
-# Expected: Status should update in Huly
+# Expected: Should see "Vibe→Legacy: Status update" within 30 seconds
+# Expected: Status should update in Legacy
 
-# Test: Change a task in Huly
-# Expected: Should see "Huly→Vibe: Status update" 
+# Test: Change a task in Legacy
+# Expected: Should see "Legacy→Vibe: Status update"
 # Expected: Status should update in Vibe Kanban
 ```
 
@@ -126,15 +126,15 @@ docker-compose logs -f | grep "Vibe→Huly"
 
 ## What We Won't Do
 
-❌ **Timestamp Conflict Resolution**: Too complex, API bug makes it unreliable  
-❌ **Complex Fallback Logic**: Simple comparison works fine  
-❌ **Over-Engineering**: October 27 version proves simple is better  
+❌ **Timestamp Conflict Resolution**: Too complex, API bug makes it unreliable
+❌ **Complex Fallback Logic**: Simple comparison works fine
+❌ **Over-Engineering**: October 27 version proves simple is better
 
 ---
 
-**Status**: ✅ WORKING  
-**Last Tested**: 2025-11-06 02:21 AM EST  
-**User Confirmed**: "yea much better"  
+**Status**: ✅ WORKING
+**Last Tested**: 2025-11-06 02:21 AM EST
+**User Confirmed**: "yea much better"
 **Approach**: Back to basics - October 27 simple logic
 
 ---
@@ -143,7 +143,7 @@ docker-compose logs -f | grep "Vibe→Huly"
 
 ```bash
 # Restart sync
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 docker-compose restart
 
 # View logs

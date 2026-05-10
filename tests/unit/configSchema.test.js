@@ -56,6 +56,15 @@ function validConfig(overrides = {}) {
       enabled: true,
       path: '/mcp',
     },
+    doltHub: {
+      enabled: false,
+      dryRun: false,
+      apiUrl: 'https://www.dolthub.com/api/v1alpha1',
+      apiToken: '',
+      owner: 'oulair',
+      defaultVisibility: 'private',
+      remoteName: 'origin',
+    },
     ...overrides,
   };
 }
@@ -131,6 +140,39 @@ describe('configSchema', () => {
   it('accepts zero sync interval (run-once mode)', () => {
     const cfg = validConfig();
     cfg.sync.interval = 0;
+    const result = configSchema.safeParse(cfg);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects enabled DoltHub provisioning without an API token outside dry-run', () => {
+    const cfg = validConfig({
+      doltHub: {
+        enabled: true,
+        dryRun: false,
+        apiUrl: 'https://www.dolthub.com/api/v1alpha1',
+        apiToken: '',
+        owner: 'oulair',
+        defaultVisibility: 'private',
+        remoteName: 'origin',
+      },
+    });
+    const result = configSchema.safeParse(cfg);
+    expect(result.success).toBe(false);
+    expect(result.error.issues[0].message).toContain('DOLTHUB_API_TOKEN');
+  });
+
+  it('accepts DoltHub provisioning dry-run without an API token', () => {
+    const cfg = validConfig({
+      doltHub: {
+        enabled: false,
+        dryRun: true,
+        apiUrl: 'https://www.dolthub.com/api/v1alpha1',
+        apiToken: '',
+        owner: 'oulair',
+        defaultVisibility: 'private',
+        remoteName: 'origin',
+      },
+    });
     const result = configSchema.safeParse(cfg);
     expect(result.success).toBe(true);
   });

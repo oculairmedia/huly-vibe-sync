@@ -52,13 +52,13 @@ async function probe(url, timeoutMs) {
 
 function formatTable(headers, rows) {
   const all = [headers, ...rows];
-  const widths = headers.map((_, i) => Math.max(...all.map(r => String(r[i] ?? '').length)));
-  const sep = widths.map(w => '─'.repeat(w + 2)).join('┼');
+  const widths = headers.map((_, i) => Math.max(...all.map((r) => String(r[i] ?? '').length)));
+  const sep = widths.map((w) => '─'.repeat(w + 2)).join('┼');
   const fmt = (row, color) =>
     row.map((c, i) => ` ${color(String(c ?? '').padEnd(widths[i]))} `).join('│');
 
   const lines = [fmt(headers, chalk.bold), sep];
-  for (const row of rows) lines.push(fmt(row, s => s));
+  for (const row of rows) lines.push(fmt(row, (s) => s));
   return lines.join('\n');
 }
 
@@ -172,7 +172,7 @@ program
   .command('projects')
   .description('List projects')
   .option('--filter <key=value>', 'Filter query param (e.g. status=active)')
-  .action(async opts => {
+  .action(async (opts) => {
     const { json: jsonOut } = getGlobalOpts();
     let path = '/api/registry/projects';
     if (opts.filter) {
@@ -194,7 +194,7 @@ program
         return;
       }
 
-      const rows = projects.map(p => [
+      const rows = projects.map((p) => [
         p.identifier || '',
         p.name || '',
         p.tech_stack || '',
@@ -212,16 +212,16 @@ program
 program
   .command('project <identifier>')
   .description('Show project detail')
-  .action(async identifier => {
+  .action(async (identifier) => {
     const { json: jsonOut } = getGlobalOpts();
     try {
       const project = toRecord(
-        await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}`)
+        await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}`),
       );
       const issueData = toRecord(
         await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}/issues`).catch(
-          () => null
-        )
+          () => null,
+        ),
       );
 
       if (jsonOut) {
@@ -282,7 +282,7 @@ program
             name: opts.name,
             git_url: opts.gitUrl,
           }),
-        })
+        }),
       );
       const project = toRecord(data.project);
 
@@ -327,7 +327,7 @@ program
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updates),
-        })
+        }),
       );
       const project = toRecord(data.project);
 
@@ -344,12 +344,70 @@ program
     }
   });
 
+program
+  .command('project-beads-remote <identifier>')
+  .description('Show Beads/DoltHub remote provisioning status for a project')
+  .action(async (identifier) => {
+    const { json: jsonOut } = getGlobalOpts();
+    try {
+      const data = toRecord(
+        await fetchJson(`/api/projects/${encodeURIComponent(identifier)}/beads-remote`),
+      );
+
+      if (jsonOut) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      const remote = toRecord(data.beads_remote);
+      console.log(chalk.bold(`\nBeads Remote: ${identifier}\n`));
+      console.log(`  Status: ${remote.status || 'not_provisioned'}`);
+      console.log(`  Remote: ${remote.url || chalk.yellow('not set')}`);
+      console.log(`  Name:   ${remote.name || chalk.yellow('not set')}`);
+      if (remote.last_push_at) console.log(`  Last push: ${remote.last_push_at}`);
+      if (remote.error) console.log(`  Error: ${chalk.red(remote.error)}`);
+      console.log();
+    } catch (err) {
+      die(err.message);
+    }
+  });
+
+program
+  .command('project-provision-beads-remote <identifier>')
+  .description('Provision a project-scoped private DoltHub remote for Beads')
+  .option('--no-push', 'Configure the remote without pushing Beads data')
+  .action(async (identifier, opts) => {
+    const { json: jsonOut } = getGlobalOpts();
+    try {
+      const data = toRecord(
+        await fetchJson(`/api/projects/${encodeURIComponent(identifier)}/beads-remote/provision`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ push: opts.push !== false }),
+        }),
+      );
+
+      if (jsonOut) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      const provisioning = toRecord(data.provisioning);
+      console.log(chalk.green(data.message || 'Beads remote provisioned'));
+      console.log(`  Remote: ${provisioning.remote_url || chalk.yellow('not set')}`);
+      console.log(`  Repo:   ${provisioning.owner || '—'}/${provisioning.repo || '—'}`);
+      console.log(`  Pushed: ${provisioning.pushed ? chalk.green('yes') : chalk.yellow('no')}`);
+    } catch (err) {
+      die(err.message);
+    }
+  });
+
 // ── scan [identifier] ─────────────────────────────────────────────
 
 program
   .command('scan [identifier]')
   .description('Trigger project scan')
-  .action(async identifier => {
+  .action(async (identifier) => {
     const { json: jsonOut } = getGlobalOpts();
     try {
       let data;
@@ -357,11 +415,11 @@ program
         data = toRecord(
           await fetchJson(`/api/registry/projects/${encodeURIComponent(identifier)}/scan`, {
             method: 'POST',
-          })
+          }),
         );
       } else {
         data = toRecord(
-          await fetchJson('/api/registry/projects/ALL/scan', { method: 'POST' }).catch(() => null)
+          await fetchJson('/api/registry/projects/ALL/scan', { method: 'POST' }).catch(() => null),
         );
         if (!data) {
           die('No identifier given and full scan endpoint not available.');
@@ -397,14 +455,14 @@ program
   .command('agents')
   .description('List PM agents')
   .option('--orphaned', 'Show only agents with no project')
-  .action(async opts => {
+  .action(async (opts) => {
     const { json: jsonOut } = getGlobalOpts();
     try {
       const data = toRecord(await fetchJson('/api/agents'));
       let agents = toArray(data.agents);
 
       if (opts.orphaned) {
-        agents = agents.filter(agent => {
+        agents = agents.filter((agent) => {
           const a = toRecord(agent);
           return !a.identifier && !a.project_identifier;
         });
@@ -420,7 +478,7 @@ program
         return;
       }
 
-      const rows = agents.map(agent => {
+      const rows = agents.map((agent) => {
         const a = toRecord(agent);
         return [
           a.letta_agent_name || a.name || '',
@@ -440,7 +498,7 @@ program
   .command('sync')
   .description('Trigger sync with live output')
   .option('--project <id>', 'Scope to a single project')
-  .action(async opts => {
+  .action(async (opts) => {
     const { apiUrl, json: jsonOut } = getGlobalOpts();
     try {
       const body = opts.project ? { projectId: opts.project } : {};
@@ -449,7 +507,7 @@ program
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-        })
+        }),
       );
 
       if (jsonOut) {
@@ -488,7 +546,7 @@ program
                 const ts = new Date().toISOString().slice(11, 19);
                 const evtType = evt.type || evt.event || 'event';
                 console.log(
-                  `${chalk.gray(ts)} ${chalk.cyan(evtType)} ${JSON.stringify(evt.data || evt)}`
+                  `${chalk.gray(ts)} ${chalk.cyan(evtType)} ${JSON.stringify(evt.data || evt)}`,
                 );
               } catch {
                 console.log(chalk.gray(payload));
@@ -578,7 +636,7 @@ program
         console.log(`  ${icon} ${r.name} ${timing} — ${detail}`);
       }
       console.log(
-        `\n  ${allPass ? chalk.green('All checks passed') : chalk.red('Some checks failed')}\n`
+        `\n  ${allPass ? chalk.green('All checks passed') : chalk.red('Some checks failed')}\n`,
       );
     }
 
@@ -594,12 +652,12 @@ program
     const { json: jsonOut } = getGlobalOpts();
     try {
       const [workflows, schedule] = await Promise.all([
-        fetchJson('/api/temporal/workflows').catch(err => ({
+        fetchJson('/api/temporal/workflows').catch((err) => ({
           available: false,
           error: err.message,
           workflows: [],
         })),
-        fetchJson('/api/temporal/schedule').catch(err => ({
+        fetchJson('/api/temporal/schedule').catch((err) => ({
           available: false,
           error: err.message,
         })),
@@ -625,14 +683,14 @@ program
         }
       } else {
         console.log(
-          `    ${chalk.yellow(scheduleData.message || scheduleData.error || 'Not available')}`
+          `    ${chalk.yellow(scheduleData.message || scheduleData.error || 'Not available')}`,
         );
       }
 
       // Workflows
       console.log(chalk.bold('\n  Active Workflows:'));
       if (workflowData.available && toArray(workflowData.workflows).length) {
-        const rows = toArray(workflowData.workflows).map(workflow => {
+        const rows = toArray(workflowData.workflows).map((workflow) => {
           const w = toRecord(workflow);
           return [
             w.workflowId || w.id || '',
@@ -644,8 +702,8 @@ program
         console.log(
           formatTable(['Workflow ID', 'Type', 'Status', 'Started'], rows)
             .split('\n')
-            .map(l => '  ' + l)
-            .join('\n')
+            .map((l) => '  ' + l)
+            .join('\n'),
         );
       } else {
         console.log(`    ${chalk.gray('No active workflows')}`);

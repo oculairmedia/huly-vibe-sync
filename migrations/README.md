@@ -1,6 +1,6 @@
 # Database Migrations
 
-This directory contains SQL migration scripts for the huly-vibe-sync database.
+This directory contains SQL migration scripts for the vibe-sync database.
 
 ## Running Migrations
 

@@ -47,7 +47,7 @@ Update `lib/LettaService.js:ensureAgent()` to exclude control agent from PM agen
 
 ```javascript
 // Try to find existing agent by name using server-side filtering
-const agents = await this.client.agents.list({ 
+const agents = await this.client.agents.list({
   name: agentName,
   limit: 100
 });

@@ -9,7 +9,7 @@ After reviewing both the updated proposal and the `letta-code` repository, I rec
 ### ✅ Completed (M1: Agent Infrastructure)
 - Database schema for tracking Letta agents per project
 - Letta SDK integration and service wrapper
-- Agent creation with MCP tool attachment (Huly + Vibe)
+- Agent creation with MCP tool attachment (Legacy + Vibe)
 - Integration into sync flow with idempotency
 
 ### 🚧 In Progress (M2: State Builder - 40% Complete)
@@ -43,13 +43,13 @@ After reviewing both the updated proposal and the `letta-code` repository, I rec
 
 ## Key Differences: Our Service vs Letta Code
 
-| Feature | Huly-Vibe Sync Service | Letta Code |
+| Feature | Vibe Sync Service | Letta Code |
 |---------|----------------------|------------|
 | **Purpose** | Automated PM agent with board analysis | Interactive dev agent with code editing |
 | **Execution** | Headless, runs on schedule | Interactive CLI, user-initiated |
 | **Persistence** | SQLite database | JSON files in `.letta/` |
 | **Memory Blocks** | PM-specific: metrics, hotspots, changelog | Dev-focused: persona, human, project |
-| **Tools** | MCP only (Huly + Vibe) | Local dev tools (Bash, Read, Write) + MCP |
+| **Tools** | MCP only (Legacy + Vibe) | Local dev tools (Bash, Read, Write) + MCP |
 | **Integration** | Automatic on every sync | Manual via `letta` command |
 
 ## Recommended Approach: Hybrid Integration
@@ -79,7 +79,7 @@ if (process.env.LETTA_CODE_INTEROP === 'true') {
   // Write .letta/settings.local.json for auto-resume
   const lettaDir = path.join(filesystemPath, '.letta');
   await fs.mkdir(lettaDir, { recursive: true });
-  
+
   await fs.writeFile(
     path.join(lettaDir, 'settings.local.json'),
     JSON.stringify({
@@ -87,7 +87,7 @@ if (process.env.LETTA_CODE_INTEROP === 'true') {
       lastInteraction: Date.now(),
     }, null, 2)
   );
-  
+
   console.log(`[Letta] CLI interop enabled: cd ${filesystemPath} && letta`);
 }
 ```
@@ -125,14 +125,14 @@ letta -p "Show me current board hotspots" --tools ""
   // Standard letta-code blocks
   persona: "PM agent role...",          // Global, reusable
   human: "Team preferences...",         // Global, reusable
-  
+
   // Project-specific (committable)
   project: {
     name, identifier, repo_path,
     board_url: `${VIBE_API_URL}/projects/${vibe_id}`,
     sync_metadata: { last_sync, sync_count }
   },
-  
+
   // PM domain blocks (our innovation)
   board_state: { metrics, hotspots },   // Dynamic, updated each sync
   backlog: { top_items, priorities },   // Dynamic
@@ -200,12 +200,12 @@ if (config.letta.cliInterop && filesystemPath) {
 async function writeLettaCliSettings(repoPath, agentId) {
   const lettaDir = path.join(repoPath, '.letta');
   await fs.mkdir(lettaDir, { recursive: true });
-  
+
   const settings = {
     lastAgentId: agentId,
     lastInteraction: Date.now(),
   };
-  
+
   await fs.writeFile(
     path.join(lettaDir, 'settings.local.json'),
     JSON.stringify(settings, null, 2)
@@ -251,7 +251,7 @@ This gives us:
 **Next Steps:**
 1. Get approval on this approach
 2. Complete M2.3: Backlog summary and change log tracker
-3. Complete M2.4: Memory block upsert  
+3. Complete M2.4: Memory block upsert
 4. Complete M2.5: Wire into sync flow
 5. Complete M3: README upload
 6. Add optional Letta Code interop flag

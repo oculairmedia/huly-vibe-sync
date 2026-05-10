@@ -2,13 +2,13 @@
 
 ## Overview
 
-The **Control Agent** (`Huly-PM-Control`) serves as the central configuration hub for all PM agents. When you update tools on the Control Agent, those changes can be automatically propagated to all PM agents.
+The **Control Agent** (`Legacy-PM-Control`) serves as the central configuration hub for all PM agents. When you update tools on the Control Agent, those changes can be automatically propagated to all PM agents.
 
 ## How It Works
 
 ```
 ┌─────────────────────────┐
-│  Huly-PM-Control Agent  │  ← Update tools here
+│  Legacy-PM-Control Agent  │  ← Update tools here
 │  (Control Agent)        │
 └────────────┬────────────┘
              │
@@ -44,8 +44,8 @@ LETTA_SYNC_TOOLS_FROM_CONTROL=true
 # WARNING: This will REMOVE tools not in control agent
 LETTA_SYNC_TOOLS_FORCE=false
 
-# Control agent name (default: Huly-PM-Control)
-LETTA_CONTROL_AGENT=Huly-PM-Control
+# Control agent name (default: Legacy-PM-Control)
+LETTA_CONTROL_AGENT=Legacy-PM-Control
 ```
 
 ### docker-compose.yml
@@ -54,7 +54,7 @@ LETTA_CONTROL_AGENT=Huly-PM-Control
 environment:
   - LETTA_SYNC_TOOLS_FROM_CONTROL=${LETTA_SYNC_TOOLS_FROM_CONTROL:-true}
   - LETTA_SYNC_TOOLS_FORCE=${LETTA_SYNC_TOOLS_FORCE:-false}
-  - LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-Huly-PM-Control}
+  - LETTA_CONTROL_AGENT=${LETTA_CONTROL_AGENT:-Legacy-PM-Control}
 ```
 
 ## Usage
@@ -68,7 +68,7 @@ Tools automatically sync during regular sync cycles:
 LETTA_SYNC_TOOLS_FROM_CONTROL=true
 
 # Restart service
-docker-compose restart huly-vibe-sync
+docker-compose restart vibe-sync
 
 # Tools will sync on next cycle (every 30 seconds)
 ```
@@ -127,8 +127,8 @@ await letta.syncToolsFromControl(agentId, true);
 2. **Wait for Auto-Sync** (or trigger manually):
    ```bash
    # Option A: Wait ~30 seconds for next sync cycle
-   docker-compose logs -f huly-vibe-sync | grep "Tools synced"
-   
+   docker-compose logs -f vibe-sync | grep "Tools synced"
+
    # Option B: Trigger immediately
    node sync-tools-from-control.js
    ```
@@ -144,7 +144,7 @@ await letta.syncToolsFromControl(agentId, true);
 1. **Enable Force Mode**:
    ```bash
    echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-   docker-compose restart huly-vibe-sync
+   docker-compose restart vibe-sync
    ```
 
 2. **Detach Tool from Control Agent**:
@@ -156,13 +156,13 @@ await letta.syncToolsFromControl(agentId, true);
 3. **Verify Propagation**:
    ```bash
    # Check sync logs
-   docker-compose logs huly-vibe-sync | grep "detached"
+   docker-compose logs vibe-sync | grep "detached"
    ```
 
 4. **Disable Force Mode** (optional):
    ```bash
    echo "LETTA_SYNC_TOOLS_FORCE=false" >> .env
-   docker-compose restart huly-vibe-sync
+   docker-compose restart vibe-sync
    ```
 
 ### Creating a New "Tool Profile"
@@ -219,7 +219,7 @@ node sync-tools-from-control.js
 
 ```bash
 # View sync logs
-docker-compose logs -f huly-vibe-sync | grep -E "(Syncing tools|Tools synced)"
+docker-compose logs -f vibe-sync | grep -E "(Syncing tools|Tools synced)"
 
 # Example output:
 # [Letta] Syncing tools from control agent...
@@ -259,7 +259,7 @@ grep LETTA_SYNC_TOOLS_FROM_CONTROL .env
 
 **Check:** Are there errors in logs?
 ```bash
-docker-compose logs huly-vibe-sync | grep "Error syncing tools"
+docker-compose logs vibe-sync | grep "Error syncing tools"
 ```
 
 **Fix:** Run manual sync to see detailed errors
@@ -277,7 +277,7 @@ node sync-tools-from-control.js
 LETTA_SYNC_TOOLS_FORCE=false
 
 # Restart
-docker-compose restart huly-vibe-sync
+docker-compose restart vibe-sync
 ```
 
 ### Sync Takes Too Long
@@ -300,10 +300,10 @@ docker-compose restart huly-vibe-sync
 ```javascript
 {
   id: "agent-xxx",
-  name: "Huly-PM-Control",
+  name: "Legacy-PM-Control",
   tools: [
-    { id: "tool-aaa", name: "huly_query" },
-    { id: "tool-bbb", name: "huly_issue_ops" },
+    { id: "tool-aaa", name: "legacy_query" },
+    { id: "tool-bbb", name: "legacy_issue_ops" },
     { id: "tool-ccc", name: "vibe_list_tasks" },
     // ... more tools
   ]
@@ -381,7 +381,7 @@ curl -X PATCH "https://letta.oculair.ca/v1/agents/CONTROL_AGENT_ID/tools/attach/
 
 # Enable force mode
 echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-docker-compose restart huly-vibe-sync
+docker-compose restart vibe-sync
 
 # Wait for next sync cycle or trigger manually
 node sync-tools-from-control.js
@@ -401,7 +401,7 @@ node sync-tools-from-control.js --dry-run
 
 # Phase 3: Enable force mode to remove old tools
 echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-docker-compose restart huly-vibe-sync
+docker-compose restart vibe-sync
 ```
 
 ## API Reference

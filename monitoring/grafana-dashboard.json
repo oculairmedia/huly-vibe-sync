@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "Huly-Vibe Sync Dashboard",
-    "tags": ["huly", "vibe", "sync"],
+    "title": "Vibe Sync Dashboard",
+    "tags": ["vibe", "sync"],
     "timezone": "browser",
     "schemaVersion": 16,
     "version": 1,
@@ -177,7 +177,7 @@
       },
       {
         "id": 7,
-        "title": "Huly API Latency by Operation",
+        "title": "Legacy API Latency by Operation",
         "type": "graph",
         "gridPos": {
           "x": 0,
@@ -187,12 +187,12 @@
         },
         "targets": [
           {
-            "expr": "histogram_quantile(0.5, rate(huly_api_latency_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.5, rate(api_latency_seconds_bucket[5m]))",
             "legendFormat": "{{operation}} - p50",
             "refId": "A"
           },
           {
-            "expr": "histogram_quantile(0.95, rate(huly_api_latency_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.95, rate(api_latency_seconds_bucket[5m]))",
             "legendFormat": "{{operation}} - p95",
             "refId": "B"
           }

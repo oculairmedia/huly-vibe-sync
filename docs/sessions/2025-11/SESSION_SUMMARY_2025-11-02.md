@@ -11,7 +11,7 @@
 
 ### 2. ✅ **Investigated Letta CPU Usage**
 - **Found**: Two traffic sources hitting Letta
-  1. huly-vibe-sync (172.20.0.1) - 72% of traffic, normal and expected
+  1. vibe-sync (172.20.0.1) - 72% of traffic, normal and expected
   2. External IP (192.168.50.99) - 28% of traffic, hammering one block
 - **Identified**: 192.168.50.99 = Cloudflare tunnel proxying HTTPS traffic
 - **Verdict**: 17-30% CPU is normal for syncing 42 projects every 30s
@@ -21,7 +21,7 @@
 
 #### Optimization #1: Local Letta Proxy
 - **Change**: `LETTA_BASE_URL` from `https://letta.oculair.ca` → `http://192.168.50.90:8289`
-- **Impact**: 
+- **Impact**:
   - Eliminated Cloudflare external routing
   - No more 192.168.50.99 hammering
   - Lower latency (direct local network)
@@ -30,7 +30,7 @@
 - **Implementation**: Cache block content hashes in memory
 - **Logic**: Compare hashes BEFORE making Letta API calls
 - **Result**: Skip API entirely if all blocks match cache
-- **Performance**: 
+- **Performance**:
   - **Cache hit**: 5-10ms (50-140x faster)
   - **Cache miss**: 250-700ms (normal)
 - **Code**: Modified `lib/LettaService.js`
@@ -58,13 +58,13 @@
 ## Git Commits
 
 1. `1971516` - Fix SearXNG worker recycling issue
-2. `1f142d8` - Add Letta CPU usage analysis  
+2. `1f142d8` - Add Letta CPU usage analysis
 3. `974ea38` - Complete Phase 2 CPU optimization - local proxy + block hash caching
 
 ## System Status
 
 ### Current Performance
-- ✅ **huly-vibe-sync**: 0-5% CPU (idle most of the time)
+- ✅ **vibe-sync**: 0-5% CPU (idle most of the time)
 - ✅ **Letta**: 3-62% CPU (much improved from 25-75%)
 - ✅ **searxng_app**: 0.01% CPU (stable, no recycling)
 - ✅ **Overall system**: Running smoothly
@@ -81,7 +81,7 @@
 
 ### Total CPU Reduction
 - **Overall system**: 500% → ~50% CPU (90% reduction)
-- **huly-vibe-sync**: 29% → 0-5% CPU (83-98% reduction)
+- **vibe-sync**: 29% → 0-5% CPU (83-98% reduction)
 - **Letta**: 25-75% → 3-62% CPU (60-88% reduction at baseline)
 - **searxng**: 30-35% → 0.01% CPU (99.97% reduction)
 
@@ -112,7 +112,7 @@
 ### Future Optimizations (If Needed)
 1. Batch block updates (20-30% additional reduction)
 2. Connection pooling (10-15% latency improvement)
-3. Incremental sync (requires Huly/Vibe change detection)
+3. Incremental sync (requires Legacy/Vibe change detection)
 
 ## Key Learnings
 
@@ -124,9 +124,9 @@
 
 ---
 
-**Session Duration**: ~2 hours  
-**Status**: ✅ Complete and successful  
-**System Health**: Excellent - optimized and stable  
+**Session Duration**: ~2 hours
+**Status**: ✅ Complete and successful
+**System Health**: Excellent - optimized and stable
 **Recommendation**: Monitor for 24-48 hours, expect further improvements as caches warm
 
 ## FINAL VERIFICATION RESULTS
@@ -138,12 +138,12 @@
 
 ### CPU Usage (Steady State)
 - **Letta CPU**: **3.16%** (down from 25-75%) - **88-96% reduction!**
-- **huly-vibe-sync**: 2.61% (normal during sync)
+- **vibe-sync**: 2.61% (normal during sync)
 - **Total impact**: System baseline CPU dramatically reduced
 
 ### API Request Rate
 - **Before**: ~280 requests per 5 minutes
-- **After**: 69 requests per 5 minutes  
+- **After**: 69 requests per 5 minutes
 - **Reduction**: **75% fewer requests**
 
 ### Per-Project Performance
@@ -165,10 +165,10 @@ This is **expected and correct** - we only want to skip API calls when NOTHING c
 
 **The optimizations exceeded expectations!**
 
-✅ Cache working perfectly (60% hit rate as predicted)  
-✅ Letta CPU reduced by 88-96% (3% vs 25-75%)  
-✅ API requests reduced by 75% (69 vs 280 per 5 min)  
-✅ System stable and responsive  
+✅ Cache working perfectly (60% hit rate as predicted)
+✅ Letta CPU reduced by 88-96% (3% vs 25-75%)
+✅ API requests reduced by 75% (69 vs 280 per 5 min)
+✅ System stable and responsive
 ✅ No false negatives (all changes detected)
 
 **You were right** - there shouldn't be that many changes. The initial test showed low cache hits because:
@@ -179,5 +179,5 @@ After warmup, we're seeing exactly the expected behavior: **60% of projects have
 
 ---
 
-**Final Status**: ✅ **COMPLETE SUCCESS**  
+**Final Status**: ✅ **COMPLETE SUCCESS**
 **Recommendation**: System is optimized and ready for production

@@ -1,12 +1,12 @@
-# Huly-Vibe Sync - Issues Created
+# Vibe Sync - Issues Created
 
-**Date**: October 27, 2025  
-**Project**: VIBEK (Vibe Kanban)  
+**Date**: October 27, 2025
+**Project**: VIBEK (Vibe Kanban)
 **Total Issues**: 11
 
 ## Issue Summary
 
-All issues have been created in Huly and automatically synced to Vibe Kanban (verified working!).
+All issues have been created in Legacy and automatically synced to Vibe Kanban (verified working!).
 
 ### Testing & Quality (3 issues)
 
@@ -86,10 +86,10 @@ All issues have been created in Huly and automatically synced to Vibe Kanban (ve
 ## Verification
 
 All 11 issues confirmed present in:
-- ✅ Huly (via `huly_list_issues`)
+- ✅ Legacy (via `legacy_list_issues`)
 - ✅ Vibe Kanban (via `vibe-kanban_list_tasks`)
 
-Sync working perfectly - issues created in Huly appeared in Vibe within 3-6 seconds!
+Sync working perfectly - issues created in Legacy appeared in Vibe within 3-6 seconds!
 
 ## Next Steps
 

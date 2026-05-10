@@ -5,7 +5,7 @@ This document updates the prior systems engineering review after your major refa
 ## TL;DR
 
 - You substantially improved structure and test coverage. The codebase now has:
-  - Modular services (SyncOrchestrator, HealthService, Huly/Vibe Services, config, mappers, parsers)
+  - Modular services (SyncOrchestrator, HealthService, Legacy/Vibe Services, config, mappers, parsers)
   - Vitest test harness with coverage and CI (Codecov upload)
   - Type checking of JS via `tsc --noEmit`
 - Remaining work is concentrated in observability, resilience, and data consistency:
@@ -28,10 +28,10 @@ Overall score moves from ~7.5 → 7.8/10. You’re close to production-grade wit
 - CI quality gates
   - `.github/workflows/test.yml` runs on push/PR; Node 18/20 matrix; runs lint, tests, coverage; Codecov upload
 - Modularity
-  - `lib/SyncOrchestrator.js` — orchestration for Phase 1 (Huly→Vibe) and Phase 2 (Vibe→Huly)
+  - `lib/SyncOrchestrator.js` — orchestration for Phase 1 (Legacy→Vibe) and Phase 2 (Vibe→Legacy)
   - `lib/HealthService.js` — `/health` endpoint + in-process metrics object
   - `lib/config.js` — env loading/validation + summaries
-  - `lib/HulyService.js`, `lib/VibeService.js` — client wrappers and sync helpers
+  - `lib/LegacyService.js`, `lib/VibeService.js` — client wrappers and sync helpers
   - `index.js` reduced to 387 LOC; delegates to modules
 - Type checking
   - `tsconfig.json` with `allowJs` + `checkJs` and strictness dialed down for gradual adoption
@@ -67,7 +67,7 @@ Minimal logger module:
 import pino from 'pino';
 export const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  base: { service: 'huly-vibe-sync' },
+  base: { service: 'vibe-sync' },
   redact: ['letta.password']
 });
 ```
@@ -76,12 +76,12 @@ export const logger = pino({
 - Add counters/gauges/histograms:
   - `sync_runs_total{status}` (success|error)
   - `sync_duration_ms` (histogram)
-  - `huly_api_latency_ms`, `vibe_api_latency_ms` (histograms)
+  - `legacy_api_latency_ms`, `vibe_api_latency_ms` (histograms)
   - `projects_processed`, `issues_synced` (gauges during run, observe as counters on completion)
 - Extend `HealthService` to expose `/metrics` via `register.metrics()`.
 
 3) Retry with exponential backoff + simple circuit breaker
-- Wrap external calls (Huly/Vibe) in a helper that:
+- Wrap external calls (Legacy/Vibe) in a helper that:
   - Retries on transient errors (429/5xx/ECONNRESET/ETIMEDOUT), bounded attempts with jittered backoff
   - Trip a per-host breaker after N failures; half-open after cooldown
   - Classify errors into transient vs permanent via a small `SyncError` hierarchy
@@ -128,8 +128,8 @@ healthcheck:
 - Ensure `.gitignore` excludes `coverage/`, `logs/`, `.letta/`, and generated `html/` report artifacts.
 
 10) Tests to add (short list)
-- Phase 2 description change path (Vibe→Huly) including skip when Huly changed recently.
-- Conflict resolution where both systems changed (“Huly wins”) ensures Vibe update is issued.
+- Phase 2 description change path (Vibe→Legacy) including skip when Legacy changed recently.
+- Conflict resolution where both systems changed (“Legacy wins”) ensures Vibe update is issued.
 - Retry/backoff unit tests: transient 500, then success; breaker transitions (closed→open→half-open→closed).
 
 ---
@@ -146,7 +146,7 @@ healthcheck:
   - Update Dockerfile/compose healthchecks to query `/health`.
 
 - PR 2 — Resilience & error taxonomy (2–3 days)
-  - Implement `fetchWithRetry` with jittered exponential backoff; wrap Huly/Vibe calls.
+  - Implement `fetchWithRetry` with jittered exponential backoff; wrap Legacy/Vibe calls.
   - Add simple circuit breaker keyed by host.
   - Introduce `SyncError` classes for transient/permanent classification; refine orchestrator error handling.
   - Unit tests for retry policies and breaker states.

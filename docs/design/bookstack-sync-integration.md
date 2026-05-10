@@ -26,7 +26,7 @@
 
 We maintain long-term project trajectory documentation in BookStack (https://docs.oculair.ca). Currently, there is no automated sync between BookStack content and the project filesystem. Agents cannot read/edit BookStack docs locally, and local edits don't flow back to BookStack.
 
-We need the same **API → File Store → Sync Service** pattern we already use for Huly ↔ Vibe ↔ Beads, extended to BookStack.
+We need the same **API → File Store → Sync Service** pattern we already use for Legacy ↔ Vibe ↔ Beads, extended to BookStack.
 
 ## 2. Goals
 
@@ -111,7 +111,7 @@ Two external tools complement each other:
                        │  + Sync orchestrator
                        ▼
 ┌──────────────────────────────────────────────────────────┐
-│              huly-vibe-sync                              │
+│              vibe-sync                              │
 │                                                          │
 │  BookStackService.js      ← Service layer               │
 │  BookStackWatcher.js      ← File watcher (chokidar)     │
@@ -397,7 +397,7 @@ BOOKSTACK_EXPORT_ATTACHMENTS=true
 BOOKSTACK_EXPORT_META=true
 BOOKSTACK_MODIFY_LINKS=true               # Rewrite image links to local paths
 BOOKSTACK_DOCS_SUBDIR=docs/bookstack      # Where to store exported content
-BOOKSTACK_PROJECT_BOOKS=HVSYN:huly-vibe-sync-service,GRAPH:graphiti-knowledge-graph
+BOOKSTACK_PROJECT_BOOKS=HVSYN:vibe-sync-service,GRAPH:graphiti-knowledge-graph
 ```
 
 ## 7. Sync Flow Diagram
@@ -405,9 +405,9 @@ BOOKSTACK_PROJECT_BOOKS=HVSYN:huly-vibe-sync-service,GRAPH:graphiti-knowledge-gr
 ```
 Every sync cycle (per project):
 ┌─────────────────────────────────────────────────────────┐
-│ Phase 1: Huly → Vibe         (existing)                │
-│ Phase 2: Vibe → Huly         (existing)                │
-│ Phase 3: Beads ↔ Huly        (existing)                │
+│ Phase 1: Legacy → Vibe         (existing)                │
+│ Phase 2: Vibe → Legacy         (existing)                │
+│ Phase 3: Beads ↔ Legacy        (existing)                │
 │ Phase 4: BookStack ↔ Files   (NEW)                     │
 │   4a. Check if export is due (interval-based)          │
 │       → Run bookstack-file-exporter                    │
@@ -454,7 +454,7 @@ services:
       - BOOKSTACK_TOKEN_ID=${BOOKSTACK_TOKEN_ID}
       - BOOKSTACK_TOKEN_SECRET=${BOOKSTACK_TOKEN_SECRET}
 
-  huly-vibe-sync:
+  vibe-sync:
     # ... existing config ...
     volumes:
       - bookstack-exports:/bookstack-exports:ro # Read exports

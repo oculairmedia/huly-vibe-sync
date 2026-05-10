@@ -2,26 +2,26 @@
 
 ## The Problem
 
-Vibe Kanban's `Task::update()` function doesn't update the `updated_at` timestamp when you change a task's status via the REST API or UI. This causes the huly-vibe-sync to oscillate because it can't tell which system was modified more recently.
+Vibe Kanban's `Task::update()` function doesn't update the `updated_at` timestamp when you change a task's status via the REST API or UI. This causes the vibe-sync to oscillate because it can't tell which system was modified more recently.
 
 ## The Fix
 
-**File**: `crates/db/src/models/task.rs`  
+**File**: `crates/db/src/models/task.rs`
 **Line**: 317
 
 ### Change This:
 ```rust
-r#"UPDATE tasks 
-   SET title = $3, description = $4, status = $5, parent_task_attempt = $6 
-   WHERE id = $1 AND project_id = $2 
+r#"UPDATE tasks
+   SET title = $3, description = $4, status = $5, parent_task_attempt = $6
+   WHERE id = $1 AND project_id = $2
    RETURNING ..."#,
 ```
 
 ### To This:
 ```rust
-r#"UPDATE tasks 
+r#"UPDATE tasks
    SET title = $3, description = $4, status = $5, parent_task_attempt = $6, updated_at = datetime('now', 'subsec')
-   WHERE id = $1 AND project_id = $2 
+   WHERE id = $1 AND project_id = $2
    RETURNING ..."#,
 ```
 
@@ -29,7 +29,7 @@ r#"UPDATE tasks
 
 1. **Copy the fixed source**:
 ```bash
-cp -r /opt/stacks/huly-vibe-sync/vibe-kanban-source /opt/stacks/vibe-kanban-fixed
+cp -r /opt/stacks/vibe-sync/vibe-kanban-source /opt/stacks/vibe-kanban-fixed
 cd /opt/stacks/vibe-kanban-fixed
 ```
 
@@ -70,7 +70,7 @@ The timestamp should reflect the current time after you move the task.
 
 ## Alternative: Use the Fixed Source I Already Patched
 
-The source at `/opt/stacks/huly-vibe-sync/vibe-kanban-source` already has the fix applied. You can build from there directly.
+The source at `/opt/stacks/vibe-sync/vibe-kanban-source` already has the fix applied. You can build from there directly.
 
 ## File Bug Report
 

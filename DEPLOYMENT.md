@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Complete guide for deploying Huly-Vibe Sync service and dashboard.
+Complete guide for deploying Vibe Sync service and dashboard.
 
 ## Table of Contents
 
@@ -24,8 +24,8 @@ The fastest way to run both backend and frontend together.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/huly-vibe-sync.git
-cd huly-vibe-sync
+git clone https://github.com/your-org/vibe-sync.git
+cd vibe-sync
 
 # Copy environment file
 cp .env.docker.example .env
@@ -103,10 +103,10 @@ Images are automatically built and pushed to GitHub Container Registry on every 
 
 ```bash
 # Backend
-docker pull ghcr.io/your-org/huly-vibe-sync:latest
+docker pull ghcr.io/your-org/vibe-sync:latest
 
 # Frontend
-docker pull ghcr.io/your-org/huly-vibe-sync-ui:latest
+docker pull ghcr.io/your-org/vibe-sync-ui:latest
 ```
 
 ### Authentication
@@ -121,19 +121,19 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 ```bash
 # Backend
 docker run -d \
-  --name huly-vibe-sync \
+  --name vibe-sync \
   -p 3099:3099 \
-  -e HULY_API_URL=http://your-huly-api:3457/api \
+  -e REMOVED_API_URL=http://your-legacy-api:3457/api \
   -e VIBE_API_URL=http://your-vibe-api:3105/api \
   -v $(pwd)/logs:/app/logs \
-  ghcr.io/your-org/huly-vibe-sync:latest
+  ghcr.io/your-org/vibe-sync:latest
 
 # Frontend
 docker run -d \
-  --name huly-vibe-sync-ui \
+  --name vibe-sync-ui \
   -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:3099 \
-  ghcr.io/your-org/huly-vibe-sync-ui:latest
+  ghcr.io/your-org/vibe-sync-ui:latest
 ```
 
 ## Environment Variables
@@ -141,9 +141,9 @@ docker run -d \
 ### Backend (.env)
 
 ```bash
-# Huly Configuration
-HULY_API_URL=http://192.168.50.90:3457/api
-HULY_USE_REST=true
+# Legacy Configuration
+REMOVED_API_URL=http://192.168.50.90:3457/api
+REMOVED_USE_REST=true
 
 # Vibe Kanban Configuration
 VIBE_API_URL=http://192.168.50.90:3105/api
@@ -176,7 +176,7 @@ STACKS_DIR=/opt/stacks
 NEXT_PUBLIC_API_URL=http://localhost:3099
 
 # Application Settings
-NEXT_PUBLIC_APP_NAME="Huly-Vibe Sync Dashboard"
+NEXT_PUBLIC_APP_NAME="Vibe Sync Dashboard"
 NEXT_PUBLIC_POLLING_INTERVAL=5000
 ```
 
@@ -198,14 +198,14 @@ NEXT_PUBLIC_POLLING_INTERVAL=5000
 
 ```bash
 # Use secrets for sensitive data
-docker secret create huly_api_url -
+docker secret create legacy_api_url -
 docker secret create letta_password -
 
 # Run with read-only filesystem
 docker run --read-only \
   --tmpfs /tmp \
   --tmpfs /app/logs \
-  ghcr.io/your-org/huly-vibe-sync:latest
+  ghcr.io/your-org/vibe-sync:latest
 ```
 
 ### 3. Networking
@@ -213,7 +213,7 @@ docker run --read-only \
 ```yaml
 # docker-compose.yml with custom network
 networks:
-  huly-vibe-network:
+  legacy-vibe-network:
     driver: bridge
     ipam:
       config:
@@ -228,7 +228,7 @@ docker run \
   --log-driver json-file \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  ghcr.io/your-org/huly-vibe-sync:latest
+  ghcr.io/your-org/vibe-sync:latest
 ```
 
 ### 5. Health Checks
@@ -258,7 +258,7 @@ readinessProbe:
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'huly-vibe-sync'
+  - job_name: 'vibe-sync'
     static_configs:
       - targets: ['localhost:3099']
     metrics_path: '/metrics'
@@ -275,7 +275,7 @@ Import the included Grafana dashboard:
 
 Key metrics:
 - Sync success rate
-- API latency (Huly & Vibe)
+- API latency (Legacy & Vibe)
 - Memory usage
 - Connection pool status
 - Error count
@@ -285,7 +285,7 @@ Key metrics:
 ```yaml
 # Prometheus alerts
 groups:
-  - name: huly-vibe-sync
+  - name: vibe-sync
     rules:
       - alert: SyncFailureRate
         expr: rate(sync_runs_total{status="error"}[5m]) > 0.1
@@ -306,29 +306,29 @@ groups:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: huly-vibe-sync
+  name: vibe-sync
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: huly-vibe-sync
+      app: vibe-sync
   template:
     metadata:
       labels:
-        app: huly-vibe-sync
+        app: vibe-sync
     spec:
       containers:
       - name: sync
-        image: ghcr.io/your-org/huly-vibe-sync:latest
+        image: ghcr.io/your-org/vibe-sync:latest
         ports:
         - containerPort: 3099
           name: health
         env:
-        - name: HULY_API_URL
+        - name: REMOVED_API_URL
           valueFrom:
             configMapKeyRef:
               name: sync-config
-              key: huly_api_url
+              key: legacy_api_url
         - name: VIBE_API_URL
           valueFrom:
             configMapKeyRef:
@@ -351,10 +351,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: huly-vibe-sync
+  name: vibe-sync
 spec:
   selector:
-    app: huly-vibe-sync
+    app: vibe-sync
   ports:
   - port: 3099
     targetPort: 3099
@@ -367,26 +367,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: huly-vibe-sync-ui
+  name: vibe-sync-ui
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: huly-vibe-sync-ui
+      app: vibe-sync-ui
   template:
     metadata:
       labels:
-        app: huly-vibe-sync-ui
+        app: vibe-sync-ui
     spec:
       containers:
       - name: ui
-        image: ghcr.io/your-org/huly-vibe-sync-ui:latest
+        image: ghcr.io/your-org/vibe-sync-ui:latest
         ports:
         - containerPort: 3000
           name: http
         env:
         - name: NEXT_PUBLIC_API_URL
-          value: "http://huly-vibe-sync:3099"
+          value: "http://vibe-sync:3099"
         resources:
           requests:
             memory: "256Mi"
@@ -398,11 +398,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: huly-vibe-sync-ui
+  name: vibe-sync-ui
 spec:
   type: LoadBalancer
   selector:
-    app: huly-vibe-sync-ui
+    app: vibe-sync-ui
   ports:
   - port: 80
     targetPort: 3000
@@ -415,7 +415,7 @@ spec:
 
 ```bash
 # Check logs
-docker logs huly-vibe-sync
+docker logs vibe-sync
 
 # Check health
 curl http://localhost:3099/health
@@ -428,7 +428,7 @@ curl http://localhost:3099/metrics
 
 ```bash
 # Check logs
-docker logs huly-vibe-sync-ui
+docker logs vibe-sync-ui
 
 # Check build logs
 docker build --progress=plain ./ui
@@ -453,26 +453,26 @@ docker-compose restart backend
 
 ```bash
 # Backup sync state database
-docker cp huly-vibe-sync:/app/logs/sync-state.db ./backup/
+docker cp vibe-sync:/app/logs/sync-state.db ./backup/
 
 # Backup logs
-docker cp huly-vibe-sync:/app/logs ./backup/logs/
+docker cp vibe-sync:/app/logs ./backup/logs/
 ```
 
 ### Restore
 
 ```bash
 # Restore database
-docker cp ./backup/sync-state.db huly-vibe-sync:/app/logs/
+docker cp ./backup/sync-state.db vibe-sync:/app/logs/
 
 # Restart service
-docker restart huly-vibe-sync
+docker restart vibe-sync
 ```
 
 ## Support
 
 For deployment issues:
-- Check logs: `docker logs huly-vibe-sync`
+- Check logs: `docker logs vibe-sync`
 - Review health endpoint: `/health`
 - Open GitHub issue with logs and configuration (redact secrets!)
 

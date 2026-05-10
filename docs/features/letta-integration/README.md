@@ -1,6 +1,6 @@
 # Letta Integration Feature Documentation
 
-Documentation for Letta agent integration with the Huly Vibe Sync system.
+Documentation for Letta agent integration with the Vibe Sync system.
 
 ## Integration Documentation
 

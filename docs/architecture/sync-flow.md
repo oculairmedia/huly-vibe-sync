@@ -7,7 +7,7 @@ Visual documentation of the bidirectional sync system.
 ```mermaid
 flowchart TB
     subgraph Sources["Event Sources"]
-        HW[Huly Webhook]
+        HW[Legacy Webhook]
         VS[Vibe SSE]
         BF[Beads File Watcher]
         SC[Scheduled Sync]
@@ -16,13 +16,13 @@ flowchart TB
     subgraph Temporal["Temporal Workflows"]
         OW[FullOrchestrationWorkflow]
         BW[BidirectionalSyncWorkflow]
-        HWW[HulyWebhookChangeWorkflow]
+        HWW[LegacyWebhookChangeWorkflow]
         VWW[VibeSSEChangeWorkflow]
         BFW[BeadsFileChangeWorkflow]
     end
 
     subgraph Systems["External Systems"]
-        H[(Huly)]
+        H[(Legacy)]
         V[(Vibe Kanban)]
         B[(Beads/Git)]
     end
@@ -48,7 +48,7 @@ Scheduled every 10 seconds. Syncs all projects.
 
 ```mermaid
 flowchart TD
-    Start([Start]) --> FetchProjects[Fetch Huly + Vibe Projects]
+    Start([Start]) --> FetchProjects[Fetch Legacy + Vibe Projects]
 
     FetchProjects --> BulkPrefetch[Bulk Prefetch All Issues]
     BulkPrefetch --> Loop{For Each Project}
@@ -57,12 +57,12 @@ flowchart TD
     CB -->|Yes| Skip[Skip Project]
     CB -->|No| EnsureVibe[Ensure Vibe Project Exists]
 
-    EnsureVibe --> Phase1[Phase 1: Huly to Vibe]
-    Phase1 --> Phase2[Phase 2: Vibe to Huly]
+    EnsureVibe --> Phase1[Phase 1: Legacy to Vibe]
+    Phase1 --> Phase2[Phase 2: Vibe to Legacy]
     Phase2 --> HasBeads{Has Git Repo?}
 
-    HasBeads -->|Yes| Phase3a[Phase 3a: Huly to Beads]
-    Phase3a --> Phase3b[Phase 3b: Beads to Huly]
+    HasBeads -->|Yes| Phase3a[Phase 3a: Legacy to Beads]
+    Phase3a --> Phase3b[Phase 3b: Beads to Legacy]
     Phase3b --> Commit[Git Commit Changes]
     HasBeads -->|No| SkipBeads[Skip Beads Sync]
 
@@ -88,11 +88,11 @@ Handles single issue sync from any source.
 flowchart TD
     Start([Issue Changed]) --> DetectSource{Source System?}
 
-    DetectSource -->|Huly| FetchHuly[Fetch Huly Issue]
+    DetectSource -->|Legacy| FetchLegacy[Fetch Legacy Issue]
     DetectSource -->|Vibe| FetchVibe[Fetch Vibe Task]
     DetectSource -->|Beads| FetchBeads[Fetch Beads Issue]
 
-    FetchHuly --> SyncToVibe[Sync to Vibe]
+    FetchLegacy --> SyncToVibe[Sync to Vibe]
     SyncToVibe --> HasBeads1{Has Git Repo?}
     HasBeads1 -->|Yes| SyncToBeads1[Sync to Beads]
     HasBeads1 -->|No| Done1([Done])
@@ -100,9 +100,9 @@ flowchart TD
     CommitBeads1 --> Done1
 
     FetchVibe --> ConflictCheck1{Conflict?\nMost Recent Wins}
-    ConflictCheck1 -->|Vibe Newer| SyncToHuly[Sync to Huly]
-    ConflictCheck1 -->|Huly Newer| SkipSync1[Skip - Huly Wins]
-    SyncToHuly --> HasBeads2{Has Git Repo?}
+    ConflictCheck1 -->|Vibe Newer| SyncToLegacy[Sync to Legacy]
+    ConflictCheck1 -->|Legacy Newer| SkipSync1[Skip - Legacy Wins]
+    SyncToLegacy --> HasBeads2{Has Git Repo?}
     HasBeads2 -->|Yes| SyncToBeads2[Sync to Beads]
     HasBeads2 -->|No| Done2([Done])
     SyncToBeads2 --> CommitBeads2[Commit Beads]
@@ -110,9 +110,9 @@ flowchart TD
     SkipSync1 --> Done2
 
     FetchBeads --> ConflictCheck2{Conflict?\nMost Recent Wins}
-    ConflictCheck2 -->|Beads Newer| SyncBeadsToHuly[Sync to Huly]
+    ConflictCheck2 -->|Beads Newer| SyncBeadsToLegacy[Sync to Legacy]
     ConflictCheck2 -->|Other Newer| SkipSync2[Skip - Other Wins]
-    SyncBeadsToHuly --> SyncBeadsToVibe[Sync to Vibe]
+    SyncBeadsToLegacy --> SyncBeadsToVibe[Sync to Vibe]
     SyncBeadsToVibe --> Done3([Done])
     SkipSync2 --> Done3
 ```
@@ -123,15 +123,15 @@ Real-time sync triggered by external events.
 
 ```mermaid
 sequenceDiagram
-    participant H as Huly
-    participant HW as Huly Webhook
+    participant H as Legacy
+    participant HW as Legacy Webhook
     participant T as Temporal
     participant V as Vibe
     participant B as Beads
 
-    Note over H,B: Huly Change Event
+    Note over H,B: Legacy Change Event
     H->>HW: Issue Updated
-    HW->>T: Start HulyWebhookChangeWorkflow
+    HW->>T: Start LegacyWebhookChangeWorkflow
     T->>T: Deduplicate (workflow ID)
     T->>V: Sync to Vibe
     V-->>T: OK
@@ -142,8 +142,8 @@ sequenceDiagram
     Note over H,B: Vibe Change Event (SSE)
     V->>T: SSE Event
     T->>T: Start VibeSSEChangeWorkflow
-    T->>T: Extract Huly ID from description
-    T->>H: Sync to Huly
+    T->>T: Extract Legacy ID from description
+    T->>H: Sync to Legacy
     H-->>T: OK
     T->>B: Sync to Beads
     B-->>T: OK
@@ -163,7 +163,7 @@ flowchart TD
     Compare -->|Other system newer| Skip[Skip sync - other system wins]
     Compare -->|Same timestamp| SourceWins[Source system wins ties]
 
-    Propagate --> UpdateTargets[Update Huly/Vibe/Beads]
+    Propagate --> UpdateTargets[Update Legacy/Vibe/Beads]
     SourceWins --> UpdateTargets
 
     UpdateTargets --> RecordSync[Record sync in DB]
@@ -206,7 +206,7 @@ flowchart LR
 
 | System | Count | Notes                      |
 | ------ | ----- | -------------------------- |
-| Huly   | 178   | Source of truth for issues |
+| Legacy   | 178   | Source of truth for issues |
 | Vibe   | 174   | Kanban board tasks         |
 | Beads  | 171   | Git-tracked local issues   |
 

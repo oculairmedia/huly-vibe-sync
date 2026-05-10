@@ -1,8 +1,8 @@
 # Session Summary: November 3, 2025
 ## Control Agent Tool Sync + Letta File Cleanup
 
-**Duration:** ~3 hours  
-**Context:** Building on Systems Engineering Review completed earlier today  
+**Duration:** ~3 hours
+**Context:** Building on Systems Engineering Review completed earlier today
 **Status:** ✅ Complete - All features implemented, tested, documented, and committed
 
 ---
@@ -13,7 +13,7 @@
 **Problem:** Need to manage tools for 42 PM agents at scale from a single control point
 
 **Solution Implemented:**
-- Control Agent (`Huly-PM-Control`) now serves as central configuration hub
+- Control Agent (`Legacy-PM-Control`) now serves as central configuration hub
 - When tools are updated on Control Agent, changes automatically propagate to all PM agents
 - Three sync methods: automatic (built-in), manual (script), programmatic (API)
 - Two modes: additive (safe, default) and force (exact match)
@@ -80,12 +80,12 @@ await lettaService.syncToolsFromControl(agentId, forceMode);
 catch (error) {
   if (error.message && error.message.includes('409')) {
     console.log(`[Letta] Source ${sourceName} already exists (409 conflict), fetching it...`);
-    
+
     // Try REST API
     const response = await fetchWithPool(`${this.apiURL}/sources?name=${sourceName}`);
     const existingSource = sources.find(s => s.name === sourceName);
     if (existingSource) return existingSource;
-    
+
     // Return placeholder to skip upload gracefully
     return { id: null, name: sourceName, _placeholder: true };
   }
@@ -142,7 +142,7 @@ catch (error) {
 - Added comprehensive error handling (reduces crash risk)
 - Documented expected behaviors
 
-**Remaining Work:** 
+**Remaining Work:**
 - Still need Vitest setup
 - Still need unit tests (2-3 weeks estimated)
 
@@ -200,7 +200,7 @@ catch (error) {
 ### Control Agent Pattern
 ```
 ┌─────────────────────────┐
-│  Huly-PM-Control Agent  │  ← Central Configuration Hub
+│  Legacy-PM-Control Agent  │  ← Central Configuration Hub
 │  (10 tools configured)  │
 └────────────┬────────────┘
              │
@@ -305,7 +305,7 @@ catch (error) {
 **Workaround:** Service ignores them with 409 handling
 **Proper Fix:** Database-level cleanup:
 ```sql
-DELETE FROM sources WHERE name LIKE 'Huly-%-root';
+DELETE FROM sources WHERE name LIKE 'Legacy-%-root';
 ```
 
 #### 2. **File Upload Disabled** ⚠️
@@ -509,11 +509,11 @@ Three levels of documentation served different needs:
 
 ### Start Service with New Features
 ```bash
-cd /opt/stacks/huly-vibe-sync
-docker-compose up -d huly-vibe-sync
+cd /opt/stacks/vibe-sync
+docker-compose up -d vibe-sync
 
 # Watch tool sync in action
-docker-compose logs -f huly-vibe-sync | grep -E "(Syncing tools|Tools synced)"
+docker-compose logs -f vibe-sync | grep -E "(Syncing tools|Tools synced)"
 ```
 
 ### Manual Tool Sync
@@ -557,13 +557,13 @@ curl -s "https://letta.oculair.ca/v1/agents/AGENT_ID/tools" \
 - **File Cleanup:** `cleanup-all-letta-files.sh`
 
 ### Git
-- **Repository:** https://github.com/oculairmedia/huly-vibe-sync
+- **Repository:** https://github.com/oculairmedia/vibe-sync
 - **Branch:** `main`
 - **Latest Commit:** `2945acc`
 
 ---
 
-**Session End Time:** 2025-11-03 21:15 EST  
-**Next Session:** TBD - Focus on Testing (P0 from Review)  
+**Session End Time:** 2025-11-03 21:15 EST
+**Next Session:** TBD - Focus on Testing (P0 from Review)
 **Overall Status:** ✅ Success - All objectives met, service improved, well documented
 

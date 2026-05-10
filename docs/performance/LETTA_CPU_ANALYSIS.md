@@ -7,8 +7,8 @@
 
 ## What's Causing Letta Processing?
 
-### 1. **huly-vibe-sync (Primary Load - Expected)**
-- **Source IP**: 172.20.0.1 (huly-vibe-sync container)
+### 1. **vibe-sync (Primary Load - Expected)**
+- **Source IP**: 172.20.0.1 (vibe-sync container)
 - **Activity**: Syncing 42 projects every 30 seconds
 - **Request Pattern** (per sync cycle):
   - `GET /v1/agents/` - List all agents
@@ -46,14 +46,14 @@ Total per cycle: ~42 GET requests + ~42×6 block reads + ~42×3 block updates
 ### Request Breakdown (Last 5 Minutes)
 - **Total requests**: 279
 - **Block PATCH requests**: 193 (69% of traffic)
-- **From huly-vibe-sync (172.20.0.1)**: 202 (72%)
+- **From vibe-sync (172.20.0.1)**: 202 (72%)
 - **From external (192.168.50.99)**: 77 (28%)
 
 ## Why CPU Spikes?
 
 ### Normal Spikes (Expected)
 1. **Sync cycles every 30 seconds**
-   - huly-vibe-sync processes 42 projects
+   - vibe-sync processes 42 projects
    - Each project: read agent + read 6 blocks + update 2-5 blocks
    - Letta does JSON serialization, database lookups, hashing
    - **Duration**: 5-10 seconds of high CPU, then idle
@@ -84,7 +84,7 @@ Total per cycle: ~42 GET requests + ~42×6 block reads + ~42×3 block updates
 ### Already Applied ✅
 1. ✅ SYNC_INTERVAL: 3s → 30s (10x reduction)
 2. ✅ SKIP_EMPTY_PROJECTS: enabled
-3. ✅ Reduced huly-vibe-sync from 29% → 3% CPU
+3. ✅ Reduced vibe-sync from 29% → 3% CPU
 
 ### Phase 2 Optimizations (If Needed)
 From previous session notes in `CPU_OPTIMIZATION_RESULTS.md`:
@@ -109,7 +109,7 @@ From previous session notes in `CPU_OPTIMIZATION_RESULTS.md`:
    ```bash
    # Check what's on that host
    ssh 192.168.50.99 "ps aux | grep letta"
-   
+
    # Check which service is patching that specific block
    curl -s http://localhost:8083/v1/blocks/block-5b977df1-8270-4393-a6cb-ab7e1ae61ca7 \
      -H "Authorization: Bearer lettaSecurePass123" | jq '.label'
@@ -119,7 +119,7 @@ From previous session notes in `CPU_OPTIMIZATION_RESULTS.md`:
    ```bash
    # Watch for external hammering
    docker logs -f letta-letta-1 | grep 192.168.50.99
-   
+
    # Count requests per minute
    docker logs letta-letta-1 --since 1m | grep "192.168.50.99" | wc -l
    ```
@@ -131,7 +131,7 @@ From previous session notes in `CPU_OPTIMIZATION_RESULTS.md`:
 ## Conclusion
 
 ### Current State
-- ✅ **huly-vibe-sync**: Working perfectly, optimized, expected load
+- ✅ **vibe-sync**: Working perfectly, optimized, expected load
 - ✅ **Letta CPU 17-30%**: NORMAL and HEALTHY
 - ⚠️ **192.168.50.99**: Unknown external service hammering one block - INVESTIGATE
 - ⚠️ **Letta CPU 60-75%**: Only when external hammering occurs - CONCERNING

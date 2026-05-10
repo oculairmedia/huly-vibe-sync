@@ -13,7 +13,7 @@ Team-wide configuration that can be committed to git.
 {
   "version": "1.0.0",
   "project": {
-    "name": "huly-vibe-sync",
+    "name": "vibe-sync",
     "description": "Service description",
     "memory": {
       "project_context": "Context shared across all agents"
@@ -25,7 +25,7 @@ Team-wide configuration that can be committed to git.
     "tools": { ... }
   },
   "control_agent": {
-    "name": "Huly-PM-Control",
+    "name": "Legacy-PM-Control",
     "persona": "Agent role and behavior definition",
     "tools": [...],
     "sync_behavior": { ... }
@@ -72,12 +72,12 @@ Located in `settings.json` under `control_agent`:
 ```json
 {
   "control_agent": {
-    "name": "Huly-PM-Control",
+    "name": "Legacy-PM-Control",
     "description": "Template agent for PM agents",
     "persona": "You are a helpful PM assistant...",
     "tools": [
-      "huly_query",
-      "huly_issue_ops",
+      "legacy_query",
+      "legacy_issue_ops",
       "list_tasks"
     ],
     "sync_behavior": {
@@ -104,7 +104,7 @@ Following **Letta Code's hierarchical pattern**:
 - **Customizable**: Can be overridden per project
 - **Purpose**: Define agent role and behavior
 
-### 2. Human Block  
+### 2. Human Block
 - **Block ID**: `block-3da80889-c509-4c68-b502-a3f54c28c137` (Meridian)
 - **Scope**: Shared across all agents in deployment
 - **Purpose**: User preferences and coding style
@@ -129,7 +129,7 @@ Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
 {
   "permissions": {
     "allow": [
-      "huly_*",                         // All Huly tools
+      "legacy_*",                         // All Legacy tools
       "vibe_*",                         // All Vibe tools
       "filesystem_read_file(*)",        // Read any file
       "filesystem_list_directory(*)",   // List directories
@@ -163,8 +163,8 @@ Tools are defined at multiple levels:
 {
   "control_agent": {
     "tools": [
-      "huly_query",
-      "huly_issue_ops",
+      "legacy_query",
+      "legacy_issue_ops",
       "list_tasks"
     ]
   }
@@ -176,7 +176,7 @@ Tools are defined at multiple levels:
 {
   "agent_settings": {
     "tools": {
-      "huly": ["huly_query", "huly_issue_ops", "huly_entity"],
+      "legacy": ["legacy_query", "legacy_issue_ops", "legacy_entity"],
       "vibe": ["list_projects", "list_tasks", "get_task"]
     }
   }
@@ -221,7 +221,7 @@ cat .letta/settings.local.json | jq '.agents | length'
 ```bash
 # Using Letta API
 source .env
-curl "${LETTA_API_URL}/agents/" -H "Authorization: Bearer ${LETTA_PASSWORD}" | jq '.[] | select(.name == "Huly-PM-Control")'
+curl "${LETTA_API_URL}/agents/" -H "Authorization: Bearer ${LETTA_PASSWORD}" | jq '.[] | select(.name == "Legacy-PM-Control")'
 
 # Using scripts
 node create-control-agent.js
@@ -277,8 +277,8 @@ When adding tools to control agent, update `agent_settings.tools` for reference.
 ### 3. Test Permission Patterns
 Use narrow patterns first, expand as needed:
 ```json
-"allow": ["huly_query"]           // Start specific
-"allow": ["huly_*"]                // Expand when confident
+"allow": ["legacy_query"]           // Start specific
+"allow": ["legacy_*"]                // Expand when confident
 ```
 
 ### 4. Version Control Settings

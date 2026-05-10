@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the second round of module decomposition for huly-vibe-sync.
+This document describes the second round of module decomposition for vibe-sync.
 Five large monolith files (700–1,300 lines each) were split into focused, single-responsibility
 modules using the **facade pattern** — the original file becomes a thin wrapper that delegates
 to new sub-modules, preserving all existing imports and test contracts.
@@ -16,33 +16,33 @@ to new sub-modules, preserving all existing imports and test contracts.
 
 ---
 
-## Item 1: HulyRestClient Split
+## Item 1: LegacyRestClient Split
 
-**Before:** `lib/HulyRestClient.js` — 983 lines, 25 methods, single class
+**Before:** `lib/LegacyRestClient.js` — 983 lines, 25 methods, single class
 **After:** 5 sub-clients + thin facade (~65 lines)
 
 ### New Files
 
 | File | Lines | Responsibility |
 |------|-------|---------------|
-| `lib/huly/HulyBaseClient.js` | ~180 | Shared HTTP helper: constructor (URL normalization, port 3458), `initialize()`, `healthCheck()`, `callTool()`, `getStats()` |
-| `lib/huly/HulyProjectClient.js` | ~60 | `listProjects()`, `listComponents()`, `getProjectActivity()` |
-| `lib/huly/HulyIssueClient.js` | ~350 | 13 methods: `listIssues`, `listIssuesBulk`, `getIssue`, `createIssue`, `updateIssue`, `patchIssue`, `deleteIssue`, `deleteIssuesBulk`, `getIssuesBulk`, `searchIssues`, `searchIssuesGlobal`, `moveIssue`, `updateIssueDueDate` |
-| `lib/huly/HulyHierarchyClient.js` | ~100 | `getSubIssues()`, `createSubIssue()`, `getIssueTree()` |
-| `lib/huly/HulyCommentsClient.js` | ~50 | `getComments()`, `createComment()` |
+| `lib/legacy/LegacyBaseClient.js` | ~180 | Shared HTTP helper: constructor (URL normalization, port 3458), `initialize()`, `healthCheck()`, `callTool()`, `getStats()` |
+| `lib/legacy/LegacyProjectClient.js` | ~60 | `listProjects()`, `listComponents()`, `getProjectActivity()` |
+| `lib/legacy/LegacyIssueClient.js` | ~350 | 13 methods: `listIssues`, `listIssuesBulk`, `getIssue`, `createIssue`, `updateIssue`, `patchIssue`, `deleteIssue`, `deleteIssuesBulk`, `getIssuesBulk`, `searchIssues`, `searchIssuesGlobal`, `moveIssue`, `updateIssueDueDate` |
+| `lib/legacy/LegacyHierarchyClient.js` | ~100 | `getSubIssues()`, `createSubIssue()`, `getIssueTree()` |
+| `lib/legacy/LegacyCommentsClient.js` | ~50 | `getComments()`, `createComment()` |
 
 ### Architecture
 
 ```
-HulyRestClient (facade)
-  ├── HulyBaseClient ← shared HTTP config (baseUrl, timeout, name)
-  ├── HulyProjectClient → delegates to _base
-  ├── HulyIssueClient → delegates to _base
-  ├── HulyHierarchyClient → delegates to _base
-  └── HulyCommentsClient → delegates to _base
+LegacyRestClient (facade)
+  ├── LegacyBaseClient ← shared HTTP config (baseUrl, timeout, name)
+  ├── LegacyProjectClient → delegates to _base
+  ├── LegacyIssueClient → delegates to _base
+  ├── LegacyHierarchyClient → delegates to _base
+  └── LegacyCommentsClient → delegates to _base
 ```
 
-Sub-clients receive `_base` (HulyBaseClient instance) in their constructor and use
+Sub-clients receive `_base` (LegacyBaseClient instance) in their constructor and use
 `this._base.callTool(name, args)` for all HTTP calls. The facade exposes the same
 public API via `...args` spread delegation:
 
@@ -51,11 +51,11 @@ listProjects(...args) { return this._projects.listProjects(...args); }
 ```
 
 ### Consumer Impact
-Zero. `createHulyRestClient()` returns facade with identical shape. Consumers:
-`index.js`, `lib/HulyService.js`, tests.
+Zero. `createLegacyRestClient()` returns facade with identical shape. Consumers:
+`index.js`, `lib/LegacyService.js`, tests.
 
 ### Test Results
-97 tests pass (`tests/unit/HulyRestClient.test.js`)
+97 tests pass (`tests/unit/LegacyRestClient.test.js`)
 
 ---
 
@@ -109,10 +109,10 @@ from `lib/ApiServer.js` — still re-exported.
 |------|-------|---------------|
 | `lib/beads/BeadsMutexService.js` | ~55 | `acquireProjectMutex()` + per-project mutex map |
 | `lib/beads/BeadsTitleMatcher.js` | ~95 | `normalizeTitleForComparison()`, `findMatchingIssueByTitle()`, `isValidProjectPath()`, `delay()`, `getOperationDelay()`, `getBatchDelay()` |
-| `lib/beads/HulyToBeadsSync.js` | ~280 | `syncHulyIssueToBeads()` — one-way Huly→Beads sync for a single issue |
-| `lib/beads/BeadsToHulySync.js` | ~280 | `syncBeadsIssueToHuly()` — one-way Beads→Huly sync for a single issue |
+| `lib/beads/LegacyToBeadsSync.js` | ~280 | `syncLegacyIssueToBeads()` — one-way Legacy→Beads sync for a single issue |
+| `lib/beads/BeadsToLegacySync.js` | ~280 | `syncBeadsIssueToLegacy()` — one-way Beads→Legacy sync for a single issue |
 | `lib/beads/BeadsGitSync.js` | ~110 | `syncBeadsToGit()` — git commit/push for Beads changes |
-| `lib/beads/BeadsBatchSync.js` | ~200 | `batchSyncHulyToBeads()`, `batchSyncBeadsToHuly()`, `fullBidirectionalSync()` |
+| `lib/beads/BeadsBatchSync.js` | ~200 | `batchSyncLegacyToBeads()`, `batchSyncBeadsToLegacy()`, `fullBidirectionalSync()` |
 
 ### Architecture
 
@@ -120,8 +120,8 @@ from `lib/ApiServer.js` — still re-exported.
 BeadsSyncService.js (pure re-export facade)
   ├── re-exports from beads/BeadsMutexService.js
   ├── re-exports from beads/BeadsTitleMatcher.js
-  ├── re-exports from beads/HulyToBeadsSync.js
-  ├── re-exports from beads/BeadsToHulySync.js
+  ├── re-exports from beads/LegacyToBeadsSync.js
+  ├── re-exports from beads/BeadsToLegacySync.js
   ├── re-exports from beads/BeadsGitSync.js
   └── re-exports from beads/BeadsBatchSync.js
 ```
@@ -132,9 +132,9 @@ No class, no constructor, no delegation logic needed.
 ### Dependency Graph
 
 ```
-BeadsBatchSync → HulyToBeadsSync, BeadsToHulySync, BeadsGitSync
-HulyToBeadsSync → BeadsMutexService, BeadsTitleMatcher
-BeadsToHulySync → BeadsMutexService, BeadsTitleMatcher
+BeadsBatchSync → LegacyToBeadsSync, BeadsToLegacySync, BeadsGitSync
+LegacyToBeadsSync → BeadsMutexService, BeadsTitleMatcher
+BeadsToLegacySync → BeadsMutexService, BeadsTitleMatcher
 All → BeadsService.js, BeadsDBReader.js, statusMapper.js (external)
 ```
 
@@ -255,7 +255,7 @@ const eventHandlers = createEventHandlers({ db, temporalEnabled, ... });
 - All event handler functions (→ `lib/EventHandlers.js`)
 - Scheduler setup code (→ `lib/SchedulerSetup.js`)
 - Unused imports: `fetch`, `fs`, `http`, `Mutex`, `pDebounce`, and several
-  Huly/Vibe service functions no longer used directly
+  Legacy/Vibe service functions no longer used directly
 
 ### Consumer Impact
 Zero. No other file imports from `index.js` (it's the entry point).
@@ -269,12 +269,12 @@ No dedicated tests for index.js. Full suite: 2,530 tests pass (52 files).
 
 ```
 lib/
-├── huly/                          (Item 1)
-│   ├── HulyBaseClient.js
-│   ├── HulyProjectClient.js
-│   ├── HulyIssueClient.js
-│   ├── HulyHierarchyClient.js
-│   └── HulyCommentsClient.js
+├── legacy/                          (Item 1)
+│   ├── LegacyBaseClient.js
+│   ├── LegacyProjectClient.js
+│   ├── LegacyIssueClient.js
+│   ├── LegacyHierarchyClient.js
+│   └── LegacyCommentsClient.js
 ├── api/                           (Item 2)
 │   ├── SSEManager.js
 │   ├── SyncHistoryStore.js
@@ -282,8 +282,8 @@ lib/
 ├── beads/                         (Item 3)
 │   ├── BeadsMutexService.js
 │   ├── BeadsTitleMatcher.js
-│   ├── HulyToBeadsSync.js
-│   ├── BeadsToHulySync.js
+│   ├── LegacyToBeadsSync.js
+│   ├── BeadsToLegacySync.js
 │   ├── BeadsGitSync.js
 │   └── BeadsBatchSync.js
 ├── perception/                    (Item 4)
@@ -301,7 +301,7 @@ lib/
 
 | File | Before | After | Pattern |
 |------|--------|-------|---------|
-| `lib/HulyRestClient.js` | 983 lines | ~65 lines | Class facade with `...args` delegation |
+| `lib/LegacyRestClient.js` | 983 lines | ~65 lines | Class facade with `...args` delegation |
 | `lib/ApiServer.js` | 702 lines | ~218 lines | Import + re-export facade |
 | `lib/BeadsSyncService.js` | 1,195 lines | ~23 lines | Pure re-export facade |
 | `lib/CodePerceptionWatcher.js` | 1,300 lines | ~370 lines | Composition with shared state |
@@ -309,7 +309,7 @@ lib/
 
 ## Design Patterns Used
 
-1. **Delegation facade** (HulyRestClient): Sub-clients hold reference to base client.
+1. **Delegation facade** (LegacyRestClient): Sub-clients hold reference to base client.
    Facade delegates each method call to the appropriate sub-client.
 
 2. **Import/re-export facade** (ApiServer, BeadsSyncService): Original module imports

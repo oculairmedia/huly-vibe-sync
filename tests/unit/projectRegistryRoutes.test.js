@@ -34,9 +34,9 @@ function makeRequest(port, method, urlPath, body = null) {
       method,
       headers: { 'Content-Type': 'application/json' },
     };
-    const req = http.request(options, res => {
+    const req = http.request(options, (res) => {
       let data = '';
-      res.on('data', chunk => (data += chunk));
+      res.on('data', (chunk) => (data += chunk));
       res.on('end', () => {
         try {
           resolve({ statusCode: res.statusCode, headers: res.headers, body: JSON.parse(data) });
@@ -55,13 +55,16 @@ describe('project registry API routes', () => {
   let server;
   let port;
   let mockProjectRegistry;
+  let mockDb;
+  let mockDoltHubProvisioner;
+  let mockBeadsIssueService;
 
   beforeAll(async () => {
     port = getRandomPort();
     process.env.HEALTH_PORT = String(port);
 
     mockProjectRegistry = {
-      registerProject: vi.fn(path => ({
+      registerProject: vi.fn((path) => ({
         identifier: 'NEWPROJ',
         name: 'New Project',
         filesystem_path: path,
@@ -92,7 +95,7 @@ describe('project registry API routes', () => {
         }
         return null;
       }),
-      deleteProject: vi.fn(identifier => identifier === 'PROJ-A'),
+      deleteProject: vi.fn((identifier) => identifier === 'PROJ-A'),
       getProjects: vi.fn(() => [
         {
           identifier: 'PROJ-A',
@@ -111,7 +114,7 @@ describe('project registry API routes', () => {
           filesystem_path: '/opt/stacks/other-project',
         },
       ]),
-      getProject: vi.fn(id => {
+      getProject: vi.fn((id) => {
         if (id === 'PROJ-A') {
           return {
             identifier: 'PROJ-A',
@@ -127,37 +130,191 @@ describe('project registry API routes', () => {
       scanProjects: vi.fn(() => ({ discovered: 10, updated: 8, errors: [] })),
     };
 
+    mockDb = {
+      getStats: vi.fn(() => ({ tables: 0, total_rows: 0 })),
+      getAllProjects: vi.fn(() => [
+        {
+          identifier: 'PROJ-A',
+          name: 'Project A',
+          status: 'active',
+          tech_stack: 'node',
+          issue_count: 2,
+          filesystem_path: '/opt/stacks/my-project',
+          git_url: 'https://github.com/oculairmedia/project-a.git',
+          letta_agent_id: 'agent-project-a',
+          letta_folder_id: 'folder-project-a',
+          letta_source_id: 'source-project-a',
+          letta_last_sync_at: 1700000000000,
+          last_sync_at: 1700000000000,
+          last_checked_at: 1700000100000,
+          updated_at: 1700000200000,
+        },
+      ]),
+      getProject: vi.fn((identifier) => {
+        if (identifier !== 'PROJ-A') return null;
+        return {
+          identifier: 'PROJ-A',
+          name: 'Project A',
+          status: 'active',
+          tech_stack: 'node',
+          issue_count: 2,
+          filesystem_path: '/opt/stacks/my-project',
+          git_url: 'https://github.com/oculairmedia/project-a.git',
+          letta_agent_id: 'agent-project-a',
+          letta_folder_id: 'folder-project-a',
+          letta_source_id: 'source-project-a',
+          letta_last_sync_at: 1700000000000,
+          last_sync_at: 1700000000000,
+          last_checked_at: 1700000100000,
+          updated_at: 1700000200000,
+        };
+      }),
+      getProjectSummary: vi.fn(() => []),
+      getProjectIssues: vi.fn((identifier) => {
+        if (identifier !== 'PROJ-A') return [];
+        return [
+          {
+            identifier: 'PROJ-A-1',
+            project_identifier: 'PROJ-A',
+            title: 'Ready task',
+            status: 'todo',
+            priority: 'high',
+            description: 'Short list-safe summary\n\nFull description body.',
+            issue_type: 'task',
+            assignee: null,
+            acceptance_criteria: 'Criterion one\nCriterion two',
+            labels: 'android,project-workspace',
+            huly_id: 'huly-parent-1',
+            vibe_task_id: 101,
+            created_at: 1700000000000,
+            updated_at: 1700000200000,
+            last_sync_at: 1700000200000,
+            sub_issue_count: 1,
+            deleted_from_vibe: 0,
+          },
+          {
+            identifier: 'PROJ-A-2',
+            project_identifier: 'PROJ-A',
+            title: 'Done task',
+            status: 'done',
+            priority: 'medium',
+            vibe_task_id: 102,
+            created_at: 1700000000000,
+            updated_at: 1700000300000,
+            last_sync_at: 1700000300000,
+            sub_issue_count: 0,
+            deleted_from_vibe: 0,
+          },
+          {
+            identifier: 'PROJ-A-3',
+            project_identifier: 'PROJ-A',
+            title: 'Blocked child task',
+            status: 'blocked',
+            priority: 'low',
+            parent_huly_id: 'huly-parent-1',
+            created_at: 1700000000000,
+            updated_at: 1700000400000,
+            last_sync_at: 1700000400000,
+            sub_issue_count: 0,
+            deleted_from_vibe: 0,
+          },
+        ];
+      }),
+      getIssue: vi.fn((identifier) => {
+        if (identifier !== 'PROJ-A-1') return null;
+        return {
+          identifier: 'PROJ-A-1',
+          project_identifier: 'PROJ-A',
+          title: 'Ready task',
+          status: 'todo',
+          priority: 'high',
+          description: 'Short list-safe summary\n\nFull description body.',
+          issue_type: 'task',
+          acceptance_criteria: 'Criterion one\nCriterion two',
+          labels: 'android,project-workspace',
+          huly_id: 'huly-parent-1',
+          vibe_task_id: 101,
+          created_at: 1700000000000,
+          updated_at: 1700000200000,
+          last_sync_at: 1700000200000,
+          sub_issue_count: 1,
+          deleted_from_vibe: 0,
+        };
+      }),
+      getProjectFilesystemPath: vi.fn(() => null),
+      resolveProjectIdentifier: vi.fn(() => null),
+      getProjectFiles: vi.fn(() => []),
+      getOrphanedFiles: vi.fn(() => []),
+      getRecentSyncs: vi.fn(() => [
+        {
+          id: 1,
+          started_at: 1700000000000,
+          completed_at: 1700000050000,
+          projects_processed: 1,
+          projects_failed: 0,
+          issues_synced: 2,
+          duration_ms: 50000,
+        },
+      ]),
+      projects: {
+        getProjectLettaInfo: vi.fn(() => ({
+          letta_agent_id: 'agent-project-a',
+          letta_folder_id: 'folder-project-a',
+          letta_source_id: 'source-project-a',
+          letta_last_sync_at: 1700000000000,
+        })),
+      },
+    };
+
+    mockDoltHubProvisioner = {
+      provisionProject: vi.fn(async () => ({
+        status: 'provisioned',
+        dry_run: false,
+        project_identifier: 'PROJ-A',
+        owner: 'oulair',
+        repo: 'my_project',
+        remote_name: 'origin',
+        remote_url: 'dolthub://oulair/my_project',
+        visibility: 'private',
+        database_created: true,
+        database_already_exists: false,
+        remote_changed: true,
+        pushed: true,
+        commands: ['bd dolt remote add origin dolthub://oulair/my_project'],
+      })),
+    };
+
+    mockBeadsIssueService = {
+      mutateIssue: vi.fn(async ({ action }) => ({
+        applied: true,
+        command: `bd ${action}`,
+      })),
+    };
+
     server = createApiServer({
       config: {
-        huly: { apiUrl: 'http://localhost:3457/api' },
         vibeKanban: { apiUrl: 'http://localhost:9717' },
         sync: { interval: 10000 },
         stacks: { baseDir: '/opt/stacks' },
         letta: { enabled: false },
       },
       healthStats: {},
-      db: {
-        getStats: vi.fn(() => ({ tables: 0, total_rows: 0 })),
-        getProjectSummary: vi.fn(() => []),
-        getProjectIssues: vi.fn(() => []),
-        getProjectFilesystemPath: vi.fn(() => null),
-        resolveProjectIdentifier: vi.fn(() => null),
-        getProjectFiles: vi.fn(() => []),
-        getOrphanedFiles: vi.fn(() => []),
-      },
+      db: mockDb,
       onSyncTrigger: vi.fn().mockResolvedValue(undefined),
       onConfigUpdate: vi.fn(),
       projectRegistry: mockProjectRegistry,
+      doltHubProvisioner: mockDoltHubProvisioner,
+      beadsIssueService: mockBeadsIssueService,
     });
 
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       if (server.listening) resolve();
       else server.on('listening', resolve);
     });
   });
 
   afterAll(async () => {
-    await new Promise(resolve => server.close(resolve));
+    await new Promise((resolve) => server.close(resolve));
   });
 
   describe('GET /api/registry/projects', () => {
@@ -174,8 +331,407 @@ describe('project registry API routes', () => {
       mockProjectRegistry.getProjects.mockClear();
       await makeRequest(port, 'GET', '/api/registry/projects?status=active&tech_stack=node');
       expect(mockProjectRegistry.getProjects).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'active', tech_stack: 'node' })
+        expect.objectContaining({ status: 'active', tech_stack: 'node' }),
       );
+    });
+  });
+
+  describe('GET /api/projects', () => {
+    it('should return Android-friendly project summaries', async () => {
+      mockDb.getProjectIssues.mockClear();
+      const res = await makeRequest(port, 'GET', '/api/projects');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.projects[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A',
+          identifier: 'PROJ-A',
+          name: 'Project A',
+          last_activity_at: '2023-11-14T22:13:20.000Z',
+          updated_at: '2023-11-14T22:16:40.000Z',
+        }),
+      );
+      expect(res.body.projects[0].repo.remote_url).toBe(
+        'https://github.com/oculairmedia/project-a.git',
+      );
+      expect(res.body.projects[0].agents.default_agent_id).toBe('agent-project-a');
+      expect(res.body.projects[0].tracker.provider).toBe('beads');
+      expect(res.body.projects[0].tracker.capabilities.work_items).toBe(true);
+      expect(res.body.projects[0].tracker.summary.total_known).toBe(2);
+      expect(res.body.projects[0].tracker.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'available',
+          last_sync_at: '2023-11-14T22:13:20.000Z',
+          error: null,
+          is_stale: true,
+          stale_threshold_ms: expect.any(Number),
+        }),
+      );
+      expect(res.body.projects[0].etag).toBe('PROJ-A:1700000200000');
+      expect(res.body.projects[0].work_items).toBeUndefined();
+      expect(res.body.projects[0].full_agents).toBeUndefined();
+      expect(res.body.projects[0].full_conversations).toBeUndefined();
+      expect(mockDb.getProjectIssues).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/projects/:id', () => {
+    it('should return project detail summary without nested raw issue data', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project.identifier).toBe('PROJ-A');
+      expect(res.body.project.tracker.summary.ready).toBe(1);
+      expect(res.body.project.tracker.summary.closed_recent).toBe(1);
+      expect(res.body.project.work_items).toBeUndefined();
+    });
+
+    it('should keep project detail available when tracker hydration fails', async () => {
+      mockDb.getProjectIssues.mockImplementationOnce(() => {
+        throw new Error('database password leaked in stack trace');
+      });
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project.identifier).toBe('PROJ-A');
+      expect(res.body.project.etag).toBe('PROJ-A:1700000200000');
+      expect(res.body.project.tracker.status).toBe('error');
+      expect(res.body.project.tracker.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          error: 'Tracker data is temporarily unavailable',
+        }),
+      );
+      expect(res.body.project.tracker.data_freshness.error).not.toContain('password');
+      expect(res.body.project.work_items).toBeUndefined();
+    });
+
+    it('should return 404 for missing project detail', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/MISSING');
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.error).toBe('Project not found');
+    });
+  });
+
+  describe('GET /api/projects/:id/beads-remote', () => {
+    it('should return project-scoped Beads remote status', async () => {
+      mockDb.getProject.mockImplementationOnce(() => ({
+        identifier: 'PROJ-A',
+        name: 'Project A',
+        filesystem_path: '/opt/stacks/my-project',
+        beads_remote_owner: 'oulair',
+        beads_remote_repo: 'my_project',
+        beads_remote_url: 'dolthub://oulair/my_project',
+        beads_remote_name: 'origin',
+        beads_remote_status: 'provisioned',
+        beads_remote_visibility: 'private',
+        beads_remote_provisioned_at: 1700000400000,
+        beads_remote_last_push_at: 1700000500000,
+      }));
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/beads-remote');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.beads_remote).toEqual(
+        expect.objectContaining({
+          owner: 'oulair',
+          repo: 'my_project',
+          url: 'dolthub://oulair/my_project',
+          status: 'provisioned',
+          last_push_at: '2023-11-14T22:21:40.000Z',
+        }),
+      );
+    });
+  });
+
+  describe('POST /api/projects/:id/beads-remote/provision', () => {
+    it('should invoke the DoltHub provisioner with sanitized project context', async () => {
+      const res = await makeRequest(port, 'POST', '/api/projects/PROJ-A/beads-remote/provision', {
+        push: false,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.message).toBe('Beads remote provisioned');
+      expect(res.body.provisioning.remote_url).toBe('dolthub://oulair/my_project');
+      expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'PROJ-A',
+          filesystem_path: '/opt/stacks/my-project',
+        }),
+        { push: false },
+      );
+    });
+
+    it('should return a UI-safe provisioning error', async () => {
+      mockDoltHubProvisioner.provisionProject.mockRejectedValueOnce(
+        new Error('DoltHub database creation failed'),
+      );
+
+      const res = await makeRequest(port, 'POST', '/api/projects/PROJ-A/beads-remote/provision');
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body.error).toBe('Failed to provision Beads remote');
+      expect(res.body.details.error).toBe('DoltHub database creation failed');
+    });
+  });
+
+  describe('GET /api/projects/:id/agents', () => {
+    it('should return paginated project agents', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/agents?limit=1');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.agents).toHaveLength(1);
+      expect(res.body.agents[0].id).toBe('agent-project-a');
+      expect(res.body.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'available',
+          last_sync_at: '2023-11-14T22:13:20.000Z',
+          error: null,
+          is_stale: true,
+        }),
+      );
+      expect(res.body.etag).toBe('PROJ-A:agents:2023-11-14T22:13:20.000Z');
+      expect(res.body.page).toEqual(
+        expect.objectContaining({ limit: 1, has_more: false, total_known: 1 }),
+      );
+    });
+  });
+
+  describe('GET /api/projects/:id/conversations', () => {
+    it('should return empty paginated conversations when conversations are not tracked', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/conversations');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.conversations).toEqual([]);
+      expect(res.body.page.has_more).toBe(false);
+      expect(res.body.tracker.status).toBe('not_tracked');
+      expect(res.body.etag).toBe('PROJ-A:conversations:2023-11-14T22:16:40.000Z');
+      expect(res.body.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'unavailable',
+          last_sync_at: null,
+          error: null,
+          is_stale: false,
+        }),
+      );
+    });
+  });
+
+  describe('GET /api/projects/:id/work-items', () => {
+    it('should return generic paginated work items', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items?limit=1');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.provider).toBe('beads');
+      expect(res.body.work_items).toHaveLength(1);
+      expect(res.body.work_items[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-1',
+          provider: 'beads',
+          title: 'Ready task',
+          priority: 'high',
+          dependency_count: 0,
+          cursor: expect.any(String),
+        }),
+      );
+      expect(res.body.page.has_more).toBe(true);
+      expect(res.body.page.next_cursor).toEqual(expect.any(String));
+      expect(res.body.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'available',
+          last_sync_at: '2023-11-14T22:13:20.000Z',
+          error: null,
+          is_stale: true,
+        }),
+      );
+      expect(res.body.etag).toBe('PROJ-A:work-items:2023-11-14T22:13:20.000Z');
+    });
+
+    it('should return a sanitized freshness error when work item hydration fails', async () => {
+      mockDb.getProjectIssues.mockImplementationOnce(() => {
+        throw new Error('raw sql stack with secret token');
+      });
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project_identifier).toBe('PROJ-A');
+      expect(res.body.work_items).toEqual([]);
+      expect(res.body.page.total_known).toBe(0);
+      expect(res.body.etag).toBe('PROJ-A:work-items:2023-11-14T22:13:20.000Z');
+      expect(res.body.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'error',
+          error: 'Work item data is temporarily unavailable',
+        }),
+      );
+      expect(res.body.data_freshness.error).not.toContain('secret');
+    });
+
+    it('should filter work items by status', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items?status=done');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.work_items).toHaveLength(1);
+      expect(res.body.work_items[0].id).toBe('PROJ-A-2');
+      expect(res.body.page.total_known).toBe(1);
+    });
+  });
+
+  describe('GET /api/projects/:id/issues', () => {
+    it('should return Android-facing compact issue summaries', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/issues?ready=true');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.schema_version).toBe(1);
+      expect(res.body.projectId).toBe('PROJ-A');
+      expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-1',
+          projectId: 'PROJ-A',
+          provider: 'beads',
+          title: 'Ready task',
+          type: 'task',
+          priority: 'high',
+          status: 'open',
+          ready: true,
+          blockedBy: [],
+          labels: ['android', 'project-workspace'],
+          acceptanceCriteria: ['Criterion one', 'Criterion two'],
+        }),
+      );
+      expect(res.body.issues[0].blocks).toEqual([
+        expect.objectContaining({ id: 'PROJ-A-3', status: 'blocked' }),
+      ]);
+      expect(res.body.issues[0].description).toBeUndefined();
+    });
+
+    it('should support incremental updatedSince filtering', async () => {
+      const res = await makeRequest(
+        port,
+        'GET',
+        '/api/projects/PROJ-A/issues?updatedSince=2023-11-14T22:17:00.000Z&sort=updated',
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.issues.map((issue) => issue.id)).toEqual(['PROJ-A-3', 'PROJ-A-2']);
+    });
+  });
+
+  describe('GET /api/projects/:id/ready-work', () => {
+    it('should return first-class ready work without client-side reconstruction', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/ready-work');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.readyWork).toHaveLength(1);
+      expect(res.body.readyWork[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-1',
+          ready: true,
+          isBlocked: false,
+          status: 'open',
+        }),
+      );
+    });
+  });
+
+  describe('GET /api/issues/:id', () => {
+    it('should return full Android-facing issue detail by stable ID', async () => {
+      const res = await makeRequest(port, 'GET', '/api/issues/PROJ-A-1');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.schema_version).toBe(1);
+      expect(res.body.issue).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-1',
+          projectId: 'PROJ-A',
+          title: 'Ready task',
+          description: 'Short list-safe summary\n\nFull description body.',
+          acceptanceCriteria: ['Criterion one', 'Criterion two'],
+          labels: ['android', 'project-workspace'],
+          ready: true,
+        }),
+      );
+      expect(res.body.issue.timestamps).toEqual(
+        expect.objectContaining({
+          created_at: '2023-11-14T22:13:20.000Z',
+          updated_at: '2023-11-14T22:16:40.000Z',
+        }),
+      );
+      expect(res.body.issue.metadata.vibe_task_id).toBe(101);
+    });
+  });
+
+  describe('POST /api/issues/:id mutation endpoints', () => {
+    it('should claim an issue with idempotency and conflict metadata', async () => {
+      const res = await makeRequest(port, 'POST', '/api/issues/PROJ-A-1/claim', {
+        assignee: 'mobile-user',
+        idempotency_key: 'claim-1',
+        if_match: 'PROJ-A-1:1700000200000',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.mutation).toEqual(
+        expect.objectContaining({
+          action: 'claim',
+          idempotency_key: 'claim-1',
+          applied: true,
+        }),
+      );
+      expect(mockBeadsIssueService.mutateIssue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'claim',
+          idempotencyKey: 'claim-1',
+          body: expect.objectContaining({ assignee: 'mobile-user' }),
+        }),
+      );
+    });
+
+    it('should reject stale mutations with structured conflict responses', async () => {
+      const res = await makeRequest(port, 'POST', '/api/issues/PROJ-A-1/close', {
+        reason: 'done',
+        if_match: 'PROJ-A-1:stale',
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.conflict).toEqual(
+        expect.objectContaining({
+          reason: 'etag_mismatch',
+          expected: 'PROJ-A-1:stale',
+          current: 'PROJ-A-1:1700000200000',
+        }),
+      );
+    });
+  });
+
+  describe('GET /api/projects/:id/activity', () => {
+    it('should return cursor-paginated activity items', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/activity');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.activity).toHaveLength(1);
+      expect(res.body.activity[0]).toEqual(
+        expect.objectContaining({
+          id: '1',
+          type: 'sync',
+          project_identifier: 'PROJ-A',
+          occurred_at: '2023-11-14T22:14:10.000Z',
+        }),
+      );
+      expect(res.body.page.total_known).toBe(1);
+      expect(res.body.data_freshness).toEqual(
+        expect.objectContaining({
+          status: 'available',
+          last_sync_at: '2023-11-14T22:14:10.000Z',
+          error: null,
+          is_stale: true,
+        }),
+      );
+      expect(res.body.etag).toBe('PROJ-A:activity:2023-11-14T22:14:10.000Z');
     });
   });
 
@@ -191,7 +747,7 @@ describe('project registry API routes', () => {
       expect(mockProjectRegistry.registerProject).toHaveBeenCalledWith('/opt/stacks/new-project');
       expect(mockProjectRegistry.updateProject).toHaveBeenCalledWith(
         'NEWPROJ',
-        expect.objectContaining({ git_url: 'https://github.com/oculairmedia/new-project.git' })
+        expect.objectContaining({ git_url: 'https://github.com/oculairmedia/new-project.git' }),
       );
     });
 
@@ -240,7 +796,7 @@ describe('project registry API routes', () => {
       expect(res.body.project.status).toBe('archived');
       expect(mockProjectRegistry.updateProject).toHaveBeenCalledWith(
         'PROJ-A',
-        expect.objectContaining({ status: 'archived' })
+        expect.objectContaining({ status: 'archived' }),
       );
     });
 

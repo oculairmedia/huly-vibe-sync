@@ -1,15 +1,15 @@
 # Performance Analysis - After PR 1: Observability
 
-**Date:** 2025-11-04  
-**Version:** Post-Observability Implementation  
+**Date:** 2025-11-04
+**Version:** Post-Observability Implementation
 **Environment:** Production Docker Container
 
 ## Executive Summary
 
-✅ **Performance Impact: MINIMAL**  
-✅ **All performance benchmarks passing**  
-✅ **Memory overhead: ~10MB increase (acceptable)**  
-✅ **Sync duration: Consistent at ~21 seconds**  
+✅ **Performance Impact: MINIMAL**
+✅ **All performance benchmarks passing**
+✅ **Memory overhead: ~10MB increase (acceptable)**
+✅ **Sync duration: Consistent at ~21 seconds**
 ✅ **No degradation in core operations**
 
 ---
@@ -89,8 +89,8 @@ HTTPS Pool: 0 active, 0 free (50 max sockets)
 
 | Operation | Volume | Time | Rate | Status |
 |-----------|--------|------|------|--------|
-| **Huly → Vibe** | 1000 calls | 1ms | 1M ops/sec | ✅ **EXCELLENT** |
-| **Vibe → Huly** | 1000 calls | 0ms | >1M ops/sec | ✅ **EXCELLENT** |
+| **Legacy → Vibe** | 1000 calls | 1ms | 1M ops/sec | ✅ **EXCELLENT** |
+| **Vibe → Legacy** | 1000 calls | 0ms | >1M ops/sec | ✅ **EXCELLENT** |
 | **Round-trip** | 500 cycles | 0ms | >1M ops/sec | ✅ **EXCELLENT** |
 
 **Analysis:** Status mapping has **zero measurable overhead**
@@ -229,7 +229,7 @@ CPU: ~1-2% during idle
 ### Network Usage
 
 **API Calls per Sync:**
-- Huly API: ~50 calls (projects + issues)
+- Legacy API: ~50 calls (projects + issues)
 - Vibe API: ~100 calls (projects + tasks + updates)
 
 **Bandwidth:** ~500 KB per sync cycle (compressed)
@@ -252,7 +252,7 @@ CPU: ~1-2% during idle
 - **Sync interval:** Could reduce to 10 seconds if needed
 
 **Bottlenecks (if scaling needed):**
-1. **API rate limits** (Huly/Vibe) - primary constraint
+1. **API rate limits** (Legacy/Vibe) - primary constraint
 2. **Network latency** - secondary constraint
 3. **Database** - Not a bottleneck (SQLite very fast)
 4. **Memory** - Not a bottleneck (only 77 MB)
@@ -269,7 +269,7 @@ CPU: ~1-2% during idle
 ### Future Optimizations (PR 2+)
 
 1. **API Latency Tracking** ⭐
-   - Instrument `recordApiLatency()` in HulyService/VibeService
+   - Instrument `recordApiLatency()` in LegacyService/VibeService
    - Identify slow API calls
    - Set up alerts for > 2s latency
 
@@ -321,7 +321,7 @@ real    0m0.008s  # 8ms
 
 **🟡 Warning (Investigate if degraded):**
 - `sync_duration_seconds` > 30s (p95)
-- `huly_api_latency_seconds` > 2s (p95)
+- `legacy_api_latency_seconds` > 2s (p95)
 - `vibe_api_latency_seconds` > 2s (p95)
 - `connection_pool_active` > 40 (80% of max)
 
@@ -336,12 +336,12 @@ real    0m0.008s  # 8ms
 
 ### Performance Score: **A+ (Excellent)**
 
-✅ **All benchmarks passing**  
-✅ **Consistent sync times (~21s)**  
-✅ **Memory usage acceptable (77 MB)**  
-✅ **No performance regressions**  
-✅ **Observability overhead negligible (<4%)**  
-✅ **Scalability headroom excellent (5x capacity)**  
+✅ **All benchmarks passing**
+✅ **Consistent sync times (~21s)**
+✅ **Memory usage acceptable (77 MB)**
+✅ **No performance regressions**
+✅ **Observability overhead negligible (<4%)**
+✅ **Scalability headroom excellent (5x capacity)**
 
 ### Key Strengths
 
@@ -368,5 +368,5 @@ real    0m0.008s  # 8ms
 
 ---
 
-**Performance Status:** ✅ **EXCELLENT - PRODUCTION READY**  
+**Performance Status:** ✅ **EXCELLENT - PRODUCTION READY**
 **Next Steps:** PR 2 (Resilience) - No performance concerns blocking it

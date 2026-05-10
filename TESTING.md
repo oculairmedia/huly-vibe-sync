@@ -1,9 +1,9 @@
-# Testing Documentation - huly-vibe-sync
+# Testing Documentation - vibe-sync
 
 ## Latest Update - VibeRestClient Implementation
 
-**Date:** November 3, 2025  
-**Phase:** Phase 4 - VibeRestClient Implementation  
+**Date:** November 3, 2025
+**Phase:** Phase 4 - VibeRestClient Implementation
 **Status:** ✅ Complete
 
 ### Previous Phase
@@ -33,7 +33,7 @@
 | textParsers.js | 97.46% | 92.4% | 100% | 97.46% | ✅ Excellent |
 | http.js | 84.61% | 100% | 77.77% | 84.61% | ✅ Excellent |
 | database.js | 80% | 72.61% | 81.81% | 79.26% | ✅ Good |
-| HulyRestClient.js | 76.57% | 61.4% | 69.23% | 80.95% | ✅ Good |
+| LegacyRestClient.js | 76.57% | 61.4% | 69.23% | 80.95% | ✅ Good |
 
 ---
 
@@ -43,7 +43,7 @@
 Located in `tests/unit/`:
 
 1. **statusMapper.test.js** (26 tests)
-   - Status mapping between Huly and Vibe
+   - Status mapping between Legacy and Vibe
    - Edge cases and normalization
    - Status equivalence checking
 
@@ -68,7 +68,7 @@ Located in `tests/unit/`:
    - Error handling
    - Multi-host aggregation
 
-5. **HulyRestClient.test.js** (42 tests)
+5. **LegacyRestClient.test.js** (42 tests)
    - REST API client
    - Health checks
    - Project/issue management
@@ -95,7 +95,7 @@ Located in `tests/unit/`:
 Located in `tests/integration/`:
 
 1. **sync.test.js** (16 tests)
-   - Huly to database sync
+   - Legacy to database sync
    - Status mapping integration
    - Bidirectional sync flows
    - Error handling
@@ -118,8 +118,8 @@ Located in `tests/performance/`:
 ### Mock Factories (3 files)
 Located in `tests/mocks/`:
 
-1. **hulyMocks.js**
-   - Mock Huly API responses
+1. **legacyMocks.js**
+   - Mock Legacy API responses
    - Project/issue factories
    - Tool response mocks
    - Error response mocks
@@ -224,27 +224,27 @@ npx vite preview --outDir html
 ### Writing Integration Tests
 1. Test realistic workflows
 2. Use in-memory databases when possible
-3. Mock external APIs (Huly, Vibe, Letta)
+3. Mock external APIs (Legacy, Vibe, Letta)
 4. Test error handling and resilience
 5. Verify data consistency
 6. Include performance benchmarks
 
 ### Mock Factory Usage
 ```javascript
-import { createMockHulyProject, createMockHulyIssue } from '../mocks/hulyMocks.js';
+import { createMockLegacyProject, createMockLegacyIssue } from '../mocks/legacyMocks.js';
 
 // Create project with defaults
-const project = createMockHulyProject();
+const project = createMockLegacyProject();
 
 // Create project with overrides
-const customProject = createMockHulyProject({ 
-  identifier: 'CUSTOM', 
-  name: 'Custom Project' 
+const customProject = createMockLegacyProject({
+  identifier: 'CUSTOM',
+  name: 'Custom Project'
 });
 
 // Create batch of issues
 const issues = Array.from({ length: 10 }, (_, i) =>
-  createMockHulyIssue({ identifier: `TEST-${i}` })
+  createMockLegacyIssue({ identifier: `TEST-${i}` })
 );
 ```
 
@@ -268,8 +268,8 @@ const issues = Array.from({ length: 10 }, (_, i) =>
 - [x] Connection pooling tested
 
 ### Phase 3: Integration and CI/CD (Complete ✅)
-- [x] Mock factories created (hulyMocks, vibeMocks, lettaMocks)
-- [x] HulyRestClient.js - 42 tests
+- [x] Mock factories created (legacyMocks, vibeMocks, lettaMocks)
+- [x] LegacyRestClient.js - 42 tests
 - [x] Integration tests - 16 tests
 - [x] 220 tests total
 - [x] 83.54% overall coverage
@@ -323,7 +323,7 @@ const issues = Array.from({ length: 10 }, (_, i) =>
 
 ### Phase 4 Recommendations
 1. **Service Integration Tests**
-   - Add tests for VibeRestClient (similar to HulyRestClient)
+   - Add tests for VibeRestClient (similar to LegacyRestClient)
    - Add tests for LettaRestClient
    - Test full sync engine with mocked services
 
@@ -384,6 +384,6 @@ const issues = Array.from({ length: 10 }, (_, i) =>
 
 The project now has a robust testing foundation with **251 passing tests**, automated CI/CD, comprehensive coverage across all critical modules, and validated performance characteristics. The codebase is production-ready with strong confidence in reliability, maintainability, and performance.
 
-**Engineering Grade:** 8.5/10 ⭐  
-**Status:** Production Ready  
+**Engineering Grade:** 8.5/10 ⭐
+**Status:** Production Ready
 **Performance:** Validated ✅

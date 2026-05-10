@@ -1,6 +1,6 @@
 # Critical Issues - Immediate Action Required
 
-**Review Date:** 2025-11-03  
+**Review Date:** 2025-11-03
 **Priority:** P0 (Production Blockers)
 
 ---
@@ -74,38 +74,38 @@ npm pkg set scripts.test:coverage="vitest --coverage"
 ```javascript
 // tests/unit/statusMapper.test.js
 import { describe, it, expect } from 'vitest';
-import { mapHulyStatusToVibe, mapVibeStatusToHuly } from '../../index.js';
+import { mapLegacyStatusToVibe, mapVibeStatusToLegacy } from '../../index.js';
 
 describe('Status Mapping', () => {
-  describe('mapHulyStatusToVibe', () => {
+  describe('mapLegacyStatusToVibe', () => {
     it('maps Backlog to todo', () => {
-      expect(mapHulyStatusToVibe('Backlog')).toBe('todo');
+      expect(mapLegacyStatusToVibe('Backlog')).toBe('todo');
     });
-    
+
     it('maps In Progress to inprogress', () => {
-      expect(mapHulyStatusToVibe('In Progress')).toBe('inprogress');
+      expect(mapLegacyStatusToVibe('In Progress')).toBe('inprogress');
     });
-    
+
     it('maps Done to done', () => {
-      expect(mapHulyStatusToVibe('Done')).toBe('done');
+      expect(mapLegacyStatusToVibe('Done')).toBe('done');
     });
-    
+
     it('defaults unknown status to todo', () => {
-      expect(mapHulyStatusToVibe('Unknown Status')).toBe('todo');
+      expect(mapLegacyStatusToVibe('Unknown Status')).toBe('todo');
     });
   });
-  
-  describe('mapVibeStatusToHuly', () => {
+
+  describe('mapVibeStatusToLegacy', () => {
     it('maps todo to Backlog', () => {
-      expect(mapVibeStatusToHuly('todo')).toBe('Backlog');
+      expect(mapVibeStatusToLegacy('todo')).toBe('Backlog');
     });
-    
+
     it('maps inprogress to In Progress', () => {
-      expect(mapVibeStatusToHuly('inprogress')).toBe('In Progress');
+      expect(mapVibeStatusToLegacy('inprogress')).toBe('In Progress');
     });
-    
+
     it('maps done to Done', () => {
-      expect(mapVibeStatusToHuly('done')).toBe('Done');
+      expect(mapVibeStatusToLegacy('done')).toBe('Done');
     });
   });
 });
@@ -118,36 +118,36 @@ import fs from 'fs';
 describe('Database', () => {
   let db;
   const testDbPath = './test-sync.db';
-  
+
   beforeEach(() => {
     db = new Database(testDbPath);
   });
-  
+
   afterEach(() => {
     db.close();
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
     if (fs.existsSync(`${testDbPath}-shm`)) fs.unlinkSync(`${testDbPath}-shm`);
     if (fs.existsSync(`${testDbPath}-wal`)) fs.unlinkSync(`${testDbPath}-wal`);
   });
-  
+
   describe('upsertProject', () => {
     it('inserts new project', () => {
       db.upsertProject({
         identifier: 'TEST',
         name: 'Test Project',
-        huly_id: 'huly-123',
+        legacy_id: 'legacy-123',
       });
-      
+
       const project = db.getProject('TEST');
       expect(project).toBeDefined();
       expect(project.name).toBe('Test Project');
-      expect(project.huly_id).toBe('huly-123');
+      expect(project.legacy_id).toBe('legacy-123');
     });
-    
+
     it('updates existing project', () => {
       db.upsertProject({ identifier: 'TEST', name: 'Original' });
       db.upsertProject({ identifier: 'TEST', name: 'Updated' });
-      
+
       const project = db.getProject('TEST');
       expect(project.name).toBe('Updated');
     });
@@ -159,18 +159,18 @@ describe('Database', () => {
 ```javascript
 // tests/integration/sync.test.js
 import { describe, it, expect, beforeEach } from 'vitest';
-import { syncHulyToVibe } from '../../index.js';
+import { syncLegacyToVibe } from '../../index.js';
 
 // Mock clients
-class MockHulyClient {
+class MockLegacyClient {
   constructor() {
     this.issues = [];
   }
-  
+
   async listIssues() {
     return this.issues;
   }
-  
+
   mockIssues(issues) {
     this.issues = issues;
   }
@@ -180,29 +180,29 @@ class MockVibeClient {
   constructor() {
     this.tasks = [];
   }
-  
+
   async createTask(projectId, task) {
     const newTask = { id: this.tasks.length + 1, ...task };
     this.tasks.push(newTask);
     return newTask;
   }
-  
+
   getTasks() {
     return this.tasks;
   }
 }
 
 describe('Sync Integration', () => {
-  let hulyClient, vibeClient, db;
-  
+  let legacyClient, vibeClient, db;
+
   beforeEach(() => {
-    hulyClient = new MockHulyClient();
+    legacyClient = new MockLegacyClient();
     vibeClient = new MockVibeClient();
     db = new Database(':memory:');
   });
-  
-  it('creates Vibe task for new Huly issue', async () => {
-    hulyClient.mockIssues([
+
+  it('creates Vibe task for new Legacy issue', async () => {
+    legacyClient.mockIssues([
       {
         identifier: 'TEST-1',
         title: 'Test Issue',
@@ -210,9 +210,9 @@ describe('Sync Integration', () => {
         status: 'Backlog',
       }
     ]);
-    
-    await syncHulyToVibe(hulyClient, vibeClient, db, 'TEST');
-    
+
+    await syncLegacyToVibe(legacyClient, vibeClient, db, 'TEST');
+
     const tasks = vibeClient.getTasks();
     expect(tasks).toHaveLength(1);
     expect(tasks[0].title).toBe('TEST-1: Test Issue');
@@ -232,22 +232,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run linter
         run: npm run lint
-      
+
       - name: Run tests
         run: npm run test:coverage
-      
+
       - name: Check coverage threshold
         run: |
           COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
@@ -255,7 +255,7 @@ jobs:
             echo "Coverage $COVERAGE% is below 60% threshold"
             exit 1
           fi
-      
+
       - name: Upload coverage
         uses: codecov/codecov-action@v3
 ```
@@ -280,7 +280,7 @@ jobs:
 ### Current State
 ```javascript
 // PROBLEM: These operations are not atomic
-await createVibeTask(vibeClient, vibeProject.id, hulyIssue);  // Step 1
+await createVibeTask(vibeClient, vibeProject.id, legacyIssue);  // Step 1
 db.upsertIssue({ identifier, vibe_task_id: task.id });        // Step 2
 
 // If Step 2 fails:
@@ -311,14 +311,14 @@ Risk Level: CRITICAL
 // Step 1: Add unique constraint in Vibe API
 // Modify Vibe task creation to use external_id
 
-async function createOrUpdateVibeTask(vibeClient, vibeProjectId, hulyIssue) {
+async function createOrUpdateVibeTask(vibeClient, vibeProjectId, legacyIssue) {
   const taskData = {
-    title: `${hulyIssue.identifier}: ${hulyIssue.title}`,
-    description: buildDescription(hulyIssue),
-    status: mapHulyStatusToVibe(hulyIssue.status),
-    external_id: hulyIssue.identifier, // Unique constraint
+    title: `${legacyIssue.identifier}: ${legacyIssue.title}`,
+    description: buildDescription(legacyIssue),
+    status: mapLegacyStatusToVibe(legacyIssue.status),
+    external_id: legacyIssue.identifier, // Unique constraint
   };
-  
+
   try {
     // Try to create
     return await vibeClient.createTask(vibeProjectId, taskData);
@@ -327,7 +327,7 @@ async function createOrUpdateVibeTask(vibeClient, vibeProjectId, hulyIssue) {
       // Task already exists, update instead
       const existingTask = await vibeClient.getTaskByExternalId(
         vibeProjectId,
-        hulyIssue.identifier
+        legacyIssue.identifier
       );
       return await vibeClient.updateTask(existingTask.id, taskData);
     }
@@ -345,7 +345,7 @@ export class WriteAheadLog {
     this.db = db;
     this.initSchema();
   }
-  
+
   initSchema() {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS wal_intents (
@@ -360,7 +360,7 @@ export class WriteAheadLog {
       CREATE INDEX IF NOT EXISTS idx_wal_status ON wal_intents(status);
     `);
   }
-  
+
   createIntent(intentType, payload) {
     const stmt = this.db.prepare(`
       INSERT INTO wal_intents (intent_type, payload)
@@ -369,7 +369,7 @@ export class WriteAheadLog {
     const result = stmt.run(intentType, JSON.stringify(payload));
     return result.lastInsertRowid;
   }
-  
+
   completeIntent(intentId, result) {
     this.db.prepare(`
       UPDATE wal_intents
@@ -379,7 +379,7 @@ export class WriteAheadLog {
       WHERE id = ?
     `).run(JSON.stringify({ result }), intentId);
   }
-  
+
   failIntent(intentId, error) {
     this.db.prepare(`
       UPDATE wal_intents
@@ -388,7 +388,7 @@ export class WriteAheadLog {
       WHERE id = ?
     `).run(error.message, intentId);
   }
-  
+
   getPendingIntents() {
     return this.db.prepare(`
       SELECT * FROM wal_intents
@@ -396,17 +396,17 @@ export class WriteAheadLog {
       ORDER BY created_at ASC
     `).all();
   }
-  
+
   async replayPendingIntents(handlers) {
     const intents = this.getPendingIntents();
-    
+
     for (const intent of intents) {
       const handler = handlers[intent.intent_type];
       if (!handler) {
         console.error(`No handler for intent type: ${intent.intent_type}`);
         continue;
       }
-      
+
       try {
         const result = await handler(JSON.parse(intent.payload));
         this.completeIntent(intent.id, result);
@@ -423,19 +423,19 @@ const wal = new WriteAheadLog(db);
 // 1. Write intent before action
 const intentId = wal.createIntent('create_vibe_task', {
   projectId: vibeProject.id,
-  hulyIssue,
+  legacyIssue,
 });
 
 try {
   // 2. Execute action
-  const task = await createVibeTask(vibeClient, vibeProject.id, hulyIssue);
-  
+  const task = await createVibeTask(vibeClient, vibeProject.id, legacyIssue);
+
   // 3. Update database
   db.upsertIssue({
-    identifier: hulyIssue.identifier,
+    identifier: legacyIssue.identifier,
     vibe_task_id: task.id,
   });
-  
+
   // 4. Mark intent as completed
   wal.completeIntent(intentId, { taskId: task.id });
 } catch (error) {
@@ -446,9 +446,9 @@ try {
 // On startup: replay incomplete intents
 await wal.replayPendingIntents({
   create_vibe_task: async (payload) => {
-    const task = await createVibeTask(vibeClient, payload.projectId, payload.hulyIssue);
+    const task = await createVibeTask(vibeClient, payload.projectId, payload.legacyIssue);
     db.upsertIssue({
-      identifier: payload.hulyIssue.identifier,
+      identifier: payload.legacyIssue.identifier,
       vibe_task_id: task.id,
     });
     return { taskId: task.id };
@@ -512,15 +512,15 @@ export class SyncError extends Error {
     this.retryable = options.retryable ?? false;
     this.context = options.context || {};
     this.cause = options.cause;
-    
+
     // Capture stack trace
     Error.captureStackTrace(this, this.constructor);
   }
-  
+
   static fromHttpError(error, context = {}) {
     const statusCode = error.response?.status || error.statusCode;
     const retryable = [408, 429, 500, 502, 503, 504].includes(statusCode);
-    
+
     return new SyncError(
       `HTTP ${statusCode}: ${error.message}`,
       {
@@ -531,7 +531,7 @@ export class SyncError extends Error {
       }
     );
   }
-  
+
   static networkError(error, context = {}) {
     return new SyncError('Network error', {
       code: 'NETWORK_ERROR',
@@ -540,7 +540,7 @@ export class SyncError extends Error {
       cause: error,
     });
   }
-  
+
   static timeout(operation, timeoutMs, context = {}) {
     return new SyncError(`Timeout after ${timeoutMs}ms: ${operation}`, {
       code: 'TIMEOUT',
@@ -550,10 +550,10 @@ export class SyncError extends Error {
   }
 }
 
-export class HulyError extends SyncError {
+export class LegacyError extends SyncError {
   constructor(message, options = {}) {
-    super(message, { ...options, code: `HULY_${options.code || 'ERROR'}` });
-    this.name = 'HulyError';
+    super(message, { ...options, code: `LEGACY_${options.code || 'ERROR'}` });
+    this.name = 'LegacyError';
   }
 }
 
@@ -583,37 +583,37 @@ export async function retryWithBackoff(fn, options = {}) {
     backoffFactor = 2,
     onRetry = () => {},
   } = options;
-  
+
   let lastError;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      
+
       // Don't retry if error is not retryable
       if (error.retryable === false) {
         throw error;
       }
-      
+
       // Don't retry on last attempt
       if (attempt === maxRetries) {
         break;
       }
-      
+
       // Calculate delay with exponential backoff
       const delay = Math.min(
         initialDelay * Math.pow(backoffFactor, attempt),
         maxDelay
       );
-      
+
       onRetry({ attempt, delay, error });
-      
+
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 }
 ```
@@ -653,12 +653,12 @@ try {
   return tasks;
 } catch (error) {
   const vibeError = VibeError.fromHttpError(error, { projectId });
-  
+
   logger.error({
     error: vibeError,
     stack: vibeError.stack,
   }, 'Failed to list Vibe tasks');
-  
+
   // Report to monitoring
   metrics.syncErrors.inc({
     component: 'vibe',
@@ -666,7 +666,7 @@ try {
     error_code: vibeError.code,
     retryable: vibeError.retryable,
   });
-  
+
   // Re-throw to let caller decide
   throw vibeError;
 }
@@ -700,7 +700,7 @@ try {
 #### Phase 1: Add JSDoc (1 week)
 ```javascript
 /**
- * @typedef {Object} HulyIssue
+ * @typedef {Object} LegacyIssue
  * @property {string} identifier - Issue identifier (e.g., "PROJ-123")
  * @property {string} title - Issue title
  * @property {string} description - Full description
@@ -710,21 +710,21 @@ try {
  */
 
 /**
- * Create a task in Vibe Kanban from a Huly issue
+ * Create a task in Vibe Kanban from a Legacy issue
  * @param {Object} vibeClient - Vibe API client
  * @param {number} vibeProjectId - Vibe project ID
- * @param {HulyIssue} hulyIssue - Source issue from Huly
+ * @param {LegacyIssue} legacyIssue - Source issue from Legacy
  * @returns {Promise<Object|null>} Created task or null on failure
  */
-async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
+async function createVibeTask(vibeClient, vibeProjectId, legacyIssue) {
   // ...
 }
 ```
 
 #### Phase 2: TypeScript Migration (2-3 weeks)
 ```typescript
-// types/huly.ts
-export interface HulyIssue {
+// types/legacy.ts
+export interface LegacyIssue {
   identifier: string;
   title: string;
   description: string;
@@ -733,18 +733,18 @@ export interface HulyIssue {
   modifiedAt?: number;
 }
 
-export interface HulyProject {
+export interface LegacyProject {
   identifier: string;
   name: string;
   id: string;
 }
 
-// lib/HulyRestClient.ts
-export class HulyRestClient {
+// lib/LegacyRestClient.ts
+export class LegacyRestClient {
   async listIssues(
     projectId: string,
     options?: { modifiedAfter?: number }
-  ): Promise<HulyIssue[]> {
+  ): Promise<LegacyIssue[]> {
     // ...
   }
 }

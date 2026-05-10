@@ -36,7 +36,7 @@ Added graceful handling in `ensureSource()` method:
 
 ### 4. Phantom Entries Analysis
 
-**Problem:** 41 folders with names like `Huly-INSTA-root`, `Huly-VIBEK-root`, etc.
+**Problem:** 41 folders with names like `Legacy-INSTA-root`, `Legacy-VIBEK-root`, etc.
 - They appear in `GET /v1/sources` and `GET /v1/folders`
 - Both endpoints return the SAME items with the SAME IDs
 - `DELETE` requests return 404 (not found)
@@ -46,7 +46,7 @@ Added graceful handling in `ensureSource()` method:
 ```json
 {
   "id": "source-ed8d165a-f0e4-4f5c-b6c5-dda5493e1de7",
-  "name": "Huly-INSTA-root"
+  "name": "Legacy-INSTA-root"
 }
 ```
 The same ID appears in both `/sources` and `/folders` endpoints.
@@ -91,7 +91,7 @@ The same ID appears in both `/sources` and `/folders` endpoints.
 If phantom entries must be removed:
 1. SSH into Letta server
 2. Connect to PostgreSQL database
-3. Run: `DELETE FROM sources WHERE name LIKE 'Huly-%-root';`
+3. Run: `DELETE FROM sources WHERE name LIKE 'Legacy-%-root';`
 4. Verify with: `SELECT COUNT(*) FROM sources;`
 
 ### Option 3: Disable File Uploads Temporarily
@@ -105,7 +105,7 @@ environment:
 ## Next Steps
 
 1. **Restart sync service** - Test that it runs without errors
-2. **Monitor logs** - Confirm 409 handling works correctly  
+2. **Monitor logs** - Confirm 409 handling works correctly
 3. **Future enhancement** - Add startup cleanup routine
 4. **Documentation** - Update README with file upload configuration
 

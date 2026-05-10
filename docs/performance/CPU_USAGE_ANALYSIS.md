@@ -1,6 +1,6 @@
 # CPU Usage Analysis & Optimization
 
-**Date**: November 2, 2025  
+**Date**: November 2, 2025
 **Environment**: Docker Compose stack on shared host
 
 ## Current CPU Usage
@@ -10,14 +10,14 @@
 | Container | CPU % | Memory | Issue |
 |-----------|-------|--------|-------|
 | **letta-letta-1** | **100.36%** | 528MB / 4GB | ⚠️ CRITICAL - Maxed out |
-| **huly-collaborator-1** | **60.26%** | 181MB | ⚠️ HIGH - Real-time collaboration |
+| **legacy-collaborator-1** | **60.26%** | 181MB | ⚠️ HIGH - Real-time collaboration |
 | **searxng_app** | **47.73%** | 358MB | ⚠️ HIGH - Search indexing |
 | **letta-postgres-1** | **43.53%** | 420MB / 2GB | ⚠️ HIGH - Database load |
-| **huly-huly-rest-api-1** | **41.24%** | 131MB | ⚠️ HIGH - REST API processing |
+| **legacy-legacy-rest-api-1** | **41.24%** | 131MB | ⚠️ HIGH - REST API processing |
 | **tesslate-orchestrator** | **40.59%** | 135MB | ⚠️ HIGH - Orchestration tasks |
-| **huly-vibe-sync** | **29.58%** | 122MB | ⚠️ MEDIUM - **Our service** |
-| **huly-minio-1** | **24.43%** | 405MB | 🟡 Storage operations |
-| **huly-transactor-1** | **11.79%** | 154MB | ✅ Acceptable |
+| **vibe-sync** | **29.58%** | 122MB | ⚠️ MEDIUM - **Our service** |
+| **legacy-minio-1** | **24.43%** | 405MB | 🟡 Storage operations |
+| **legacy-transactor-1** | **11.79%** | 154MB | ✅ Acceptable |
 | **letta-proxy-1** | **8.59%** | 66MB | ✅ Acceptable |
 
 ### Total System Load
@@ -35,7 +35,7 @@
 
 **Root Cause**:
 ```
-huly-vibe-sync is hammering Letta with memory block updates:
+vibe-sync is hammering Letta with memory block updates:
 
 42 projects × 6 blocks/project × sync every 3 seconds
 = 252 block operations every 3 seconds
@@ -45,13 +45,13 @@ huly-vibe-sync is hammering Letta with memory block updates:
 **Evidence**:
 ```python
 # From letta logs
-sqlalchemy.orm.exc.StaleDataError: UPDATE statement on table 'block' 
+sqlalchemy.orm.exc.StaleDataError: UPDATE statement on table 'block'
 expected to update 1 row(s); 0 were matched.
 ```
 
 This happens when multiple concurrent updates try to modify the same block.
 
-### 2. Huly-Vibe-Sync (29% CPU) - MEDIUM ⚠️
+### 2. Vibe Sync (29% CPU) - MEDIUM ⚠️
 
 **Symptoms**:
 - Running at 29% CPU (almost 1/3 of a core)
@@ -70,8 +70,8 @@ PARALLEL_SYNC=false // Sequential processing
 Per Cycle (every 3 seconds):
 - 44 projects to process
 - Each project:
-  * Fetch Huly issues
-  * Fetch Vibe tasks  
+  * Fetch Legacy issues
+  * Fetch Vibe tasks
   * Update 6 memory blocks (even if unchanged - checking takes time)
   * Save agent state to DB
   * Save to project .letta folder
@@ -83,12 +83,12 @@ Total per cycle: ~44 × 10 operations = 440 operations / 3 seconds
 ### 3. Letta Postgres (43% CPU) - HIGH ⚠️
 
 **Root Cause**:
-- Overwhelmed by huly-vibe-sync's memory block updates
+- Overwhelmed by vibe-sync's memory block updates
 - 84 UPDATE statements/second
 - Concurrent writes causing lock contention
 - Index updates on every block change
 
-### 4. Huly Collaborator (60% CPU) - HIGH ⚠️
+### 4. Legacy Collaborator (60% CPU) - HIGH ⚠️
 
 **Cause**: Real-time collaboration features (WebSocket connections, live updates)
 **Note**: This is expected for collaboration services
@@ -108,7 +108,7 @@ SYNC_INTERVAL=60000  # 60 seconds (20x reduction)
 ```
 
 **Impact**:
-- **huly-vibe-sync CPU**: 29% → **3-6%** (80-90% reduction)
+- **vibe-sync CPU**: 29% → **3-6%** (80-90% reduction)
 - **letta-letta-1 CPU**: 100% → **10-20%** (80% reduction)
 - **letta-postgres-1 CPU**: 43% → **5-10%** (75% reduction)
 
@@ -127,7 +127,7 @@ SYNC_INTERVAL=60000  # 60 seconds (20x reduction)
 // In lib/LettaService.js
 async upsertMemoryBlocks(agentId, blocks) {
   // Current: Always calls Letta API to check each block
-  
+
   // Better: Cache block hashes locally
   const localCache = this._blockHashCache[agentId] || {};
   const blocksToUpdate = blocks.filter(block => {
@@ -138,12 +138,12 @@ async upsertMemoryBlocks(agentId, blocks) {
     localCache[block.label] = hash;
     return true; // Update needed
   });
-  
+
   if (blocksToUpdate.length === 0) {
     console.log(`[Letta] All blocks up to date (cached check)`);
     return;
   }
-  
+
   // Only update changed blocks
   await this._updateBlocks(agentId, blocksToUpdate);
 }
@@ -177,7 +177,7 @@ SKIP_EMPTY_PROJECTS=true
 **Impact**:
 - Skips projects with 0 issues after first detection
 - Reduces processing by ~20-30% (many empty projects)
-- **huly-vibe-sync CPU**: 29% → **20-23%** (20-30% reduction)
+- **vibe-sync CPU**: 29% → **20-23%** (20-30% reduction)
 
 ### Priority 4: Incremental Sync ⭐
 
@@ -197,7 +197,7 @@ If you're running sleep-time agents (off-hours agents), consider:
 ### Phase 1: Quick Wins (5 minutes)
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 
 # Edit .env
 nano .env
@@ -210,12 +210,12 @@ SKIP_EMPTY_PROJECTS=true         # Was: false
 docker-compose restart
 
 # Monitor impact
-docker stats --no-stream | grep -E "(letta|huly-vibe)"
+docker stats --no-stream | grep -E "(letta|legacy-vibe)"
 ```
 
 **Expected Result**:
-- **huly-vibe-sync**: 29% → **6%** CPU
-- **letta-letta-1**: 100% → **20%** CPU  
+- **vibe-sync**: 29% → **6%** CPU
+- **letta-letta-1**: 100% → **20%** CPU
 - **letta-postgres-1**: 43% → **8%** CPU
 - **Total system**: ~500% → ~350% CPU (30% reduction)
 
@@ -227,7 +227,7 @@ docker stats --no-stream | grep -E "(letta|huly-vibe)"
 
 **Expected Additional Result**:
 - **letta-letta-1**: 20% → **5-10%** CPU
-- **huly-vibe-sync**: 6% → **3-4%** CPU
+- **vibe-sync**: 6% → **3-4%** CPU
 
 ### Phase 3: Advanced (Future)
 
@@ -247,16 +247,16 @@ docker stats --no-stream --format "{{.Name}} {{.CPUPerc}}" | \
   awk '{print $2, $1}' | sort -rn | head -10
 
 # Monitor specific containers
-docker stats letta-letta-1 huly-vibe-sync letta-postgres-1
+docker stats letta-letta-1 vibe-sync letta-postgres-1
 ```
 
 ### Check Sync Performance
 ```bash
 # Watch logs
-docker-compose logs -f huly-vibe-sync | grep -E "(Starting|Complete|projects)"
+docker-compose logs -f vibe-sync | grep -E "(Starting|Complete|projects)"
 
 # Count block updates per minute
-docker-compose logs --since 1m huly-vibe-sync | grep "Updated block" | wc -l
+docker-compose logs --since 1m vibe-sync | grep "Updated block" | wc -l
 ```
 
 ### Alerts to Add
@@ -267,37 +267,37 @@ docker-compose logs --since 1m huly-vibe-sync | grep "Updated block" | wc -l
 
 ## Other Heavy Containers
 
-### Huly Collaborator (60% CPU)
-**Type**: Real-time collaboration service  
-**Action**: Expected behavior - provides live editing/updates  
+### Legacy Collaborator (60% CPU)
+**Type**: Real-time collaboration service
+**Action**: Expected behavior - provides live editing/updates
 **Optimization**: Limit max concurrent connections if possible
 
-### SearXNG (47% CPU)  
-**Type**: Meta search engine  
-**Action**: Review if this is actively used  
+### SearXNG (47% CPU)
+**Type**: Meta search engine
+**Action**: Review if this is actively used
 **Optimization**: Reduce index update frequency or disable if not needed
 
 ### Tesslate Orchestrator (40% CPU)
-**Type**: Orchestration service  
-**Action**: Review task frequency  
+**Type**: Orchestration service
+**Action**: Review task frequency
 **Optimization**: Increase task intervals if possible
 
 ## Summary
 
 ### Current State
-- **huly-vibe-sync**: Syncing every 3 seconds (too aggressive)
+- **vibe-sync**: Syncing every 3 seconds (too aggressive)
 - **Letta**: Maxed out at 100% CPU from block update spam
 - **System**: Using 5+ CPU cores constantly
 
 ### Recommended Changes
 1. ✅ **Increase sync interval**: 3s → 30s (10x reduction)
-2. ✅ **Skip empty projects**: Reduce unnecessary processing  
+2. ✅ **Skip empty projects**: Reduce unnecessary processing
 3. ✅ **Add block hash caching**: Prevent unnecessary API calls
 4. ⏭️ **Consider disabling sleep-time agents**: If not actively used
 
 ### Expected Impact
 - **70-80% CPU reduction** on Letta services
-- **80-90% CPU reduction** on huly-vibe-sync
+- **80-90% CPU reduction** on vibe-sync
 - **30% overall system CPU reduction**
 - **Improved stability** (no more database conflicts)
 

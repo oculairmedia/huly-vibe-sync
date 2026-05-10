@@ -1,7 +1,7 @@
 # PR 1: Observability Foundation - Complete ✅
 
-**Date:** 2025-11-04  
-**Status:** Successfully Implemented and Deployed  
+**Date:** 2025-11-04
+**Status:** Successfully Implemented and Deployed
 **Tests:** 381 passing (13 new logger tests added)
 
 ## Overview
@@ -39,7 +39,7 @@ log.info({ project: 'PROJECT', count: 10 }, 'Processing project');
 **Metrics Implemented:**
 - **`sync_runs_total{status}`** - Counter for successful/failed syncs
 - **`sync_duration_seconds`** - Histogram of sync durations (1s-10min buckets)
-- **`huly_api_latency_seconds{operation}`** - Histogram for Huly API calls
+- **`legacy_api_latency_seconds{operation}`** - Histogram for Legacy API calls
 - **`vibe_api_latency_seconds{operation}`** - Histogram for Vibe API calls
 - **`projects_processed`** - Gauge for current sync projects count
 - **`issues_synced`** - Gauge for current sync issues count
@@ -106,7 +106,7 @@ log.info({ count: 5, syncId }, 'Processing projects');
 ```json
 {
   "status": "healthy",
-  "service": "huly-vibe-sync",
+  "service": "vibe-sync",
   "version": "1.0.0",
   "uptime": { "milliseconds": 26245, "seconds": 26, "human": "26s" },
   "sync": {
@@ -153,15 +153,15 @@ issues_synced 299
 ## Sample Structured Logs
 
 ```json
-{"level":"info","time":"2025-11-04T05:38:00.439Z","service":"huly-vibe-sync","pid":1,"dbPath":"/app/logs/sync-state.db","msg":"Database initialized successfully"}
+{"level":"info","time":"2025-11-04T05:38:00.439Z","service":"vibe-sync","pid":1,"dbPath":"/app/logs/sync-state.db","msg":"Database initialized successfully"}
 
-{"level":"info","time":"2025-11-04T05:38:00.481Z","service":"huly-vibe-sync","pid":1,"syncId":280,"msg":"Starting bidirectional sync"}
+{"level":"info","time":"2025-11-04T05:38:00.481Z","service":"vibe-sync","pid":1,"syncId":280,"msg":"Starting bidirectional sync"}
 
-{"level":"info","time":"2025-11-04T05:38:00.627Z","service":"huly-vibe-sync","pid":1,"syncId":280,"count":44,"msg":"Fetched Huly projects"}
+{"level":"info","time":"2025-11-04T05:38:00.627Z","service":"vibe-sync","pid":1,"syncId":280,"count":44,"msg":"Fetched Legacy projects"}
 
-{"level":"info","time":"2025-11-04T05:38:00.733Z","service":"huly-vibe-sync","pid":1,"syncId":280,"project":"GRAPH","name":"Graphiti Knowledge Graph Platform","msg":"Processing project"}
+{"level":"info","time":"2025-11-04T05:38:00.733Z","service":"vibe-sync","pid":1,"syncId":280,"project":"GRAPH","name":"Graphiti Knowledge Graph Platform","msg":"Processing project"}
 
-{"level":"error","time":"2025-11-04T05:38:01.234Z","service":"huly-vibe-sync","pid":1,"syncId":280,"err":{"type":"ReferenceError","message":"require is not defined","stack":"..."},"project":"GRAPH","msg":"Letta PM agent memory update failed"}
+{"level":"error","time":"2025-11-04T05:38:01.234Z","service":"vibe-sync","pid":1,"syncId":280,"err":{"type":"ReferenceError","message":"require is not defined","stack":"..."},"project":"GRAPH","msg":"Letta PM agent memory update failed"}
 ```
 
 ## Dependencies Added
@@ -214,7 +214,7 @@ Total: 26 new packages (pino ecosystem + prom-client)
 - ✅ **PR 1 Complete** - Observability foundation deployed
 
 ### Recommended Follow-up (PR 2)
-- [ ] Instrument API latencies in HulyService and VibeService
+- [ ] Instrument API latencies in LegacyService and VibeService
 - [ ] Add retry/backoff with exponential backoff
 - [ ] Implement circuit breaker pattern
 - [ ] Create SyncError hierarchy for error classification
@@ -264,12 +264,12 @@ curl http://localhost:3099/metrics
 
 ## Acceptance Criteria Met
 
-✅ `/metrics` returns Prometheus text format  
-✅ Logs include `syncId` correlation  
-✅ Docker/compose healthcheck reflects real health status  
-✅ All 381 tests passing  
-✅ Zero breaking changes  
-✅ Container deployed and running successfully  
+✅ `/metrics` returns Prometheus text format
+✅ Logs include `syncId` correlation
+✅ Docker/compose healthcheck reflects real health status
+✅ All 381 tests passing
+✅ Zero breaking changes
+✅ Container deployed and running successfully
 
 ## Score Improvement
 

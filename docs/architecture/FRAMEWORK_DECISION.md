@@ -390,7 +390,7 @@ Key files to study:
 ## Next Steps
 
 1. **Review and approve** this framework decision
-2. **Create Huly issue** for MCP expansion (use vibe-kanban MCP)
+2. **Create Legacy issue** for MCP expansion (use vibe-kanban MCP)
 3. **Set up development environment** with TurboMCP
 4. **Implement Phase 1** (Executor Profiles first - fixes our blocker!)
 5. **Test with real workflows** (OpenCode + Claude Code)

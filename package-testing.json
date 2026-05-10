@@ -1,7 +1,7 @@
 {
-  "name": "huly-vibe-sync-testing",
+  "name": "vibe-sync-testing",
   "version": "1.0.0",
-  "description": "Testing infrastructure for Huly-Vibe-Sync",
+  "description": "Testing infrastructure for Vibe Sync",
   "type": "module",
   "scripts": {
     "test": "vitest run",

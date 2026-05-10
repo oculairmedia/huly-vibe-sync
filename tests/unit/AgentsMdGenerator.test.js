@@ -10,7 +10,7 @@ import fs from 'fs';
 vi.mock('fs');
 
 const mockedFs = vi.mocked(fs);
-const pathText = value => String(value);
+const pathText = (value) => String(value);
 
 vi.mock('../../lib/logger.js', () => ({
   logger: {
@@ -26,6 +26,7 @@ vi.mock('../../lib/logger.js', () => ({
 const MOCK_TEMPLATES = {
   'project-info': '# Agent Instructions\n\n- **Project Code**: `{{identifier}}`',
   'reporting-hierarchy': '## PM Agent Communication\n\nReport to PM agent.',
+  'beads-instructions': '## Issue Tracking\n\nUse bd for issue tracking.',
   'bookstack-docs': '## BookStack Documentation\n\nDocs at BookStack.',
   'session-completion': '## Landing the Plane\n\nPush before ending.',
   'codebase-context': '## Codebase Context\n\nProject: {{identifier}}',
@@ -33,7 +34,7 @@ const MOCK_TEMPLATES = {
 };
 
 function setupTemplateMocks() {
-  mockedFs.existsSync.mockImplementation(p => {
+  mockedFs.existsSync.mockImplementation((p) => {
     const path = pathText(p);
     if (path.includes('templates/agents-md/')) {
       const filename = path.split('/').pop().replace('.md', '');
@@ -41,7 +42,7 @@ function setupTemplateMocks() {
     }
     return false;
   });
-  mockedFs.readFileSync.mockImplementation(p => {
+  mockedFs.readFileSync.mockImplementation((p) => {
     const path = pathText(p);
     if (path.includes('templates/agents-md/')) {
       const filename = path.split('/').pop().replace('.md', '');
@@ -93,7 +94,7 @@ describe('AgentsMdGenerator', () => {
 
   describe('generate - fresh file', () => {
     it('should generate all sections in order for new file', () => {
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return false;
         if (path.includes('templates/agents-md/')) {
@@ -106,7 +107,7 @@ describe('AgentsMdGenerator', () => {
       const { content, changes } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'TEST' },
-        { dryRun: true }
+        { dryRun: true },
       );
 
       for (const sectionId of SECTION_ORDER) {
@@ -121,11 +122,11 @@ describe('AgentsMdGenerator', () => {
       expect(projectIdx).toBeLessThan(bookstackIdx);
       expect(bookstackIdx).toBeLessThan(sessionIdx);
 
-      expect(changes.every(c => c.action === 'inserted')).toBe(true);
+      expect(changes.every((c) => c.action === 'inserted')).toBe(true);
     });
 
     it('should interpolate variables in templates', () => {
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return false;
         if (path.includes('templates/agents-md/')) {
@@ -138,7 +139,7 @@ describe('AgentsMdGenerator', () => {
       const { content } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'MYPROJ' },
-        { dryRun: true }
+        { dryRun: true },
       );
 
       expect(content).toContain('`MYPROJ`');
@@ -154,7 +155,7 @@ describe('AgentsMdGenerator', () => {
         '<!-- VIBESYNC:project-info:END -->',
       ].join('\n');
 
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return true;
         if (path.includes('templates/agents-md/')) {
@@ -163,7 +164,7 @@ describe('AgentsMdGenerator', () => {
         }
         return false;
       });
-      mockedFs.readFileSync.mockImplementation(p => {
+      mockedFs.readFileSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return existing;
         if (path.includes('templates/agents-md/')) {
@@ -176,13 +177,13 @@ describe('AgentsMdGenerator', () => {
       const { content, changes } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'UPD' },
-        { dryRun: true }
+        { dryRun: true },
       );
 
       expect(content).toContain('`UPD`');
       expect(content).not.toContain('# Old Content');
 
-      const piChange = changes.find(c => c.section === 'project-info');
+      const piChange = changes.find((c) => c.section === 'project-info');
       expect(piChange.action).toBe('updated');
     });
   });
@@ -205,7 +206,7 @@ describe('AgentsMdGenerator', () => {
         '<!-- VIBESYNC:bookstack-docs:END -->',
       ].join('\n');
 
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return true;
         if (path.includes('templates/agents-md/')) {
@@ -214,7 +215,7 @@ describe('AgentsMdGenerator', () => {
         }
         return false;
       });
-      mockedFs.readFileSync.mockImplementation(p => {
+      mockedFs.readFileSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return existing;
         if (path.includes('templates/agents-md/')) {
@@ -227,13 +228,13 @@ describe('AgentsMdGenerator', () => {
       const { content, changes } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'GRAPH' },
-        { dryRun: true }
+        { dryRun: true },
       );
 
       expect(content).toContain('<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->');
       expect(content).toContain('This is custom content that must be preserved.');
 
-      const rhChange = changes.find(c => c.section === 'reporting-hierarchy');
+      const rhChange = changes.find((c) => c.section === 'reporting-hierarchy');
       expect(rhChange.action).toBe('skipped');
       expect(rhChange.reason).toBe('CUSTOM marker');
     });
@@ -253,7 +254,7 @@ describe('AgentsMdGenerator', () => {
         'Custom content line 3.',
       ].join('\n');
 
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return true;
         if (path.includes('templates/agents-md/')) {
@@ -262,7 +263,7 @@ describe('AgentsMdGenerator', () => {
         }
         return false;
       });
-      mockedFs.readFileSync.mockImplementation(p => {
+      mockedFs.readFileSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return existing;
         if (path.includes('templates/agents-md/')) {
@@ -275,7 +276,7 @@ describe('AgentsMdGenerator', () => {
       const { content } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'GRAPH' },
-        { dryRun: true, sections: ['bookstack-docs'] }
+        { dryRun: true, sections: ['bookstack-docs'] },
       );
 
       const customMarkerIdx = content.indexOf('<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->');
@@ -303,7 +304,7 @@ describe('AgentsMdGenerator', () => {
         'End of custom content.',
       ].join('\n');
 
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return true;
         if (path.includes('templates/agents-md/')) {
@@ -312,7 +313,7 @@ describe('AgentsMdGenerator', () => {
         }
         return false;
       });
-      mockedFs.readFileSync.mockImplementation(p => {
+      mockedFs.readFileSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return existing;
         if (path.includes('templates/agents-md/')) {
@@ -325,7 +326,7 @@ describe('AgentsMdGenerator', () => {
       const { content } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'GRAPH' },
-        { dryRun: true, sections: ['bookstack-docs'] }
+        { dryRun: true, sections: ['bookstack-docs'] },
       );
 
       const customContentIdx = content.indexOf('End of custom content.');
@@ -347,7 +348,7 @@ describe('AgentsMdGenerator', () => {
         'Preserved content here.',
       ].join('\n');
 
-      mockedFs.existsSync.mockImplementation(p => {
+      mockedFs.existsSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return true;
         if (path.includes('templates/agents-md/')) {
@@ -356,7 +357,7 @@ describe('AgentsMdGenerator', () => {
         }
         return false;
       });
-      mockedFs.readFileSync.mockImplementation(p => {
+      mockedFs.readFileSync.mockImplementation((p) => {
         const path = pathText(p);
         if (path.endsWith('AGENTS.md')) return existing;
         if (path.includes('templates/agents-md/')) {
@@ -369,7 +370,7 @@ describe('AgentsMdGenerator', () => {
       const { content } = generator.generate(
         '/tmp/AGENTS.md',
         { identifier: 'GRAPH' },
-        { dryRun: true, sections: ['bookstack-docs', 'session-completion'] }
+        { dryRun: true, sections: ['bookstack-docs', 'session-completion'] },
       );
 
       const preservedIdx = content.indexOf('Preserved content here.');
@@ -385,7 +386,7 @@ describe('AgentsMdGenerator', () => {
     it('should detect managed section', () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedFs.readFileSync.mockReturnValue(
-        '<!-- VIBESYNC:project-info:START -->\ncontent\n<!-- VIBESYNC:project-info:END -->'
+        '<!-- VIBESYNC:project-info:START -->\ncontent\n<!-- VIBESYNC:project-info:END -->',
       );
 
       const result = generator.hasSection('/tmp/AGENTS.md', 'project-info');
@@ -395,7 +396,7 @@ describe('AgentsMdGenerator', () => {
     it('should detect CUSTOM section', () => {
       mockedFs.existsSync.mockReturnValue(true);
       mockedFs.readFileSync.mockReturnValue(
-        '<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->\ncustom content'
+        '<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->\ncustom content',
       );
 
       const result = generator.hasSection('/tmp/AGENTS.md', 'reporting-hierarchy');
@@ -428,7 +429,7 @@ describe('AgentsMdGenerator', () => {
           '<!-- VIBESYNC:project-info:END -->',
           '<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->',
           'custom stuff',
-        ].join('\n')
+        ].join('\n'),
       );
 
       const result = generator.inspect('/tmp/AGENTS.md');

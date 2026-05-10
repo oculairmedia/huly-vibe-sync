@@ -2,25 +2,25 @@
 
 # Agent Instructions
 
-## Huly Integration
+## Project Identity
 
 - **Project Code**: `HVSYN`
-- **Project Name**: Huly-Vibe Sync Service
+- **Project Name**: Vibe Sync Service
 - **Letta Agent ID**: `agent-b417b8da-84d2-40dd-97ad-3a35454934f7`
 
 ## Workflow Instructions
 
-1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `HVSYN`
-2. **Issue references**: All issues for this project use the format `HVSYN-XXX` (e.g., `HVSYN-123`)
-3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent`
-4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
+1. **Before starting work**: Use the local Beads tracker (`bd ready`, `bd show <id>`, `bd update <id> --claim`) to find and claim related work.
+2. **Issue references**: Use Beads issue IDs exactly as reported by `bd` (for example, `HVSYN-abc` or the repository's configured prefix).
+3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent`.
+4. **Memory**: Store important discoveries with the configured project memory tool.
 <!-- VIBESYNC:project-info:END -->
 
 <!-- VIBESYNC:reporting-hierarchy:START -->
 
 ## PM Agent Communication
 
-**Project PM Agent:** `PM - Huly-Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
+**Project PM Agent:** `PM - Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
 
 ### Reporting Hierarchy
 
@@ -41,7 +41,7 @@ You (Developer Agent - experienced)
 ```json
 {
   "operation": "talk_to_agent",
-  "agent": "PM - Huly-Vibe Sync Service",
+  "agent": "PM - Vibe Sync Service",
   "message": "<your report>",
   "caller_directory": "/opt/stacks/huly-vibe-sync"
 }
@@ -72,41 +72,29 @@ You (Developer Agent - experienced)
 
 ## Issue Tracking
 
-This project uses **bd** for issue tracking. Run `bd onboard` to get started.
+This project uses **bd** (Beads) for local issue tracking. Beads is a CLI tool: interact with it only through `bd` commands, not by reading or writing its backing database directly. Run `bd prime` for the current workflow context and command reference.
 
 ### Quick Reference
 
 ```bash
 bd ready              # Find available work
 bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
+bd update <id> --claim  # Claim work
 bd close <id>         # Complete work
-bd sync               # Sync with git
 ```
 
-### bd Sync Flow (Hybrid System)
+### Rules
 
-bd uses a **hybrid sync** approach for reliability:
+- Use `bd` for task tracking and follow-up work; do not route issue operations through external issue tools.
+- Do not access the Beads/Dolt backing database directly. Use the `bd` CLI for all issue reads, updates, claims, closes, syncs, and durable notes.
+- Create or update Beads issues before writing code when the work is non-trivial.
+- Close completed issues with `bd close <id>` and include a reason when helpful.
+- Use `bd remember` for durable project knowledge instead of ad-hoc memory files.
 
-#### Automatic Sync (Real-time)
+### Persistence
 
-- `bd create`, `bd update`, `bd close` write to SQLite DB
-- File watcher detects DB changes automatically
-- Syncs to Huly within ~30-60 seconds
-
-#### Git Persistence (`bd sync`)
-
-- `bd sync` exports to JSONL and commits to git
-- Required for cross-machine persistence
-- Run before ending session to ensure changes are saved
-
-### Best Practice
-
-```bash
-bd create "New task"   # Auto-syncs to Huly
-bd close some-issue    # Auto-syncs to Huly
-bd sync                # Git backup (recommended before session end)
-```
+- Beads state is local-first. If the repository has a remote, persist issue changes with the configured Beads sync command before ending a session.
+- If no git remote is configured, leave the Beads database and JSONL export in a clean local state and note that work is local-only.
 
 <!-- VIBESYNC:beads-instructions:END -->
 
@@ -126,37 +114,38 @@ bd sync                # Git backup (recommended before session end)
 
 ## Landing the Plane (Session Completion)
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, you MUST complete ALL steps below. Work is not complete until code changes, Beads state, and handoff notes are in a clean state.
 
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+4. **Persist changes** - If a git remote is configured, push code and Beads state:
    ```bash
    git pull --rebase
-   bd sync
+   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
+   If no remote is configured, verify `git status` and Beads state locally and mention that the session is local-only.
+5. **Clean up** - Clear stashes and prune stale branches when applicable
+6. **Verify** - All intended changes are committed or explicitly handed off
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+- Do not leave issue updates half-applied; Beads is the source of truth for task state.
+- Use the `bd` CLI only; do not inspect or mutate the Beads/Dolt backing database directly.
+- Do not use external issue tools for issue tracking.
+- If push is available and fails, resolve and retry until it succeeds.
 <!-- VIBESYNC:session-completion:END -->
 
 <!-- VIBESYNC:codebase-context:START -->
 
 ## Codebase Context
 
-**Project**: Huly-Vibe Sync Service (`HVSYN`)
+**Project**: Vibe Sync Service (`HVSYN`)
 **Path**: `/opt/stacks/huly-vibe-sync`
 
 This project's PM agent has a `codebase_ast` memory block with live structural data including:
@@ -169,52 +158,3 @@ This project's PM agent has a `codebase_ast` memory block with live structural d
 Ask the PM agent for architectural guidance before making significant changes.
 
 <!-- VIBESYNC:codebase-context:END -->
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-
-## Issue Tracker
-
-This project uses **bd** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
-```
-
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-## Session Completion
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->

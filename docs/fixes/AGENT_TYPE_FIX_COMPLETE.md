@@ -2,10 +2,10 @@
 
 ## Problem Statement
 
-The huly-vibe-sync service was incorrectly using **sleeptime agents** instead of **primary agents** for project management tasks. Letta creates two types of agents per project when `enable_sleeptime: true`:
+The vibe-sync service was incorrectly using **sleeptime agents** instead of **primary agents** for project management tasks. Letta creates two types of agents per project when `enable_sleeptime: true`:
 
-- **Primary Agent** (`Huly-{PROJECT}-PM`) - For direct interaction and PM tasks
-- **Sleeptime Agent** (`Huly-{PROJECT}-PM-sleeptime`) - For background memory consolidation
+- **Primary Agent** (`Legacy-{PROJECT}-PM`) - For direct interaction and PM tasks
+- **Sleeptime Agent** (`Legacy-{PROJECT}-PM-sleeptime`) - For background memory consolidation
 
 The sync service should ALWAYS use primary agents, but the database contained sleeptime agent IDs which were being reused across sync runs.
 
@@ -73,10 +73,10 @@ To verify the fix is working:
 
 ```bash
 # Check logs for sleeptime detection
-docker logs huly-vibe-sync 2>&1 | grep "sleeptime"
+docker logs vibe-sync 2>&1 | grep "sleeptime"
 
 # Query database to see current mappings
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 sqlite3 logs/sync-state.db "SELECT identifier, letta_agent_id FROM projects WHERE identifier IN ('OPCDE', 'BKMCP', 'LMS');"
 
 # Verify agent types via Letta API
@@ -88,15 +88,15 @@ curl -s http://192.168.50.90:8289/v1/agents/{agent-id} -H "Authorization: Bearer
 The logs show **47-49 duplicate agents** per project name due to past issues. Run the cleanup script:
 
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 node cleanup-agents.js
 ```
 
 ## Status
 
-✅ **Fix Deployed**: Docker container rebuilt with fix (2025-11-02 23:19)  
-✅ **Automated Detection**: Service now automatically detects and corrects sleeptime agents  
-✅ **One-Time Fix**: Each project fixes itself on first sync after container restart  
+✅ **Fix Deployed**: Docker container rebuilt with fix (2025-11-02 23:19)
+✅ **Automated Detection**: Service now automatically detects and corrects sleeptime agents
+✅ **One-Time Fix**: Each project fixes itself on first sync after container restart
 ⚠️  **Duplicate Cleanup**: Manual cleanup of duplicate agents recommended but not required
 
 ## Technical Notes

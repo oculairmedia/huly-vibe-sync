@@ -1,8 +1,8 @@
 # Session Summary - Testing Infrastructure Implementation
 
-**Date:** November 3, 2025  
-**Duration:** ~1 hour  
-**Branch:** main  
+**Date:** November 3, 2025
+**Duration:** ~1 hour
+**Branch:** main
 **Commits:** 2 (001b151, 5c80d04)
 
 ---
@@ -41,7 +41,7 @@ tests/
 │   ├── Environment variables for testing
 │   ├── Test database configuration
 │   ├── Console spy utilities
-│   └── Mock data factories (Huly, Vibe, Letta)
+│   └── Mock data factories (Legacy, Vibe, Letta)
 ├── unit/
 │   ├── statusMapper.test.js    # 29 tests, 100% coverage
 │   └── textParsers.test.js     # 39 tests, 97.46% coverage
@@ -53,16 +53,16 @@ tests/
 ### 3. Utility Modules Extracted (Complete)
 
 **lib/statusMapper.js** (85 lines)
-- `mapHulyStatusToVibe()` - Bidirectional status mapping
-- `mapVibeStatusToHuly()` - Reverse mapping with defaults
+- `mapLegacyStatusToVibe()` - Bidirectional status mapping
+- `mapVibeStatusToLegacy()` - Reverse mapping with defaults
 - `normalizeStatus()` - Lowercase and trim
 - `areStatusesEquivalent()` - Semantic comparison
 
 **lib/textParsers.js** (236 lines)
-- `parseProjectsFromText()` - Parse Huly MCP project list output
-- `parseIssuesFromText()` - Parse Huly MCP issue list output
+- `parseProjectsFromText()` - Parse Legacy MCP project list output
+- `parseIssuesFromText()` - Parse Legacy MCP issue list output
 - `extractFilesystemPath()` - Extract repo paths from descriptions
-- `extractHulyIdentifierFromDescription()` - Parse Huly IDs from Vibe tasks
+- `extractLegacyIdentifierFromDescription()` - Parse Legacy IDs from Vibe tasks
 - `parseIssueCount()` - Extract numeric counts from text
 
 ### 4. Test Suite (Complete)
@@ -78,8 +78,8 @@ tests/
 
 **Test Breakdown:**
 - **statusMapper.test.js** - 29 tests
-  - Huly → Vibe mapping (9 tests)
-  - Vibe → Huly mapping (6 tests)
+  - Legacy → Vibe mapping (9 tests)
+  - Vibe → Legacy mapping (6 tests)
   - Status normalization (3 tests)
   - Equivalence checking (4 tests)
   - Bidirectional consistency (2 tests)
@@ -89,7 +89,7 @@ tests/
   - Project parsing (7 tests)
   - Issue parsing (7 tests)
   - Filesystem path extraction (7 tests)
-  - Huly ID extraction (7 tests)
+  - Legacy ID extraction (7 tests)
   - Issue count parsing (5 tests)
   - Integration scenarios (6 tests)
 
@@ -235,7 +235,7 @@ npm run type-check       # TypeScript type checking
    - Estimated: 40-50 tests
 
 2. **Mock Factories** (Priority: High)
-   - Complete Huly API mocks
+   - Complete Legacy API mocks
    - Complete Vibe API mocks
    - Complete Letta API mocks
    - Use nock for HTTP mocking
@@ -258,7 +258,7 @@ npm run type-check       # TypeScript type checking
    - Estimated: 60-80 tests
 
 5. **Service Tests** (Priority: High)
-   - HulyRestClient tests
+   - LegacyRestClient tests
    - LettaService tests
    - Control Agent tool sync tests
    - Target: +15% coverage
@@ -406,10 +406,10 @@ docs: Add comprehensive testing documentation
 
 ---
 
-**Session Status:** ✅ **Complete**  
-**Ready for:** Phase 2 Testing (Database & Integration Tests)  
+**Session Status:** ✅ **Complete**
+**Ready for:** Phase 2 Testing (Database & Integration Tests)
 **Blocker Status:** P0 Partially Addressed (2/10 → 4/10, targeting 7/10)
 
-**Total Lines Added This Session:** 2,093 lines  
-**Test Coverage Achievement:** 98% on utilities (target: 60% overall)  
+**Total Lines Added This Session:** 2,093 lines
+**Test Coverage Achievement:** 98% on utilities (target: 60% overall)
 **Tests Written:** 68 (target: 250+ for production)

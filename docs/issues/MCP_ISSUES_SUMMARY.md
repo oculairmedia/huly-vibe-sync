@@ -239,7 +239,7 @@ This tool enables agents to:
 
 ## Next Steps
 
-1. **Review Issues**: Validate all 37 issues in Huly project VIBEK
+1. **Review Issues**: Validate all 37 issues in Legacy project VIBEK
 2. **Prioritize**: Confirm Phase 1 priority order
 3. **Start Development**: Begin with VIBEK-16 (TurboMCP setup)
 4. **Implement Blocker Fix**: VIBEK-15 (executor profiles) immediately after setup

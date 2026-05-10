@@ -1,7 +1,7 @@
 # Testing Infrastructure
 
-**Status:** ✅ **Phase 1 Complete**  
-**Date:** November 3, 2025  
+**Status:** ✅ **Phase 1 Complete**
+**Date:** November 3, 2025
 **Coverage:** 98% (utilities), targeting 60% overall
 
 ---
@@ -38,7 +38,7 @@ Comprehensive testing infrastructure implemented to address the P0 testing gap i
   - Mock environment variables
   - Test database setup
   - Console spy utilities
-  - Mock data factories (Huly, Vibe, Letta)
+  - Mock data factories (Legacy, Vibe, Letta)
   - Test cleanup helpers
 
 **Directory Structure:**
@@ -56,16 +56,16 @@ tests/
 ### 4. Utility Modules Extracted ✅
 
 **lib/statusMapper.js**
-- `mapHulyStatusToVibe()` - Huly → Vibe status conversion
-- `mapVibeStatusToHuly()` - Vibe → Huly status conversion
+- `mapLegacyStatusToVibe()` - Legacy → Vibe status conversion
+- `mapVibeStatusToLegacy()` - Vibe → Legacy status conversion
 - `normalizeStatus()` - Status normalization helper
 - `areStatusesEquivalent()` - Status comparison utility
 
 **lib/textParsers.js**
-- `parseProjectsFromText()` - Parse Huly project list
-- `parseIssuesFromText()` - Parse Huly issue list
+- `parseProjectsFromText()` - Parse Legacy project list
+- `parseIssuesFromText()` - Parse Legacy issue list
 - `extractFilesystemPath()` - Extract repo paths from descriptions
-- `extractHulyIdentifierFromDescription()` - Parse Huly IDs from Vibe tasks
+- `extractLegacyIdentifierFromDescription()` - Parse Legacy IDs from Vibe tasks
 - `parseIssueCount()` - Extract issue counts from text
 
 ### 5. Test Coverage ✅
@@ -133,8 +133,8 @@ npm run type-check
 ### statusMapper.test.js (29 tests)
 
 **Coverage Areas:**
-- Huly → Vibe status mapping (9 tests)
-- Vibe → Huly status mapping (6 tests)
+- Legacy → Vibe status mapping (9 tests)
+- Vibe → Legacy status mapping (6 tests)
 - Status normalization (3 tests)
 - Status equivalence checking (4 tests)
 - Bidirectional consistency (2 tests)
@@ -154,7 +154,7 @@ npm run type-check
 - Project parsing from text (7 tests)
 - Issue parsing from text (7 tests)
 - Filesystem path extraction (7 tests)
-- Huly identifier extraction (7 tests)
+- Legacy identifier extraction (7 tests)
 - Issue count parsing (5 tests)
 - Integration scenarios (2 tests)
 
@@ -184,7 +184,7 @@ npm run type-check
    - Target: +10% coverage
 
 3. **Mock Factories** (Priority: High)
-   - Create reusable mocks for Huly API
+   - Create reusable mocks for Legacy API
    - Create reusable mocks for Vibe API
    - Create reusable mocks for Letta API
    - Implement nock for HTTP mocking
@@ -199,7 +199,7 @@ npm run type-check
    - Target: +20% coverage
 
 5. **Service Tests** (Priority: High)
-   - HulyRestClient tests
+   - LegacyRestClient tests
    - LettaService tests
    - Control Agent tool sync tests
    - Target: +15% coverage
@@ -310,6 +310,6 @@ VERBOSE_TESTS=1 npm run test:watch
 
 ---
 
-**Last Updated:** November 3, 2025  
-**Author:** OpenCode AI  
+**Last Updated:** November 3, 2025
+**Author:** OpenCode AI
 **Review Status:** Phase 1 Complete ✅

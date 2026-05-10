@@ -157,7 +157,7 @@ new CodePerceptionWatcher({
 
 **Name format:** `function:{projectId}:{filePath}:{functionName}`
 
-**Example:** `function:huly-vibe-sync:lib/ASTParser.js:parseFile`
+**Example:** `function:vibe-sync:lib/ASTParser.js:parseFile`
 
 **Summary contains:**
 
@@ -192,7 +192,7 @@ Health metrics logged periodically include `functionsSynced` and `astSuccessRate
 
 ## Performance
 
-Benchmarked on huly-vibe-sync project (595 source files):
+Benchmarked on vibe-sync project (595 source files):
 
 | Metric                 | Result        | Target  |
 | ---------------------- | ------------- | ------- |
@@ -232,7 +232,7 @@ node scripts/benchmark-ast.js
 ### Python Dependencies Missing
 
 ```bash
-cd /opt/stacks/huly-vibe-sync/python
+cd /opt/stacks/vibe-sync/python
 pip install -r requirements.txt
 ```
 
@@ -241,7 +241,7 @@ pip install -r requirements.txt
 Check logs for parse errors:
 
 ```bash
-docker logs huly-vibe-sync 2>&1 | grep "AST parse failed"
+docker logs vibe-sync 2>&1 | grep "AST parse failed"
 ```
 
 Common causes:

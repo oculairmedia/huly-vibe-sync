@@ -1,16 +1,16 @@
 # PM Agent Tool Provisioning Strategy
-## Recommended MCP Tools for Huly PM Agents
+## Recommended MCP Tools for Legacy PM Agents
 
-**Created**: 2025-11-01  
-**Purpose**: Define optimal tool mix for Letta PM agents managing Huly projects  
+**Created**: 2025-11-01
+**Purpose**: Define optimal tool mix for Letta PM agents managing Legacy projects
 **Status**: Recommendation - Ready for Implementation
 
 ---
 
 ## Executive Summary
 
-Huly PM agents currently have **only core Letta tools** (send_message, memory_replace, memory_insert). They need MCP tools to:
-1. Read/write Huly issues and projects
+Legacy PM agents currently have **only core Letta tools** (send_message, memory_replace, memory_insert). They need MCP tools to:
+1. Read/write Legacy issues and projects
 2. Manage Vibe Kanban tasks and executions
 3. Research technical topics online
 4. Access code documentation
@@ -21,7 +21,7 @@ Huly PM agents currently have **only core Letta tools** (send_message, memory_re
 
 ### ✅ Already Registered in Letta
 
-1. **huly** - `http://192.168.50.90:3457/mcp`
+1. **legacy** - `http://192.168.50.90:3457/mcp`
 2. **vibekanban** - `http://192.168.50.90:9717/mcp`
 3. **vibekanban_system** - `http://192.168.50.90:9718/mcp`
 4. **Searxng** - Web search capabilities
@@ -39,19 +39,19 @@ Huly PM agents currently have **only core Letta tools** (send_message, memory_re
 
 These tools enable core PM functionality:
 
-#### From **huly** MCP (3 tools)
-1. **huly_query** - Read projects, issues, comments
+#### From **legacy** MCP (3 tools)
+1. **legacy_query** - Read projects, issues, comments
    - List all projects
    - Search issues by status/priority/assignee
    - Get detailed issue information
-   
-2. **huly_issue_ops** - Create/update issues
+
+2. **legacy_issue_ops** - Create/update issues
    - Create new issues
    - Update issue status, priority, description
    - Create sub-issues
    - Bulk operations
-   
-3. **huly_entity** - Manage project metadata
+
+3. **legacy_entity** - Manage project metadata
    - Create/update components and milestones
    - Manage project structure
    - Add comments to issues
@@ -62,33 +62,33 @@ These tools enable core PM functionality:
 
 #### From **vibekanban** MCP (7 tools)
 1. **list_projects** - Discover available Vibe projects
-   
+
 2. **list_tasks** - See what tasks exist and their status
    - Filter by status (todo, inprogress, done)
    - Check execution status
-   
+
 3. **get_task** - Get full task details including description
-   
+
 4. **update_task** - Update task metadata
    - Change title/description
    - Update status
-   
+
 5. **list_task_attempts** - View execution history
    - See what was tried
    - Check branch names and executors used
    - Understand failure patterns
-   
+
 6. **get_task_attempt** - Detailed attempt information
    - Branch status
    - Timestamps
    - Worktree details
-   
+
 7. **get_branch_status** - Git sync status
    - Commits ahead/behind
    - Conflict detection
    - PR status
 
-**Rationale**: PM agents need to monitor task execution, understand failures, and coordinate between Huly and Vibe.
+**Rationale**: PM agents need to monitor task execution, understand failures, and coordinate between Legacy and Vibe.
 
 ---
 
@@ -101,16 +101,16 @@ These tools enhance PM capabilities:
    - Exit codes
    - Runtime metrics
    - Git commits made
-   
+
 9. **get_process_raw_logs** - Debugging support
    - Full stdout/stderr
    - Understand what went wrong
-   
+
 10. **get_attempt_commits** - Code review
     - See what code was changed
     - Review commit messages
     - Assess quality
-    
+
 11. **merge_task_attempt** - Merge completed work
     - Perform git merge
     - Mark tasks as done
@@ -124,7 +124,7 @@ These tools enhance PM capabilities:
     - Find solutions to common errors
     - Research best practices
     - Stay updated on technologies
-    
+
 13. **web_url_read** - Deep dive into search results
     - Read Stack Overflow answers
     - Parse documentation pages
@@ -138,7 +138,7 @@ These tools enhance PM capabilities:
 
 #### From **context7** MCP (2 tools)
 14. **resolve-library-id** - Find library documentation
-    
+
 15. **get-library-docs** - Fetch API docs
     - Get up-to-date package documentation
     - Understand library APIs used in projects
@@ -150,7 +150,7 @@ These tools enhance PM capabilities:
 #### From **vibekanban_system** MCP (2 tools)
 16. **list_executor_profiles** - See available executors
     - Claude Code, Cursor, Copilot, etc.
-    
+
 17. **health_check** - Monitor Vibe system health
 
 **Rationale**: System awareness for better task assignment.
@@ -162,10 +162,10 @@ These tools enhance PM capabilities:
 ### Minimal Set (Essential Only - 10 tools)
 Perfect for starting out and testing:
 
-**Huly Tools (3):**
-- huly_query
-- huly_issue_ops  
-- huly_entity
+**Legacy Tools (3):**
+- legacy_query
+- legacy_issue_ops
+- legacy_entity
 
 **Vibe Tools (7):**
 - list_projects
@@ -183,10 +183,10 @@ Perfect for starting out and testing:
 ### Recommended Set (Essential + High Value - 17 tools)
 Best balance of capability and complexity:
 
-**Huly Tools (3):**
-- huly_query
-- huly_issue_ops
-- huly_entity
+**Legacy Tools (3):**
+- legacy_query
+- legacy_issue_ops
+- legacy_entity
 
 **Vibe Tools (11):**
 - list_projects
@@ -243,12 +243,12 @@ From **vibekanban_system** MCP:
 - ❌ **update_config** - System configuration should be protected
 - ❌ **update_mcp_servers** - System-level changes
 
-From **huly** MCP:
-- ❌ **huly_workflow** - Complex multi-step operations (risky)
-- ❌ **huly_template_ops** - Template management (not needed)
-- ❌ **huly_account_ops** - User management (security risk)
-- ❌ **huly_integration** - GitHub integration (complex)
-- ❌ **huly_validate** - Deletion validation (implies deletion)
+From **legacy** MCP:
+- ❌ **legacy_workflow** - Complex multi-step operations (risky)
+- ❌ **legacy_template_ops** - Template management (not needed)
+- ❌ **legacy_account_ops** - User management (security risk)
+- ❌ **legacy_integration** - GitHub integration (complex)
+- ❌ **legacy_validate** - Deletion validation (implies deletion)
 
 **Rationale**: These tools can make destructive changes or interfere with the sync service's job.
 
@@ -266,18 +266,18 @@ Use Letta UI to manually attach tools to each agent:
 3. Go to Tools tab
 4. Click "Add Tool"
 5. Select from MCP servers:
-   - huly → huly_query, huly_issue_ops, huly_entity
+   - legacy → legacy_query, legacy_issue_ops, legacy_entity
    - vibekanban → (7-11 tools depending on tier)
    - Searxng → searxng_web_search, web_url_read (if tier 2+)
 6. Save
 ```
 
-**Pros**: 
+**Pros**:
 - Visual confirmation
 - Easy to customize per agent
 - No code changes
 
-**Cons**: 
+**Cons**:
 - Time consuming (42 agents × ~5 min = 3.5 hours)
 - Manual process prone to errors
 - Not repeatable for new agents
@@ -291,8 +291,8 @@ Add tool attachment logic to `lib/LettaService.js`:
 async attachPmTools(agentId, tier = 'recommended') {
   const toolSets = {
     minimal: [
-      // Huly tools
-      { server: 'huly', tools: ['huly_query', 'huly_issue_ops', 'huly_entity'] },
+      // Legacy tools
+      { server: 'legacy', tools: ['legacy_query', 'legacy_issue_ops', 'legacy_entity'] },
       // Vibe tools
       { server: 'vibekanban', tools: [
         'list_projects', 'list_tasks', 'get_task', 'update_task',
@@ -313,13 +313,13 @@ async attachPmTools(agentId, tier = 'recommended') {
       { server: 'vibekanban_system', tools: ['list_executor_profiles', 'health_check'] }
     ]
   };
-  
-  const toolsToAttach = tier === 'full' 
+
+  const toolsToAttach = tier === 'full'
     ? [...toolSets.minimal, ...toolSets.recommended, ...toolSets.full]
     : tier === 'recommended'
     ? [...toolSets.minimal, ...toolSets.recommended]
     : toolSets.minimal;
-  
+
   // Use Letta API to attach tools
   for (const { server, tools } of toolsToAttach) {
     for (const toolName of tools) {
@@ -362,14 +362,14 @@ async attachPmTools(agentId, tier = 'recommended') {
 ## Testing Strategy
 
 ### Phase 1: Single Agent Test
-1. Pick one agent (e.g., Huly-VIBEK-PM for Vibe Kanban project)
+1. Pick one agent (e.g., Legacy-VIBEK-PM for Vibe Kanban project)
 2. Manually attach **minimal set** (10 tools)
 3. Send test message: "What tasks are in progress in Vibe Kanban?"
 4. Verify agent can call tools and respond correctly
 
 ### Phase 2: Tool Capability Test
 1. Test each tool category:
-   - **Read Huly**: "What are the open issues in VIBEK?"
+   - **Read Legacy**: "What are the open issues in VIBEK?"
    - **Read Vibe**: "Show me tasks that are in progress"
    - **Check Status**: "What's the status of task XYZ?"
    - **Web Research**: "Search for solutions to 'Docker connection refused'"
@@ -386,7 +386,7 @@ async attachPmTools(agentId, tier = 'recommended') {
 
 ### For PM Agents
 - **Situational awareness**: Can see real-time task and issue status
-- **Proactive updates**: Can update Huly issues based on Vibe execution
+- **Proactive updates**: Can update Legacy issues based on Vibe execution
 - **Debugging support**: Can analyze logs and suggest fixes
 - **Research capability**: Can look up error messages and solutions
 - **Code review**: Can review commits and assess quality
@@ -517,6 +517,6 @@ I can start implementation immediately upon approval.
 
 ---
 
-**Status**: Awaiting decision  
-**Estimated Implementation**: 6 hours  
+**Status**: Awaiting decision
+**Estimated Implementation**: 6 hours
 **Ready to begin**: Yes

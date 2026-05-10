@@ -385,7 +385,7 @@ All task status fields accept these values:
 ## Common Patterns
 
 ### Case-Insensitive Project Matching
-When syncing from external systems like Huly, use case-insensitive matching:
+When syncing from external systems like Legacy, use case-insensitive matching:
 
 ```javascript
 // Fetch all projects
@@ -422,7 +422,7 @@ async function createVibeProject(name, existingPath = null) {
 
 ### Syncing Tasks from External System
 ```javascript
-async function syncTask(hulyTask, vibeProject) {
+async function syncTask(legacyTask, vibeProject) {
   // Check if task exists
   const tasksResponse = await fetch(
     `${API_BASE}/tasks?project_id=${vibeProject.id}`
@@ -430,7 +430,7 @@ async function syncTask(hulyTask, vibeProject) {
   const existingTasks = await tasksResponse.json();
 
   const existingTask = existingTasks.data.find(
-    t => t.title === hulyTask.title
+    t => t.title === legacyTask.title
   );
 
   if (existingTask) {
@@ -439,8 +439,8 @@ async function syncTask(hulyTask, vibeProject) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        description: hulyTask.description,
-        status: mapStatus(hulyTask.status)
+        description: legacyTask.description,
+        status: mapStatus(legacyTask.status)
       })
     });
   } else {
@@ -450,8 +450,8 @@ async function syncTask(hulyTask, vibeProject) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         project_id: vibeProject.id,
-        title: hulyTask.title,
-        description: hulyTask.description,
+        title: legacyTask.title,
+        description: legacyTask.description,
         status: 'todo'
       })
     });

@@ -1,27 +1,21 @@
-version: '3.8'
-
 services:
-  huly-vibe-sync:
+  vibe-sync:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: huly-vibe-sync
+    container_name: vibe-sync
     restart: unless-stopped
     environment:
-      # Huly API Configuration
-      - HULY_API_URL=${HULY_API_URL:-http://192.168.50.90:3458}
-      - HULY_USE_REST=${HULY_USE_REST:-true}
-
       # Vibe Kanban Configuration
       - VIBE_MCP_URL=${VIBE_MCP_URL:-http://192.168.50.90:9717/mcp}
       - VIBE_API_URL=${VIBE_API_URL:-http://192.168.50.90:3105/api}
 
       # Sync Configuration
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000}  # 10 seconds default
-      - INCREMENTAL_SYNC=false  # Disabled for bidirectional sync - Phase 2 needs full issue list
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-10000} # 10 seconds default
+      - INCREMENTAL_SYNC=false # Disabled for bidirectional sync - Phase 2 needs full issue list
       - PARALLEL_SYNC=${PARALLEL_SYNC:-false}
       - MAX_WORKERS=${MAX_WORKERS:-5}
-      - SKIP_EMPTY_PROJECTS=false  # Disabled to allow all projects to sync
+      - SKIP_EMPTY_PROJECTS=false # Disabled to allow all projects to sync
       - DRY_RUN=${DRY_RUN:-false}
 
       # Stacks Directory
@@ -40,14 +34,14 @@ services:
     network_mode: host
 
     healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      test: ['CMD', 'node', '-e', 'process.exit(0)']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'

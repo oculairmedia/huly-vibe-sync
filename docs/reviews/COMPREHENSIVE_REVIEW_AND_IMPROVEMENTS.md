@@ -1,8 +1,8 @@
 # Comprehensive Review and Improvement Recommendations
-## Huly-Vibe-Sync with Letta PM Agent Integration
+## Vibe Sync with Letta PM Agent Integration
 
-**Review Date**: 2025-11-01  
-**Reviewer**: System Engineering Analysis  
+**Review Date**: 2025-11-01
+**Reviewer**: System Engineering Analysis
 **Scope**: Full project review including implementation status, performance, architecture, and roadmap alignment
 
 ---
@@ -12,7 +12,7 @@
 ### What Has Been Done ✅
 
 **Core Sync Service (Production-Ready)**
-- ✅ Bidirectional sync between Huly and VibeKanban (REST API + MCP fallback)
+- ✅ Bidirectional sync between Legacy and VibeKanban (REST API + MCP fallback)
 - ✅ SQLite database with WAL mode for state management
 - ✅ Incremental sync with timestamp-based change detection
 - ✅ Parallel processing (5 workers, configurable)
@@ -58,7 +58,7 @@
 
 2. **P0 - MCP Tools Not Attached** (Feature Gap)
    - `attachMcpTools()` is stubbed out
-   - **Impact**: Agents can't read/write to Huly/Vibe (core requirement)
+   - **Impact**: Agents can't read/write to Legacy/Vibe (core requirement)
 
 3. **P0 - Letta Source Cache Leak** (Memory Leak)
    - Cache never cleared between sync runs
@@ -155,7 +155,7 @@ Refactor to layered architecture:
 |--------|--------|------|----------------|
 | Secrets in .env | ✅ Good | Low | Ensure .env not committed |
 | SQL injection | ✅ Good | Low | Using prepared statements |
-| API authentication | ⚠️ Unknown | Medium | Review Huly/Vibe auth |
+| API authentication | ⚠️ Unknown | Medium | Review Legacy/Vibe auth |
 | Letta API key | ⚠️ Password in env | Medium | Use proper API key rotation |
 | Input validation | ❌ Missing | High | Validate all external data |
 | Rate limiting | ❌ Missing | Medium | Add per-API rate limits |
@@ -210,7 +210,7 @@ The Letta SDK version 0.0.68665 doesn't support `tools.mcp.*` endpoints. Current
 
 **Recommendation**: Implement REST fallback for MCP tool attachment:
 ```javascript
-async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
+async attachMcpTools(agentId, legacyMcpUrl, vibeMcpUrl) {
   // Fallback to direct REST API
   const response = await fetch(`${this.baseURL}/agents/${agentId}/tools/mcp`, {
     method: 'POST',
@@ -220,7 +220,7 @@ async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
     },
     body: JSON.stringify({
       servers: [
-        { name: 'huly', url: hulyMcpUrl },
+        { name: 'legacy', url: legacyMcpUrl },
         { name: 'vibe', url: vibeMcpUrl },
       ],
     }),
@@ -261,7 +261,7 @@ async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
 
 **P0-2: Implement MCP Tool Attachment** (4 hours)
 - Add REST API fallback in `attachMcpTools()`
-- Test agent can call Huly/Vibe tools
+- Test agent can call Legacy/Vibe tools
 - Document manual attachment process if REST fails
 
 **P0-3: Fix Letta Cache Leak** (1 hour)
@@ -433,7 +433,7 @@ async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
 - Low risk for core sync without Letta
 
 **Go/No-Go for Production**:
-- ✅ **GO** for core sync service (Huly ↔ Vibe)
+- ✅ **GO** for core sync service (Legacy ↔ Vibe)
 - ❌ **NO-GO** for Letta integration until P0 fixes applied
 - ⚠️ **CONDITIONAL** for >100 projects (needs performance work)
 

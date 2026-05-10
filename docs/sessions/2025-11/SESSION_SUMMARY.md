@@ -142,12 +142,12 @@ All commits pushed to GitHub ✓
 ```bash
 curl -s https://letta.oculair.ca/v1/agents \
   -H "Authorization: Bearer lettaSecurePass123" | \
-  python3 -c "import sys, json; data=json.load(sys.stdin); huly=[a for a in data if a['name'].startswith('Huly-')]; bad=[a for a in huly if a.get('agent_type')!='letta_v1_agent']; print(f'✅ All {len(huly)} agents correct' if len(bad)==0 else f'❌ {len(bad)} agents wrong type')"
+  python3 -c "import sys, json; data=json.load(sys.stdin); legacy=[a for a in data if a['name'].startswith('Legacy-')]; bad=[a for a in legacy if a.get('agent_type')!='letta_v1_agent']; print(f'✅ All {len(legacy)} agents correct' if len(bad)==0 else f'❌ {len(bad)} agents wrong type')"
 ```
 
 **Check memory update efficiency:**
 ```bash
-docker-compose logs --tail=100 huly-vibe-sync | grep "No changes needed"
+docker-compose logs --tail=100 vibe-sync | grep "No changes needed"
 ```
 
 **List all agents:**
@@ -170,15 +170,15 @@ node manage-agents.js show-agent GRAPH
 
 ## Key Improvements Summary
 
-✅ **Architecture:** All agents using modern `letta_v1_agent`  
-✅ **Efficiency:** 95% reduction in unnecessary API calls  
-✅ **Flexibility:** Can now modify agents without recreation  
-✅ **Maintainability:** Clear documentation and management tools  
-✅ **Performance:** Optimized sync cycle with content hashing  
+✅ **Architecture:** All agents using modern `letta_v1_agent`
+✅ **Efficiency:** 95% reduction in unnecessary API calls
+✅ **Flexibility:** Can now modify agents without recreation
+✅ **Maintainability:** Clear documentation and management tools
+✅ **Performance:** Optimized sync cycle with content hashing
 
 ## Resources
 
 - **Agent Management Guide:** `AGENT_MANAGEMENT.md`
 - **Database:** `./logs/sync-state.db`
 - **Letta API:** https://letta.oculair.ca
-- **Repository:** https://github.com/oculairmedia/huly-vibe-sync
+- **Repository:** https://github.com/oculairmedia/vibe-sync

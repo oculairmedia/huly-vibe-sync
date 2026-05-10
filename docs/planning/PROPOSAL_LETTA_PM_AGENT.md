@@ -1,11 +1,11 @@
-# Proposal: Per‑Project Letta “PM” Agent Integration for Huly ↔ VibeKanban Sync
+# Proposal: Per‑Project Letta “PM” Agent Integration for Legacy ↔ VibeKanban Sync
 
 ## Summary
-Introduce one dedicated Letta “PM” agent per Huly project. The agent is read–write by way of attached MCP servers (Huly + VibeKanban), and is continuously fed with a structured, high‑signal Kanban state snapshot derived from both systems. As a first step, upload the repository README.md to the agent (expandable to more docs later).
+Introduce one dedicated Letta “PM” agent per Legacy project. The agent is read–write by way of attached MCP servers (Legacy + VibeKanban), and is continuously fed with a structured, high‑signal Kanban state snapshot derived from both systems. As a first step, upload the repository README.md to the agent (expandable to more docs later).
 
 ## Goals
 - 1 project → 1 persistent Letta agent (idempotent creation; persisted in DB)
-- Agents are read–write via MCP tools for Huly and VibeKanban (safe/gated)
+- Agents are read–write via MCP tools for Legacy and VibeKanban (safe/gated)
 - Build a “PM harness” that composes a project state snapshot and updates agent memory blocks every sync
 - Seed agent context with README.md now, expandable to more repo docs later
 
@@ -18,16 +18,16 @@ Introduce one dedicated Letta “PM” agent per Huly project. The agent is read
 ## Architecture Overview
 - Extend existing Node.js sync service (index.js) to:
   - Ensure Vibe project exists (already implemented)
-  - Ensure/track a Letta agent per Huly project
-  - Build a “Project State Snapshot” from Huly issues + Vibe tasks
+  - Ensure/track a Letta agent per Legacy project
+  - Build a “Project State Snapshot” from Legacy issues + Vibe tasks
   - Upsert structured memory blocks into the agent each sync
   - Upload README.md, keeping per‑project Letta folder/source for files
 - Persist Letta identifiers in SQLite (`projects` table)
 
 Data Flow (simplified):
-1) Huly projects/issues + Vibe projects/tasks → Sync Service
+1) Legacy projects/issues + Vibe projects/tasks → Sync Service
 2) Sync Service → DB (state, last sync) + Letta (agent/memory/optional sources)
-3) Letta agent tools → MCP servers (Huly/Vibe) for read–write when invoked
+3) Letta agent tools → MCP servers (Legacy/Vibe) for read–write when invoked
 
 ---
 ## Alignment with Letta Code (Research Preview)
@@ -38,7 +38,7 @@ Data Flow (simplified):
   - Primary persistence remains in this service's SQLite DB (per‑project `letta_agent_id`)
   - Optional synergy: write `.letta/settings.local.json` in each repo so Letta Code auto‑resumes the same agent (behind a config flag, default OFF)
 - Tools and permissions:
-  - Attach only MCP tools (Huly/Vibe) to the PM agent; do not attach local dev tools (Bash/Read/Write) in the service context
+  - Attach only MCP tools (Legacy/Vibe) to the PM agent; do not attach local dev tools (Bash/Read/Write) in the service context
   - Default to plan‑like gating; writes only via explicit MCP calls that the service mediates
 - Developer workflow:
   - Developers can connect via the Letta Code CLI to the same agent for collaboration. Example:
@@ -97,19 +97,19 @@ Fallback (no new dep): direct REST with fetch to Letta endpoints. SDK is recomme
 ---
 
 ## Agent Specification (One PM Agent per Project)
-- Naming: `Huly/<PROJECT_IDENTIFIER> PM Agent`
+- Naming: `Legacy/<PROJECT_IDENTIFIER> PM Agent`
 - Memory blocks (base):
   - persona: Project/Kanban PM; optimize flow, clarity, and actionability
   - human: Optional developer/team preferences (style, conventions) to align with Letta Code’s global memory model
 - Models: From env (`LETTA_MODEL`, `LETTA_EMBEDDING`), aligned to your llms config
 - Tools (read‑write via MCP):
-  - Huly MCP (e.g., `huly_query`, `huly_issue_ops`)
+  - Legacy MCP (e.g., `legacy_query`, `legacy_issue_ops`)
   - Vibe MCP (tasks CRUD)
 - Idempotency: Store `letta_agent_id` in DB; reuse on subsequent runs
 
 Create/ensure agent (conceptual):
 ```ts
-const name = `Huly/${project.identifier} PM Agent`;
+const name = `Legacy/${project.identifier} PM Agent`;
 const agent = await letta.agents.create({
   name,
   model: process.env.LETTA_MODEL,
@@ -120,9 +120,9 @@ const agent = await letta.agents.create({
 
 Attach MCP tools (conceptual):
 ```ts
-const hulyTool = await letta.tools.mcp.create({ name:'huly', transport:'http', url:process.env.HULY_MCP_URL });
+const legacyTool = await letta.tools.mcp.create({ name:'legacy', transport:'http', url:process.env.REMOVED_MCP_URL });
 const vibeTool = await letta.tools.mcp.create({ name:'vibe', transport:'http', url:process.env.VIBE_MCP_URL });
-await letta.agents.tools.add(agent.id, hulyTool.id);
+await letta.agents.tools.add(agent.id, legacyTool.id);
 await letta.agents.tools.add(agent.id, vibeTool.id);
 ```
 
@@ -131,7 +131,7 @@ await letta.agents.tools.add(agent.id, vibeTool.id);
 ## PM Harness: Project State Snapshot → Memory Blocks
 On each sync for a project:
 1) Ensure agent exists (store/reuse `letta_agent_id`)
-2) Build snapshot from current Huly issues and Vibe tasks:
+2) Build snapshot from current Legacy issues and Vibe tasks:
    - `project`: project name, identifier, repo path, git URL, vibe project id
    - `board_config`: status mapping and WIP policies (from existing mapping functions)
    - `board_metrics`: counts by status, WIP, done rates (windowed if available)
@@ -155,7 +155,7 @@ await letta.agents.blocks.upsert(agentId, [
 ```
 
 Snapshot sources (available from current code):
-- Huly issues (index.js → `fetchHulyIssues()`)
+- Legacy issues (index.js → `fetchLegacyIssues()`)
 - Vibe tasks (index.js → `listVibeTasks()`)
 - Repo path/git URL (index.js → `extractFilesystemPath()`, `getGitUrl()`)
 
@@ -177,10 +177,10 @@ await letta.sources.files.upsertText({ agentId, folderId, path: 'README.md', tex
 ---
 
 ## Integration Points in Code
-- `index.js` inside `processProject(hulyProject)` (after Vibe project ensure):
+- `index.js` inside `processProject(legacyProject)` (after Vibe project ensure):
   1) Read `letta_agent_id` from DB; call `ensurePmAgent()` if missing
-  2) Ensure MCP tools attached to the agent (Huly + Vibe)
-  3) Build snapshot from `hulyIssues` + `vibeTasks`
+  2) Ensure MCP tools attached to the agent (Legacy + Vibe)
+  3) Build snapshot from `legacyIssues` + `vibeTasks`
   4) Upsert memory blocks; update `letta_last_sync_at`
   5) Upload README.md if repo path exists; upsert per‑project folder/source
 - `lib/database.js`:
@@ -210,7 +210,7 @@ letta -p "Review current hotspots and suggest next actions" --agent <AGENT_ID> -
 ## Configuration
 Required (Service):
 - `LETTA_BASE_URL`, `LETTA_PASSWORD`
-- `HULY_MCP_URL`, `VIBE_MCP_URL` (reachable by Letta for tool calling)
+- `REMOVED_MCP_URL`, `VIBE_MCP_URL` (reachable by Letta for tool calling)
 
 Optional (Service):
 - `LETTA_MODEL`, `LETTA_EMBEDDING`
@@ -244,7 +244,7 @@ Respect existing `DRY_RUN`: no Letta writes in dry‑run mode.
 ---
 
 ## Open Questions
-1) Confirm MCP URLs for Huly and Vibe accessible by Letta
+1) Confirm MCP URLs for Legacy and Vibe accessible by Letta
 2) Confirm default model/embedding (or keep env defaults)
 3) Should we create a pinned “meta” Vibe task with agent link/ID? (optional)
 4) What approval workflow for write‑backs do you prefer (Slack/CLI/UI)?
@@ -253,7 +253,7 @@ Respect existing `DRY_RUN`: no Letta writes in dry‑run mode.
 
 ## Next Steps Checklist
 - [ ] Approve adding dependency: `@letta-ai/letta-client`
-- [ ] Provide/confirm `HULY_MCP_URL` and `VIBE_MCP_URL`
+- [ ] Provide/confirm `REMOVED_MCP_URL` and `VIBE_MCP_URL`
 - [ ] Apply DB migration (add Letta columns)
 - [ ] Implement `lib/LettaService.js` (ensureAgent, attachTools, upsertBlocks, uploadReadme)
 - [ ] Wire `processProject()` in `index.js` to call the PM harness

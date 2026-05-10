@@ -2,13 +2,13 @@
 
 ## Overview
 
-The Letta PM agents require MCP tools to interact with Huly and Vibe Kanban. Currently, the Letta Node SDK does not support MCP tool management, so tools must be attached manually via the Letta UI or API.
+The Letta PM agents require MCP tools to interact with Legacy and Vibe Kanban. Currently, the Letta Node SDK does not support MCP tool management, so tools must be attached manually via the Letta UI or API.
 
 ## Required MCP Tools
 
 Each PM agent needs access to two MCP servers:
 
-1. **Huly MCP Server** (`http://192.168.50.90:3457/mcp`)
+1. **Legacy MCP Server** (`http://192.168.50.90:3457/mcp`)
    - Issue management
    - Project queries
    - Status updates
@@ -26,8 +26,8 @@ Navigate to your Letta instance: `https://letta2.oculair.ca`
 ### Step 2: Register MCP Servers (One-time setup)
 1. Go to **Settings** → **MCP Servers**
 2. Click **Add MCP Server**
-3. Add Huly MCP:
-   - Name: `huly-mcp`
+3. Add Legacy MCP:
+   - Name: `legacy-mcp`
    - Transport: `HTTP`
    - URL: `http://192.168.50.90:3457/mcp`
 4. Add Vibe MCP:
@@ -36,11 +36,11 @@ Navigate to your Letta instance: `https://letta2.oculair.ca`
    - URL: `http://192.168.50.90:9717/mcp`
 
 ### Step 3: Attach Tools to Each Agent
-For each agent (e.g., `Huly-VIBEK-PM`):
+For each agent (e.g., `Legacy-VIBEK-PM`):
 1. Navigate to **Agents** → Select the agent
 2. Go to **Tools** tab
 3. Click **Attach Tool**
-4. Select `huly-mcp` from the list
+4. Select `legacy-mcp` from the list
 5. Click **Attach Tool** again
 6. Select `vibe-mcp` from the list
 7. Save changes
@@ -59,7 +59,7 @@ curl -X POST "${LETTA_API_URL}/tools/mcp/servers" \
   -H "Authorization: Bearer ${LETTA_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "huly-mcp",
+    "name": "legacy-mcp",
     "transport": "http",
     "url": "http://192.168.50.90:3457/mcp"
   }'
@@ -75,7 +75,7 @@ curl -X POST "${LETTA_API_URL}/tools/mcp/servers" \
 
 # Then attach tools to an agent
 # Get the tool IDs first
-HULY_TOOL_ID=$(curl -s "${LETTA_API_URL}/tools?name=huly-mcp" \
+LEGACY_TOOL_ID=$(curl -s "${LETTA_API_URL}/tools?name=legacy-mcp" \
   -H "Authorization: Bearer ${LETTA_TOKEN}" | jq -r '.[0].id')
 
 VIBE_TOOL_ID=$(curl -s "${LETTA_API_URL}/tools?name=vibe-mcp" \
@@ -84,7 +84,7 @@ VIBE_TOOL_ID=$(curl -s "${LETTA_API_URL}/tools?name=vibe-mcp" \
 # Attach to agent (replace AGENT_ID)
 AGENT_ID="agent-xxxxx"
 
-curl -X POST "${LETTA_API_URL}/agents/${AGENT_ID}/tools/${HULY_TOOL_ID}/attach" \
+curl -X POST "${LETTA_API_URL}/agents/${AGENT_ID}/tools/${LEGACY_TOOL_ID}/attach" \
   -H "Authorization: Bearer ${LETTA_TOKEN}"
 
 curl -X POST "${LETTA_API_URL}/agents/${AGENT_ID}/tools/${VIBE_TOOL_ID}/attach" \
@@ -101,7 +101,7 @@ curl "${LETTA_API_URL}/agents/${AGENT_ID}/tools" \
   -H "Authorization: Bearer ${LETTA_TOKEN}"
 ```
 
-You should see both `huly-mcp` and `vibe-mcp` in the response.
+You should see both `legacy-mcp` and `vibe-mcp` in the response.
 
 ## Automation (Future)
 

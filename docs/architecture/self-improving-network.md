@@ -29,7 +29,7 @@ The system already generates the **raw material** for self-improvement:
 
 - **Quality signals** (`codebase_ast` blocks) with doc gaps, untested modules, complexity hotspots — pushed to 38 PM agents every 15-60 minutes
 - **Health metrics** (Prometheus) with sync success rates, API latencies, error counts
-- **Huly backlogs** with issues, priorities, and status tracking
+- **Legacy backlogs** with issues, priorities, and status tracking
 - **Graphiti knowledge graph** with cross-project structural memory
 - **Matrix communication** enabling agent-to-agent coordination
 - **Temporal workflows** providing durable, crash-resilient scheduling
@@ -99,7 +99,7 @@ const SCHEDULES = {
     schedule: { interval: '4h' },
     action: 'TriageCycleWorkflow',
     // Reads: codebase_ast quality_signals across all 38 projects
-    // Produces: prioritized improvement tickets in Huly
+    // Produces: prioritized improvement tickets in Legacy
   },
 
   // Retrospective — evaluate improvement outcomes (like sleep/dreaming)
@@ -127,7 +127,7 @@ An agent wake-up in this system means:
 1. **Temporal Schedule fires** → starts a workflow
 2. **Workflow activity calls Letta API** → sends a message to the PM agent with context
 3. **PM agent processes message** → reads its memory blocks, reasons, produces output
-4. **Output routed back** → via Matrix or direct API call to create Huly issues, update blocks, message other agents
+4. **Output routed back** → via Matrix or direct API call to create Legacy issues, update blocks, message other agents
 
 The PM agent doesn't need to be "running" between ticks. It's stateless between invocations. Its state lives in its memory blocks (which are already being updated continuously by the sync service).
 
@@ -158,7 +158,7 @@ The `codebase_ast` quality_signals block already tracks:
 }
 ```
 
-**Pressure mechanism**: When `doc_gaps` exceeds a threshold (e.g., >5 files with <25% documentation), the triage cycle automatically files a Huly issue:
+**Pressure mechanism**: When `doc_gaps` exceeds a threshold (e.g., >5 files with <25% documentation), the triage cycle automatically files a Legacy issue:
 
 ```
 Title: [AUTO] Reduce documentation debt in lib/ (8 files < 25% documented)
@@ -179,7 +179,7 @@ Description:
 
 Issues that sit in backlogs without progress should generate increasing pressure. This is the agent equivalent of biological hunger — the longer you don't eat, the more urgent eating becomes.
 
-**Mechanism**: Each Huly issue has `modifiedOn` timestamps. The triage cycle calculates:
+**Mechanism**: Each Legacy issue has `modifiedOn` timestamps. The triage cycle calculates:
 
 ```
 staleness_score = days_since_last_update * priority_weight
@@ -273,7 +273,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 │                                                                         │
 │  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐  │
 │  │  Health Metrics  │  │  Quality Signals │  │   Backlog Analysis    │  │
-│  │  (Prometheus)    │  │  (codebase_ast)  │  │   (Huly REST API)    │  │
+│  │  (Prometheus)    │  │  (codebase_ast)  │  │   (Legacy REST API)    │  │
 │  │                  │  │                  │  │                       │  │
 │  │  • Error rates   │  │  • Doc gaps      │  │  • Stale issues      │  │
 │  │  • Sync latency  │  │  • Untested      │  │  • Blocked items     │  │
@@ -302,12 +302,12 @@ Projects compete for developer agent slots based on their work queue priority. T
 │  │  Process:                                                          │ │
 │  │    1. Rank projects by health score                                │ │
 │  │    2. Identify highest-impact improvements                         │ │
-│  │    3. Check Huly for existing issues (avoid duplicates)            │ │
+│  │    3. Check Legacy for existing issues (avoid duplicates)            │ │
 │  │    4. Estimate effort vs. impact for each candidate                │ │
 │  │    5. Select top-N items that fit available capacity               │ │
 │  │                                                                    │ │
 │  │  Output: Prioritized work items                                    │ │
-│  │    - New Huly issues (auto-filed with [AUTO] prefix)               │ │
+│  │    - New Legacy issues (auto-filed with [AUTO] prefix)               │ │
 │  │    - Updated priorities on existing issues                         │ │
 │  │    - PM agent notifications via Matrix                             │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
@@ -339,7 +339,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 │  │    3. Runs tests (quality gate)                                    │ │
 │  │    4. Commits and pushes                                           │ │
 │  │    5. Reports back to PM agent via Matrix                          │ │
-│  │    6. Closes Huly issue                                            │ │
+│  │    6. Closes Legacy issue                                            │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
 │                                                                         │
 │  Capacity Management:                                                   │
@@ -389,7 +389,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 
 2. **T=4h**: Triage cycle fires. Workflow reads all 38 PM agents' `codebase_ast` blocks. HVSYN has a doc_gap score of 13/15 = 87% undocumented for BeadsService.js. This exceeds the threshold (>75% undocumented + >10 functions).
 
-3. **T=4h+30s**: Triage workflow queries Huly API: `GET /api/issues?project=HVSYN&title=*BeadsService*documentation*`. No existing issue found. Triage creates:
+3. **T=4h+30s**: Triage workflow queries Legacy API: `GET /api/issues?project=HVSYN&title=*BeadsService*documentation*`. No existing issue found. Triage creates:
    ```
    POST /api/issues
    {
@@ -409,7 +409,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 
 5. **T=4h+2m**: PM agent processes message, reads its `codebase_ast` block to understand the codebase, and dispatches to developer agent:
    ```
-   talk_to_opencode(target="huly-vibe-sync", message="Please work on HVSYN-157...")
+   talk_to_opencode(target="vibe-sync", message="Please work on HVSYN-157...")
    ```
 
 6. **T=4h+30m**: Developer agent adds JSDoc to all 15 functions in BeadsService.js. Pushes commit. Reports to PM agent. Closes HVSYN-157.
@@ -430,7 +430,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 |-------|-------------|---------|--------|
 | **Temporal Schedule** | External clock | Wall-clock time | Starts workflows |
 | **Pulse Workflow** | Health monitor | Every 15 min | Alerts, auto-restarts |
-| **Triage Workflow** | Signal analyzer | Every 4 hours | Huly issues, PM notifications |
+| **Triage Workflow** | Signal analyzer | Every 4 hours | Legacy issues, PM notifications |
 | **Retro Workflow** | Outcome evaluator | Daily at 3 AM | Effectiveness scores, strategy updates |
 | **PM Agent (×38)** | Project owner | Matrix message | Task breakdown, dev dispatching |
 | **Meridian** | Network overseer | Escalations | Cross-project coordination, strategy |
@@ -523,7 +523,7 @@ const circuitBreakers = {
 #### Layer 4: Audit Trail
 
 Every autonomous action is recorded in multiple places:
-- **Huly issues** with `[AUTO]` prefix and `auto-improvement` label
+- **Legacy issues** with `[AUTO]` prefix and `auto-improvement` label
 - **Git commits** with `[auto]` prefix in commit message
 - **Graphiti entities** with improvement effectiveness scores
 - **Temporal workflow history** (immutable, queryable)
@@ -766,7 +766,7 @@ export async function createImprovementSchedules(client: Client) {
 The pulse check aggregates:
 1. Health metrics from `HealthService.getHealthMetrics()` (already exists)
 2. Quality signals from all PM agents' `codebase_ast` blocks (already being pushed)
-3. Backlog stats from Huly REST API (already have client)
+3. Backlog stats from Legacy REST API (already have client)
 
 **Concrete deliverable**: A workflow activity that produces a `SystemStateSnapshot`:
 
@@ -854,7 +854,7 @@ This is the riskiest phase. Start with **dry-run mode**:
 
 1. Triage workflow produces candidates but only **logs them** (doesn't create issues)
 2. Human reviews logged candidates for 1-2 weeks
-3. If candidate quality is high, enable Huly issue creation
+3. If candidate quality is high, enable Legacy issue creation
 4. If issue quality is high, enable PM agent notification
 5. If PM agent dispatches are sound, enable developer agent execution
 
@@ -863,7 +863,7 @@ This is the riskiest phase. Start with **dry-run mode**:
 ### Phase 5: Close the Loop (Effort: Short — 2-4 hours)
 
 **Build**: `RetrospectiveWorkflow` that:
-1. Queries Huly for `[AUTO]` issues completed in last 24h
+1. Queries Legacy for `[AUTO]` issues completed in last 24h
 2. Compares quality signals before vs. after
 3. Computes effectiveness scores
 4. Writes to Graphiti
@@ -905,7 +905,7 @@ Everything after this is refinement: better triage rules, LLM-based reasoning, c
 | `BidirectionalSyncWorkflow` | Single issue bidirectional sync | Event-triggered |
 | `BeadsFileChangeWorkflow` | React to .beads file changes | File watcher |
 | `VibeSSEChangeWorkflow` | React to Vibe SSE events | SSE stream |
-| `HulyWebhookChangeWorkflow` | React to Huly webhooks | Webhook |
+| `LegacyWebhookChangeWorkflow` | React to Legacy webhooks | Webhook |
 | `MemoryUpdateWorkflow` | Single agent memory block update | On-demand |
 | `BatchMemoryUpdateWorkflow` | Batch memory updates | On-demand |
 | `ProvisionAgentsWorkflow` | Create/configure PM agents | On-demand |
@@ -930,7 +930,7 @@ Everything after this is refinement: better triage rules, LLM-based reasoning, c
 |---------|-----------|---------|
 | Matrix `talk_to_agent` | Matrix bridge → Letta | PM agents, Meridian, Dev agents |
 | Matrix `talk_to_opencode` | Matrix bridge → OpenCode | PM agents dispatching dev work |
-| Huly REST API | Direct HTTP | Triage (create issues), sync (read/write) |
+| Legacy REST API | Direct HTTP | Triage (create issues), sync (read/write) |
 | Temporal signals | Workflow signals | Cancel, progress queries |
 | Graphiti API | Entity/edge operations | CodePerceptionWatcher, retrospective |
 | Letta memory blocks | Block API | AstBlockUpdater, LettaMemoryBuilders |

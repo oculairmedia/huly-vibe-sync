@@ -1,7 +1,7 @@
 # Quick Wins - High Impact, Low Effort Improvements
 
-**Review Date:** 2025-11-03  
-**Effort:** 1-2 days each  
+**Review Date:** 2025-11-03
+**Effort:** 1-2 days each
 **Total Timeline:** 2-3 weeks (if done sequentially)
 
 ---
@@ -22,8 +22,8 @@ These are **high-impact improvements** that can be implemented quickly to signif
 ### Current State
 ```javascript
 // No type information
-async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
-  // What type is hulyIssue? What properties does it have?
+async function createVibeTask(vibeClient, vibeProjectId, legacyIssue) {
+  // What type is legacyIssue? What properties does it have?
   // IDE can't help, developers must read code
 }
 ```
@@ -31,7 +31,7 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
 ### Implementation
 ```javascript
 /**
- * @typedef {Object} HulyIssue
+ * @typedef {Object} LegacyIssue
  * @property {string} identifier - Issue identifier (e.g., "PROJ-123")
  * @property {string} title - Issue title
  * @property {string} description - Full description
@@ -49,21 +49,21 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
  */
 
 /**
- * Create a task in Vibe Kanban from a Huly issue
+ * Create a task in Vibe Kanban from a Legacy issue
  * @param {Object} vibeClient - Vibe API client instance
  * @param {number} vibeProjectId - Vibe project ID
- * @param {HulyIssue} hulyIssue - Source issue from Huly
+ * @param {LegacyIssue} legacyIssue - Source issue from Legacy
  * @returns {Promise<VibeTask|null>} Created task or null on failure
  * @throws {VibeError} If API call fails after retries
  */
-async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
+async function createVibeTask(vibeClient, vibeProjectId, legacyIssue) {
   // Now IDE provides autocomplete and type checking!
 }
 ```
 
 ### Files to Annotate (Priority Order)
 1. `index.js` - Main sync functions
-2. `lib/HulyRestClient.js` - Already well-structured
+2. `lib/LegacyRestClient.js` - Already well-structured
 3. `lib/LettaService.js` - Complex, needs types
 4. `lib/database.js` - Database operations
 
@@ -82,7 +82,7 @@ async function createVibeTask(vibeClient, vibeProjectId, hulyIssue) {
 
 ### Current State
 ```javascript
-console.log('[Huly] Fetching projects...');
+console.log('[Legacy] Fetching projects...');
 console.error('[Vibe] Error:', error.message);
 // Not machine-parseable, no log levels, no context
 ```
@@ -117,7 +117,7 @@ const logger = pino({
 export default logger;
 
 // Create child loggers for each component
-export const hulyLogger = logger.child({ component: 'huly' });
+export const legacyLogger = logger.child({ component: 'legacy' });
 export const vibeLogger = logger.child({ component: 'vibe' });
 export const lettaLogger = logger.child({ component: 'letta' });
 export const dbLogger = logger.child({ component: 'database' });
@@ -126,16 +126,16 @@ export const dbLogger = logger.child({ component: 'database' });
 #### Step 3: Replace console.log
 ```javascript
 // Before
-console.log('[Huly] Fetching projects...');
-console.log(`[Huly] ✓ Fetched ${projects.length} projects in ${duration}ms`);
+console.log('[Legacy] Fetching projects...');
+console.log(`[Legacy] ✓ Fetched ${projects.length} projects in ${duration}ms`);
 
 // After
-import { hulyLogger } from './lib/logger.js';
+import { legacyLogger } from './lib/logger.js';
 
-hulyLogger.info('Fetching projects');
-hulyLogger.info({ 
-  projectCount: projects.length, 
-  duration 
+legacyLogger.info('Fetching projects');
+legacyLogger.info({
+  projectCount: projects.length,
+  duration
 }, 'Fetched projects successfully');
 ```
 
@@ -146,12 +146,12 @@ import crypto from 'crypto';
 async function runSync() {
   const correlationId = crypto.randomUUID();
   const syncLogger = logger.child({ correlationId });
-  
+
   syncLogger.info('Starting sync cycle');
-  
+
   try {
-    await syncHulyToVibe(syncLogger);
-    await syncVibeToHuly(syncLogger);
+    await syncLegacyToVibe(syncLogger);
+    await syncVibeToLegacy(syncLogger);
     syncLogger.info('Sync cycle completed');
   } catch (error) {
     syncLogger.error({ error }, 'Sync cycle failed');
@@ -186,49 +186,49 @@ npm install prom-client
 import promClient from 'prom-client';
 
 // Enable default metrics (CPU, memory, etc.)
-promClient.collectDefaultMetrics({ prefix: 'huly_vibe_sync_' });
+promClient.collectDefaultMetrics({ prefix: 'vibe_sync_' });
 
 // Custom metrics
 export const syncDuration = new promClient.Histogram({
-  name: 'huly_vibe_sync_duration_seconds',
+  name: 'vibe_sync_duration_seconds',
   help: 'Duration of sync operations',
   labelNames: ['project', 'phase', 'status'],
   buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60],
 });
 
 export const syncErrors = new promClient.Counter({
-  name: 'huly_vibe_sync_errors_total',
+  name: 'vibe_sync_errors_total',
   help: 'Total number of sync errors',
   labelNames: ['project', 'component', 'error_type', 'retryable'],
 });
 
 export const projectsProcessed = new promClient.Counter({
-  name: 'huly_vibe_sync_projects_processed_total',
+  name: 'vibe_sync_projects_processed_total',
   help: 'Total number of projects processed',
   labelNames: ['status'],
 });
 
 export const issuesSynced = new promClient.Counter({
-  name: 'huly_vibe_sync_issues_synced_total',
+  name: 'vibe_sync_issues_synced_total',
   help: 'Total number of issues synced',
   labelNames: ['project', 'direction'],
 });
 
 export const httpPoolConnections = new promClient.Gauge({
-  name: 'huly_vibe_sync_http_pool_connections',
+  name: 'vibe_sync_http_pool_connections',
   help: 'Number of HTTP pool connections',
   labelNames: ['protocol', 'state'],
 });
 
 export const databaseQueryDuration = new promClient.Histogram({
-  name: 'huly_vibe_sync_database_query_duration_seconds',
+  name: 'vibe_sync_database_query_duration_seconds',
   help: 'Duration of database queries',
   labelNames: ['operation'],
   buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1],
 });
 
 export const lettaApiCalls = new promClient.Counter({
-  name: 'huly_vibe_sync_letta_api_calls_total',
+  name: 'vibe_sync_letta_api_calls_total',
   help: 'Total number of Letta API calls',
   labelNames: ['operation', 'cached'],
 });
@@ -240,31 +240,31 @@ export const register = promClient.register;
 ```javascript
 import { syncDuration, syncErrors, issuesSynced } from './lib/metrics.js';
 
-async function syncHulyToVibe(project) {
-  const timer = syncDuration.startTimer({ 
-    project: project.identifier, 
-    phase: 'huly_to_vibe' 
+async function syncLegacyToVibe(project) {
+  const timer = syncDuration.startTimer({
+    project: project.identifier,
+    phase: 'legacy_to_vibe'
   });
-  
+
   try {
-    const issues = await fetchHulyIssues(project);
-    
+    const issues = await fetchLegacyIssues(project);
+
     for (const issue of issues) {
       await createVibeTask(issue);
-      issuesSynced.inc({ 
-        project: project.identifier, 
-        direction: 'huly_to_vibe' 
+      issuesSynced.inc({
+        project: project.identifier,
+        direction: 'legacy_to_vibe'
       });
     }
-    
+
     timer({ status: 'success' });
   } catch (error) {
     timer({ status: 'error' });
-    syncErrors.inc({ 
+    syncErrors.inc({
       project: project.identifier,
-      component: 'huly',
+      component: 'legacy',
       error_type: error.code,
-      retryable: error.retryable 
+      retryable: error.retryable
     });
     throw error;
   }
@@ -314,24 +314,24 @@ if (req.url === '/health') {
     uptime: process.uptime(),
     checks: {},
   };
-  
+
   // Check database
   try {
     db.db.prepare('SELECT 1').get();
     health.checks.database = { status: 'healthy' };
   } catch (error) {
     health.status = 'unhealthy';
-    health.checks.database = { 
-      status: 'unhealthy', 
-      error: error.message 
+    health.checks.database = {
+      status: 'unhealthy',
+      error: error.message
     };
   }
-  
+
   // Check last sync time
   const lastSync = db.getLastSyncTime();
   const timeSinceSync = Date.now() - lastSync;
   const syncInterval = parseInt(process.env.SYNC_INTERVAL) || 10000;
-  
+
   if (timeSinceSync > syncInterval * 3) {
     health.status = 'degraded';
     health.checks.sync = {
@@ -345,23 +345,23 @@ if (req.url === '/health') {
       lastSync: new Date(lastSync).toISOString(),
     };
   }
-  
+
   // Check external APIs
   try {
     await Promise.race([
-      hulyClient.healthCheck(),
-      new Promise((_, reject) => 
+      legacyClient.healthCheck(),
+      new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Timeout')), 5000)
       ),
     ]);
-    health.checks.huly = { status: 'healthy' };
+    health.checks.legacy = { status: 'healthy' };
   } catch (error) {
-    health.checks.huly = { 
-      status: 'unhealthy', 
-      error: error.message 
+    health.checks.legacy = {
+      status: 'unhealthy',
+      error: error.message
     };
   }
-  
+
   const statusCode = health.status === 'healthy' ? 200 : 503;
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(health, null, 2));
@@ -393,41 +393,41 @@ export class PathValidator {
   constructor(baseDir) {
     this.baseDir = path.resolve(baseDir);
   }
-  
+
   validate(inputPath) {
     // Prevent directory traversal
     if (inputPath.includes('..')) {
       throw new Error('Invalid path: directory traversal detected');
     }
-    
+
     // Resolve to absolute path
     const resolved = path.resolve(this.baseDir, inputPath);
-    
+
     // Ensure path is within base directory
     if (!resolved.startsWith(this.baseDir)) {
       throw new Error('Invalid path: outside allowed directory');
     }
-    
+
     return resolved;
   }
-  
+
   validateExists(inputPath) {
     const validated = this.validate(inputPath);
-    
+
     if (!fs.existsSync(validated)) {
       throw new Error(`Path does not exist: ${inputPath}`);
     }
-    
+
     return validated;
   }
-  
+
   validateDirectory(inputPath) {
     const validated = this.validateExists(inputPath);
-    
+
     if (!fs.statSync(validated).isDirectory()) {
       throw new Error(`Path is not a directory: ${inputPath}`);
     }
-    
+
     return validated;
   }
 }
@@ -468,42 +468,42 @@ export async function retryWithBackoff(fn, options = {}) {
     jitter = true,
     onRetry = () => {},
   } = options;
-  
+
   let lastError;
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      
+
       // Don't retry if error is not retryable
       if (error.retryable === false) {
         throw error;
       }
-      
+
       // Don't retry on last attempt
       if (attempt === maxRetries) {
         break;
       }
-      
+
       // Calculate delay with exponential backoff
       let delay = Math.min(
         initialDelay * Math.pow(backoffFactor, attempt),
         maxDelay
       );
-      
+
       // Add jitter to prevent thundering herd
       if (jitter) {
         delay = delay * (0.5 + Math.random() * 0.5);
       }
-      
+
       onRetry({ attempt: attempt + 1, delay, error });
-      
+
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 }
 
@@ -511,7 +511,7 @@ export async function retryWithBackoff(fn, options = {}) {
 import { retryWithBackoff } from './lib/utils/retry.js';
 
 const projects = await retryWithBackoff(
-  () => hulyClient.listProjects(),
+  () => legacyClient.listProjects(),
   {
     maxRetries: 3,
     initialDelay: 1000,
@@ -566,8 +566,8 @@ const logger = pino({
 async function runSync() {
   await withCorrelationId(async () => {
     logger.info('Starting sync'); // Automatically includes correlationId
-    await syncHulyToVibe();
-    await syncVibeToHuly();
+    await syncLegacyToVibe();
+    await syncVibeToLegacy();
     logger.info('Sync completed');
   });
 }
@@ -670,19 +670,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run ESLint
         run: npm run lint
-      
+
       - name: Check formatting
         run: npx prettier --check .
 ```

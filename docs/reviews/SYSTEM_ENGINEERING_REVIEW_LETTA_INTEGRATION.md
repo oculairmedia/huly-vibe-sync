@@ -1,4 +1,4 @@
-# System Engineering Review: Letta “PM” Agent Integration for Huly ↔ VibeKanban
+# System Engineering Review: Letta “PM” Agent Integration for Legacy ↔ VibeKanban
 
 ## Executive Summary
 
@@ -80,7 +80,7 @@ Code excerpt – MCP tool attach stub (capability gap):
 
 ```javascript
 // lib/LettaService.js
-async attachMcpTools(agentId, hulyMcpUrl, vibeMcpUrl) {
+async attachMcpTools(agentId, legacyMcpUrl, vibeMcpUrl) {
   console.log(`[Letta] Skipping MCP tool attachment (not supported by SDK yet)`);
   // TODO: Implement via SDK tools.mcp.* or REST once available
 }
@@ -113,7 +113,7 @@ letta_source_id TEXT,
 letta_last_sync_at INTEGER
 ```
 
-### 4) Huly REST Client (lib/HulyRestClient.js)
+### 4) Legacy REST Client (lib/LegacyRestClient.js)
 - Good
   - Explicit health checks and timeouts.
   - Incremental sync support via `modifiedAfter`.
@@ -126,8 +126,8 @@ letta_last_sync_at INTEGER
 ## Security and Secrets
 - Avoid logging secrets (`LETTA_PASSWORD`); currently safe.
 - Consider supporting `LETTA_API_KEY` for Letta Cloud vs self‑host.
-- Default `HULY_MCP_URL` is LAN IP; document environment expectations.
-- Filesystem path is parsed from Huly descriptions; ensure this is trusted input.
+- Default `REMOVED_MCP_URL` is LAN IP; document environment expectations.
+- Filesystem path is parsed from Legacy descriptions; ensure this is trusted input.
 
 ## Observability and Operability
 - Logging is descriptive; consider structured JSON logs tagged with `project_identifier`, `agent_id`.

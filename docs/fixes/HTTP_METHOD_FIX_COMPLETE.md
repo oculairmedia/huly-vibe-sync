@@ -34,20 +34,20 @@ API test showed allowed methods: `GET,HEAD,PUT,DELETE` - **NO PATCH!**
 
 To verify the fix is working:
 
-1. **Make a change in Huly**:
+1. **Make a change in Legacy**:
 
    ```bash
-   # Change any issue status in Huly UI
+   # Change any issue status in Legacy UI
    ```
 
 2. **Watch logs**:
 
    ```bash
-   docker-compose logs -f | grep "Huly→Vibe"
+   docker-compose logs -f | grep "Legacy→Vibe"
    ```
 
 3. **Expected**:
-   - ✅ See "Huly→Vibe: Status update" messages
+   - ✅ See "Legacy→Vibe: Status update" messages
    - ✅ NO more "API call failed" errors with 405
    - ✅ Changes appear in Vibe Kanban within 30 seconds
 
@@ -57,12 +57,12 @@ To verify the fix is working:
 
 ## Summary
 
-**Root Cause**: Vibe API doesn't support PATCH method (returns 405)  
-**Solution**: Changed all update methods to use PUT instead  
+**Root Cause**: Vibe API doesn't support PATCH method (returns 405)
+**Solution**: Changed all update methods to use PUT instead
 **Status**: ✅ Fixed and deployed
 
 ---
 
-**Fix Date**: November 6, 2025  
-**Files Changed**: 1 (VibeRestClient.js)  
+**Fix Date**: November 6, 2025
+**Files Changed**: 1 (VibeRestClient.js)
 **Lines Changed**: 3 (method: 'PATCH' → method: 'PUT')

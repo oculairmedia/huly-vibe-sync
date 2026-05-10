@@ -1,6 +1,6 @@
 # Bidirectional Sync - Current Status
 
-**Date:** October 27, 2025  
+**Date:** October 27, 2025
 **Status:** ✅ Working (with database conflict resolution)
 
 ---
@@ -12,14 +12,14 @@
    - 270 issues cached across 44 projects
    - Stats: `9 active, 35 empty, 270 total issues`
 
-2. **Phase 1: Huly → Vibe** - ✅ Working
-   - Fetches issues from Huly
+2. **Phase 1: Legacy → Vibe** - ✅ Working
+   - Fetches issues from Legacy
    - Creates/updates tasks in Vibe Kanban
-   - Updates Vibe task statuses when Huly changes
+   - Updates Vibe task statuses when Legacy changes
 
-3. **Phase 2: Vibe → Huly** - ✅ Working  
+3. **Phase 2: Vibe → Legacy** - ✅ Working
    - Detects status changes in Vibe Kanban
-   - Syncs back to Huly REST API
+   - Syncs back to Legacy REST API
    - Updates database after successful sync
 
 4. **Conflict Resolution** - ✅ Implemented
@@ -31,46 +31,46 @@
 
 ## 🧪 How to Test Bidirectional Sync
 
-### Test 1: Vibe → Huly (Status Change)
+### Test 1: Vibe → Legacy (Status Change)
 
 1. **In Vibe Kanban:** Move a task from "todo" to "in progress"
 2. **Wait:** ~10 seconds (SYNC_INTERVAL)
-3. **Check Huly:** Issue status should update to "In Progress"
+3. **Check Legacy:** Issue status should update to "In Progress"
 4. **Check Logs:**
    ```bash
-   docker-compose -f docker-compose.local.yml logs -f | grep "Vibe→Huly"
+   docker-compose -f docker-compose.local.yml logs -f | grep "Vibe→Legacy"
    ```
 
    Expected output:
    ```
-   [Vibe→Huly] Task "Your Task Title" status changed: Backlog → In Progress
-   [Huly] ✓ Updated issue PROJ-123 status to: In Progress
+   [Vibe→Legacy] Task "Your Task Title" status changed: Backlog → In Progress
+   [Legacy] ✓ Updated issue PROJ-123 status to: In Progress
    ```
 
-### Test 2: Huly → Vibe (Status Change)
+### Test 2: Legacy → Vibe (Status Change)
 
-1. **In Huly:** Change an issue status from "Backlog" to "Done"
+1. **In Legacy:** Change an issue status from "Backlog" to "Done"
 2. **Wait:** ~10 seconds
 3. **Check Vibe Kanban:** Task should move to "done" column
 4. **Check Logs:**
    ```bash
-   docker-compose -f docker-compose.local.yml logs -f | grep "Huly→Vibe"
+   docker-compose -f docker-compose.local.yml logs -f | grep "Legacy→Vibe"
    ```
 
    Expected output:
    ```
-   [Huly→Vibe] Updating task "Your Task Title" status: todo → done
+   [Legacy→Vibe] Updating task "Your Task Title" status: todo → done
    [Vibe] ✓ Updated task <uuid> status to: done
    ```
 
 ### Test 3: Conflict Detection
 
-1. **In Huly:** Change issue PROJ-123 to "In Progress"
+1. **In Legacy:** Change issue PROJ-123 to "In Progress"
 2. **Immediately in Vibe:** Change same task to "Done" (before sync runs)
 3. **Wait:** ~10 seconds
 4. **Check Logs:**
    ```
-   [Conflict] Both systems changed "Task Title". Huly wins: In Progress
+   [Conflict] Both systems changed "Task Title". Legacy wins: In Progress
    ```
 
 ---
@@ -96,14 +96,14 @@
 On the **first sync** after the database is initialized, there's NO prior state to compare against, so:
 - All tasks are considered "unchanged"
 - No conflict detection messages
-- Everything syncs based on current Huly state
+- Everything syncs based on current Legacy state
 
 ### Subsequent Syncs
 
 After the **first sync**, the database has prior state, so:
 - Changes are detected
 - Conflict resolution activates
-- You'll see "[Vibe changed]" or "[Huly→Vibe]" messages
+- You'll see "[Vibe changed]" or "[Legacy→Vibe]" messages
 
 ---
 
@@ -115,23 +115,23 @@ After the **first sync**, the database has prior state, so:
 // Current: incrementalSync: false
 ```
 
-**Reason:** Phase 2 (Vibe → Huly) needs the FULL list of Huly issues to map Vibe task identifiers back to Huly issues.
+**Reason:** Phase 2 (Vibe → Legacy) needs the FULL list of Legacy issues to map Vibe task identifiers back to Legacy issues.
 
 If incremental sync is enabled:
 - Phase 1 only fetches changed issues
 - Phase 2 can't find issues that haven't changed
-- Result: "[Skip] Huly issue PROJ-123 not found"
+- Result: "[Skip] Legacy issue PROJ-123 not found"
 
 **Solution (Future):** Cache all issues in database, use cached list for Phase 2 lookups.
 
 ### Conflict Resolution Policy
 
-**Current policy:** Huly wins in conflicts
+**Current policy:** Legacy wins in conflicts
 
 ```javascript
-if (hulyChanged && vibeChanged) {
-  console.log('[Conflict] Both systems changed. Huly wins');
-  // Update Vibe to match Huly
+if (legacyChanged && vibeChanged) {
+  console.log('[Conflict] Both systems changed. Legacy wins');
+  // Update Vibe to match Legacy
 }
 ```
 
@@ -168,13 +168,13 @@ if (hulyChanged && vibeChanged) {
    # - Open Vibe Kanban
    # - Move a task from "todo" to "in progress"
    # - Wait 10 seconds
-   # - Check if Huly issue updated
+   # - Check if Legacy issue updated
    ```
 
 2. **Check database state:**
    ```bash
    # Enter container
-   docker-compose -f docker-compose.local.yml exec huly-vibe-sync sh
+   docker-compose -f docker-compose.local.yml exec vibe-sync sh
 
    # Query database
    sqlite3 /app/logs/sync-state.db "SELECT identifier, title, status FROM issues LIMIT 10;"
@@ -192,8 +192,8 @@ if (hulyChanged && vibeChanged) {
 ### No status change detected
 
 **Check:**
-1. Is the task linked to Huly? (description contains "Huly Issue: PROJ-123")
-2. Is the database tracking the issue? 
+1. Is the task linked to Legacy? (description contains "Legacy Issue: PROJ-123")
+2. Is the database tracking the issue?
    ```bash
    sqlite3 /app/logs/sync-state.db "SELECT * FROM issues WHERE identifier = 'PROJ-123';"
    ```
@@ -235,12 +235,12 @@ read
 
 echo "Monitoring..."
 docker-compose -f docker-compose.local.yml logs -f 2>&1 | \
-  grep -E "Vibe→Huly|Huly→Vibe|Vibe changed|Conflict" \
+  grep -E "Vibe→Legacy|Legacy→Vibe|Vibe changed|Conflict" \
   --line-buffered | \
   timeout 30 head -20
 
 echo ""
-echo "Test complete. Check if Huly issue updated!"
+echo "Test complete. Check if Legacy issue updated!"
 ```
 
 ---
@@ -251,11 +251,11 @@ echo "Test complete. Check if Huly issue updated!"
 
 **Database:** ✅ SQLite integration complete
 
-**Conflict Resolution:** ✅ Implemented (Huly wins policy)
+**Conflict Resolution:** ✅ Implemented (Legacy wins policy)
 
 **Testing:** ⏳ Needs manual verification
 
-**Next:** Test by moving tasks in Vibe Kanban and verifying Huly updates!
+**Next:** Test by moving tasks in Vibe Kanban and verifying Legacy updates!
 
 ---
 

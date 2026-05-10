@@ -45,7 +45,7 @@ for match_id, captures in cursor.matches(tree.root_node):
         docstring = None
         params = []
         return_type = None
-        
+
         for child in func_node.children:
             if child.type == "identifier":
                 name = source_code[child.start_byte:child.end_byte]
@@ -64,7 +64,7 @@ for match_id, captures in cursor.matches(tree.root_node):
                         if string_node.type == "string":
                             docstring = source_code[string_node.start_byte:string_node.end_byte]
                             docstring = docstring.strip().strip('"""').strip("'''")
-        
+
         print(f"{name}({', '.join(params)}) -> {return_type}")
         print(f"  Doc: {docstring}")
 ```
@@ -87,10 +87,10 @@ cursor = QueryCursor(query)
 
 for match_id, captures in cursor.matches(tree.root_node):
     func_nodes = (captures.get("func", []) + captures.get("arrow", []))
-    
+
     for func_node in func_nodes:
         # Extract name, params, return_type (same as Python example above)
-        
+
         # Find nearest JSDoc
         func_line = func_node.start_point[0]
         jsdoc = None
@@ -98,7 +98,7 @@ for match_id, captures in cursor.matches(tree.root_node):
             if line < func_line and func_line - line <= 5:
                 jsdoc = comments[line]
                 break
-        
+
         print(f"{name}({', '.join(params)})")
         print(f"  JSDoc: {jsdoc}")
 ```
@@ -143,7 +143,7 @@ CocoIndex would be useful if you ALSO need:
 
 See `tree_sitter_function_extraction.py` for a complete, runnable script with:
 - Python function extraction
-- JavaScript function extraction  
+- JavaScript function extraction
 - TypeScript function extraction
 - JSDoc/docstring extraction
 - Performance benchmarks

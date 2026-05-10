@@ -1,6 +1,6 @@
 # Letta Folder API Endpoints - Test Results
-**Date:** 2025-11-04  
-**Proxy:** Fixed version with query parameter support  
+**Date:** 2025-11-04
+**Proxy:** Fixed version with query parameter support
 **Test Environment:** http://192.168.50.90:8289 (Letta proxy)
 
 ---
@@ -21,12 +21,12 @@ All folder endpoints tested successfully through the fixed proxy. Query paramete
 curl "${LETTA_BASE_URL}/v1/folders/count" -H "Authorization: Bearer ${LETTA_PASSWORD}"
 ```
 
-**Result:** 
+**Result:**
 ```
 115
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Notes:** Returns integer count, no query parameters needed
 
 ---
@@ -47,17 +47,17 @@ curl "${LETTA_BASE_URL}/v1/folders/?limit=3&order=asc" -H "Authorization: Bearer
     "created_at": "2025-10-31T23:24:30.964635Z"
   },
   {
-    "name": "Huly-INSTA-root",
+    "name": "Legacy-INSTA-root",
     "created_at": "2025-10-31T23:31:10.566652Z"
   },
   {
-    "name": "Huly-INSTA",
+    "name": "Legacy-INSTA",
     "created_at": "2025-10-31T23:32:20.467576Z"
   }
 ]
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Query Parameters Tested:**
 - ✅ `limit=3` - Pagination works
 - ✅ `order=asc` - Ordering works
@@ -82,7 +82,7 @@ curl "${LETTA_BASE_URL}/v1/folders/source-01b2386d-c64c-4568-b8d5-c94100a649ce" 
 }
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Notes:** Path parameter works correctly, returns full folder object
 
 ---
@@ -101,7 +101,7 @@ curl "${LETTA_BASE_URL}/v1/folders/name/VIBEK-README" \
 "source-01b2386d-c64c-4568-b8d5-c94100a649ce"
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Notes:** Returns just the folder ID as a string (not full object)
 
 ---
@@ -127,7 +127,7 @@ curl "${LETTA_BASE_URL}/v1/folders/${FOLDER_ID}/files?limit=5&order=desc&order_b
 }
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Query Parameters Tested:**
 - ✅ `limit=5` - Pagination works
 - ✅ `order=desc` - Sort order works
@@ -150,7 +150,7 @@ curl "${LETTA_BASE_URL}/v1/folders/${FOLDER_ID}/agents" \
 1
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Notes:** Returns array of agent objects, length indicates 1 agent attached to this folder
 
 ---
@@ -169,7 +169,7 @@ curl "${LETTA_BASE_URL}/v1/folders/${FOLDER_ID}/passages" \
 0
 ```
 
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Notes:** Returns array of passages, empty array indicates no passages yet
 
 ---
@@ -191,8 +191,8 @@ curl "${LETTA_BASE_URL}/v1/folders/metadata" \
 }
 ```
 
-**Status:** ⚠️ API Design Issue (Not Proxy Bug)  
-**Notes:** 
+**Status:** ⚠️ API Design Issue (Not Proxy Bug)
+**Notes:**
 - This endpoint appears to be incorrectly documented or the route is misconfigured
 - The API is treating "metadata" as a folder_id path parameter
 - Likely needs to be `GET /v1/folders/{folder_id}/metadata` instead
@@ -276,9 +276,9 @@ Result:   Returns exactly 5 files in descending order ✅
 - Fix Applied: Query parameter preservation (Lines 121-124)
 - Secondary Fix: Empty body handling (Lines 153-160)
 
-**Test Date:** 2025-11-04  
-**Test Duration:** ~5 minutes  
-**Endpoints Tested:** 8/15+ folder endpoints  
+**Test Date:** 2025-11-04
+**Test Duration:** ~5 minutes
+**Endpoints Tested:** 8/15+ folder endpoints
 **Success Rate:** 100% (excluding API design issue in `/metadata`)
 
 ---
@@ -300,7 +300,7 @@ Result:   Returns exactly 5 files in descending order ✅
    ```bash
    # Good - explicit limit
    GET /v1/folders/?limit=50
-   
+
    # Risky - defaults to 50, might change
    GET /v1/folders/
    ```

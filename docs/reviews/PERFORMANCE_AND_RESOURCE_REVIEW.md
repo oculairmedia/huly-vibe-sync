@@ -1,8 +1,8 @@
-# Performance and Resource Consumption Review: Huly-Vibe-Sync
+# Performance and Resource Consumption Review: Vibe Sync
 
 ## Executive Summary
 
-This document provides an in-depth analysis of the performance characteristics and resource consumption patterns of the Huly-Vibe-Sync service. The service performs bidirectional synchronization between Huly and VibeKanban, with optional Letta PM agent integration.
+This document provides an in-depth analysis of the performance characteristics and resource consumption patterns of the Vibe Sync service. The service performs bidirectional synchronization between Legacy and VibeKanban, with optional Letta PM agent integration.
 
 ### Overall Assessment
 - **Current Scale**: Designed for small-to-medium deployments (10-50 projects, <1000 issues each)
@@ -27,11 +27,11 @@ This document provides an in-depth analysis of the performance characteristics a
 #### A) Project and Issue Loading (index.js)
 ```javascript
 // Lines 957-968: All projects loaded at once
-const hulyProjects = await fetchHulyProjects(hulyClient);
+const legacyProjects = await fetchLegacyProjects(legacyClient);
 const vibeProjects = await listVibeProjects(vibeClient);
 
 // Lines 1140-1141: All issues per project loaded
-const hulyIssues = await fetchHulyIssues(hulyClient, projectIdentifier, lastProjectSync);
+const legacyIssues = await fetchLegacyIssues(legacyClient, projectIdentifier, lastProjectSync);
 const vibeTasks = await listVibeTasks(vibeProject.id);
 ```
 
@@ -48,9 +48,9 @@ const vibeTasks = await listVibeTasks(vibeProject.id);
 // Lines 1152-1178: All memory blocks built in-memory
 const projectMeta = buildProjectMeta(...);
 const boardConfig = buildBoardConfig();
-const boardMetrics = buildBoardMetrics(hulyIssues, vibeTasks);
-const hotspots = buildHotspots(hulyIssues, vibeTasks);
-const backlogSummary = buildBacklogSummary(hulyIssues, vibeTasks);
+const boardMetrics = buildBoardMetrics(legacyIssues, vibeTasks);
+const hotspots = buildHotspots(legacyIssues, vibeTasks);
+const backlogSummary = buildBacklogSummary(legacyIssues, vibeTasks);
 const changeLog = buildChangeLog(...);
 ```
 
@@ -77,7 +77,7 @@ this._sourceCache = new Map(); // name -> source object
 1. **Stream large datasets**: Implement cursor-based pagination for projects/issues
    - Fetch projects in batches of 10-20
    - Process and release memory before next batch
-   
+
 2. **Limit issue fetch**: Add hard cap (e.g., 1000 issues per project)
    ```javascript
    const options = { limit: 1000 }; // Already present, good!
@@ -104,7 +104,7 @@ this._sourceCache = new Map(); // name -> source object
 
 #### A) JSON Parsing/Serialization
 - **Frequency**: Every API response, every DB operation, every Letta block
-- **Volume**: 
+- **Volume**:
   - 100 projects × 500 issues = 50,000 JSON parse operations per sync
   - Letta blocks: 6 blocks × 100 projects = 600 JSON.stringify() calls
 - **Impact**: Moderate CPU spikes (10-30% on modern CPUs)
@@ -129,7 +129,7 @@ if (config.sync.parallel) {
 ```
 
 **Current Default**: Sequential (PARALLEL_SYNC=false by default)
-**Impact**: 
+**Impact**:
 - Sequential: Low CPU (5-15%), high latency
 - Parallel (5 workers): Moderate CPU (20-40%), lower latency
 
@@ -162,7 +162,7 @@ if (config.sync.parallel) {
 - **No retry logic**: Transient failures cause immediate errors
 
 **Impact per sync run (100 projects):**
-- Huly API: 100 project fetches + 100 issue list calls = 200 connections
+- Legacy API: 100 project fetches + 100 issue list calls = 200 connections
 - Vibe API: 100 project checks + 100 task lists + N creates/updates = 200+ connections
 - Letta API: 100 agent checks + 600 memory block updates + 100 README uploads = 800+ connections
 - **Total**: ~1200 TCP connections per sync (5-minute default interval)
@@ -170,7 +170,7 @@ if (config.sync.parallel) {
 #### B) API Call Patterns
 ```javascript
 // index.js:1349-1360: Sequential with delays
-for (const hulyIssue of hulyIssues) {
+for (const legacyIssue of legacyIssues) {
   // ... sync logic
   await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
 }
@@ -194,7 +194,7 @@ async function withTimeout(promise, timeoutMs, operation) {
 **Timeouts:**
 - Individual MCP calls: 60 seconds
 - Full sync cycle: 15 minutes (900 seconds)
-- Huly REST client: 60 seconds per request
+- Legacy REST client: 60 seconds per request
 
 ### Recommendations
 
@@ -203,10 +203,10 @@ async function withTimeout(promise, timeoutMs, operation) {
    ```javascript
    import http from 'http';
    import https from 'https';
-   
+
    const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
    const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
-   
+
    fetch(url, { agent: url.startsWith('https') ? httpsAgent : httpAgent });
    ```
 
@@ -264,7 +264,7 @@ upsertIssue(issue) {
 ```javascript
 // index.js:1256-1260: Called in loop, no transaction wrapper
 db.upsertIssue({
-  identifier: hulyIssue.identifier,
+  identifier: legacyIssue.identifier,
   // ...
 });
 ```
@@ -313,7 +313,7 @@ db.upsertIssue({
 #### A) Agent Lookup (lib/LettaService.js:44-60)
 ```javascript
 async ensureAgent(projectIdentifier, projectName) {
-  const agents = await this.client.agents.list({ 
+  const agents = await this.client.agents.list({
     name: agentName,
     limit: 1
   });
@@ -334,7 +334,7 @@ async ensureSource(sourceName, folderId = null) {
 }
 ```
 
-**Performance**: 
+**Performance**:
 - First call: O(N) where N = total sources across all projects
 - Subsequent calls: O(1) from cache
 - **Problem**: Cache never cleared; grows unbounded

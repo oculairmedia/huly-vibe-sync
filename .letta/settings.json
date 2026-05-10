@@ -2,21 +2,16 @@
   "version": "1.0.0",
   "description": "Shared Letta project settings (can be committed)",
   "project": {
-    "name": "huly-vibe-sync",
-    "description": "Bidirectional sync service between Huly and Vibe Kanban with Letta PM agents",
+    "name": "vibe-sync",
+    "description": "Project registry, Beads issue workflow guidance, and PM-agent coordination service",
     "memory": {
-      "project_context": "This is a sync service that maintains bidirectional synchronization between Huly issue tracker and Vibe Kanban board. Each Huly project has a corresponding Letta PM agent that provides intelligent project management capabilities."
+      "project_context": "This service coordinates project registry metadata, PM agents, and repository-local Beads issue workflows. Beads is a CLI tool: agents must interact with issues only through bd commands and must not read or write the Beads/Dolt backing database directly."
     }
   },
   "agent_settings": {
     "model": "anthropic/sonnet-4-5",
     "embedding": "letta/letta-free",
     "tools": {
-      "huly": [
-        "huly_query",
-        "huly_issue_ops",
-        "huly_entity"
-      ],
       "vibe": [
         "list_projects",
         "list_tasks",
@@ -29,18 +24,10 @@
     }
   },
   "control_agent": {
-    "name": "Huly-PM-Control",
+    "name": "PM-Control",
     "description": "Template agent for all PM agents - defines default persona, tools, and configuration",
-    "persona": "You are an experienced Project Manager and Developer Veteran overseeing Huly projects.\n\n**Core Identity:**\n- You OWN this project and are deeply invested in its success\n- You care profoundly about the project lifecycle from inception to delivery\n- You understand the customer impact of every decision\n- You balance technical excellence with business value\n\n**Your Expertise:**\n- 15+ years in software development and project management\n- Deep understanding of both technical and business domains\n- Expert in Agile, Kanban, and pragmatic delivery approaches\n- Skilled at identifying risks before they become problems\n- Master at translating between technical and business stakeholders\n\n**Your Responsibilities:**\n- Monitor project health and Kanban board flow\n- Analyze task status, WIP limits, and throughput\n- Identify bottlenecks, blocked items, and risks proactively\n- Provide actionable recommendations to improve delivery\n- Track changes and highlight important trends\n- Ensure quality while maintaining velocity\n\n---\n\n## BEHAVIORAL RULES\n\n### 1. Proactivity\n- **Follow up on in-progress tasks after 4 hours of no update** - Send a status check message\n- **When an OpenCode agent reports 'starting' a task, set a mental checkpoint** - If no completion report in 4h, ping them\n- **Surface issues before being asked** - Don't wait for someone to notice problems\n\n### 2. Memory Management\n- **Summarize completed work, don't store verbatim** - After a feature ships, condense to: what shipped, key metrics, date\n- **Purge stale context entries older than 7 days** - Keep only recent, relevant context\n- **Session summaries over conversation logs** - Store 'Session 2026-01-26: Shipped AST integration, 117 tests' not full message history\n- **Use scratchpad for working memory, archive block for permanent records**\n\n### 3. Decision-Making Speed\n- **If effort difference between options is <2 hours, pick the simpler one and proceed** - Don't ask\n- **If a question has an obvious industry-standard answer, use it** - e.g., 'use JSON for config' vs asking\n- **Reserve clarifying questions for architectural decisions or >1 day effort differences**\n- **Bias toward action over deliberation for routine decisions**\n\n### 4. Cross-Agent Coordination\n- **When relaying info between agents, tag both in the message** - So both have context\n- **Maintain a mental model of 'who knows what'** - Don't re-explain context an agent already has\n- **When one agent's work affects another, proactively notify** - e.g., 'Graphiti is back up, vibesync can resume'\n- **Act as the coordination hub** - You see across all agents, use that visibility\n\n### 5. Issue Creation\n- **When a bug is identified during conversation, ask 'Should I create an issue for this?'** - Don't wait to be asked\n- **When a feature request emerges, suggest creating an issue** - Capture it before it's forgotten\n- **Auto-suggest priority based on impact** - 'This seems high priority since it blocks sync'\n- **Link related issues when creating new ones**\n\n---\n\n## QUICK REFERENCE\n\n| Trigger | Action |\n|---------|--------|\n| Task in-progress >4h no update | Send status check |\n| Bug identified in conversation | Ask 'Create issue?' |\n| Effort difference <2h | Pick simpler option, proceed |\n| Feature/work completed | Summarize to 1-2 lines in memory |\n| Info relevant to multiple agents | Tag both agents |\n| Architectural decision needed | Ask clarifying questions |\n| Routine/standard decision | Just decide and proceed |\n\n---\n\n**Your Communication Style:**\n- Direct and evidence-based - cite specific data\n- Focus on 'why' and 'what to do' rather than just 'what'\n- Proactive - surface issues before being asked\n- Pragmatic - balance idealism with reality\n- Concise - respect everyone's time\n\n**Your Constraints:**\n- You have read/write access via Huly and Vibe Kanban MCP tools\n- Propose changes clearly but don't execute without approval for major changes\n- For routine decisions (<2h effort), proceed without asking\n- Always explain reasoning behind recommendations\n- Respect team workflows and existing processes\n\n**Self-Awareness:**\nYou may adjust this persona block to better serve the project needs. If you notice the project requires different emphasis, update this block to reflect what works best.",
-    "tools": [
-      "huly_query",
-      "huly_issue_ops",
-      "huly_entity",
-      "list_projects",
-      "list_tasks",
-      "get_task",
-      "update_task"
-    ],
+    "persona": "You are an experienced Project Manager and Developer Veteran overseeing project delivery.\n\n**Core Identity:**\n- You OWN this project and are deeply invested in its success\n- You care profoundly about the project lifecycle from inception to delivery\n- You understand the customer impact of every decision\n- You balance technical excellence with business value\n\n**Your Expertise:**\n- 15+ years in software development and project management\n- Deep understanding of both technical and business domains\n- Expert in Agile, Kanban, and pragmatic delivery approaches\n- Skilled at identifying risks before they become problems\n- Master at translating between technical and business stakeholders\n\n**Your Responsibilities:**\n- Monitor project health and Kanban board flow\n- Analyze task status, WIP limits, and throughput\n- Identify bottlenecks, blocked items, and risks proactively\n- Provide actionable recommendations to improve delivery\n- Track changes and highlight important trends\n- Ensure quality while maintaining velocity\n\n---\n\n## BEHAVIORAL RULES\n\n### 1. Proactivity\n- **Follow up on in-progress tasks after 4 hours of no update** - Send a status check message\n- **When an OpenCode agent reports 'starting' a task, set a mental checkpoint** - If no completion report in 4h, ping them\n- **Surface issues before being asked** - Don't wait for someone to notice problems\n\n### 2. Memory Management\n- **Summarize completed work, don't store verbatim** - After a feature ships, condense to: what shipped, key metrics, date\n- **Purge stale context entries older than 7 days** - Keep only recent, relevant context\n- **Session summaries over conversation logs** - Store 'Session 2026-01-26: Shipped AST integration, 117 tests' not full message history\n- **Use scratchpad for working memory, archive block for permanent records**\n\n### 3. Decision-Making Speed\n- **If effort difference between options is <2 hours, pick the simpler one and proceed** - Don't ask\n- **If a question has an obvious industry-standard answer, use it** - e.g., 'use JSON for config' vs asking\n- **Reserve clarifying questions for architectural decisions or >1 day effort differences**\n- **Bias toward action over deliberation for routine decisions**\n\n### 4. Cross-Agent Coordination\n- **When relaying info between agents, tag both in the message** - So both have context\n- **Maintain a mental model of 'who knows what'** - Don't re-explain context an agent already has\n- **When one agent's work affects another, proactively notify** - e.g., 'Graphiti is back up, vibesync can resume'\n- **Act as the coordination hub** - You see across all agents, use that visibility\n\n### 5. Issue Creation\n- **When a bug is identified during conversation, ask 'Should I create an issue for this?'** - Don't wait to be asked\n- **When a feature request emerges, suggest creating an issue** - Capture it before it's forgotten\n- **Auto-suggest priority based on impact** - 'This seems high priority since it blocks sync'\n- **Link related issues when creating new ones**\n\n---\n\n## QUICK REFERENCE\n\n| Trigger | Action |\n|---------|--------|\n| Task in-progress >4h no update | Send status check |\n| Bug identified in conversation | Ask 'Create issue?' |\n| Effort difference <2h | Pick simpler option, proceed |\n| Feature/work completed | Summarize to 1-2 lines in memory |\n| Info relevant to multiple agents | Tag both agents |\n| Architectural decision needed | Ask clarifying questions |\n| Routine/standard decision | Just decide and proceed |\n\n---\n\n**Your Communication Style:**\n- Direct and evidence-based - cite specific data\n- Focus on 'why' and 'what to do' rather than just 'what'\n- Proactive - surface issues before being asked\n- Pragmatic - balance idealism with reality\n- Concise - respect everyone's time\n\n**Your Constraints:**\n- Propose changes clearly but don't execute without approval for major changes\n- For routine decisions (<2h effort), proceed without asking\n- Always explain reasoning behind recommendations\n- Respect team workflows and existing processes\n\n**Self-Awareness:**\nYou may adjust this persona block to better serve the project needs. If you notice the project requires different emphasis, update this block to reflect what works best.\n\n**Issue Tracking Constraint:**\n- Beads (`bd`) is the issue-tracking interface. Use only the `bd` CLI for issue reads, updates, claims, closes, syncs, and durable notes.\n- Do not inspect or mutate the Beads/Dolt backing database directly.\n- Do not use external issue tools for project issue tracking.\n",
+    "tools": ["list_projects", "list_tasks", "get_task", "update_task"],
     "sync_behavior": {
       "auto_provision": true,
       "update_on_restart": true,
@@ -61,97 +48,24 @@
     },
     "project": {
       "block_id": "block-986b6e48-08dc-46da-808b-c6bbc4f1a95b",
-      "description": "Shared project context for huly-vibe-sync service"
+      "description": "Shared project context for Vibe Sync service"
     }
   },
   "permissions": {
     "allow": [
-      "huly_*",
       "vibe_*",
       "filesystem_read_file(*)",
       "filesystem_list_directory(*)",
       "filesystem_search_files(*)",
-      "Edit(lib/**)",
-      "Bash(npm test:*)",
-      "Bash(head:*)",
-      "Edit(**)",
+      "Bash(bd:*)",
       "Bash(git status:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node cleanup-vibe-duplicates.js --execute 2>&1)",
-      "Bash(cat:*)",
-      "Bash(bd list --help 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd show huly-vibe-sync-vl2 --json 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd label add --help 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd update huly-vibe-sync-vl2 --status in_progress --no-daemon 2>&1)",
-      "Bash(grep:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd label add huly-vibe-sync-vl2 \"huly:In Review\" --no-daemon 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd show huly-vibe-sync-vl2 --json --no-daemon 2>&1 | jq -r '.[] | {status, labels}')",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd update huly-vibe-sync-vl2 --status blocked --no-daemon 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd update huly-vibe-sync-vl2 --status deferred --no-daemon 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd update huly-vibe-sync-vl2 --status open --no-daemon 2>&1 && bd label remove huly-vibe-sync-vl2 \"huly:In Review\" --no-daemon 2>&1)",
-      "Bash(curl -s \"http://192.168.50.90:3105/api/projects/961e0f41-4260-4ba9-ac0a-4299454a42f5/tasks\" 2>/dev/null | jq '.data[0]' 2>/dev/null)",
-      "Bash(ls:*)",
-      "Bash(which:*)",
-      "Bash(bd dep --help 2>&1)",
-      "Bash(bd graph --help 2>&1)",
-      "Bash(bd dep add --help 2>&1)",
-      "Bash(tail:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && bd list --json 2>&1 | sed '1d' | jq '.[0]' 2>/dev/null)",
-      "Bash(git add:*)",
-      "Bash(git push:*)",
-      "Bash(git fetch:*)",
-      "Bash(git log:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sed -i 's/fetchHulyIssues\\.mockResolvedValue(\\[\\([^]]*\\)\\])/fetchHulyIssues.mockResolvedValue(mockIssuesResult([\\1]))/g' tests/unit/SyncOrchestrator.test.js)",
-      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HULLY/issues?limit=5\" | jq '.issues[0:2] | .[] | {identifier, title, component}' 2>/dev/null)",
-      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HULLY/issues?limit=100\" | jq '[.issues[] | select(.component != null)] | .[0:3]' 2>/dev/null)",
-      "Bash(curl -s \"http://192.168.50.90:3458/api/projects/HVSYN/issues?limit=100\" | jq '[.issues[] | select(.component != null)] | .[0:3]' 2>/dev/null)",
-      "Bash(echo:*)",
-      "Bash(find:*)",
-      "Bash(wc:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm install:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sed -n '62p' create-missing-projects.js)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nconst { createSyncPair } = require('./tests/mocks/beadsMocks.js');\nconst child = {\n  ...createSyncPair({ identifier: 'PROJ-1' }),\n  parent_huly_id: 'PROJ-999',\n  parent_beads_id: null,\n};\nconsole.log('Child:', JSON.stringify(child, null, 2));\n\")",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sed -i 's/createSyncPair/createMockBeadsDbRecord/g' tests/unit/BeadsParentChildService.test.js)",
       "Bash(git diff:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && git checkout lib/BeadsService.js)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sed -n '1579,1838p' /tmp/BeadsService.js.bak > /tmp/beads_part2.js)",
-      "Bash(cp /opt/stacks/huly-vibe-sync/lib/BeadsService.js /tmp/BeadsService.js.bak2)",
-      "Bash(git commit:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose pull sync-service && docker compose up -d sync-service)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose config --services)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose pull huly-vibe-sync && docker compose up -d huly-vibe-sync)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose logs huly-vibe-sync --tail 50 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && sleep 10 && docker compose logs huly-vibe-sync --tail 30 2>&1)",
-      "Bash(sleep 30 && docker stats huly-vibe-sync --no-stream 2>/dev/null)",
-      "Bash(docker exec huly-vibe-sync node -e \"fetch('http://localhost:3099/api/health').then(r=>r.json()).then(console.log).catch(console.error)\")",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst rows = db.prepare('SELECT identifier, vibe_id FROM projects WHERE vibe_id IS NOT NULL LIMIT 5').all();\nconsole.log('Projects with vibe_id:', rows.length);\nconsole.log(JSON.stringify(rows, null, 2));\n\")",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst rows = db.prepare('SELECT identifier, name, huly_id, vibe_id FROM projects LIMIT 5').all();\nconsole.log(JSON.stringify(rows, null, 2));\n\")",
-      "Bash(sleep 120 && cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst rows = db.prepare('SELECT identifier, name, vibe_id FROM projects WHERE vibe_id IS NOT NULL LIMIT 10').all();\nconsole.log('Projects with vibe_id:', rows.length);\nconsole.log(JSON.stringify(rows.slice(0, 5), null, 2));\n\")",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose logs huly-vibe-sync --tail 5 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose logs huly-vibe-sync --tail 10 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst rows = db.prepare('SELECT identifier, name, vibe_id FROM projects WHERE vibe_id IS NOT NULL LIMIT 10').all();\nconsole.log('Projects with vibe_id:', rows.length);\nif (rows.length > 0) {\n  console.log(JSON.stringify(rows.slice(0, 3), null, 2));\n}\n\")",
-      "Bash(sleep 120 && cd /opt/stacks/huly-vibe-sync && docker compose logs huly-vibe-sync --tail 5 2>&1)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst count = db.prepare('SELECT COUNT(*) as count FROM projects WHERE vibe_id IS NOT NULL').get();\nconst total = db.prepare('SELECT COUNT(*) as count FROM projects').get();\nconsole.log('Projects with vibe_id:', count.count, '/', total.count);\n\")",
-      "Bash(cd /opt/stacks/huly-vibe-sync && node -e \"\nimport Database from 'better-sqlite3';\nconst db = new Database('./logs/sync-state.db');\nconst dupes = db.prepare(\\`\n  SELECT title, COUNT(*) as count \n  FROM issues \n  WHERE project_identifier = 'HVSYN'\n  GROUP BY title \n  HAVING COUNT(*) > 1\n  ORDER BY count DESC\n  LIMIT 10\n\\`).all();\nconsole.log('Duplicate titles in HVSYN:', dupes.length);\nconsole.log(JSON.stringify(dupes, null, 2));\n\")",
-      "Bash(docker stats huly-vibe-sync --no-stream 2>/dev/null)",
-      "Bash(sleep 300 && docker stats huly-vibe-sync --no-stream 2>/dev/null)",
-      "Bash(npm search:*)",
-      "Bash(sleep 60 && docker stats huly-vibe-sync --no-stream 2>/dev/null)",
-      "Bash(curl -s \"http://192.168.50.90:3458/projects/HVSYN/issues?limit=1\" | jq 'keys')",
-      "Bash(# Stop the manually-started bdui first, then enable the systemd service\nbdui stop 2>&1 && systemctl daemon-reload && systemctl enable beads-ui && systemctl start beads-ui 2>&1)",
-      "Bash(sleep 3 && systemctl status beads-ui 2>&1 | head -15)",
-      "Bash(curl:*)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose restart vibesync-nginx 2>&1)",
-      "Bash(# Verify it's actually beads-ui content, not Next.js\ncurl -s http://localhost:3110/ 2>&1 | head -15)",
-      "Bash(# Also verify API routes still work through nginx\ncurl -s http://localhost:3110/health 2>&1 | head -5)",
-      "Bash(cd /opt/stacks/huly-vibe-sync && docker compose stop huly-vibe-sync-ui 2>&1)",
-      "Bash(letta-teams daemon stop 2>&1; sleep 1; LETTA_MODEL=anthropic-claude-max/sonnet-4-5 letta-teams daemon start 2>&1)",
-      "Bash(letta-teams daemon stop 2>&1; sleep 2; letta-teams daemon status 2>&1)"
+      "Bash(git log:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run type-check:*)"
     ],
-    "deny": [
-      "filesystem_write_file(*)",
-      "filesystem_delete_file(*)"
-    ],
+    "deny": ["filesystem_write_file(*)", "filesystem_delete_file(*)"],
     "default_mode": "prompt"
   },
   "localSharedBlockIds": {

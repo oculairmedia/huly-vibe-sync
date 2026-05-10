@@ -1,8 +1,8 @@
 # Comprehensive Testing Strategy
 
-**Date:** 2025-11-04  
-**Current Coverage:** 85.41% statements, 79.83% branches  
-**Current Tests:** 381 passing  
+**Date:** 2025-11-04
+**Current Coverage:** 85.41% statements, 79.83% branches
+**Current Tests:** 381 passing
 **Goal:** 95%+ coverage, 600+ tests, confidence for continuous development
 
 ---
@@ -12,14 +12,14 @@
 ### Current State
 ```
 ✅ Excellent:    Config, StatusMapper, TextParsers, Logger, HTTP
-✅ Good:         VibeRestClient (95%), HulyRestClient (77%)
-⚠️  Needs Work:  Database (67%), HulyService, VibeService, HealthService
+✅ Good:         VibeRestClient (95%), LegacyRestClient (77%)
+⚠️  Needs Work:  Database (67%), LegacyService, VibeService, HealthService
 ❌ Missing:      SyncOrchestrator, LettaService (core business logic!)
 ```
 
 ### Priority Action Items
 1. **Add SyncOrchestrator tests** - 0% coverage on 457-line core orchestration
-2. **Add Service Layer tests** - HulyService, VibeService, HealthService, LettaService
+2. **Add Service Layer tests** - LegacyService, VibeService, HealthService, LettaService
 3. **Add Integration tests** - Full sync cycle E2E
 4. **Add Error scenario tests** - Transient failures, retries, edge cases
 
@@ -37,9 +37,9 @@
 | **textParsers.js** | 96% | 91% | 100% | 96% | ✅ Excellent |
 | **VibeRestClient.js** | 95% | 92% | 100% | 95% | ✅ Good |
 | **http.js** | 85% | 100% | 78% | 85% | ✅ Good |
-| **HulyRestClient.js** | 77% | 61% | 69% | 81% | ⚠️ Needs Work |
+| **LegacyRestClient.js** | 77% | 61% | 69% | 81% | ⚠️ Needs Work |
 | **database.js** | 67% | 69% | 79% | 66% | ⚠️ Needs Work |
-| **HulyService.js** | 0% | 0% | 0% | 0% | ❌ Missing |
+| **LegacyService.js** | 0% | 0% | 0% | 0% | ❌ Missing |
 | **VibeService.js** | 0% | 0% | 0% | 0% | ❌ Missing |
 | **SyncOrchestrator.js** | 0% | 0% | 0% | 0% | ❌ Missing |
 | **HealthService.js** | 0% | 0% | 0% | 0% | ❌ Missing |
@@ -49,13 +49,13 @@
 
 **Critical Gaps (Block Development):**
 - ❌ **SyncOrchestrator** - 457 lines of core sync logic untested
-- ❌ **HulyService** - 279 lines of API wrapper untested
+- ❌ **LegacyService** - 279 lines of API wrapper untested
 - ❌ **VibeService** - 228 lines of API wrapper untested
 - ❌ **HealthService** - 289 lines of metrics/health untested
 
 **Important Gaps (Risk to Stability):**
 - ⚠️ **Database** - Letta integration methods (423-452, 545-610)
-- ⚠️ **HulyRestClient** - Error handling paths (253-343)
+- ⚠️ **LegacyRestClient** - Error handling paths (253-343)
 - ⚠️ **LettaService** - 1,923 lines, zero tests!
 
 ---
@@ -64,20 +64,20 @@
 
 ### Phase 1: Critical Foundation (2-3 days)
 
-#### 1.1 HulyService Tests
-**File:** `tests/unit/HulyService.test.js`  
+#### 1.1 LegacyService Tests
+**File:** `tests/unit/LegacyService.test.js`
 **Priority:** 🔴 Critical
 
 ```javascript
-describe('HulyService', () => {
-  describe('fetchHulyProjects', () => {
+describe('LegacyService', () => {
+  describe('fetchLegacyProjects', () => {
     it('should return projects from REST client');
     it('should handle empty project list');
     it('should handle API errors gracefully');
     it('should record API latency');
   });
 
-  describe('fetchHulyIssues', () => {
+  describe('fetchLegacyIssues', () => {
     it('should fetch issues for project');
     it('should support incremental sync with lastSyncTime');
     it('should handle pagination');
@@ -85,7 +85,7 @@ describe('HulyService', () => {
     it('should handle network errors');
   });
 
-  describe('updateHulyIssueStatus', () => {
+  describe('updateLegacyIssueStatus', () => {
     it('should update via REST client');
     it('should update via MCP client');
     it('should respect dry-run mode');
@@ -93,7 +93,7 @@ describe('HulyService', () => {
     it('should handle update failures');
   });
 
-  describe('updateHulyIssueDescription', () => {
+  describe('updateLegacyIssueDescription', () => {
     it('should update via REST client');
     it('should update via MCP client');
     it('should respect dry-run mode');
@@ -105,7 +105,7 @@ describe('HulyService', () => {
 **Estimated:** 50-60 tests, 3-4 hours
 
 #### 1.2 VibeService Tests
-**File:** `tests/unit/VibeService.test.js`  
+**File:** `tests/unit/VibeService.test.js`
 **Priority:** 🔴 Critical
 
 ```javascript
@@ -132,7 +132,7 @@ describe('VibeService', () => {
   });
 
   describe('createVibeTask', () => {
-    it('should create task with Huly metadata');
+    it('should create task with Legacy metadata');
     it('should map status correctly');
     it('should respect dry-run mode');
     it('should record API latency');
@@ -156,7 +156,7 @@ describe('VibeService', () => {
 **Estimated:** 40-50 tests, 3-4 hours
 
 #### 1.3 HealthService Tests
-**File:** `tests/unit/HealthService.test.js`  
+**File:** `tests/unit/HealthService.test.js`
 **Priority:** 🔴 Critical
 
 ```javascript
@@ -168,7 +168,7 @@ describe('HealthService', () => {
   });
 
   describe('recordApiLatency', () => {
-    it('should record huly API latency');
+    it('should record legacy API latency');
     it('should record vibe API latency');
     it('should handle different operations');
   });
@@ -198,13 +198,13 @@ describe('HealthService', () => {
 **Estimated:** 30-40 tests, 2-3 hours
 
 #### 1.4 SyncOrchestrator Tests
-**File:** `tests/unit/SyncOrchestrator.test.js`  
+**File:** `tests/unit/SyncOrchestrator.test.js`
 **Priority:** 🔴 Critical
 
 ```javascript
 describe('SyncOrchestrator', () => {
-  describe('syncHulyToVibe', () => {
-    it('should sync projects from Huly to Vibe');
+  describe('syncLegacyToVibe', () => {
+    it('should sync projects from Legacy to Vibe');
     it('should create missing Vibe projects');
     it('should create missing Vibe tasks');
     it('should update existing task statuses');
@@ -226,16 +226,16 @@ describe('SyncOrchestrator', () => {
   });
 
   describe('bidirectional sync', () => {
-    it('should sync Vibe changes back to Huly');
+    it('should sync Vibe changes back to Legacy');
     it('should avoid sync loops');
-    it('should handle conflicts (Huly wins)');
-    it('should update descriptions if Huly changed');
+    it('should handle conflicts (Legacy wins)');
+    it('should update descriptions if Legacy changed');
     it('should update statuses if Vibe changed');
   });
 
   describe('error handling', () => {
     it('should continue on single project failure');
-    it('should handle Huly API errors');
+    it('should handle Legacy API errors');
     it('should handle Vibe API errors');
     it('should handle database errors');
   });
@@ -249,7 +249,7 @@ describe('SyncOrchestrator', () => {
 ### Phase 2: Service Layer Completeness (1-2 days)
 
 #### 2.1 LettaService Tests (High Value)
-**File:** `tests/unit/LettaService.test.js`  
+**File:** `tests/unit/LettaService.test.js`
 **Priority:** 🟡 Important
 
 **Focus Areas:**
@@ -261,7 +261,7 @@ describe('SyncOrchestrator', () => {
 **Estimated:** 100+ tests, 8-10 hours
 
 #### 2.2 Complete Database Coverage
-**File:** `tests/unit/database.test.js` (extend existing)  
+**File:** `tests/unit/database.test.js` (extend existing)
 **Priority:** 🟡 Important
 
 **Add Tests For:**
@@ -271,8 +271,8 @@ describe('SyncOrchestrator', () => {
 
 **Estimated:** 20-30 tests, 2-3 hours
 
-#### 2.3 Complete HulyRestClient Coverage
-**File:** `tests/unit/HulyRestClient.test.js` (extend existing)  
+#### 2.3 Complete LegacyRestClient Coverage
+**File:** `tests/unit/LegacyRestClient.test.js` (extend existing)
 **Priority:** 🟡 Important
 
 **Add Tests For:**
@@ -287,15 +287,15 @@ describe('SyncOrchestrator', () => {
 ### Phase 3: Integration & E2E (1 day)
 
 #### 3.1 Full Sync Cycle Integration Test
-**File:** `tests/integration/fullSyncCycle.test.js`  
+**File:** `tests/integration/fullSyncCycle.test.js`
 **Priority:** 🔴 Critical
 
 ```javascript
 describe('Full Sync Cycle Integration', () => {
   it('should complete full sync with mock APIs', async () => {
-    // Setup mock Huly with projects and issues
+    // Setup mock Legacy with projects and issues
     // Setup mock Vibe with projects
-    // Run syncHulyToVibe
+    // Run syncLegacyToVibe
     // Verify all projects created
     // Verify all issues synced
     // Verify database state
@@ -313,12 +313,12 @@ describe('Full Sync Cycle Integration', () => {
 **Estimated:** 10-15 tests, 4-5 hours
 
 #### 3.2 Error Scenario Integration Tests
-**File:** `tests/integration/errorScenarios.test.js`  
+**File:** `tests/integration/errorScenarios.test.js`
 **Priority:** 🟡 Important
 
 ```javascript
 describe('Error Scenarios', () => {
-  it('should handle Huly API timeout');
+  it('should handle Legacy API timeout');
   it('should handle Vibe API 500 error');
   it('should handle database lock');
   it('should handle network disconnection');
@@ -378,10 +378,10 @@ describe('Feature', () => {
   it('should do something when condition', () => {
     // Arrange - Setup test data and mocks
     const mockClient = { fetch: vi.fn() };
-    
+
     // Act - Execute the code under test
     const result = await functionUnderTest(mockClient);
-    
+
     // Assert - Verify the outcome
     expect(result).toEqual(expectedValue);
     expect(mockClient.fetch).toHaveBeenCalledWith(expectedArgs);
@@ -397,7 +397,7 @@ describe('Feature', () => {
 - Logger (can capture output)
 
 **Mock For:**
-- External APIs (Huly, Vibe, Letta)
+- External APIs (Legacy, Vibe, Letta)
 - File system operations
 - Network calls
 - Time-dependent operations
@@ -406,14 +406,14 @@ describe('Feature', () => {
 
 ```javascript
 // tests/__fixtures__/testData.js
-export const mockHulyProject = {
+export const mockLegacyProject = {
   identifier: 'TEST',
   name: 'Test Project',
   description: 'Test description',
   status: 'active'
 };
 
-export const mockHulyIssue = {
+export const mockLegacyIssue = {
   identifier: 'TEST-1',
   title: 'Test Issue',
   description: 'Issue description',
@@ -484,46 +484,46 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [18.x, 20.x]
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run linter
         run: npm run lint
-      
+
       - name: Run type check
         run: npm run type-check
-      
+
       - name: Run unit tests
         run: npm run test:unit
-      
+
       - name: Run integration tests
         run: npm run test:integration
-      
+
       - name: Run performance benchmarks
         run: npm run test:performance
-      
+
       - name: Generate coverage report
         run: npm run test:coverage
-      
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage/coverage-final.json
           fail_ci_if_error: true
-      
+
       - name: Check coverage thresholds
         run: |
           npm run test:coverage -- --thresholds.statements=95 \
@@ -554,13 +554,13 @@ npm test
 npm run test:coverage
 
 # Run specific test file
-npm test tests/unit/HulyService.test.js
+npm test tests/unit/LegacyService.test.js
 
 # Run tests in watch mode
 npm test -- --watch
 
 # Run tests with specific pattern
-npm test -- --grep="HulyService"
+npm test -- --grep="LegacyService"
 
 # Run only unit tests
 npm run test:unit
@@ -583,7 +583,7 @@ npm run type-check
 ## Success Metrics
 
 ### Phase 1 Complete (Critical Foundation)
-- ✅ 95%+ coverage on HulyService, VibeService, HealthService
+- ✅ 95%+ coverage on LegacyService, VibeService, HealthService
 - ✅ 90%+ coverage on SyncOrchestrator
 - ✅ 500+ total tests passing
 - ✅ All critical paths tested
@@ -614,8 +614,8 @@ npm run type-check
 
 | Phase | Tasks | Tests | Hours | Days |
 |-------|-------|-------|-------|------|
-| Phase 1 | HulyService, VibeService, HealthService, SyncOrchestrator | +180 | 18-22 | 2-3 |
-| Phase 2 | LettaService, Database, HulyRestClient | +135 | 12-15 | 1-2 |
+| Phase 1 | LegacyService, VibeService, HealthService, SyncOrchestrator | +180 | 18-22 | 2-3 |
+| Phase 2 | LettaService, Database, LegacyRestClient | +135 | 12-15 | 1-2 |
 | Phase 3 | Integration, Error Scenarios | +25 | 7-9 | 1 |
 | Phase 4 | API Latency, Performance, Mutation | +40 | 6-8 | 1 |
 | **Total** | **All Tests** | **+380** | **43-54** | **5-7** |
@@ -669,7 +669,7 @@ npm run type-check
 Current test suite is **good but incomplete**. The main gaps are:
 
 1. **SyncOrchestrator** - Core business logic untested (457 lines)
-2. **Service Layer** - HulyService, VibeService, HealthService untested
+2. **Service Layer** - LegacyService, VibeService, HealthService untested
 3. **LettaService** - Largest file (1,923 lines) with zero tests
 
 Completing Phase 1 (2-3 days) will give you **solid confidence** for continued development. Completing all phases (5-7 days) will give you **maximum confidence** for production deployment.

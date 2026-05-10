@@ -1,8 +1,8 @@
-# Huly-Vibe Sync Frontend Architecture
+# Vibe Sync Frontend Architecture
 
 ## Overview
 
-This document describes the architecture of the Huly-Vibe Sync management dashboard - a modern web-based UI for monitoring and configuring the bidirectional synchronization service.
+This document describes the architecture of the Vibe Sync management dashboard - a modern web-based UI for monitoring and configuring the bidirectional synchronization service.
 
 ## Architecture Principles
 
@@ -89,7 +89,7 @@ ui/                                    # Frontend application root
 │   │
 │   ├── history/                       # Sync history components
 │   │   ├── SyncTimeline.tsx           # Timeline view of syncs
-│   │   ├── IssueMappingTable.tsx      # Huly ↔ Vibe mappings
+│   │   ├── IssueMappingTable.tsx      # Legacy ↔ Vibe mappings
 │   │   └── ConflictResolver.tsx       # Manual conflict resolution
 │   │
 │   └── shared/                        # Shared/common components
@@ -175,8 +175,8 @@ POST /api/sync/stop                 - Stop current sync (graceful)
 ```
 GET /api/sync/history                    - Get sync history (paginated)
 GET /api/sync/history/:syncId            - Get specific sync details
-GET /api/sync/mappings                   - Get Huly ↔ Vibe mappings
-GET /api/sync/mappings/:hulyIdentifier   - Get mapping for specific issue
+GET /api/sync/mappings                   - Get Legacy ↔ Vibe mappings
+GET /api/sync/mappings/:legacyIdentifier   - Get mapping for specific issue
 ```
 
 ### 4. Real-time Events (SSE)
@@ -506,11 +506,11 @@ Users
 ### 1. Local Development
 ```bash
 # Terminal 1: Backend
-cd /home/user/huly-vibe-sync
+cd /home/user/vibe-sync
 npm run dev
 
 # Terminal 2: Frontend
-cd /home/user/huly-vibe-sync/ui
+cd /home/user/vibe-sync/ui
 npm run dev
 ```
 
@@ -596,4 +596,4 @@ For questions or issues:
 
 **Last Updated:** 2025-11-11
 **Version:** 1.0.0
-**Authors:** Huly-Vibe Sync Team
+**Authors:** Vibe Sync Team

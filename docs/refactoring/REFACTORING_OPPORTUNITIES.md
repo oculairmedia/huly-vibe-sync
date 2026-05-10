@@ -1,7 +1,7 @@
 # Refactoring Opportunities Analysis
 
-**Date:** 2025-11-04  
-**Current Score:** 8.5/10  
+**Date:** 2025-11-04
+**Current Score:** 8.5/10
 **Code Quality:** Good, but room for improvement
 
 ## Executive Summary
@@ -23,9 +23,9 @@ The codebase has been well-refactored through Phase 1-4, with clear separation o
 **Issue:** Multiple files still use `console.log/error` instead of structured logging
 
 **Files Affected:**
-- `lib/HulyRestClient.js` - 16 console statements
+- `lib/LegacyRestClient.js` - 16 console statements
 - `lib/VibeRestClient.js` - Similar pattern
-- `lib/HulyService.js` - 20+ console statements
+- `lib/LegacyService.js` - 20+ console statements
 - `lib/VibeService.js` - 15+ console statements
 - `lib/LettaService.js` - 50+ console statements
 
@@ -37,8 +37,8 @@ The codebase has been well-refactored through Phase 1-4, with clear separation o
 **Recommendation:**
 ```javascript
 // Before
-console.log('[Huly] Fetching projects...');
-console.error('[Huly] Error:', error.message);
+console.log('[Legacy] Fetching projects...');
+console.error('[Legacy] Error:', error.message);
 
 // After
 import { logger } from './logger.js';
@@ -46,7 +46,7 @@ logger.info({ operation: 'fetchProjects' }, 'Fetching projects');
 logger.error({ err: error, operation: 'fetchProjects' }, 'Fetch failed');
 ```
 
-**Estimated Effort:** 2-3 hours  
+**Estimated Effort:** 2-3 hours
 **PR:** PR 2 (Resilience) or separate PR
 
 ---
@@ -99,7 +99,7 @@ export class NotFoundError extends PermanentError {}
 - Better error reporting
 - Clearer error handling patterns
 
-**Estimated Effort:** 3-4 hours  
+**Estimated Effort:** 3-4 hours
 **PR:** PR 2 (Resilience & Error Taxonomy)
 
 ---
@@ -119,25 +119,25 @@ export async function withRetry(fn, {
   onRetry = (attempt, err) => {}
 } = {}) {
   let lastError;
-  
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
-      
+
       if (attempt === maxAttempts || !shouldRetry(error)) {
         throw error;
       }
-      
+
       const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
       const jitter = Math.random() * 0.1 * delay;
-      
+
       onRetry(attempt, error);
       await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
   }
-  
+
   throw lastError;
 }
 ```
@@ -145,17 +145,17 @@ export async function withRetry(fn, {
 **Usage:**
 ```javascript
 const projects = await withRetry(
-  () => hulyClient.listProjects(),
+  () => legacyClient.listProjects(),
   {
     maxAttempts: 3,
     onRetry: (attempt, err) => {
-      logger.warn({ attempt, err }, 'Retrying Huly API call');
+      logger.warn({ attempt, err }, 'Retrying Legacy API call');
     }
   }
 );
 ```
 
-**Estimated Effort:** 2-3 hours  
+**Estimated Effort:** 2-3 hours
 **PR:** PR 2 (Resilience)
 
 ---
@@ -200,7 +200,7 @@ export class CircuitBreaker {
 
   onSuccess() {
     this.failures = 0;
-    
+
     if (this.state === 'HALF_OPEN') {
       this.successes++;
       if (this.successes >= this.successThreshold) {
@@ -213,7 +213,7 @@ export class CircuitBreaker {
   onFailure() {
     this.failures++;
     this.successes = 0;
-    
+
     if (this.failures >= this.failureThreshold) {
       this.state = 'OPEN';
       this.nextAttempt = Date.now() + this.timeout;
@@ -222,14 +222,14 @@ export class CircuitBreaker {
 }
 ```
 
-**Estimated Effort:** 3-4 hours  
+**Estimated Effort:** 3-4 hours
 **PR:** PR 2 (Resilience)
 
 ---
 
 ### 5. Consolidate API Client Error Handling
 
-**Issue:** HulyRestClient and VibeRestClient have duplicated error handling
+**Issue:** LegacyRestClient and VibeRestClient have duplicated error handling
 
 **Current:**
 ```javascript
@@ -270,11 +270,11 @@ export class ApiClient {
             ...options,
             signal: controller.signal
           });
-          
+
           if (!res.ok) {
             throw this.createError(res);
           }
-          
+
           return res;
         }, this.retryConfig);
       });
@@ -311,7 +311,7 @@ export class ApiClient {
 - Consistent error handling
 - Easier to add features (auth, headers, etc.)
 
-**Estimated Effort:** 4-5 hours  
+**Estimated Effort:** 4-5 hours
 **PR:** PR 3 or PR 4
 
 ---
@@ -338,7 +338,7 @@ lib/letta/
   └── LettaHelpers.js       (Utility functions, 400 lines)
 ```
 
-**Estimated Effort:** 3-4 hours  
+**Estimated Effort:** 3-4 hours
 **PR:** PR 4 or separate refactoring PR
 
 ---
@@ -352,7 +352,7 @@ Add comprehensive JSDoc with type definitions:
 
 ```javascript
 /**
- * @typedef {Object} HulyProject
+ * @typedef {Object} LegacyProject
  * @property {string} identifier - Project identifier (e.g., "PROJ")
  * @property {string} name - Project display name
  * @property {string} [description] - Project description
@@ -361,12 +361,12 @@ Add comprehensive JSDoc with type definitions:
  */
 
 /**
- * Fetch projects from Huly
- * @param {import('./HulyRestClient').HulyRestClient} hulyClient
+ * Fetch projects from Legacy
+ * @param {import('./LegacyRestClient').LegacyRestClient} legacyClient
  * @param {Object} config
- * @returns {Promise<HulyProject[]>}
+ * @returns {Promise<LegacyProject[]>}
  */
-export async function fetchHulyProjects(hulyClient, config = {}) {
+export async function fetchLegacyProjects(legacyClient, config = {}) {
   // ...
 }
 ```
@@ -377,7 +377,7 @@ export async function fetchHulyProjects(hulyClient, config = {}) {
 - Documentation generation
 - No runtime overhead
 
-**Estimated Effort:** 6-8 hours (across all files)  
+**Estimated Effort:** 6-8 hours (across all files)
 **PR:** Separate documentation PR
 
 ---
@@ -395,15 +395,15 @@ Use a schema validator like Joi or Zod:
 import Joi from 'joi';
 
 const configSchema = Joi.object({
-  huly: Joi.object({
+  legacy: Joi.object({
     apiUrl: Joi.string().uri().required(),
     token: Joi.string().required(),
   }).required(),
-  
+
   vibe: Joi.object({
     apiUrl: Joi.string().uri().required(),
   }).required(),
-  
+
   sync: Joi.object({
     interval: Joi.number().min(10).default(30),
     dryRun: Joi.boolean().default(false),
@@ -417,18 +417,18 @@ export function validateConfig(config) {
     abortEarly: false,
     stripUnknown: true,
   });
-  
+
   if (error) {
     throw new ValidationError('Invalid configuration', {
       details: error.details,
     });
   }
-  
+
   return value;
 }
 ```
 
-**Estimated Effort:** 2-3 hours  
+**Estimated Effort:** 2-3 hours
 **PR:** Separate config PR
 
 ---
@@ -459,14 +459,14 @@ export function withMetrics(serviceName, operationName) {
 }
 
 // Usage
-export const fetchHulyProjects = withMetrics('huly', 'listProjects')(
-  async function(hulyClient, config = {}) {
+export const fetchLegacyProjects = withMetrics('legacy', 'listProjects')(
+  async function(legacyClient, config = {}) {
     // Original implementation
   }
 );
 ```
 
-**Estimated Effort:** 2-3 hours  
+**Estimated Effort:** 2-3 hours
 **PR:** Separate monitoring PR
 
 ---
@@ -481,11 +481,11 @@ Add indexes for common queries:
 ```sql
 CREATE INDEX IF NOT EXISTS idx_projects_identifier ON projects(identifier);
 CREATE INDEX IF NOT EXISTS idx_projects_last_sync ON projects(last_sync_at);
-CREATE INDEX IF NOT EXISTS idx_issue_mappings_lookup ON issue_mappings(huly_issue_id, vibe_task_id);
+CREATE INDEX IF NOT EXISTS idx_issue_mappings_lookup ON issue_mappings(legacy_issue_id, vibe_task_id);
 CREATE INDEX IF NOT EXISTS idx_sync_runs_timestamp ON sync_runs(started_at DESC);
 ```
 
-**Estimated Effort:** 1-2 hours  
+**Estimated Effort:** 1-2 hours
 **PR:** Database optimization PR
 
 ---

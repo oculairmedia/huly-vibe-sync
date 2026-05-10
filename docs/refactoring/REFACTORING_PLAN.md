@@ -1,4 +1,4 @@
-# Huly-Vibe Sync - Comprehensive Refactoring Plan
+# Vibe Sync - Comprehensive Refactoring Plan
 
 ## Executive Summary
 
@@ -71,15 +71,15 @@ if (trimmed.startsWith('📁 ') && trimmed.includes('(') && trimmed.endsWith(')'
 
 **Solutions:**
 1. **Short-term:** Add validation and fallbacks
-2. **Long-term:** Request JSON output from Huly MCP or use structured parser
+2. **Long-term:** Request JSON output from Legacy MCP or use structured parser
 
 ---
 
-### 3. **Giant Function: `syncHulyToVibe` (185 lines)**
+### 3. **Giant Function: `syncLegacyToVibe` (185 lines)**
 
 **Lines 835-1019:** This function does EVERYTHING:
 - Fetches projects
-- Filters projects  
+- Filters projects
 - Creates projects
 - Syncs issues
 - Handles errors
@@ -87,16 +87,16 @@ if (trimmed.startsWith('📁 ') && trimmed.includes('(') && trimmed.endsWith(')'
 
 **Refactor to:**
 ```javascript
-async function syncHulyToVibe(hulyClient, vibeClient, db) {
+async function syncLegacyToVibe(legacyClient, vibeClient, db) {
   const syncId = db.startSyncRun();
-  
+
   try {
-    const projects = await fetchAndFilterProjects(hulyClient, db);
-    const results = await processProjects(projects, hulyClient, vibeClient, db);
-    
+    const projects = await fetchAndFilterProjects(legacyClient, db);
+    const results = await processProjects(projects, legacyClient, vibeClient, db);
+
     const stats = generateStats(results);
     db.completeSyncRun(syncId, stats);
-    
+
     return stats;
   } catch (error) {
     db.completeSyncRun(syncId, { error: error.message });
@@ -117,13 +117,13 @@ async function syncHulyToVibe(hulyClient, vibeClient, db) {
 export async function withRetry(fn, options = {}) {
   const maxRetries = options.maxRetries || 3;
   const baseDelay = options.baseDelay || 1000;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       if (attempt === maxRetries) throw error;
-      
+
       const delay = baseDelay * Math.pow(2, attempt - 1);
       console.log(`[Retry] Attempt ${attempt} failed, retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -140,7 +140,7 @@ export async function withRetry(fn, options = {}) {
 
 **Current:**
 ```javascript
-console.log('[Huly] Found ${projects.length} projects');
+console.log('[Legacy] Found ${projects.length} projects');
 ```
 
 **Problems:**
@@ -185,8 +185,8 @@ const config = {
 ```javascript
 function validateConfig(config) {
   const errors = [];
-  
-  if (!config.huly.apiUrl) errors.push('HULY_API_URL required');
+
+  if (!config.legacy.apiUrl) errors.push('REMOVED_API_URL required');
   if (!config.vibeKanban.apiUrl) errors.push('VIBE_API_URL required');
   if (isNaN(config.sync.interval) || config.sync.interval < 0) {
     errors.push('SYNC_INTERVAL must be positive number');
@@ -194,7 +194,7 @@ function validateConfig(config) {
   if (config.sync.maxWorkers < 1 || config.sync.maxWorkers > 50) {
     errors.push('MAX_WORKERS must be 1-50');
   }
-  
+
   if (errors.length > 0) {
     console.error('Configuration errors:', errors);
     process.exit(1);
@@ -252,12 +252,12 @@ async function withTimeout(promise, timeoutMs, operation) {
 
 **Problem:** Timeout doesn't CANCEL the underlying promise. It continues running, potentially causing resource leaks.
 
-**Better:** Use `AbortController` (like HulyRestClient does):
+**Better:** Use `AbortController` (like LegacyRestClient does):
 ```javascript
 async function withTimeout(promiseFn, timeoutMs, operation) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   try {
     return await promiseFn(controller.signal);
   } catch (error) {
@@ -316,19 +316,19 @@ const projectActivityCache = new Map(); // Unbounded growth
 ```
 lib/
   clients/
-    HulyRestClient.js      ✅ Already exists
+    LegacyRestClient.js      ✅ Already exists
     MCPClient.js           ⏳ Extract from index.js
     VibeClient.js          ⏳ Wrapper for Vibe REST API
-  
+
   parsers/
-    huly-text-parser.js    ⏳ Extract parseProjectsFromText, parseIssuesFromText
-    status-mapper.js       ⏳ mapHulyStatusToVibe, mapVibeStatusToHuly
-  
+    legacy-text-parser.js    ⏳ Extract parseProjectsFromText, parseIssuesFromText
+    status-mapper.js       ⏳ mapLegacyStatusToVibe, mapVibeStatusToLegacy
+
   services/
     sync-service.js        ⏳ Main sync orchestration
     project-sync.js        ⏳ Project-level operations
     issue-sync.js          ⏳ Issue-level operations
-  
+
   utils/
     database.js            ✅ Already created!
     logger.js              ⏳ Structured logging
@@ -368,7 +368,7 @@ index.js                   ⏳ Minimal entry point (< 100 lines)
 
 ### Phase 4: Refactor Large Functions (2 days)
 
-1. Break down `syncHulyToVibe`
+1. Break down `syncLegacyToVibe`
 2. Extract parsers
 3. Extract services
 4. Add unit tests
@@ -435,7 +435,7 @@ for (const project of projectsToSync) {
 
 ### 1. Add Database (30 minutes)
 ```bash
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 npm install better-sqlite3
 # Integration code below
 ```

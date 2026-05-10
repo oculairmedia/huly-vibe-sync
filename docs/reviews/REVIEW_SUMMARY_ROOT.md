@@ -1,7 +1,7 @@
-# Huly-Vibe Sync - Complete Code Review Summary
+# Vibe Sync - Complete Code Review Summary
 
-**Reviewed:** January 27, 2025  
-**Reviewer:** OpenCode AI  
+**Reviewed:** January 27, 2025
+**Reviewer:** OpenCode AI
 **Request:** "Review from refactoring perspective + need controllable DB for enriched cache"
 
 ---
@@ -12,7 +12,7 @@
 2. **Incremental Sync** - Timestamp-based filtering reduces load
 3. **Parallel Processing** - Configurable workers for speed
 4. **Smart Caching** - Skips empty projects
-5. **Bidirectional Sync** - Huly ↔ Vibe status updates work
+5. **Bidirectional Sync** - Legacy ↔ Vibe status updates work
 6. **Docker Deployment** - Containerized with health checks
 
 ---
@@ -21,7 +21,7 @@
 
 ### 1. **FILE-BASED STATE IS A PROBLEM** ⭐ YOUR INSTINCT WAS RIGHT!
 
-**Current:** JSON file + in-memory Map  
+**Current:** JSON file + in-memory Map
 **Problems:**
 - No atomic writes → corruption risk
 - No locking → race conditions
@@ -42,19 +42,19 @@
 
 ### 2. **Fragile Text Parsing**
 
-Parsing emoji-decorated text (`📁`, `📋`) from Huly MCP:
+Parsing emoji-decorated text (`📁`, `📋`) from Legacy MCP:
 ```javascript
 if (trimmed.startsWith('📁 ') && trimmed.includes('('))
 ```
 
-**Problem:** Breaks if format changes  
-**Solution:** Request JSON from Huly or add validation
+**Problem:** Breaks if format changes
+**Solution:** Request JSON from Legacy or add validation
 
 ---
 
 ### 3. **Giant Function (185 lines)**
 
-`syncHulyToVibe` does everything:
+`syncLegacyToVibe` does everything:
 - Fetch projects
 - Filter projects
 - Sync issues
@@ -67,7 +67,7 @@ if (trimmed.startsWith('📁 ') && trimmed.includes('('))
 
 ### 4. **No Retry Logic**
 
-If API fails → entire sync fails  
+If API fails → entire sync fails
 **Solution:** Add exponential backoff retry
 
 ---
@@ -75,10 +75,10 @@ If API fails → entire sync fails
 ### 5. **No Structured Logging**
 
 ```javascript
-console.log('[Huly] Found projects');
+console.log('[Legacy] Found projects');
 ```
 
-**Problem:** Can't filter, parse, or analyze  
+**Problem:** Can't filter, parse, or analyze
 **Solution:** JSON structured logs with levels
 
 ---
@@ -108,7 +108,7 @@ setTimeout(resolve, 50);  // Why 50?
 
 ### 8. **Weak Timeout**
 
-Current timeout doesn't cancel the underlying promise  
+Current timeout doesn't cancel the underlying promise
 **Solution:** Use AbortController
 
 ---
@@ -116,7 +116,7 @@ Current timeout doesn't cancel the underlying promise
 ## 📁 Files Reviewed
 
 - ✅ `index.js` (1110 lines) - Main sync service
-- ✅ `lib/HulyRestClient.js` (240 lines) - REST API client
+- ✅ `lib/LegacyRestClient.js` (240 lines) - REST API client
 - ✅ `sync-projects.js` (241 lines) - Project sync script
 - ✅ `create-missing-projects.js` (146 lines) - Quick creator
 - ✅ `package.json` - Dependencies
@@ -135,8 +135,8 @@ Current timeout doesn't cancel the underlying promise
 - ⏳ Test migration
 - ⏳ Deploy
 
-**Impact:** Fixes corruption, enables queries, adds history  
-**Effort:** 4-6 hours  
+**Impact:** Fixes corruption, enables queries, adds history
+**Effort:** 4-6 hours
 **Risk:** Medium (needs thorough testing)
 
 ---
@@ -146,8 +146,8 @@ Current timeout doesn't cancel the underlying promise
 - Create `lib/config-validator.js`
 - Update index.js
 
-**Impact:** Prevents invalid configs  
-**Effort:** 2 hours  
+**Impact:** Prevents invalid configs
+**Effort:** 2 hours
 **Risk:** Low
 
 ---
@@ -156,8 +156,8 @@ Current timeout doesn't cancel the underlying promise
 - Create `lib/logger.js`
 - Replace console.log calls
 
-**Impact:** Better debugging, monitoring  
-**Effort:** 2-3 hours  
+**Impact:** Better debugging, monitoring
+**Effort:** 2-3 hours
 **Risk:** Low
 
 ---
@@ -166,19 +166,19 @@ Current timeout doesn't cancel the underlying promise
 - Create `lib/retry.js`
 - Wrap API calls
 
-**Impact:** Resilience to transient failures  
-**Effort:** 2-3 hours  
+**Impact:** Resilience to transient failures
+**Effort:** 2-3 hours
 **Risk:** Low
 
 ---
 
 ### Priority 5: Refactor Large Functions (MEDIUM)
-- Break down `syncHulyToVibe`
+- Break down `syncLegacyToVibe`
 - Extract parsers
 - Extract services
 
-**Impact:** Maintainability  
-**Effort:** 4-6 hours  
+**Impact:** Maintainability
+**Effort:** 4-6 hours
 **Risk:** Medium (regression risk)
 
 ---
@@ -201,11 +201,11 @@ db.getProject('HULLY');
 ```javascript
 {
   identifier: 'HULLY',
-  name: 'Huly Project',
+  name: 'Legacy Project',
   vibe_id: 42,
   issue_count: 27,
   last_sync_at: 1761595909665,
-  filesystem_path: '/opt/stacks/huly',
+  filesystem_path: '/opt/stacks/legacy',
   status: 'active'
 }
 ```

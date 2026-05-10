@@ -1,6 +1,6 @@
 # Bidirectional Sync Feature Documentation
 
-Documentation for the bidirectional synchronization feature between Huly and Vibe Kanban.
+Documentation for the bidirectional synchronization feature between Legacy and Vibe Kanban.
 
 ## Implementation Status
 
@@ -19,7 +19,7 @@ Documentation for the bidirectional synchronization feature between Huly and Vib
 ## Overview
 
 This feature enables bidirectional synchronization between:
-- Huly project management system
+- Legacy project management system
 - Vibe Kanban boards
 
 Changes made in either system are automatically synced to the other, maintaining consistency across platforms.

@@ -21,7 +21,7 @@ This file **can be committed** to git and shared with the team.
 Instance-specific agent persistence:
 - Maps project identifiers to agent IDs
 - Auto-generated and updated during sync runs
-- One agent ID per Huly project
+- One agent ID per Legacy project
 
 This file is **gitignored** and personal to each deployment instance.
 
@@ -49,7 +49,7 @@ You can use the Letta CLI to interact with agents directly:
 
 ```bash
 # Navigate to project directory
-cd /opt/stacks/huly-vibe-sync
+cd /opt/stacks/vibe-sync
 
 # List available agents
 letta agents list
@@ -89,7 +89,7 @@ docker-compose restart
 ## Integration
 
 Agent IDs are automatically synchronized between:
-1. **SQLite Database** (`huly-vibe-sync.db`) - Primary storage
+1. **SQLite Database** (`vibe-sync.db`) - Primary storage
 2. **`.letta/settings.local.json`** - Letta-Code compatible format
 
 Both sources are kept in sync during every sync cycle.
@@ -158,7 +158,7 @@ Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
 ```json
 {
   "permissions": {
-    "allow": ["huly_*", "vibe_*", "filesystem_read_file(*)"],
+    "allow": ["legacy_*", "vibe_*", "filesystem_read_file(*)"],
     "deny": ["filesystem_write_file(*)", "filesystem_delete_file(*)"],
     "default_mode": "prompt"
   }
@@ -171,7 +171,7 @@ Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
 2. **Hierarchical Memory**: Global + project + agent-specific blocks
 3. **Control Agent Pattern**: Centralized configuration management
 4. **Permission Control**: Fine-grained tool access (allow/deny patterns)
-5. **Human-Readable**: JSON format for easy inspection and debugging  
+5. **Human-Readable**: JSON format for easy inspection and debugging
 6. **Portable**: Can be backed up, copied, or version controlled (via settings.json)
 7. **Dual Persistence**: Redundancy with database ensures no data loss
 8. **Fast Lookup**: Quick agent ID resolution without database queries

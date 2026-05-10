@@ -90,13 +90,38 @@ try {
   const scanResult = projectRegistry.scanProjects();
   logger.info(
     { discovered: scanResult.discovered, updated: scanResult.updated },
-    'ProjectRegistry initial scan complete'
+    'ProjectRegistry initial scan complete',
   );
 } catch (registryError) {
   logger.warn(
     { err: registryError },
-    'Failed to initialize ProjectRegistry, continuing without it'
+    'Failed to initialize ProjectRegistry, continuing without it',
   );
+}
+
+let doltHubProvisioner = null;
+if (config.doltHub?.enabled || config.doltHub?.dryRun) {
+  try {
+    const { createDoltHubProvisioningService } = await import(
+      './lib/DoltHubProvisioningService.js'
+    );
+    doltHubProvisioner = createDoltHubProvisioningService({
+      config: config.doltHub,
+      db,
+      logger,
+    });
+    logger.info(
+      { dryRun: config.doltHub.dryRun, owner: config.doltHub.owner },
+      'DoltHub Beads remote provisioning service initialized',
+    );
+  } catch (doltHubError) {
+    logger.warn(
+      { err: doltHubError },
+      'Failed to initialize DoltHub provisioning service, Beads remote provisioning disabled',
+    );
+  }
+} else {
+  logger.info('DoltHub Beads remote provisioning disabled');
 }
 
 let lettaService = null;
@@ -107,7 +132,7 @@ if (isLettaEnabled(config)) {
   } catch (lettaError) {
     logger.warn(
       { err: lettaError },
-      'Failed to initialize Letta service, PM agent integration disabled'
+      'Failed to initialize Letta service, PM agent integration disabled',
     );
   }
 } else {
@@ -124,7 +149,7 @@ if (config.bookstack?.enabled) {
   } catch (bookstackError) {
     logger.warn(
       { err: bookstackError },
-      'Failed to initialize BookStack service, documentation sync disabled'
+      'Failed to initialize BookStack service, documentation sync disabled',
     );
   }
 } else {
@@ -150,7 +175,7 @@ if (lettaService && process.env.LETTA_FILE_WATCH !== 'false') {
   } catch (fileWatchError) {
     logger.warn(
       { err: fileWatchError },
-      'Failed to initialize FileWatcher, falling back to periodic sync'
+      'Failed to initialize FileWatcher, falling back to periodic sync',
     );
   }
 }
@@ -169,7 +194,7 @@ if (config.graphiti?.enabled && config.codePerception?.enabled) {
     });
     logger.info('CodePerceptionWatcher initialized - realtime Graphiti sync enabled');
 
-    codePerceptionWatcher.syncWatchedProjects().catch(err => {
+    codePerceptionWatcher.syncWatchedProjects().catch((err) => {
       logger.warn({ err }, 'Initial code perception watcher sync failed');
     });
   } catch (codePerceptionError) {
@@ -206,7 +231,7 @@ async function main() {
     astMemorySync,
     getTemporalOrchestration,
     getSyncTimer: () => syncTimer,
-    setSyncTimer: t => {
+    setSyncTimer: (t) => {
       syncTimer = t;
     },
   });
@@ -230,7 +255,7 @@ async function main() {
     if (bookstackWatchResult.watching > 0) {
       logger.info(
         { watching: bookstackWatchResult.watching, available: bookstackWatchResult.available },
-        'BookStack file watcher active for real-time local→BookStack import'
+        'BookStack file watcher active for real-time local→BookStack import',
       );
     }
   }
@@ -244,6 +269,7 @@ async function main() {
     getTemporalClient: getTemporalOrchestration,
     codePerceptionWatcher,
     projectRegistry,
+    doltHubProvisioner,
   });
 
   await syncController.runSyncWithTimeout();
@@ -253,13 +279,13 @@ async function main() {
     subscribed: false,
     getTemporalOrchestration,
     runSyncWithTimeout: syncController.runSyncWithTimeout,
-    setSyncTimer: t => {
+    setSyncTimer: (t) => {
       syncTimer = t;
     },
   });
 }
 
-main().catch(error => {
+main().catch((error) => {
   logger.fatal({ err: error }, 'Fatal error, exiting');
   process.exit(1);
 });
