@@ -199,3 +199,4 @@
 {"id":"int-5628446c","kind":"field_change","created_at":"2026-05-10T20:28:28.11351923Z","actor":"Claude Code","issue_id":"huly-vibe-sync-tk0","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"implemented"}}
 {"id":"int-a7506e0f","kind":"field_change","created_at":"2026-05-10T20:28:28.202176473Z","actor":"Claude Code","issue_id":"huly-vibe-sync-79n","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"tested"}}
 {"id":"int-2f829e2c","kind":"field_change","created_at":"2026-05-10T20:28:36.022312996Z","actor":"Claude Code","issue_id":"huly-vibe-sync-z2u","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"implemented"}}
+{"id":"int-5b286b37","kind":"field_change","created_at":"2026-05-10T20:46:10.340513494Z","actor":"Claude Code","issue_id":"huly-vibe-sync-3du","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"implemented"}}
