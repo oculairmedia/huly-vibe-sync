@@ -1287,7 +1287,27 @@ describe('createApiServer - HTTP Routes', () => {
     mockDb = {
       getStats: vi.fn(() => ({ tables: 5, total_rows: 100 })),
       getProjectSummary: vi.fn(() => [{ identifier: 'TEST', name: 'Test Project', issueCount: 5 }]),
-      getProjectIssues: vi.fn(() => [{ id: 'issue-1', title: 'Test Issue' }]),
+      getProject: vi.fn(identifier =>
+        identifier === 'TEST'
+          ? {
+              identifier: 'TEST',
+              name: 'Test Project',
+              status: 'active',
+              issue_count: 1,
+              last_sync_at: 1700000000000,
+            }
+          : null,
+      ),
+      getProjectIssues: vi.fn(() => [
+        {
+          identifier: 'issue-1',
+          project_identifier: 'TEST',
+          title: 'Test Issue',
+          status: 'todo',
+          priority: 'medium',
+          updated_at: 1700000000000,
+        },
+      ]),
       getProjectFilesystemPath: vi.fn(() => '/opt/stacks/test-project'),
       resolveProjectIdentifier: vi.fn(id => (id === 'testfolder' ? 'TEST' : null)),
       getProjectFiles: vi.fn(() => []),
@@ -1431,8 +1451,18 @@ describe('createApiServer - HTTP Routes', () => {
     it('should return project issues', async () => {
       const res = await makeRequest(port, 'GET', '/api/projects/TEST/issues');
       expect(res.statusCode).toBe(200);
-      expect(res.body.projectIdentifier).toBe('TEST');
+      expect(res.body.schema_version).toBe(1);
+      expect(res.body.projectId).toBe('TEST');
       expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'issue-1',
+          projectId: 'TEST',
+          provider: 'beads',
+          title: 'Test Issue',
+          status: 'open',
+        }),
+      );
     });
 
     it('should handle db error', async () => {
