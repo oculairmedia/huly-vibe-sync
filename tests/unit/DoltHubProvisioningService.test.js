@@ -27,7 +27,10 @@ describe('DoltHubProvisioningService', () => {
       if (args.join(' ') === 'dolt remote list') {
         listCalls += 1;
         return {
-          stdout: listCalls === 1 ? '' : 'origin dolthub://oulair/letta_mobile\n',
+          stdout:
+            listCalls === 1
+              ? ''
+              : 'origin https://doltremoteapi.dolthub.com/oulair/letta_mobile\n',
           stderr: '',
         };
       }
@@ -62,7 +65,7 @@ describe('DoltHubProvisioningService', () => {
       filesystem_path: '/opt/stacks/letta-mobile',
     });
 
-    expect(result.remote_url).toBe('dolthub://oulair/letta_mobile');
+    expect(result.remote_url).toBe('https://doltremoteapi.dolthub.com/oulair/letta_mobile');
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://www.dolthub.com/api/v1alpha1/database',
       expect.objectContaining({
@@ -108,7 +111,7 @@ describe('DoltHubProvisioningService', () => {
           stdout:
             listCalls === 1
               ? 'origin file:///tmp/beads-backup\n'
-              : 'origin dolthub://oulair/letta_mobile\n',
+              : 'origin https://doltremoteapi.dolthub.com/oulair/letta_mobile\n',
           stderr: '',
         };
       }
@@ -124,7 +127,7 @@ describe('DoltHubProvisioningService', () => {
     expect(result.commands).toEqual([
       'bd dolt remote list',
       'bd dolt remote remove origin',
-      'bd dolt remote add origin dolthub://oulair/letta_mobile',
+      'bd dolt remote add origin https://doltremoteapi.dolthub.com/oulair/letta_mobile',
       'bd dolt remote list',
       'bd dolt push origin main',
     ]);
@@ -157,6 +160,8 @@ describe('DoltHubProvisioningService', () => {
     expect(result.status).toBe('dry_run');
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(commandRunner).not.toHaveBeenCalled();
-    expect(result.commands).toContain('bd dolt remote add origin dolthub://oulair/letta_mobile');
+    expect(result.commands).toContain(
+      'bd dolt remote add origin https://doltremoteapi.dolthub.com/oulair/letta_mobile',
+    );
   });
 });
