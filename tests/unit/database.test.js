@@ -686,6 +686,54 @@ describe('SyncDatabase', () => {
         expect(summary[1].identifier).toBe('A');
         expect(summary[1].issue_count).toBe(0);
       });
+
+      it('should include full project metadata and actual issue counts', () => {
+        db.updateProject('B', {
+          filesystem_path: '/opt/stacks/bravo',
+          git_url: 'https://github.com/oculairmedia/bravo.git',
+        });
+        db.setProjectLettaAgent('B', {
+          agentId: 'agent-bravo',
+          folderId: 'folder-bravo',
+          sourceId: 'source-bravo',
+        });
+        db.upsertIssue({
+          identifier: 'B-3',
+          project_identifier: 'B',
+          title: 'Issue 3',
+        });
+        db.upsertIssue({
+          identifier: 'B-4',
+          project_identifier: 'B',
+          title: 'Issue 4',
+        });
+        db.upsertIssue({
+          identifier: 'B-5',
+          project_identifier: 'B',
+          title: 'Issue 5',
+        });
+        db.upsertIssue({
+          identifier: 'B-6',
+          project_identifier: 'B',
+          title: 'Issue 6',
+        });
+
+        const summary = db.getProjectSummary();
+        const bravo = summary.find((project) => project.identifier === 'B');
+
+        expect(bravo).toEqual(
+          expect.objectContaining({
+            identifier: 'B',
+            filesystem_path: '/opt/stacks/bravo',
+            git_url: 'https://github.com/oculairmedia/bravo.git',
+            letta_agent_id: 'agent-bravo',
+            letta_folder_id: 'folder-bravo',
+            letta_source_id: 'source-bravo',
+            actual_issue_count: 6,
+            issue_count: 6,
+          }),
+        );
+      });
     });
   });
 

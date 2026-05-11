@@ -406,6 +406,50 @@ describe('project registry API routes', () => {
       expect(res.body.projects[0].full_conversations).toBeUndefined();
       expect(mockDb.getProjectIssues).not.toHaveBeenCalled();
     });
+
+    it('should preserve project metadata when using summary fallback', async () => {
+      const originalGetAllProjects = mockDb.getAllProjects;
+      mockDb.getAllProjects = undefined;
+      mockDb.getProjectSummary.mockReturnValueOnce([
+        {
+          identifier: 'BEADS-PROJ',
+          name: 'Beads Project',
+          status: 'active',
+          tech_stack: 'node',
+          issue_count: 7,
+          filesystem_path: '/opt/stacks/beads-project',
+          git_url: 'https://github.com/oculairmedia/beads-project.git',
+          letta_agent_id: 'agent-beads-project',
+          letta_folder_id: 'folder-beads-project',
+          letta_source_id: 'source-beads-project',
+          letta_last_sync_at: 1700000000000,
+          last_sync_at: 1700000000000,
+          last_checked_at: 1700000100000,
+          updated_at: 1700000200000,
+        },
+      ]);
+
+      try {
+        const res = await makeRequest(port, 'GET', '/api/projects');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.total).toBe(1);
+        expect(res.body.projects[0]).toEqual(
+          expect.objectContaining({
+            id: 'BEADS-PROJ',
+            identifier: 'BEADS-PROJ',
+            tech_stack: 'node',
+          }),
+        );
+        expect(res.body.projects[0].repo.remote_url).toBe(
+          'https://github.com/oculairmedia/beads-project.git',
+        );
+        expect(res.body.projects[0].agents.default_agent_id).toBe('agent-beads-project');
+        expect(res.body.projects[0].tracker.summary.total_known).toBe(7);
+      } finally {
+        mockDb.getAllProjects = originalGetAllProjects;
+      }
+    });
   });
 
   describe('GET /api/projects/:id', () => {
