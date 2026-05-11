@@ -64,6 +64,15 @@ services:
       - USE_TEMPORAL_ORCHESTRATION=${USE_TEMPORAL_ORCHESTRATION:-true}
       - USE_TEMPORAL_VIBE=${USE_TEMPORAL_VIBE:-false}
 
+      # Beads/DoltHub per-project remote provisioning
+      - DOLTHUB_PROVISIONING_ENABLED=${DOLTHUB_PROVISIONING_ENABLED:-false}
+      - DOLTHUB_PROVISIONING_DRY_RUN=${DOLTHUB_PROVISIONING_DRY_RUN:-true}
+      - DOLTHUB_API_TOKEN=${DOLTHUB_API_TOKEN}
+      - DOLTHUB_API_URL=${DOLTHUB_API_URL:-https://www.dolthub.com/api/v1alpha1}
+      - DOLTHUB_OWNER=${DOLTHUB_OWNER:-oulair}
+      - DOLTHUB_DEFAULT_VISIBILITY=${DOLTHUB_DEFAULT_VISIBILITY:-private}
+      - DOLTHUB_REMOTE_NAME=${DOLTHUB_REMOTE_NAME:-origin}
+
     volumes:
       # Logs directory
       - ./logs:/app/logs

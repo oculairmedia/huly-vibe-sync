@@ -165,7 +165,7 @@ Normalized machine-readable statuses are `open`, `in_progress`, `blocked`, `defe
 
 `POST /api/projects/:id/beads-remote/provision`
 
-Creates or reuses a project-scoped DoltHub database, configures the project's Beads remote, and pushes the local Beads database by default. Database names are normalized from the project folder name, for example `/opt/stacks/letta-mobile` becomes `oulair/letta_mobile`.
+Creates or reuses a project-scoped DoltHub database, configures the project's Beads remote, and pushes the local Beads database by default. Database names are normalized from the project folder name, for example `/opt/stacks/letta-mobile` becomes the DoltHub remote `https://doltremoteapi.dolthub.com/oulair/letta_mobile`.
 
 ```json
 {

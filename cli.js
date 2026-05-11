@@ -17,10 +17,12 @@ function getGlobalOpts() {
 async function fetchJson(path, options = {}) {
   const { apiUrl, timeout } = getGlobalOpts();
   const url = path.startsWith('http') ? path : `${apiUrl}${path}`;
+  const { timeoutMs, ...fetchOptions } = options;
+  const requestTimeout = Number(timeoutMs) || timeout;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
+  const timer = setTimeout(() => controller.abort(), requestTimeout);
   try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
+    const res = await fetch(url, { ...fetchOptions, signal: controller.signal });
     clearTimeout(timer);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -29,7 +31,7 @@ async function fetchJson(path, options = {}) {
     return await res.json();
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') throw new Error(`Timeout after ${timeout}ms: ${url}`);
+    if (err.name === 'AbortError') throw new Error(`Timeout after ${requestTimeout}ms: ${url}`);
     if (err.code === 'ECONNREFUSED') throw new Error(`Connection refused: ${url}`);
     throw err;
   }
@@ -397,6 +399,57 @@ program
       console.log(`  Remote: ${provisioning.remote_url || chalk.yellow('not set')}`);
       console.log(`  Repo:   ${provisioning.owner || '—'}/${provisioning.repo || '—'}`);
       console.log(`  Pushed: ${provisioning.pushed ? chalk.green('yes') : chalk.yellow('no')}`);
+    } catch (err) {
+      die(err.message);
+    }
+  });
+
+program
+  .command('project-provision-beads-remotes')
+  .description('Provision project-scoped private DoltHub remotes for all missing Beads projects')
+  .option('--all', 'Include already provisioned active projects')
+  .option('--projects <identifiers>', 'Comma-separated project identifiers to provision')
+  .option('--limit <n>', 'Limit number of projects processed in this run')
+  .option('--no-push', 'Configure remotes without pushing Beads data')
+  .option('--stop-on-error', 'Stop the batch on the first provisioning error')
+  .action(async (opts) => {
+    const { json: jsonOut } = getGlobalOpts();
+    const body = {
+      push: opts.push !== false,
+      only_missing: !opts.all,
+      continue_on_error: !opts.stopOnError,
+    };
+    if (opts.projects) body.identifiers = opts.projects;
+    if (opts.limit) body.limit = Number.parseInt(opts.limit, 10);
+
+    try {
+      const data = toRecord(
+        await fetchJson('/api/projects/beads-remote/provision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          timeoutMs: 600_000,
+        }),
+      );
+
+      if (jsonOut) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      const summary = toRecord(data.summary);
+      console.log(chalk.green(data.message || 'Beads remote batch provisioning complete'));
+      console.log(`  Succeeded: ${summary.succeeded ?? 0}`);
+      console.log(`  Failed:    ${summary.failed ?? 0}`);
+      console.log(`  Push:      ${data.push ? chalk.green('yes') : chalk.yellow('no')}`);
+      console.log(`  Dry run:   ${data.dry_run ? chalk.yellow('yes') : chalk.green('no')}`);
+      const errors = toArray(data.errors);
+      if (errors.length) {
+        console.log(chalk.red('\nErrors'));
+        for (const error of errors) {
+          console.log(`  ${error.identifier}: ${error.error}`);
+        }
+      }
     } catch (err) {
       die(err.message);
     }
