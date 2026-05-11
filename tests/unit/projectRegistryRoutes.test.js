@@ -1029,6 +1029,165 @@ describe('project registry API routes', () => {
     });
   });
 
+  describe('GET /api/projects/:id/issue-analytics', () => {
+    it('should return timezone-aware created and completed issue analytics', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([
+        {
+          identifier: 'PROJ-A-OPEN',
+          project_identifier: 'PROJ-A',
+          title: 'Open analytics task',
+          status: 'todo',
+          priority: 'high',
+          issue_type: 'bug',
+          assignee: 'emmanuel',
+          labels: 'android,project-api',
+          created_at: '2026-05-01T14:00:00.000Z',
+          updated_at: '2026-05-01T14:30:00.000Z',
+        },
+        {
+          identifier: 'PROJ-A-DONE-1',
+          project_identifier: 'PROJ-A',
+          title: 'Closed before local midnight',
+          status: 'done',
+          priority: 'high',
+          issue_type: 'feature',
+          assignee: 'emmanuel',
+          owner: 'emmanuel',
+          labels: 'android,project-api',
+          close_reason: 'done',
+          created_at: '2026-05-01T16:00:00.000Z',
+          closed_at: '2026-05-02T03:30:00.000Z',
+          updated_at: '2026-05-10T18:24:11.000Z',
+        },
+        {
+          identifier: 'PROJ-A-DONE-2',
+          project_identifier: 'PROJ-A',
+          title: 'Closed later',
+          status: 'closed',
+          priority: 'low',
+          issue_type: 'task',
+          assignee: 'mira',
+          labels: 'backend',
+          close_reason: 'fixed',
+          created_at: '2026-05-03T12:00:00.000Z',
+          closed_at: '2026-05-03T15:00:00.000Z',
+          updated_at: '2026-05-03T16:00:00.000Z',
+        },
+      ]);
+
+      const res = await makeRequest(
+        port,
+        'GET',
+        '/api/projects/PROJ-A/issue-analytics?rangeStart=2026-05-01T00:00:00-04:00&rangeEnd=2026-05-04T00:00:00-04:00&granularity=day&timezone=America/Toronto&timelineLimit=1',
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          projectId: 'PROJ-A',
+          rangeStart: '2026-05-01T00:00:00-04:00',
+          rangeEnd: '2026-05-04T00:00:00-04:00',
+          granularity: 'day',
+          timezone: 'America/Toronto',
+          isPartial: true,
+          completionSource: 'issue_close_metadata',
+          nextTimelineCursor: expect.any(String),
+        }),
+      );
+      expect(res.body.createdBuckets.map((bucket) => bucket.createdCount)).toEqual([2, 0, 1]);
+      expect(res.body.completedBuckets.map((bucket) => bucket.completedCount)).toEqual([1, 0, 1]);
+      expect(res.body.createdBuckets[0]).toEqual(
+        expect.objectContaining({
+          bucketStart: '2026-05-01T00:00:00-04:00',
+          bucketEnd: '2026-05-02T00:00:00-04:00',
+          label: 'May 1',
+        }),
+      );
+      expect(res.body.summary).toEqual(
+        expect.objectContaining({
+          openCount: 1,
+          inProgressCount: 0,
+          completedCount: 2,
+          blockedCount: 0,
+          readyCount: 1,
+          totalCreatedInRange: 3,
+          totalCompletedInRange: 2,
+        }),
+      );
+      expect(res.body.completedTimeline).toHaveLength(1);
+      expect(res.body.completedTimeline[0]).toEqual(
+        expect.objectContaining({
+          issueId: 'PROJ-A-DONE-2',
+          title: 'Closed later',
+          status: 'closed',
+          statusLabel: 'closed',
+          completedAt: '2026-05-03T15:00:00.000Z',
+          completedBy: 'mira',
+          completionReason: 'fixed',
+        }),
+      );
+    });
+
+    it('should apply analytics filters consistently', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([
+        {
+          identifier: 'PROJ-A-OPEN',
+          project_identifier: 'PROJ-A',
+          title: 'Open analytics task',
+          status: 'todo',
+          priority: 'high',
+          issue_type: 'bug',
+          assignee: 'emmanuel',
+          labels: 'android,project-api',
+          created_at: '2026-05-01T14:00:00.000Z',
+        },
+        {
+          identifier: 'PROJ-A-DONE-1',
+          project_identifier: 'PROJ-A',
+          title: 'Closed android task',
+          status: 'done',
+          priority: 'high',
+          issue_type: 'feature',
+          assignee: 'emmanuel',
+          labels: 'android,project-api',
+          created_at: '2026-05-01T16:00:00.000Z',
+          closed_at: '2026-05-02T03:30:00.000Z',
+        },
+        {
+          identifier: 'PROJ-A-DONE-2',
+          project_identifier: 'PROJ-A',
+          title: 'Closed backend task',
+          status: 'closed',
+          priority: 'low',
+          issue_type: 'task',
+          assignee: 'mira',
+          labels: 'backend',
+          created_at: '2026-05-03T12:00:00.000Z',
+          closed_at: '2026-05-03T15:00:00.000Z',
+        },
+      ]);
+
+      const res = await makeRequest(
+        port,
+        'GET',
+        '/api/projects/PROJ-A/issue-analytics?rangeStart=2026-05-01T00:00:00-04:00&rangeEnd=2026-05-04T00:00:00-04:00&granularity=day&timezone=America/Toronto&priorityFilter=high&labelFilter=android&assigneeFilter=emmanuel',
+      );
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.createdBuckets.map((bucket) => bucket.createdCount)).toEqual([2, 0, 0]);
+      expect(res.body.completedBuckets.map((bucket) => bucket.completedCount)).toEqual([1, 0, 0]);
+      expect(res.body.summary).toEqual(
+        expect.objectContaining({
+          openCount: 1,
+          completedCount: 1,
+          totalCreatedInRange: 2,
+          totalCompletedInRange: 1,
+        }),
+      );
+      expect(res.body.completedTimeline.map((item) => item.issueId)).toEqual(['PROJ-A-DONE-1']);
+    });
+  });
+
   describe('GET /api/projects/:id/ready-work', () => {
     it('should return first-class ready work without client-side reconstruction', async () => {
       const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/ready-work');
