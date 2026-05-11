@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import http from 'http';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 vi.mock('../../lib/logger.js', () => ({
   logger: {
@@ -58,10 +61,21 @@ describe('project registry API routes', () => {
   let mockDb;
   let mockDoltHubProvisioner;
   let mockBeadsIssueService;
+  let tempRoot;
+  let beadsProjectPath;
+  let nonBeadsProjectPath;
 
   beforeAll(async () => {
     port = getRandomPort();
     process.env.HEALTH_PORT = String(port);
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hvsyn-project-routes-'));
+    beadsProjectPath = path.join(tempRoot, 'my-project');
+    nonBeadsProjectPath = path.join(tempRoot, 'no-beads-project');
+    fs.mkdirSync(path.join(beadsProjectPath, '.beads'), { recursive: true });
+    fs.writeFileSync(path.join(beadsProjectPath, '.beads', 'config.yaml'), 'database: dolt\n');
+    fs.writeFileSync(path.join(beadsProjectPath, '.beads', 'metadata.json'), '{"backend":"dolt"}\n');
+    fs.mkdirSync(path.join(beadsProjectPath, '.beads', 'dolt'), { recursive: true });
+    fs.mkdirSync(nonBeadsProjectPath, { recursive: true });
 
     mockProjectRegistry = {
       registerProject: vi.fn((path) => ({
@@ -78,7 +92,7 @@ describe('project registry API routes', () => {
             status: updates.status || 'active',
             tech_stack: 'node',
             issue_count: 5,
-            filesystem_path: updates.filesystem_path || '/opt/stacks/my-project',
+            filesystem_path: updates.filesystem_path || beadsProjectPath,
             git_url: updates.git_url || 'https://github.com/oculairmedia/project-a.git',
           };
         }
@@ -103,7 +117,7 @@ describe('project registry API routes', () => {
           status: 'active',
           tech_stack: 'node',
           issue_count: 5,
-          filesystem_path: '/opt/stacks/my-project',
+          filesystem_path: beadsProjectPath,
         },
         {
           identifier: 'PROJ-B',
@@ -111,7 +125,7 @@ describe('project registry API routes', () => {
           status: 'active',
           tech_stack: 'python',
           issue_count: 0,
-          filesystem_path: '/opt/stacks/other-project',
+          filesystem_path: nonBeadsProjectPath,
         },
       ]),
       getProject: vi.fn((id) => {
@@ -122,7 +136,7 @@ describe('project registry API routes', () => {
             status: 'active',
             tech_stack: 'node',
             issue_count: 5,
-            filesystem_path: '/opt/stacks/my-project',
+            filesystem_path: beadsProjectPath,
           };
         }
         return null;
@@ -139,7 +153,7 @@ describe('project registry API routes', () => {
           status: 'active',
           tech_stack: 'node',
           issue_count: 2,
-          filesystem_path: '/opt/stacks/my-project',
+          filesystem_path: beadsProjectPath,
           git_url: 'https://github.com/oculairmedia/project-a.git',
           letta_agent_id: 'agent-project-a',
           letta_folder_id: 'folder-project-a',
@@ -172,7 +186,7 @@ describe('project registry API routes', () => {
           status: 'active',
           tech_stack: 'node',
           issue_count: 2,
-          filesystem_path: '/opt/stacks/my-project',
+          filesystem_path: beadsProjectPath,
           git_url: 'https://github.com/oculairmedia/project-a.git',
           letta_agent_id: 'agent-project-a',
           letta_folder_id: 'folder-project-a',
@@ -295,6 +309,16 @@ describe('project registry API routes', () => {
           letta_source_id: 'source-project-a',
           letta_last_sync_at: 1700000000000,
         })),
+        getProjectsNeedingBeadsRemote: vi.fn(() => [
+          {
+            identifier: 'PROJ-A',
+            name: 'Project A',
+            status: 'active',
+            filesystem_path: beadsProjectPath,
+            beads_remote_status: null,
+            beads_remote_url: null,
+          },
+        ]),
       },
     };
 
@@ -306,13 +330,13 @@ describe('project registry API routes', () => {
         owner: 'oulair',
         repo: 'my_project',
         remote_name: 'origin',
-        remote_url: 'dolthub://oulair/my_project',
+        remote_url: 'https://doltremoteapi.dolthub.com/oulair/my_project',
         visibility: 'private',
         database_created: true,
         database_already_exists: false,
         remote_changed: true,
         pushed: true,
-        commands: ['bd dolt remote add origin dolthub://oulair/my_project'],
+        commands: ['bd dolt remote add origin https://doltremoteapi.dolthub.com/oulair/my_project'],
       })),
     };
 
@@ -347,6 +371,7 @@ describe('project registry API routes', () => {
 
   afterAll(async () => {
     await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
   describe('GET /api/registry/projects', () => {
@@ -507,10 +532,10 @@ describe('project registry API routes', () => {
       mockDb.getProject.mockImplementationOnce(() => ({
         identifier: 'PROJ-A',
         name: 'Project A',
-        filesystem_path: '/opt/stacks/my-project',
+        filesystem_path: beadsProjectPath,
         beads_remote_owner: 'oulair',
         beads_remote_repo: 'my_project',
-        beads_remote_url: 'dolthub://oulair/my_project',
+        beads_remote_url: 'https://doltremoteapi.dolthub.com/oulair/my_project',
         beads_remote_name: 'origin',
         beads_remote_status: 'provisioned',
         beads_remote_visibility: 'private',
@@ -525,10 +550,127 @@ describe('project registry API routes', () => {
         expect.objectContaining({
           owner: 'oulair',
           repo: 'my_project',
-          url: 'dolthub://oulair/my_project',
+          url: 'https://doltremoteapi.dolthub.com/oulair/my_project',
           status: 'provisioned',
           last_push_at: '2023-11-14T22:21:40.000Z',
         }),
+      );
+    });
+  });
+
+  describe('GET /api/projects/beads-remote', () => {
+    it('should list projects needing Beads remote provisioning', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/beads-remote');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.schema_version).toBe(1);
+      expect(res.body.total).toBe(1);
+      expect(res.body.projects[0]).toEqual(
+        expect.objectContaining({
+          identifier: 'PROJ-A',
+          filesystem_path: beadsProjectPath,
+        }),
+      );
+      expect(mockDb.projects.getProjectsNeedingBeadsRemote).toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/projects/beads-remote/provision', () => {
+    it('should provision missing project Beads remotes through the API', async () => {
+      mockDoltHubProvisioner.provisionProject.mockClear();
+
+      const res = await makeRequest(port, 'POST', '/api/projects/beads-remote/provision', {
+        push: true,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.summary).toEqual(expect.objectContaining({ succeeded: 1, failed: 0 }));
+      expect(res.body.results[0].identifier).toBe('PROJ-A');
+      expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'PROJ-A' }),
+        { push: true },
+      );
+    });
+
+    it('should skip projects without an accessible Beads database', async () => {
+      mockDoltHubProvisioner.provisionProject.mockClear();
+      mockDb.projects.getProjectsNeedingBeadsRemote.mockReturnValueOnce([
+        {
+          identifier: 'PROJ-A',
+          name: 'Project A',
+          status: 'active',
+          filesystem_path: beadsProjectPath,
+          beads_remote_status: null,
+          beads_remote_url: null,
+        },
+        {
+          identifier: 'NO-BEADS',
+          name: 'No Beads Project',
+          status: 'active',
+          filesystem_path: nonBeadsProjectPath,
+          beads_remote_status: null,
+          beads_remote_url: null,
+        },
+      ]);
+
+      const res = await makeRequest(port, 'POST', '/api/projects/beads-remote/provision', {
+        push: true,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.summary).toEqual(
+        expect.objectContaining({ succeeded: 1, failed: 0, skipped: 1 }),
+      );
+      expect(res.body.skipped[0]).toEqual(
+        expect.objectContaining({
+          identifier: 'NO-BEADS',
+          status: 'skipped',
+          reason: 'no_accessible_beads_database',
+        }),
+      );
+      expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledTimes(1);
+      expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'PROJ-A' }),
+        { push: true },
+      );
+    });
+
+    it('should skip locally unusable Beads databases instead of failing the batch', async () => {
+      mockDoltHubProvisioner.provisionProject.mockClear();
+      mockDoltHubProvisioner.provisionProject.mockRejectedValueOnce(
+        new Error('Command failed: bd dolt remote list\nError: no beads database found'),
+      );
+
+      const res = await makeRequest(port, 'POST', '/api/projects/beads-remote/provision', {
+        push: true,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.summary).toEqual(
+        expect.objectContaining({ succeeded: 0, failed: 0, skipped: 1 }),
+      );
+      expect(res.body.skipped[0]).toEqual(
+        expect.objectContaining({
+          identifier: 'PROJ-A',
+          status: 'skipped',
+          reason: 'unusable_beads_database',
+        }),
+      );
+    });
+
+    it('should support explicitly targeted project identifiers', async () => {
+      mockDoltHubProvisioner.provisionProject.mockClear();
+
+      const res = await makeRequest(port, 'POST', '/api/projects/beads-remote/provision', {
+        identifiers: ['huly-vibe-sync'],
+        push: false,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.results[0].identifier).toBe('HVSYN');
+      expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'HVSYN' }),
+        { push: false },
       );
     });
   });
@@ -541,11 +683,13 @@ describe('project registry API routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.message).toBe('Beads remote provisioned');
-      expect(res.body.provisioning.remote_url).toBe('dolthub://oulair/my_project');
+      expect(res.body.provisioning.remote_url).toBe(
+        'https://doltremoteapi.dolthub.com/oulair/my_project',
+      );
       expect(mockDoltHubProvisioner.provisionProject).toHaveBeenCalledWith(
         expect.objectContaining({
           identifier: 'PROJ-A',
-          filesystem_path: '/opt/stacks/my-project',
+          filesystem_path: beadsProjectPath,
         }),
         { push: false },
       );
