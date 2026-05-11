@@ -1873,6 +1873,26 @@ describe('SyncDatabase', () => {
         expect(id).toBeNull();
       });
     });
+
+    describe('project issue count summaries', () => {
+      it('should report actual issue row counts when stored project activity is stale', () => {
+        db.upsertProject({
+          identifier: 'STALE',
+          name: 'Stale Count Project',
+          issue_count: 0,
+        });
+        db.upsertIssue({ identifier: 'STALE-1', project_identifier: 'STALE' });
+        db.upsertIssue({ identifier: 'STALE-2', project_identifier: 'STALE' });
+
+        expect(db.getProject('STALE').issue_count).toBe(2);
+        expect(db.getAllProjects().find((project) => project.identifier === 'STALE').issue_count).toBe(
+          2,
+        );
+        expect(
+          db.getProjectSummary().find((project) => project.identifier === 'STALE').issue_count,
+        ).toBe(2);
+      });
+    });
   });
 
   describe('migration operations', () => {
