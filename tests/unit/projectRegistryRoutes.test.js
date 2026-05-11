@@ -151,6 +151,20 @@ describe('project registry API routes', () => {
         },
       ]),
       getProject: vi.fn((identifier) => {
+        if (identifier === 'HVSYN') {
+          return {
+            identifier: 'HVSYN',
+            name: 'Vibe Sync Service',
+            status: 'active',
+            tech_stack: 'node',
+            issue_count: 2,
+            filesystem_path: '/opt/stacks/huly-vibe-sync',
+            git_url: 'https://github.com/oculairmedia/huly-vibe-sync.git',
+            last_sync_at: 1700000000000,
+            last_checked_at: 1700000100000,
+            updated_at: 1700000200000,
+          };
+        }
         if (identifier !== 'PROJ-A') return null;
         return {
           identifier: 'PROJ-A',
@@ -171,6 +185,20 @@ describe('project registry API routes', () => {
       }),
       getProjectSummary: vi.fn(() => []),
       getProjectIssues: vi.fn((identifier) => {
+        if (identifier === 'HVSYN') {
+          return [
+            {
+              identifier: 'HVSYN-1',
+              project_identifier: 'HVSYN',
+              title: 'Slug-addressed ready task',
+              status: 'todo',
+              priority: 'high',
+              created_at: 1700000000000,
+              updated_at: 1700000200000,
+              last_sync_at: 1700000200000,
+            },
+          ];
+        }
         if (identifier !== 'PROJ-A') return [];
         return [
           {
@@ -242,7 +270,11 @@ describe('project registry API routes', () => {
         };
       }),
       getProjectFilesystemPath: vi.fn(() => null),
-      resolveProjectIdentifier: vi.fn(() => null),
+      resolveProjectIdentifier: vi.fn((identifier) => {
+        if (identifier === 'huly-vibe-sync') return 'HVSYN';
+        if (identifier === 'PROJ-A' || identifier === 'HVSYN') return identifier;
+        return null;
+      }),
       getProjectFiles: vi.fn(() => []),
       getOrphanedFiles: vi.fn(() => []),
       getRecentSyncs: vi.fn(() => [
@@ -385,6 +417,16 @@ describe('project registry API routes', () => {
       expect(res.body.project.tracker.summary.ready).toBe(1);
       expect(res.body.project.tracker.summary.closed_recent).toBe(1);
       expect(res.body.project.work_items).toBeUndefined();
+    });
+
+    it('should resolve folder slugs to canonical project identifiers for detail', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/huly-vibe-sync');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.project.identifier).toBe('HVSYN');
+      expect(res.body.project.tracker.summary.total_known).toBe(1);
+      expect(mockDb.getProject).toHaveBeenCalledWith('HVSYN');
+      expect(mockDb.getProjectIssues).toHaveBeenCalledWith('HVSYN');
     });
 
     it('should keep project detail available when tracker hydration fails', async () => {
@@ -608,6 +650,22 @@ describe('project registry API routes', () => {
         expect.objectContaining({ id: 'PROJ-A-3', status: 'blocked' }),
       ]);
       expect(res.body.issues[0].description).toBeUndefined();
+    });
+
+    it('should resolve folder slugs before listing Android issue summaries', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/huly-vibe-sync/issues');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.projectId).toBe('HVSYN');
+      expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'HVSYN-1',
+          projectId: 'HVSYN',
+          title: 'Slug-addressed ready task',
+        }),
+      );
+      expect(mockDb.getProjectIssues).toHaveBeenCalledWith('HVSYN');
     });
 
     it('should support incremental updatedSince filtering', async () => {
