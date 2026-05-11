@@ -91,7 +91,7 @@ describe('Agent lookup API', () => {
     });
 
     it('should be case-insensitive', () => {
-      const result = db.lookupProjectByRepo('HULY-VIBE-SYNC');
+      const result = db.lookupProjectByRepo('VIBESYNC');
       expect(result).not.toBeNull();
       expect(result.project_identifier).toBe('HVSYN');
     });

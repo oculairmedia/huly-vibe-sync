@@ -149,6 +149,18 @@ describe('project registry API routes', () => {
       getStats: vi.fn(() => ({ tables: 0, total_rows: 0 })),
       getAllProjects: vi.fn(() => [
         {
+          identifier: 'HVSYN',
+          name: 'Vibesync Service',
+          status: 'active',
+          tech_stack: 'node',
+          issue_count: 2,
+          filesystem_path: '/opt/stacks/vibesync',
+          git_url: 'https://github.com/oculairmedia/vibesync.git',
+          last_sync_at: 1700000000000,
+          last_checked_at: 1700000100000,
+          updated_at: 1700000200000,
+        },
+        {
           identifier: 'PROJ-A',
           name: 'Project A',
           status: 'active',
@@ -420,8 +432,9 @@ describe('project registry API routes', () => {
       const res = await makeRequest(port, 'GET', '/api/projects');
 
       expect(res.statusCode).toBe(200);
-      expect(res.body.total).toBe(1);
-      expect(res.body.projects[0]).toEqual(
+      expect(res.body.total).toBe(2);
+      const project = res.body.projects.find(({ id }) => id === 'PROJ-A');
+      expect(project).toEqual(
         expect.objectContaining({
           id: 'PROJ-A',
           identifier: 'PROJ-A',
@@ -430,14 +443,14 @@ describe('project registry API routes', () => {
           updated_at: '2023-11-14T22:16:40.000Z',
         }),
       );
-      expect(res.body.projects[0].repo.remote_url).toBe(
+      expect(project.repo.remote_url).toBe(
         'https://github.com/oculairmedia/project-a.git',
       );
-      expect(res.body.projects[0].agents.default_agent_id).toBe('agent-project-a');
-      expect(res.body.projects[0].tracker.provider).toBe('beads');
-      expect(res.body.projects[0].tracker.capabilities.work_items).toBe(true);
-      expect(res.body.projects[0].tracker.summary.total_known).toBe(2);
-      expect(res.body.projects[0].tracker.data_freshness).toEqual(
+      expect(project.agents.default_agent_id).toBe('agent-project-a');
+      expect(project.tracker.provider).toBe('beads');
+      expect(project.tracker.capabilities.work_items).toBe(true);
+      expect(project.tracker.summary.total_known).toBe(2);
+      expect(project.tracker.data_freshness).toEqual(
         expect.objectContaining({
           status: 'available',
           last_sync_at: '2023-11-14T22:13:20.000Z',
@@ -446,9 +459,9 @@ describe('project registry API routes', () => {
           stale_threshold_ms: expect.any(Number),
         }),
       );
-      expect(res.body.projects[0].etag).toBe('PROJ-A:1700000200000');
-      expect(res.body.projects[0].work_items).toBeUndefined();
-      expect(res.body.projects[0].full_agents).toBeUndefined();
+      expect(project.etag).toBe('PROJ-A:1700000200000');
+      expect(project.work_items).toBeUndefined();
+      expect(project.full_agents).toBeUndefined();
       expect(res.body.projects[0].full_conversations).toBeUndefined();
       expect(mockDb.getProjectIssues).not.toHaveBeenCalled();
     });
