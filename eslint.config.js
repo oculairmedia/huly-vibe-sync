@@ -48,6 +48,7 @@ export default [
       'coverage/**',
       'html/**',
       'dist/**',
+      'temporal/dist/**',
       '.beads/**',
       'data/**',
       'ui/**',
