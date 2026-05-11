@@ -844,6 +844,15 @@ describe('project registry API routes', () => {
       expect(res.body.page.total_known).toBe(1);
     });
 
+    it('should match canonical closed status aliases for work items', async () => {
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items?status=closed');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.work_items).toHaveLength(1);
+      expect(res.body.work_items[0].id).toBe('PROJ-A-2');
+      expect(res.body.page.total_known).toBe(1);
+    });
+
     it('should fall back to the project Beads store when cached work items are empty', async () => {
       mockDb.getProjectIssues.mockReturnValueOnce([]);
       mockBeadsAdapter.listIssues.mockClear();
@@ -862,6 +871,44 @@ describe('project registry API routes', () => {
       );
       expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
       expect(mockDb.updateProjectActivity).toHaveBeenCalledWith('PROJ-A', 1);
+    });
+
+    it('should return closed work items from Beads fallback when cached rows are empty', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([]);
+      mockBeadsAdapter.listIssues.mockResolvedValueOnce({
+        items: [
+          {
+            id: 'PROJ-A-BEADS-OPEN',
+            title: 'Open fallback task',
+            status: 'open',
+            priority: 'high',
+            updatedAt: '2026-05-02T00:00:00.000Z',
+          },
+          {
+            id: 'PROJ-A-BEADS-DONE',
+            title: 'Closed fallback task',
+            status: 'done',
+            priority: 'medium',
+            closedAt: '2026-05-03T00:00:00.000Z',
+            updatedAt: '2026-05-03T00:00:00.000Z',
+          },
+        ],
+      });
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items?status=closed');
+
+      expect(res.statusCode).toBe(200);
+      expect(mockBeadsAdapter.listIssues).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'PROJ-A', filesystem_path: beadsProjectPath }),
+        { status: 'closed' },
+        { forceRefresh: true },
+      );
+      expect(res.body.work_items).toHaveLength(1);
+      expect(res.body.work_items[0]).toEqual(
+        expect.objectContaining({ id: 'PROJ-A-BEADS-DONE', title: 'Closed fallback task' }),
+      );
+      expect(res.body.page.total_known).toBe(1);
+      expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
     });
   });
 
@@ -937,6 +984,45 @@ describe('project registry API routes', () => {
           type: 'bug',
           status: 'open',
           labels: ['fallback'],
+        }),
+      );
+      expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
+    });
+
+    it('should return closed Android issues from Beads fallback when cached rows are empty', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([]);
+      mockBeadsAdapter.listIssues.mockResolvedValueOnce({
+        items: [
+          {
+            id: 'PROJ-A-BEADS-OPEN',
+            title: 'Open fallback task',
+            status: 'open',
+            priority: 'high',
+            type: 'task',
+            updatedAt: '2026-05-02T00:00:00.000Z',
+          },
+          {
+            id: 'PROJ-A-BEADS-DONE',
+            title: 'Closed fallback task',
+            status: 'done',
+            priority: 'medium',
+            type: 'task',
+            closedAt: '2026-05-03T00:00:00.000Z',
+            updatedAt: '2026-05-03T00:00:00.000Z',
+          },
+        ],
+      });
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/issues?status=closed');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-BEADS-DONE',
+          projectId: 'PROJ-A',
+          title: 'Closed fallback task',
+          status: 'closed',
         }),
       );
       expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));

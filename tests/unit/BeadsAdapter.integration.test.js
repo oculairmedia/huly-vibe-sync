@@ -76,6 +76,22 @@ describe('BeadsAdapter integration tests', () => {
       );
     });
 
+    it('listIssues includes closed issues when no status filter is supplied', async () => {
+      mockRunCommand.mockResolvedValueOnce([
+        { id: 'PROJ-1', status: 'open', priority: 'P1' },
+        { id: 'PROJ-2', status: 'closed', priority: 'P2' },
+      ]);
+
+      const project = { identifier: 'PROJ', filesystem_path: '/tmp/proj' };
+      const result = await adapter.listIssues(project);
+
+      expect(result.items).toHaveLength(2);
+      expect(mockRunCommand).toHaveBeenCalledWith(
+        'list',
+        expect.arrayContaining(['--all']),
+      );
+    });
+
     it('getDependencies returns issue blockers', async () => {
       const mockDeps = [
         { id: 'PROJ-2', type: 'blocks' },
