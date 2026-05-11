@@ -1,4 +1,4 @@
-# .lettaignore — Letta Code file index exclusions
+# .lettaignore — Letta PM-agent file index exclusions
 #
 # Files and directories matching these patterns are excluded from the @ file
 # search index and disk scan fallback. Comment out or remove a line to bring

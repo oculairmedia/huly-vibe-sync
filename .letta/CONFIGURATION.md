@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project uses a **Letta-Code-inspired** configuration system with hierarchical memory blocks and a control agent pattern for managing PM agents.
+This project uses a Letta PM-agent configuration system with hierarchical memory blocks and a control agent pattern.
 
 ## Configuration Files
 
@@ -96,7 +96,7 @@ Located in `settings.json` under `control_agent`:
 
 ## Memory Blocks
 
-Following **Letta Code's hierarchical pattern**:
+Using hierarchical memory blocks:
 
 ### 1. Persona Block
 - **Source**: Control agent's `persona` field
@@ -123,7 +123,7 @@ Each PM agent gets 6 additional blocks:
 
 ## Permissions
 
-Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
+Permissions use allow/deny tool patterns:
 
 ```json
 {
@@ -330,5 +330,4 @@ curl "${LETTA_API_URL}/agents/{agent_id}/memory/blocks" \
 ## See Also
 
 - **Control Agent Guide**: ../CONTROL_AGENT_GUIDE.md
-- **Letta Code**: https://github.com/letta-ai/letta-code
 - **Project README**: ../README.md

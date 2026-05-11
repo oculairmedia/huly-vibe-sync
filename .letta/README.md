@@ -1,6 +1,6 @@
 # Letta Agent Persistence
 
-This directory maintains Letta PM agent state in a **Letta-Code-compatible** format, following patterns from the official Letta CLI tool.
+This directory maintains Letta PM-agent state for Vibesync deployments.
 
 ## Files
 
@@ -15,7 +15,6 @@ Project-level configuration shared across all instances:
 
 This file **can be committed** to git and shared with the team.
 
-**Inspired by Letta Code's hierarchical memory system** - combines global settings (persona, human blocks) with project-specific context.
 
 ### `settings.local.json` (Local, Gitignored)
 Instance-specific agent persistence:
@@ -25,7 +24,6 @@ Instance-specific agent persistence:
 
 This file is **gitignored** and personal to each deployment instance.
 
-**Follows Letta Code's project-level persistence** - automatically resumes agents per directory.
 
 ## Agent ID Mapping
 
@@ -41,28 +39,8 @@ Example structure:
 }
 ```
 
-## Usage
+## Querying Agent State
 
-### Local Development with Letta Code
-
-You can use the Letta CLI to interact with agents directly:
-
-```bash
-# Navigate to project directory
-cd /opt/stacks/vibesync
-
-# List available agents
-letta agents list
-
-# Resume a specific project's agent
-export AGENT_ID=$(cat .letta/settings.local.json | jq -r '.agents.VIBEK')
-letta --agent $AGENT_ID
-
-# Or use the project identifier
-letta --agent $(cat .letta/settings.local.json | jq -r '.agents.VIBEK')
-```
-
-### Querying Agent State
 
 ```bash
 # Get all agent IDs
@@ -90,7 +68,7 @@ docker-compose restart
 
 Agent IDs are automatically synchronized between:
 1. **SQLite Database** (`vibesync.db`) - Primary storage
-2. **`.letta/settings.local.json`** - Letta-Code compatible format
+2. **`.letta/settings.local.json`** - Local agent ID cache
 
 Both sources are kept in sync during every sync cycle.
 
@@ -138,7 +116,7 @@ rm .letta/settings.local.json
 docker-compose restart
 ```
 
-## New Features (Inspired by Letta Code)
+## PM Agent Configuration Features
 
 ### Control Agent System
 The `control_agent` section in `settings.json` defines a template agent that:
@@ -148,13 +126,11 @@ The `control_agent` section in `settings.json` defines a template agent that:
 - **Auto-provisions on startup** - Creates control agent if missing
 
 ### Memory Block Hierarchy
-Following Letta Code's pattern:
 1. **Global blocks** (`persona`, `human`) - Shared across all agents
 2. **Project blocks** - Service-specific context
 3. **Per-agent blocks** - Project-specific scraperchpad
 
 ### Permission System
-Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
 ```json
 {
   "permissions": {
@@ -167,18 +143,16 @@ Inspired by Letta Code's `--allowedTools` / `--disallowedTools`:
 
 ## Benefits
 
-1. **Letta-Code Compatibility**: Direct CLI access to PM agents
-2. **Hierarchical Memory**: Global + project + agent-specific blocks
-3. **Control Agent Pattern**: Centralized configuration management
-4. **Permission Control**: Fine-grained tool access (allow/deny patterns)
-5. **Human-Readable**: JSON format for easy inspection and debugging
-6. **Portable**: Can be backed up, copied, or version controlled (via settings.json)
-7. **Dual Persistence**: Redundancy with database ensures no data loss
-8. **Fast Lookup**: Quick agent ID resolution without database queries
+1. **Hierarchical Memory**: Global + project + agent-specific blocks
+2. **Control Agent Pattern**: Centralized configuration management
+3. **Permission Control**: Fine-grained tool access (allow/deny patterns)
+4. **Human-Readable**: JSON format for easy inspection and debugging
+5. **Portable**: Can be backed up, copied, or version controlled (via settings.json)
+6. **Dual Persistence**: Redundancy with database ensures no data loss
+7. **Fast Lookup**: Quick agent ID resolution without database queries
 
 ## See Also
 
-- **Letta Code Documentation**: https://github.com/letta-ai/letta-code
 - **Letta API Documentation**: https://docs.letta.com/api-reference
 - **Control Agent Guide**: ../CONTROL_AGENT_GUIDE.md
 - **Project README**: ../README.md
