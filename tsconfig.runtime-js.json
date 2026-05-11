@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitReturns": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "moduleResolution": "Node",
+    "verbatimModuleSyntax": false
+  },
+  "include": ["index.js", "cli.js", "lib/**/*.js"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    ".test-data",
+    "logs",
+    ".letta",
+    "tests",
+    "temporal",
+    "ui",
+    "docs"
+  ]
+}

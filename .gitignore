@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-bun.lock
 bun.lockb
 
 # Environment
@@ -36,9 +35,14 @@ coverage/
 html/
 
 # Build artifacts
+/dist/
+.*.bun-build
 *.working
 *.backup
 *.bak
+
+# Local Beads maintenance artifacts
+.beads/backup/
 
 # Docker
 docker-compose.override.yml
