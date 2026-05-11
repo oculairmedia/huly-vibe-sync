@@ -24,6 +24,7 @@ Agent management, configuration, and control
 - PM agent tool provisioning
 
 ### Other Guides
+- **BEADS_DOLT_MIGRATION.md** - Beads-backed project inventory, Dolt migration findings, and preflight checks
 - **PERMISSIONS_GUIDE.md** - Comprehensive permissions system documentation
 
 ## Overview

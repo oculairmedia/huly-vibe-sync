@@ -34,6 +34,7 @@ How-to guides organized by topic:
 - [Deployment](./guides/deployment/) - Deployment guides and success reports
 - [Testing](./guides/testing/) - Testing infrastructure and strategies
 - [Agents](./guides/agents/) - Agent management and control
+- [Beads/Dolt migration findings](./guides/BEADS_DOLT_MIGRATION.md) - Beads-backed project inventory, Dolt migration batches, and preflight checks
 - Permissions Guide
 
 ### [Reviews](./reviews/)
