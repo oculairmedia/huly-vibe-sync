@@ -1027,6 +1027,57 @@ describe('project registry API routes', () => {
       );
       expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
     });
+
+    it('should prefer fresh Beads issues over stale cached rows for Beads-backed projects', async () => {
+      mockDb.getProject.mockReturnValueOnce({
+        identifier: 'PROJ-A',
+        name: 'Project A',
+        status: 'active',
+        tech_stack: 'node',
+        issue_count: 57,
+        filesystem_path: beadsProjectPath,
+        beads_remote_status: 'error',
+        beads_remote_url: null,
+        last_sync_at: 1700000000000,
+      });
+      mockDb.getProjectIssues.mockReturnValueOnce([
+        {
+          identifier: 'PROJ-A-STALE',
+          project_identifier: 'PROJ-A',
+          title: 'Stale cached task',
+          status: 'Backlog',
+          priority: 'medium',
+          created_at: '2026-05-01T00:00:00.000Z',
+          updated_at: '2026-05-01T00:00:00.000Z',
+        },
+      ]);
+      mockBeadsAdapter.listIssues.mockResolvedValueOnce({
+        items: [
+          {
+            id: 'PROJ-A-BEADS-CLOSED',
+            title: 'Fresh closed Beads task',
+            status: 'closed',
+            priority: 'high',
+            type: 'task',
+            closedAt: '2026-05-11T16:45:42.000Z',
+            updatedAt: '2026-05-11T16:45:42.000Z',
+          },
+        ],
+      });
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/issues?status=closed');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-BEADS-CLOSED',
+          title: 'Fresh closed Beads task',
+          status: 'closed',
+        }),
+      );
+      expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
+    });
   });
 
   describe('GET /api/projects/:id/issue-analytics', () => {
