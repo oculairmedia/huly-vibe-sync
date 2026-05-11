@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withTimeout, processBatch, formatDuration } from '../../lib/utils.js';
+import { withTimeout, processBatch, formatDuration } from '../../src/utils';
 
 describe('utils', () => {
   describe('withTimeout', () => {

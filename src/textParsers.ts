@@ -1,15 +1,9 @@
-/**
- * Text Parsing Utilities — Facade
- *
- * Re-exports from domain-specific parser modules.
- */
-
 export {
   extractHulyIdentifier,
   extractHulyIdentifierFromDescription,
   extractHulyParentIdentifier,
   extractFullDescription,
-} from './parsers/hulyIdentifierParser.js';
+} from '../lib/parsers/hulyIdentifierParser.js';
 export {
   extractFilesystemPath,
   getGitUrl,
@@ -17,4 +11,4 @@ export {
   determineGitRepoPath,
   resolveGitUrl,
   cleanGitUrl,
-} from './parsers/gitPathResolvers.js';
+} from '../lib/parsers/gitPathResolvers.js';

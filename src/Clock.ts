@@ -1,5 +1,5 @@
 export class Clock {
-  now() {
+  now(): number {
     return Date.now();
   }
 }

@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { LettaService, createLettaService } from '../../lib/LettaService.js';
+import { LettaService, createLettaService } from '../../src/LettaService';
 
 // Mock external dependencies
 vi.mock('@letta-ai/letta-client', () => {
@@ -77,11 +77,11 @@ vi.mock('@letta-ai/letta-client', () => {
   return { LettaClient: MockLettaClient };
 });
 
-vi.mock('../../lib/http.js', () => ({
+vi.mock('../../src/http', () => ({
   fetchWithPool: vi.fn(),
 }));
 
-vi.mock('../../lib/LettaMemoryBuilders.js', () => ({
+vi.mock('../../src/LettaMemoryBuilders', () => ({
   buildScratchpad: vi.fn(() => ({
     notes: [],
     observations: [],
@@ -110,16 +110,16 @@ vi.mock('child_process', () => ({
   execSync: vi.fn(),
 }));
 
-vi.mock('../../lib/AgentsMdGenerator.js', () => ({
+vi.mock('../../src/AgentsMdGenerator', () => ({
   agentsMdGenerator: {
     generate: vi.fn(() => ({ changes: [{ section: 'project-info', action: 'updated' }] })),
   },
 }));
 
 import { LettaClient } from '@letta-ai/letta-client';
-import { fetchWithPool } from '../../lib/http.js';
-import { buildScratchpad, buildExpression } from '../../lib/LettaMemoryBuilders.js';
-import { agentsMdGenerator } from '../../lib/AgentsMdGenerator.js';
+import { fetchWithPool } from '../../src/http';
+import { buildScratchpad, buildExpression } from '../../src/LettaMemoryBuilders';
+import { agentsMdGenerator } from '../../src/AgentsMdGenerator';
 import { execSync } from 'child_process';
 import fs from 'fs';
 

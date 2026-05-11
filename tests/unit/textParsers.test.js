@@ -16,7 +16,7 @@ import {
   validateGitRepoPath,
   cleanGitUrl,
   resolveGitUrl,
-} from '../../lib/textParsers.js';
+} from '../../src/textParsers';
 
 describe('textParsers', () => {
   describe('extractFilesystemPath', () => {

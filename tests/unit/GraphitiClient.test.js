@@ -3,13 +3,13 @@ import {
   GraphitiClient,
   createGraphitiClient,
   createAstGraphitiClient,
-} from '../../lib/GraphitiClient.js';
+} from '../../src/GraphitiClient';
 
-vi.mock('../../lib/http.js', () => ({
+vi.mock('../../src/http', () => ({
   fetchWithPool: vi.fn(),
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger', () => ({
   logger: {
     child: () => ({
       debug: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('../../lib/logger.js', () => ({
   },
 }));
 
-import { fetchWithPool } from '../../lib/http.js';
+import { fetchWithPool } from '../../src/http';
 
 function createMockResponse(data, ok = true, status = 200) {
   return {

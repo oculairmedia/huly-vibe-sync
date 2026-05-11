@@ -3,21 +3,21 @@
 import 'dotenv/config';
 
 import { createSyncDatabase } from './lib/database.js';
-import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
+import { loadConfig, getConfigSummary, isLettaEnabled } from './src/config';
 import { initializeHealthStats } from './lib/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';
 import { createLettaService } from './lib/LettaService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './lib/AstMemorySync.js';
-import { logger } from './lib/logger.js';
+import { logger } from './src/logger';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
 import { ProjectRegistry } from './lib/ProjectRegistry.js';
 
 import { createSyncController } from './lib/SyncController.js';
-import { createEventHandlers } from './lib/EventHandlers.js';
+import { createEventHandlers } from './src/EventHandlers';
 import { setupScheduler } from './lib/SchedulerSetup.js';
-import { resolveFromAppRoot } from './lib/runtimePaths.js';
+import { resolveFromAppRoot } from './src/runtimePaths';
 
 let temporalOrchestration = null;
 const USE_TEMPORAL_ORCHESTRATION = process.env.USE_TEMPORAL_ORCHESTRATION === 'true';

@@ -11,7 +11,7 @@ import {
   fetchWithPool,
   getPoolStats,
   destroyPool,
-} from '../../lib/http.js';
+} from '../../src/http';
 
 describe('http module', () => {
   describe('agent configuration', () => {

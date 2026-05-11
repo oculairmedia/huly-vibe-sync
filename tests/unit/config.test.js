@@ -11,7 +11,7 @@ import {
   getConfigSummary,
   isLettaEnabled,
   getEnvironmentOverrides,
-} from '../../lib/config.js';
+} from '../../src/config';
 
 describe('config', () => {
   // Store original environment variables

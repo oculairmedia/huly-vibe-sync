@@ -25,7 +25,7 @@ const stacksSchema = z.object({
 
 const lettaSchema = z
   .object({
-    enabled: z.any(),
+    enabled: z.boolean().or(z.unknown()),
     baseURL: z.string().optional(),
     password: z.string().optional(),
   })
@@ -117,3 +117,5 @@ export const configSchema = z.object({
   projectMcp: projectMcpSchema,
   doltHub: doltHubSchema,
 });
+
+export type AppConfig = z.infer<typeof configSchema>;

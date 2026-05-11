@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { configSchema } from './configSchema.js';
+import { configSchema, type AppConfig } from './configSchema';
 
-function parseBookMappings(raw) {
+function parseBookMappings(raw: string | undefined): { projectIdentifier: string; bookSlug: string }[] {
   if (!raw) return [];
   return raw
     .split(',')
@@ -9,33 +9,33 @@ function parseBookMappings(raw) {
     .filter(Boolean)
     .map((pair) => {
       const [projectIdentifier, bookSlug] = pair.split(':').map((s) => s.trim());
-      return { projectIdentifier, bookSlug };
+      return { projectIdentifier: projectIdentifier!, bookSlug: bookSlug! };
     })
     .filter((m) => m.projectIdentifier && m.bookSlug);
 }
 
-export function loadConfig() {
-  const config = {
+export function loadConfig(): AppConfig {
+  const config: AppConfig = {
     sync: {
-      interval: parseInt(process.env.SYNC_INTERVAL || '300000'),
+      interval: parseInt(process.env.SYNC_INTERVAL || '300000', 10),
       dryRun: process.env.DRY_RUN === 'true',
       incremental: process.env.INCREMENTAL_SYNC !== 'false',
       parallel: process.env.PARALLEL_SYNC === 'true',
-      maxWorkers: parseInt(process.env.MAX_WORKERS || '5'),
+      maxWorkers: parseInt(process.env.MAX_WORKERS || '5', 10),
       skipEmpty: process.env.SKIP_EMPTY_PROJECTS === 'true',
-      apiDelay: parseInt(process.env.API_DELAY || '10'),
+      apiDelay: parseInt(process.env.API_DELAY || '10', 10),
     },
     reconciliation: {
       enabled: process.env.RECONCILIATION_ENABLED !== 'false',
-      intervalMinutes: parseInt(process.env.RECONCILIATION_INTERVAL_MINUTES || '1440'),
-      action: process.env.RECONCILIATION_ACTION || 'mark_deleted',
+      intervalMinutes: parseInt(process.env.RECONCILIATION_INTERVAL_MINUTES || '1440', 10),
+      action: (process.env.RECONCILIATION_ACTION || 'mark_deleted') as 'mark_deleted' | 'hard_delete',
       dryRun: process.env.RECONCILIATION_DRY_RUN === 'true',
     },
     stacks: {
       baseDir: process.env.STACKS_DIR || '/opt/stacks',
     },
     letta: {
-      enabled: process.env.LETTA_BASE_URL && process.env.LETTA_PASSWORD,
+      enabled: Boolean(process.env.LETTA_BASE_URL && process.env.LETTA_PASSWORD),
       baseURL: process.env.LETTA_BASE_URL,
       password: process.env.LETTA_PASSWORD,
     },
@@ -45,14 +45,14 @@ export function loadConfig() {
       groupIdPrefix: process.env.GRAPHITI_GROUP_ID_PREFIX || 'vibesync_',
       astEnabled: process.env.GRAPHITI_AST_ENABLED !== 'false',
       astGroupIdPrefix: process.env.GRAPHITI_AST_GROUP_ID_PREFIX || 'ast_',
-      timeout: parseInt(process.env.GRAPHITI_TIMEOUT || '30000'),
-      retries: parseInt(process.env.GRAPHITI_RETRIES || '3'),
+      timeout: parseInt(process.env.GRAPHITI_TIMEOUT || '30000', 10),
+      retries: parseInt(process.env.GRAPHITI_RETRIES || '3', 10),
     },
     codePerception: {
       enabled: process.env.CODE_PERCEPTION_ENABLED === 'true',
-      debounceMs: parseInt(process.env.CODE_PERCEPTION_DEBOUNCE_MS || '2000'),
-      batchSize: parseInt(process.env.CODE_PERCEPTION_BATCH_SIZE || '50'),
-      maxFileSizeKb: parseInt(process.env.CODE_PERCEPTION_MAX_FILE_SIZE_KB || '500'),
+      debounceMs: parseInt(process.env.CODE_PERCEPTION_DEBOUNCE_MS || '2000', 10),
+      batchSize: parseInt(process.env.CODE_PERCEPTION_BATCH_SIZE || '50', 10),
+      maxFileSizeKb: parseInt(process.env.CODE_PERCEPTION_MAX_FILE_SIZE_KB || '500', 10),
       excludePatterns: (
         process.env.CODE_PERCEPTION_EXCLUDE_PATTERNS ||
         process.env.AST_EXCLUDE_PATTERNS ||
@@ -72,14 +72,14 @@ export function loadConfig() {
       url: process.env.BOOKSTACK_URL || 'http://192.168.50.80:8087',
       tokenId: process.env.BOOKSTACK_TOKEN_ID || '',
       tokenSecret: process.env.BOOKSTACK_TOKEN_SECRET || '',
-      syncInterval: parseInt(process.env.BOOKSTACK_SYNC_INTERVAL || '3600000'),
+      syncInterval: parseInt(process.env.BOOKSTACK_SYNC_INTERVAL || '3600000', 10),
       exportFormats: (process.env.BOOKSTACK_EXPORT_FORMATS || 'markdown').split(','),
       exportImages: process.env.BOOKSTACK_EXPORT_IMAGES !== 'false',
       exportAttachments: process.env.BOOKSTACK_EXPORT_ATTACHMENTS !== 'false',
       exportMeta: process.env.BOOKSTACK_EXPORT_META !== 'false',
       modifyMarkdownLinks: process.env.BOOKSTACK_MODIFY_LINKS !== 'false',
       docsSubdir: process.env.BOOKSTACK_DOCS_SUBDIR || 'docs/bookstack',
-      projectBookMappings: parseBookMappings(process.env.BOOKSTACK_PROJECT_BOOKS || ''),
+      projectBookMappings: parseBookMappings(process.env.BOOKSTACK_PROJECT_BOOKS),
       exporterOutputPath: process.env.BOOKSTACK_EXPORTER_OUTPUT || '/bookstack-exports',
       importOnSync: process.env.BOOKSTACK_IMPORT_ON_SYNC === 'true',
       bidirectionalSync: process.env.BOOKSTACK_BIDIRECTIONAL_SYNC === 'true',
@@ -94,7 +94,7 @@ export function loadConfig() {
       apiUrl: process.env.DOLTHUB_API_URL || 'https://www.dolthub.com/api/v1alpha1',
       apiToken: process.env.DOLTHUB_API_TOKEN || '',
       owner: process.env.DOLTHUB_OWNER || 'oulair',
-      defaultVisibility: process.env.DOLTHUB_DEFAULT_VISIBILITY || 'private',
+      defaultVisibility: (process.env.DOLTHUB_DEFAULT_VISIBILITY || 'private') as 'public' | 'private',
       remoteName: process.env.DOLTHUB_REMOTE_NAME || 'origin',
     },
   };
@@ -110,7 +110,7 @@ export function loadConfig() {
   return config;
 }
 
-export function validateConfig(config) {
+export function validateConfig(config: AppConfig): void {
   if (isNaN(config.sync.interval) || config.sync.interval < 1000) {
     throw new Error('SYNC_INTERVAL must be a number >= 1000 (milliseconds)');
   }
@@ -156,7 +156,7 @@ export function validateConfig(config) {
   }
 }
 
-export function getConfigSummary(config) {
+export function getConfigSummary(config: AppConfig) {
   return {
     stacksDir: config.stacks.baseDir,
     syncInterval: `${config.sync.interval / 1000}s`,
@@ -174,7 +174,7 @@ export function getConfigSummary(config) {
     graphitiAstEnabled: config.graphiti.astEnabled,
     codePerceptionEnabled: config.codePerception.enabled,
     codePerceptionAllowlistMode: config.codePerception.allowlistMode,
-    codePerceptionSourceRoots: config.codePerception.sourceRoots.length,
+    codePerceptionSourceRoots: config.codePerception.sourceRoots!.length,
     bookstackEnabled: config.bookstack.enabled,
     bookstackUrl: config.bookstack.enabled ? config.bookstack.url : undefined,
     bookstackMappings: config.bookstack.projectBookMappings.length,
@@ -187,12 +187,12 @@ export function getConfigSummary(config) {
   };
 }
 
-export function isLettaEnabled(config) {
-  return config.letta.enabled && config.letta.baseURL && config.letta.password;
+export function isLettaEnabled(config: AppConfig): boolean {
+  return Boolean(config.letta.enabled && config.letta.baseURL && config.letta.password);
 }
 
-export function getEnvironmentOverrides(env = process.env.NODE_ENV || 'production') {
-  const overrides = {
+export function getEnvironmentOverrides(env: string = process.env.NODE_ENV || 'production') {
+  const overrides: Record<string, Record<string, unknown>> = {
     test: {
       sync: {
         interval: 1000,

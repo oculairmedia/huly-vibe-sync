@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { configSchema } from '../../lib/configSchema.js';
+import { configSchema } from '../../src/configSchema';
 
 function validConfig(overrides = {}) {
   return {
