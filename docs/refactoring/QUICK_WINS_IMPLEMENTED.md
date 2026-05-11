@@ -162,7 +162,7 @@ function startHealthServer() {
       const uptime = Date.now() - healthStats.startTime;
       const health = {
         status: 'healthy',
-        service: 'vibe-sync',
+        service: 'vibesync',
         version: '1.0.0',
         uptime: { /* ... */ },
         sync: { /* ... */ },
@@ -189,7 +189,7 @@ HEALTH_PORT=3099
 ```json
 {
   "status": "healthy",
-  "service": "vibe-sync",
+  "service": "vibesync",
   "version": "1.0.0",
   "uptime": {
     "milliseconds": 3920,
@@ -230,7 +230,7 @@ curl http://localhost:3099/health | jq '.'
 **Monitor in Prometheus:**
 ```yaml
 scrape_configs:
-  - job_name: 'vibe-sync'
+  - job_name: 'vibesync'
     static_configs:
       - targets: ['localhost:3099']
 ```
@@ -259,7 +259,7 @@ scrape_configs:
 
 ### Test Execution
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 DRY_RUN=true SYNC_INTERVAL=0 node index.js
 ```
 

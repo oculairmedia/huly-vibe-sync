@@ -69,7 +69,7 @@ def look_at_file(file_path: str, start_line: int = 1, max_lines: int = 200) -> d
         if os.path.isfile(full_path):
             result["mode"] = "local"
     
-    # If not local, try remote via vibe-sync API
+    # If not local, try remote via vibesync API
     if result["mode"] == "unknown" and vibe_sync_url:
         try:
             resp = requests.post(

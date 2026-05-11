@@ -174,7 +174,7 @@ if (legacyChanged && vibeChanged) {
 2. **Check database state:**
    ```bash
    # Enter container
-   docker-compose -f docker-compose.local.yml exec vibe-sync sh
+   docker-compose -f docker-compose.local.yml exec vibesync sh
 
    # Query database
    sqlite3 /app/logs/sync-state.db "SELECT identifier, title, status FROM issues LIMIT 10;"

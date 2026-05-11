@@ -1,4 +1,4 @@
-# Systems Engineering Review: Vibe Sync
+# Systems Engineering Review: Vibesync
 **Review Date:** 2025-11-03
 **Reviewer:** Systems Engineering Analysis
 **Version:** 1.0.0
@@ -40,7 +40,7 @@ This is a **sophisticated bidirectional synchronization service** integrating th
 **Component Overview:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Vibe Sync Service                   │
+│                    Vibesync Service                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
@@ -206,7 +206,7 @@ Database Size:     ~5-10 MB (estimated for 1000 issues)
 
 **Current Structure:**
 ```
-vibe-sync/
+vibesync/
 ├── index.js (1,652 lines) ⚠️ TOO LARGE
 │   ├── MCPClient class (122 lines)
 │   ├── Text parsers (225 lines)

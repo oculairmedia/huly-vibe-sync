@@ -1,6 +1,6 @@
-# Vibe Sync Dashboard
+# Vibesync Dashboard
 
-Modern, real-time web dashboard for monitoring and managing the Vibe Sync service.
+Modern, real-time web dashboard for monitoring and managing the Vibesync service.
 
 ## Features
 
@@ -190,7 +190,7 @@ The dashboard uses Server-Sent Events (SSE) for real-time updates:
 NEXT_PUBLIC_API_URL=http://localhost:3099
 
 # Application name (optional)
-NEXT_PUBLIC_APP_NAME="Vibe Sync Dashboard"
+NEXT_PUBLIC_APP_NAME="Vibesync Dashboard"
 
 # Polling interval in milliseconds (optional, default: 5000)
 NEXT_PUBLIC_POLLING_INTERVAL=5000
@@ -202,12 +202,12 @@ NEXT_PUBLIC_POLLING_INTERVAL=5000
 
 ```bash
 # Build Docker image
-docker build -t vibe-sync-ui .
+docker build -t vibesync-ui .
 
 # Run container
 docker run -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:3099 \
-  vibe-sync-ui
+  vibesync-ui
 ```
 
 ### Vercel

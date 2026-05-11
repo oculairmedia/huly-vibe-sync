@@ -13,7 +13,7 @@ After clearing all agent state and creating fresh agents, the project-specific `
 During the cleanup phase, we deleted all `.letta` folders from project directories:
 
 ```bash
-find /opt/stacks -type d -name ".letta" ! -path "*/vibe-sync/*" -exec rm -rf {} +
+find /opt/stacks -type d -name ".letta" ! -path "*/vibesync/*" -exec rm -rf {} +
 ```
 
 The SyncOrchestrator was calling `lettaService.saveAgentId()` to save to the central file, but not `lettaService.saveAgentIdToProjectFolder()` to save to project-specific locations.

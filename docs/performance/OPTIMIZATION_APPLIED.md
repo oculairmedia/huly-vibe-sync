@@ -130,7 +130,7 @@ MAX_WORKERS=3
 
 If any issues occur:
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 cp .env.backup-* .env
 docker-compose down && docker-compose up -d
 ```

@@ -18,7 +18,7 @@ curl -X PATCH "https://letta.oculair.ca/v1/agents/agent-0a2b4b2e-c578-4b04-93d6-
 
 2. **Wait ~30 seconds** (or restart service for immediate sync):
 ```bash
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 ```
 
 3. **Done!** All 42 PM agents now have the new tool.
@@ -31,7 +31,7 @@ docker-compose restart vibe-sync
 LETTA_SYNC_TOOLS_FORCE=true
 
 # Restart
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 ```
 
 2. **Detach tool from Control Agent**:
@@ -45,7 +45,7 @@ curl -X PATCH "https://letta.oculair.ca/v1/agents/agent-0a2b4b2e-c578-4b04-93d6-
 4. **Disable force mode**:
 ```bash
 LETTA_SYNC_TOOLS_FORCE=false
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 ```
 
 ## Manual Sync (Immediate)
@@ -106,7 +106,7 @@ curl -X PATCH "https://letta.oculair.ca/v1/agents/agent-0a2b4b2e-c578-4b04-93d6-
 
 ```bash
 # Check sync logs
-docker-compose logs -f vibe-sync | grep "Tools synced"
+docker-compose logs -f vibesync | grep "Tools synced"
 
 # Output:
 # [Letta] ✓ Tools synced: 3 attached, 0 detached

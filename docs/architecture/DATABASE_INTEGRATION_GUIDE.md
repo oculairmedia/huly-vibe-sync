@@ -18,7 +18,7 @@ Replace the fragile JSON file state management with a proper SQLite database for
 ## 🔧 Step 1: Install Dependencies
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 npm install
 ```
 

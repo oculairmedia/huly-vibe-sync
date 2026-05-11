@@ -138,10 +138,10 @@ async function fetchAgentsToProvision(projectIdentifiers) {
         if (projectIdentifiers && projectIdentifiers.length > 0) {
             projects = registryProjects.filter((p) => projectIdentifiers.includes(p.identifier));
         }
-        // Get existing Letta agents with huly-vibe-sync tag
+        // Get existing Letta agents with vibesync tag
         // Using matchAllTags ensures we only get agents that belong to our sync system
         const existingAgents = await lettaClient.agents.list({
-            tags: ['huly-vibe-sync'],
+            tags: ['vibesync'],
             limit: 500,
         });
         // Build map of project identifier -> agent ID
@@ -162,7 +162,7 @@ async function fetchAgentsToProvision(projectIdentifiers) {
                 agentByProject.set(projectId, agent.id);
             }
         }
-        console.log(`[Activity:FetchAgents] Found ${existingAgents.length} existing huly-vibe-sync agents`);
+        console.log(`[Activity:FetchAgents] Found ${existingAgents.length} existing vibesync agents`);
         // Build list of agents to provision
         const agentsToProvision = [];
         for (const project of projects) {
@@ -210,7 +210,7 @@ async function provisionSingleAgent(projectIdentifier, projectName) {
         // This mirrors the deduplication logic in LettaService.ensureAgent()
         const existingAgents = await lettaClient.agents.list({
             name: agentName,
-            tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+            tags: ['vibesync', `project:${projectIdentifier}`],
             matchAllTags: true, // Must have BOTH tags - critical for deduplication
             limit: 100,
         });
@@ -265,7 +265,7 @@ async function provisionSingleAgent(projectIdentifier, projectName) {
             agentType: 'letta_v1_agent',
             model: LETTA_MODEL,
             embedding: LETTA_EMBEDDING,
-            tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+            tags: ['vibesync', `project:${projectIdentifier}`],
         });
         console.log(`[Activity:ProvisionAgent] Agent created: ${agent.id}`);
         try {
@@ -407,7 +407,7 @@ async function cleanupFailedProvision(projectIdentifier) {
     try {
         // Find agents for this project using tags
         const allAgents = await lettaClient.agents.list({
-            tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+            tags: ['vibesync', `project:${projectIdentifier}`],
             matchAllTags: true,
             limit: 100,
         });
@@ -510,7 +510,7 @@ async function checkAgentExists(input) {
     try {
         // First check the sync database
         const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
-        const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+        const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {
             const lettaInfo = db.getProjectLettaInfo(projectIdentifier);
@@ -528,7 +528,7 @@ async function checkAgentExists(input) {
         }
         // Fall back to querying Letta API directly
         const existingAgents = await lettaClient.agents.list({
-            tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+            tags: ['vibesync', `project:${projectIdentifier}`],
             matchAllTags: true,
             limit: 10,
         });
@@ -561,7 +561,7 @@ async function updateProjectAgent(input) {
     console.log(`[Activity:UpdateAgent] Updating database for ${projectIdentifier} with agent ${agentId}...`);
     try {
         const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
-        const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+        const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {
             db.setProjectLettaAgent(projectIdentifier, { agentId });

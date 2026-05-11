@@ -285,11 +285,11 @@ Line 4 after blank line
 
       const hulyProject = {
         identifier: 'TEST',
-        description: 'Project description\nFilesystem: /opt/stacks/huly-vibe-sync',
+        description: 'Project description\nFilesystem: /opt/stacks/vibesync',
       };
 
       const path = determineGitRepoPath(hulyProject);
-      expect(path).toBe('/opt/stacks/huly-vibe-sync');
+      expect(path).toBe('/opt/stacks/vibesync');
     });
 
     it('should use placeholder path if filesystem path does not exist', () => {
@@ -454,11 +454,11 @@ Line 4 after blank line
       expect(await resolveGitUrl(null)).toBeNull();
     });
 
-    it.skipIf(!fs.existsSync('/opt/stacks/huly-vibe-sync/.git'))(
+    it.skipIf(!fs.existsSync('/opt/stacks/vibesync/.git'))(
       'should resolve a real git repo',
       async () => {
-        const url = await resolveGitUrl('/opt/stacks/huly-vibe-sync');
-        expect(url).toBe('https://github.com/oculairmedia/huly-vibe-sync');
+        const url = await resolveGitUrl('/opt/stacks/vibesync');
+        expect(url).toBe('https://github.com/oculairmedia/vibesync');
       }
     );
   });

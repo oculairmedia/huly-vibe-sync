@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Complete guide for deploying Vibe Sync service and dashboard.
+Complete guide for deploying Vibesync service and dashboard.
 
 ## Table of Contents
 
@@ -24,8 +24,8 @@ The fastest way to run both backend and frontend together.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/vibe-sync.git
-cd vibe-sync
+git clone https://github.com/your-org/vibesync.git
+cd vibesync
 
 # Copy environment file
 cp .env.docker.example .env
@@ -103,10 +103,10 @@ Images are automatically built and pushed to GitHub Container Registry on every 
 
 ```bash
 # Backend
-docker pull ghcr.io/your-org/vibe-sync:latest
+docker pull ghcr.io/your-org/vibesync:latest
 
 # Frontend
-docker pull ghcr.io/your-org/vibe-sync-ui:latest
+docker pull ghcr.io/your-org/vibesync-ui:latest
 ```
 
 ### Authentication
@@ -121,19 +121,19 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 ```bash
 # Backend
 docker run -d \
-  --name vibe-sync \
+  --name vibesync \
   -p 3099:3099 \
   -e REMOVED_API_URL=http://your-legacy-api:3457/api \
   -e VIBE_API_URL=http://your-vibe-api:3105/api \
   -v $(pwd)/logs:/app/logs \
-  ghcr.io/your-org/vibe-sync:latest
+  ghcr.io/your-org/vibesync:latest
 
 # Frontend
 docker run -d \
-  --name vibe-sync-ui \
+  --name vibesync-ui \
   -p 3000:3000 \
   -e NEXT_PUBLIC_API_URL=http://localhost:3099 \
-  ghcr.io/your-org/vibe-sync-ui:latest
+  ghcr.io/your-org/vibesync-ui:latest
 ```
 
 ## Environment Variables
@@ -176,7 +176,7 @@ STACKS_DIR=/opt/stacks
 NEXT_PUBLIC_API_URL=http://localhost:3099
 
 # Application Settings
-NEXT_PUBLIC_APP_NAME="Vibe Sync Dashboard"
+NEXT_PUBLIC_APP_NAME="Vibesync Dashboard"
 NEXT_PUBLIC_POLLING_INTERVAL=5000
 ```
 
@@ -205,7 +205,7 @@ docker secret create letta_password -
 docker run --read-only \
   --tmpfs /tmp \
   --tmpfs /app/logs \
-  ghcr.io/your-org/vibe-sync:latest
+  ghcr.io/your-org/vibesync:latest
 ```
 
 ### 3. Networking
@@ -228,7 +228,7 @@ docker run \
   --log-driver json-file \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
-  ghcr.io/your-org/vibe-sync:latest
+  ghcr.io/your-org/vibesync:latest
 ```
 
 ### 5. Health Checks
@@ -258,7 +258,7 @@ readinessProbe:
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'vibe-sync'
+  - job_name: 'vibesync'
     static_configs:
       - targets: ['localhost:3099']
     metrics_path: '/metrics'
@@ -285,7 +285,7 @@ Key metrics:
 ```yaml
 # Prometheus alerts
 groups:
-  - name: vibe-sync
+  - name: vibesync
     rules:
       - alert: SyncFailureRate
         expr: rate(sync_runs_total{status="error"}[5m]) > 0.1
@@ -306,20 +306,20 @@ groups:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vibe-sync
+  name: vibesync
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: vibe-sync
+      app: vibesync
   template:
     metadata:
       labels:
-        app: vibe-sync
+        app: vibesync
     spec:
       containers:
       - name: sync
-        image: ghcr.io/your-org/vibe-sync:latest
+        image: ghcr.io/your-org/vibesync:latest
         ports:
         - containerPort: 3099
           name: health
@@ -351,10 +351,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vibe-sync
+  name: vibesync
 spec:
   selector:
-    app: vibe-sync
+    app: vibesync
   ports:
   - port: 3099
     targetPort: 3099
@@ -367,26 +367,26 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: vibe-sync-ui
+  name: vibesync-ui
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: vibe-sync-ui
+      app: vibesync-ui
   template:
     metadata:
       labels:
-        app: vibe-sync-ui
+        app: vibesync-ui
     spec:
       containers:
       - name: ui
-        image: ghcr.io/your-org/vibe-sync-ui:latest
+        image: ghcr.io/your-org/vibesync-ui:latest
         ports:
         - containerPort: 3000
           name: http
         env:
         - name: NEXT_PUBLIC_API_URL
-          value: "http://vibe-sync:3099"
+          value: "http://vibesync:3099"
         resources:
           requests:
             memory: "256Mi"
@@ -398,11 +398,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vibe-sync-ui
+  name: vibesync-ui
 spec:
   type: LoadBalancer
   selector:
-    app: vibe-sync-ui
+    app: vibesync-ui
   ports:
   - port: 80
     targetPort: 3000
@@ -415,7 +415,7 @@ spec:
 
 ```bash
 # Check logs
-docker logs vibe-sync
+docker logs vibesync
 
 # Check health
 curl http://localhost:3099/health
@@ -428,7 +428,7 @@ curl http://localhost:3099/metrics
 
 ```bash
 # Check logs
-docker logs vibe-sync-ui
+docker logs vibesync-ui
 
 # Check build logs
 docker build --progress=plain ./ui
@@ -453,26 +453,26 @@ docker-compose restart backend
 
 ```bash
 # Backup sync state database
-docker cp vibe-sync:/app/logs/sync-state.db ./backup/
+docker cp vibesync:/app/logs/sync-state.db ./backup/
 
 # Backup logs
-docker cp vibe-sync:/app/logs ./backup/logs/
+docker cp vibesync:/app/logs ./backup/logs/
 ```
 
 ### Restore
 
 ```bash
 # Restore database
-docker cp ./backup/sync-state.db vibe-sync:/app/logs/
+docker cp ./backup/sync-state.db vibesync:/app/logs/
 
 # Restart service
-docker restart vibe-sync
+docker restart vibesync
 ```
 
 ## Support
 
 For deployment issues:
-- Check logs: `docker logs vibe-sync`
+- Check logs: `docker logs vibesync`
 - Review health endpoint: `/health`
 - Open GitHub issue with logs and configuration (redact secrets!)
 

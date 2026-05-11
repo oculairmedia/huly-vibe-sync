@@ -20,7 +20,7 @@ const mockProjects = [
 ];
 
 const mockLettaAgents = [
-  { id: 'agent-1', name: 'PM - Project One', tags: ['huly-vibe-sync', 'project:PROJ1'] },
+  { id: 'agent-1', name: 'PM - Project One', tags: ['vibesync', 'project:PROJ1'] },
 ];
 
 const mockControlAgent = {

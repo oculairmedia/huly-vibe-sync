@@ -209,7 +209,7 @@ describe('ErrorBoundary', () => {
       const link = screen.getByText('GitHub')
       expect(link).toHaveAttribute(
         'href',
-        'https://github.com/oculairmedia/huly-vibe-sync/issues'
+        'https://github.com/oculairmedia/vibesync/issues'
       )
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')

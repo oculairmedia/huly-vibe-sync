@@ -61,6 +61,7 @@ describe('project registry API routes', () => {
   let mockDb;
   let mockDoltHubProvisioner;
   let mockBeadsIssueService;
+  let mockBeadsAdapter;
   let tempRoot;
   let beadsProjectPath;
   let nonBeadsProjectPath;
@@ -168,12 +169,12 @@ describe('project registry API routes', () => {
         if (identifier === 'HVSYN') {
           return {
             identifier: 'HVSYN',
-            name: 'Vibe Sync Service',
+            name: 'Vibesync Service',
             status: 'active',
             tech_stack: 'node',
             issue_count: 2,
-            filesystem_path: '/opt/stacks/huly-vibe-sync',
-            git_url: 'https://github.com/oculairmedia/huly-vibe-sync.git',
+            filesystem_path: '/opt/stacks/vibesync',
+            git_url: 'https://github.com/oculairmedia/vibesync.git',
             last_sync_at: 1700000000000,
             last_checked_at: 1700000100000,
             updated_at: 1700000200000,
@@ -284,8 +285,9 @@ describe('project registry API routes', () => {
         };
       }),
       getProjectFilesystemPath: vi.fn(() => null),
+      updateProjectActivity: vi.fn(),
       resolveProjectIdentifier: vi.fn((identifier) => {
-        if (identifier === 'huly-vibe-sync') return 'HVSYN';
+        if (identifier === 'vibesync') return 'HVSYN';
         if (identifier === 'PROJ-A' || identifier === 'HVSYN') return identifier;
         return null;
       }),
@@ -347,6 +349,24 @@ describe('project registry API routes', () => {
       })),
     };
 
+    mockBeadsAdapter = {
+      listIssues: vi.fn(async () => ({
+        items: [
+          {
+            id: 'PROJ-A-BEADS-1',
+            title: 'Fallback Beads task',
+            status: 'open',
+            priority: 'high',
+            type: 'bug',
+            description: 'Hydrated from project Beads store',
+            labels: ['fallback'],
+            createdAt: '2026-05-01T00:00:00.000Z',
+            updatedAt: '2026-05-02T00:00:00.000Z',
+          },
+        ],
+      })),
+    };
+
     server = createApiServer({
       config: {
         vibeKanban: { apiUrl: 'http://localhost:9717' },
@@ -361,6 +381,7 @@ describe('project registry API routes', () => {
       projectRegistry: mockProjectRegistry,
       doltHubProvisioner: mockDoltHubProvisioner,
       beadsIssueService: mockBeadsIssueService,
+      beadsAdapter: mockBeadsAdapter,
     });
 
     await new Promise((resolve) => {
@@ -489,7 +510,7 @@ describe('project registry API routes', () => {
     });
 
     it('should resolve folder slugs to canonical project identifiers for detail', async () => {
-      const res = await makeRequest(port, 'GET', '/api/projects/huly-vibe-sync');
+      const res = await makeRequest(port, 'GET', '/api/projects/vibesync');
 
       expect(res.statusCode).toBe(200);
       expect(res.body.project.identifier).toBe('HVSYN');
@@ -662,7 +683,7 @@ describe('project registry API routes', () => {
       mockDoltHubProvisioner.provisionProject.mockClear();
 
       const res = await makeRequest(port, 'POST', '/api/projects/beads-remote/provision', {
-        identifiers: ['huly-vibe-sync'],
+        identifiers: ['vibesync'],
         push: false,
       });
 
@@ -809,6 +830,26 @@ describe('project registry API routes', () => {
       expect(res.body.work_items[0].id).toBe('PROJ-A-2');
       expect(res.body.page.total_known).toBe(1);
     });
+
+    it('should fall back to the project Beads store when cached work items are empty', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([]);
+      mockBeadsAdapter.listIssues.mockClear();
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/work-items');
+
+      expect(res.statusCode).toBe(200);
+      expect(mockBeadsAdapter.listIssues).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'PROJ-A', filesystem_path: beadsProjectPath }),
+        {},
+        { forceRefresh: true },
+      );
+      expect(res.body.work_items).toHaveLength(1);
+      expect(res.body.work_items[0]).toEqual(
+        expect.objectContaining({ id: 'PROJ-A-BEADS-1', title: 'Fallback Beads task' }),
+      );
+      expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
+      expect(mockDb.updateProjectActivity).toHaveBeenCalledWith('PROJ-A', 1);
+    });
   });
 
   describe('GET /api/projects/:id/issues', () => {
@@ -841,7 +882,7 @@ describe('project registry API routes', () => {
     });
 
     it('should resolve folder slugs before listing Android issue summaries', async () => {
-      const res = await makeRequest(port, 'GET', '/api/projects/huly-vibe-sync/issues');
+      const res = await makeRequest(port, 'GET', '/api/projects/vibesync/issues');
 
       expect(res.statusCode).toBe(200);
       expect(res.body.projectId).toBe('HVSYN');
@@ -865,6 +906,27 @@ describe('project registry API routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body.issues.map((issue) => issue.id)).toEqual(['PROJ-A-3', 'PROJ-A-2']);
+    });
+
+    it('should fall back to the project Beads store when cached issue rows are empty', async () => {
+      mockDb.getProjectIssues.mockReturnValueOnce([]);
+      mockBeadsAdapter.listIssues.mockClear();
+
+      const res = await makeRequest(port, 'GET', '/api/projects/PROJ-A/issues');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.issues).toHaveLength(1);
+      expect(res.body.issues[0]).toEqual(
+        expect.objectContaining({
+          id: 'PROJ-A-BEADS-1',
+          projectId: 'PROJ-A',
+          title: 'Fallback Beads task',
+          type: 'bug',
+          status: 'open',
+          labels: ['fallback'],
+        }),
+      );
+      expect(res.body.data_freshness).toEqual(expect.objectContaining({ source: 'beads' }));
     });
   });
 

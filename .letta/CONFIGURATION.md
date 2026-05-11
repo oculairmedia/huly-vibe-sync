@@ -13,7 +13,7 @@ Team-wide configuration that can be committed to git.
 {
   "version": "1.0.0",
   "project": {
-    "name": "vibe-sync",
+    "name": "vibesync",
     "description": "Service description",
     "memory": {
       "project_context": "Context shared across all agents"

@@ -21,9 +21,9 @@ Suspected variable scope issues or async race conditions in the project processi
 
 ### 2. Code Review
 Examined:
-- `/opt/stacks/vibe-sync/index.js` lines 1028-1258 (project processing loop)
-- `/opt/stacks/vibe-sync/lib/LettaService.js` lines 1095-1225 (`upsertMemoryBlocks()`)
-- `/opt/stacks/vibe-sync/lib/LettaService.js` lines 1322-1342 (`buildProjectMeta()`)
+- `/opt/stacks/vibesync/index.js` lines 1028-1258 (project processing loop)
+- `/opt/stacks/vibesync/lib/LettaService.js` lines 1095-1225 (`upsertMemoryBlocks()`)
+- `/opt/stacks/vibesync/lib/LettaService.js` lines 1322-1342 (`buildProjectMeta()`)
 
 **Finding**: Code logic was correct. Sequential processing (default mode) properly passed individual project objects without variable reuse issues.
 
@@ -99,13 +99,13 @@ The normal sync process with a clean Docker rebuild corrected all the data autom
 
 ## Files Modified (Temporary)
 
-- `/opt/stacks/vibe-sync/index.js` - Added debug logging (lines 1228-1236)
+- `/opt/stacks/vibesync/index.js` - Added debug logging (lines 1228-1236)
 - **Reverted** - Debug logging removed after verification
 
 ## Environment
 
-- **Service**: `/opt/stacks/vibe-sync`
-- **Docker Container**: `vibe-sync`
+- **Service**: `/opt/stacks/vibesync`
+- **Docker Container**: `vibesync`
 - **Letta API**: `http://192.168.50.90:8283` (direct) / `http://192.168.50.90:8289` (proxy)
 - **Database**: SQLite at `logs/sync-state.db`
 - **Sync Interval**: 30 seconds

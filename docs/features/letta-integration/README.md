@@ -1,6 +1,6 @@
 # Letta Integration Feature Documentation
 
-Documentation for Letta agent integration with the Vibe Sync system.
+Documentation for Letta agent integration with the Vibesync system.
 
 ## Integration Documentation
 

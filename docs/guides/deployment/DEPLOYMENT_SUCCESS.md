@@ -50,7 +50,7 @@ Successfully implemented, tested, and deployed the VibeRestClient to production.
 
 ### Docker Build
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose build --no-cache
 docker-compose down
 docker-compose up -d
@@ -75,7 +75,7 @@ Coverage:   87.97% overall
 ```json
 {
   "status": "healthy",
-  "service": "vibe-sync",
+  "service": "vibesync",
   "uptime": "21s",
   "sync": {
     "totalSyncs": 0,
@@ -290,7 +290,7 @@ Key improvements:
 - Cleaner, more maintainable code
 
 Health endpoint: http://localhost:3099/health
-Documentation: /opt/stacks/vibe-sync/VIBERESTCLIENT_IMPLEMENTATION.md
+Documentation: /opt/stacks/vibesync/VIBERESTCLIENT_IMPLEMENTATION.md
 ```
 
 ---

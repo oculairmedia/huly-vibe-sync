@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   return NextResponse.json({
     status: 'healthy',
-    service: 'huly-vibe-sync-ui',
+    service: 'vibesync-ui',
     timestamp: new Date().toISOString()
   })
 }

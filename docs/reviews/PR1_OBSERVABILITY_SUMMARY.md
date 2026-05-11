@@ -106,7 +106,7 @@ log.info({ count: 5, syncId }, 'Processing projects');
 ```json
 {
   "status": "healthy",
-  "service": "vibe-sync",
+  "service": "vibesync",
   "version": "1.0.0",
   "uptime": { "milliseconds": 26245, "seconds": 26, "human": "26s" },
   "sync": {
@@ -153,15 +153,15 @@ issues_synced 299
 ## Sample Structured Logs
 
 ```json
-{"level":"info","time":"2025-11-04T05:38:00.439Z","service":"vibe-sync","pid":1,"dbPath":"/app/logs/sync-state.db","msg":"Database initialized successfully"}
+{"level":"info","time":"2025-11-04T05:38:00.439Z","service":"vibesync","pid":1,"dbPath":"/app/logs/sync-state.db","msg":"Database initialized successfully"}
 
-{"level":"info","time":"2025-11-04T05:38:00.481Z","service":"vibe-sync","pid":1,"syncId":280,"msg":"Starting bidirectional sync"}
+{"level":"info","time":"2025-11-04T05:38:00.481Z","service":"vibesync","pid":1,"syncId":280,"msg":"Starting bidirectional sync"}
 
-{"level":"info","time":"2025-11-04T05:38:00.627Z","service":"vibe-sync","pid":1,"syncId":280,"count":44,"msg":"Fetched Legacy projects"}
+{"level":"info","time":"2025-11-04T05:38:00.627Z","service":"vibesync","pid":1,"syncId":280,"count":44,"msg":"Fetched Legacy projects"}
 
-{"level":"info","time":"2025-11-04T05:38:00.733Z","service":"vibe-sync","pid":1,"syncId":280,"project":"GRAPH","name":"Graphiti Knowledge Graph Platform","msg":"Processing project"}
+{"level":"info","time":"2025-11-04T05:38:00.733Z","service":"vibesync","pid":1,"syncId":280,"project":"GRAPH","name":"Graphiti Knowledge Graph Platform","msg":"Processing project"}
 
-{"level":"error","time":"2025-11-04T05:38:01.234Z","service":"vibe-sync","pid":1,"syncId":280,"err":{"type":"ReferenceError","message":"require is not defined","stack":"..."},"project":"GRAPH","msg":"Letta PM agent memory update failed"}
+{"level":"error","time":"2025-11-04T05:38:01.234Z","service":"vibesync","pid":1,"syncId":280,"err":{"type":"ReferenceError","message":"require is not defined","stack":"..."},"project":"GRAPH","msg":"Letta PM agent memory update failed"}
 ```
 
 ## Dependencies Added

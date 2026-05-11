@@ -49,7 +49,7 @@ You can use the Letta CLI to interact with agents directly:
 
 ```bash
 # Navigate to project directory
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 
 # List available agents
 letta agents list
@@ -89,7 +89,7 @@ docker-compose restart
 ## Integration
 
 Agent IDs are automatically synchronized between:
-1. **SQLite Database** (`vibe-sync.db`) - Primary storage
+1. **SQLite Database** (`vibesync.db`) - Primary storage
 2. **`.letta/settings.local.json`** - Letta-Code compatible format
 
 Both sources are kept in sync during every sync cycle.

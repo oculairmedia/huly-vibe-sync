@@ -129,7 +129,7 @@ To test the optimizations:
 
 ```bash
 # Clear cache before first sync
-cd /opt/stacks/vibe-sync && node index.js
+cd /opt/stacks/vibesync && node index.js
 
 # Observe logs:
 # - "Skipped N unchanged blocks" (content hashing working)

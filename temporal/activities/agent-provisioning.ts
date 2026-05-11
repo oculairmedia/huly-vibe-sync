@@ -139,10 +139,10 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
       projects = registryProjects.filter((p: any) => projectIdentifiers.includes(p.identifier));
     }
 
-    // Get existing Letta agents with huly-vibe-sync tag
+    // Get existing Letta agents with vibesync tag
     // Using matchAllTags ensures we only get agents that belong to our sync system
     const existingAgents = await lettaClient.agents.list({
-      tags: ['huly-vibe-sync'],
+      tags: ['vibesync'],
       limit: 500,
     });
 
@@ -168,7 +168,7 @@ export async function fetchAgentsToProvision(projectIdentifiers?: string[]): Pro
     }
 
     console.log(
-      `[Activity:FetchAgents] Found ${existingAgents.length} existing huly-vibe-sync agents`
+      `[Activity:FetchAgents] Found ${existingAgents.length} existing vibesync agents`
     );
 
     // Build list of agents to provision
@@ -233,7 +233,7 @@ export async function provisionSingleAgent(
     // This mirrors the deduplication logic in LettaService.ensureAgent()
     const existingAgents = await lettaClient.agents.list({
       name: agentName,
-      tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+      tags: ['vibesync', `project:${projectIdentifier}`],
       matchAllTags: true, // Must have BOTH tags - critical for deduplication
       limit: 100,
     });
@@ -310,7 +310,7 @@ export async function provisionSingleAgent(
       agentType: 'letta_v1_agent',
       model: LETTA_MODEL,
       embedding: LETTA_EMBEDDING,
-      tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+      tags: ['vibesync', `project:${projectIdentifier}`],
     });
 
     console.log(`[Activity:ProvisionAgent] Agent created: ${agent.id}`);
@@ -489,7 +489,7 @@ export async function cleanupFailedProvision(projectIdentifier: string): Promise
   try {
     // Find agents for this project using tags
     const allAgents = await lettaClient.agents.list({
-      tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+      tags: ['vibesync', `project:${projectIdentifier}`],
       matchAllTags: true,
       limit: 100,
     });
@@ -660,7 +660,7 @@ export async function checkAgentExists(
   try {
     // First check the sync database
     const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
-    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+    const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
 
     try {
@@ -679,7 +679,7 @@ export async function checkAgentExists(
 
     // Fall back to querying Letta API directly
     const existingAgents = await lettaClient.agents.list({
-      tags: ['huly-vibe-sync', `project:${projectIdentifier}`],
+      tags: ['vibesync', `project:${projectIdentifier}`],
       matchAllTags: true,
       limit: 10,
     });
@@ -733,7 +733,7 @@ export async function updateProjectAgent(
 
   try {
     const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
-    const dbPath = process.env.DB_PATH || '/opt/stacks/huly-vibe-sync/logs/sync-state.db';
+    const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
     const db = createSyncDatabase(dbPath);
 
     try {

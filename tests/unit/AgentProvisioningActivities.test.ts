@@ -55,7 +55,7 @@ import { checkAgentExists, updateProjectAgent } from '../../temporal/activities/
 describe('Agent Provisioning Activities (real implementation)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.DB_PATH = '/tmp/huly-vibe-sync-test.db';
+    process.env.DB_PATH = '/tmp/vibesync-test.db';
 
     mockCreateSyncDatabase.mockReturnValue(mockDb);
     mockDb.getProjectLettaInfo.mockReturnValue(undefined);
@@ -93,7 +93,7 @@ describe('Agent Provisioning Activities (real implementation)', () => {
         source: 'letta',
       });
       expect(mockLettaAgentsList).toHaveBeenCalledWith({
-        tags: ['huly-vibe-sync', 'project:HVSYN'],
+        tags: ['vibesync', 'project:HVSYN'],
         matchAllTags: true,
         limit: 10,
       });

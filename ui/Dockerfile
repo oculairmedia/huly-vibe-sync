@@ -1,4 +1,4 @@
-# Huly-Vibe Sync UI - Production Dockerfile
+# Vibesync UI - Production Dockerfile
 # Multi-stage build for optimized image size
 
 # Stage 1: Install dependencies

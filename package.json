@@ -1,5 +1,5 @@
 {
-  "name": "vibe-sync",
+  "name": "vibesync",
   "version": "1.0.0",
   "description": "Project sync service with PM agent orchestration",
   "main": "index.js",
@@ -32,7 +32,7 @@
     "vibesync": "node cli.js"
   },
   "keywords": [
-    "vibe-sync",
+    "vibesync",
     "pm-agents",
     "sync",
     "mcp",

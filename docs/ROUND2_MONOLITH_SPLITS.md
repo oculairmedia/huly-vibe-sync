@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the second round of module decomposition for vibe-sync.
+This document describes the second round of module decomposition for vibesync.
 Five large monolith files (700–1,300 lines each) were split into focused, single-responsibility
 modules using the **facade pattern** — the original file becomes a thin wrapper that delegates
 to new sub-modules, preserving all existing imports and test contracts.

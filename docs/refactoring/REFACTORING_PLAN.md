@@ -1,4 +1,4 @@
-# Vibe Sync - Comprehensive Refactoring Plan
+# Vibesync - Comprehensive Refactoring Plan
 
 ## Executive Summary
 
@@ -435,7 +435,7 @@ for (const project of projectsToSync) {
 
 ### 1. Add Database (30 minutes)
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 npm install better-sqlite3
 # Integration code below
 ```

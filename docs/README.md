@@ -1,6 +1,6 @@
 # Documentation Index
 
-Welcome to the Vibe Sync documentation! This documentation is organized into the following categories:
+Welcome to the Vibesync documentation! This documentation is organized into the following categories:
 
 ## 📚 Quick Start
 

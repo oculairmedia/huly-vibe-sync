@@ -1,4 +1,4 @@
-# Vibe Sync - Session Context
+# Vibesync - Session Context
 
 ## What We Just Completed
 
@@ -8,9 +8,9 @@ Successfully upgraded the Vibe sync service from MCP protocol to REST API with i
 
 ✅ **DEPLOYED AND RUNNING**
 
-- Container: `vibe-sync` - Running with REST API mode
-- Location: `/opt/stacks/vibe-sync`
-- Image: `ghcr.io/oculairmedia/vibe-sync:latest`
+- Container: `vibesync` - Running with REST API mode
+- Location: `/opt/stacks/vibesync`
+- Image: `ghcr.io/oculairmedia/vibesync:latest`
 - Status: Initial full sync in progress (first run)
 
 ## Key Changes Made
@@ -40,7 +40,7 @@ Successfully upgraded the Vibe sync service from MCP protocol to REST API with i
 - **`README.md`**: Documented new features
 
 ### 4. Git Repository
-- Repo: `https://github.com/oculairmedia/vibe-sync`
+- Repo: `https://github.com/oculairmedia/vibesync`
 - All changes committed and pushed
 - GitHub Actions automatically builds Docker images
 - Latest commits:
@@ -53,7 +53,7 @@ Successfully upgraded the Vibe sync service from MCP protocol to REST API with i
 ### First Sync (Currently Running)
 - **Mode**: Full sync of all issues
 - **Duration**: ~2-3 minutes for 44 projects, 250+ issues
-- **Saves**: Timestamp to `/opt/stacks/vibe-sync/logs/.sync-state.json`
+- **Saves**: Timestamp to `/opt/stacks/vibesync/logs/.sync-state.json`
 
 ### Subsequent Syncs (After First Completes)
 - **Mode**: Incremental sync using `modified_after` filter
@@ -93,23 +93,23 @@ node test-rest-client.js
 
 ```bash
 # Check status
-docker ps --filter name=vibe-sync
+docker ps --filter name=vibesync
 
 # View logs
-docker logs vibe-sync -f
+docker logs vibesync -f
 
 # Check if sync completed
-docker logs vibe-sync 2>&1 | grep -E "State saved|sync completed"
+docker logs vibesync 2>&1 | grep -E "State saved|sync completed"
 
 # Count sync cycles
-docker logs vibe-sync 2>&1 | grep "Starting bidirectional sync" | wc -l
+docker logs vibesync 2>&1 | grep "Starting bidirectional sync" | wc -l
 ```
 
 ## Important Notes
 
 1. **Initial sync takes 2-3 minutes** - This is normal for the first run
 2. **State file**: Once created, enables incremental sync
-   - Location: `/opt/stacks/vibe-sync/logs/.sync-state.json`
+   - Location: `/opt/stacks/vibesync/logs/.sync-state.json`
    - Tracks last sync timestamp per project
 
 3. **Sync interval**: Set to 30 seconds to allow initial sync to complete before next cycle
@@ -133,7 +133,7 @@ The Legacy MCP server (`legacy-mcp` container in `/opt/stacks/legacy-selfhost/`)
 ## Files Modified
 
 ```
-/opt/stacks/vibe-sync/
+/opt/stacks/vibesync/
 ├── lib/LegacyRestClient.js          (NEW - REST API client)
 ├── index.js                       (UPDATED - dual-mode support)
 ├── .env                           (UPDATED - REST config)
@@ -149,15 +149,15 @@ The Legacy MCP server (`legacy-mcp` container in `/opt/stacks/legacy-selfhost/`)
 Latest build: **Success** ✓
 - Workflow: Build and Push Docker Image
 - Trigger: Push to main branch
-- Output: `ghcr.io/oculairmedia/vibe-sync:latest`
+- Output: `ghcr.io/oculairmedia/vibesync:latest`
 - Platforms: linux/amd64, linux/arm64
 
 ## Current Deployment
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose ps
-# Should show: vibe-sync - Up and Healthy
+# Should show: vibesync - Up and Healthy
 ```
 
 ---

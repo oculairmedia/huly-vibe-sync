@@ -1,4 +1,4 @@
-# Testing Documentation - vibe-sync
+# Testing Documentation - vibesync
 
 ## Latest Update - VibeRestClient Implementation
 

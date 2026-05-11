@@ -81,7 +81,7 @@
 
 ### Test 3: Watch Logs
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose -f docker-compose.local.yml logs -f | grep -E "Legacy→Vibe|Vibe→Legacy"
 ```
 

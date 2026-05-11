@@ -119,7 +119,7 @@ Result: Status stays "In Progress" ✅
 
 The service is running with the fix applied:
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose up -d
 ```
 

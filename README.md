@@ -1,4 +1,4 @@
-# Vibe Sync Service
+# Vibesync Service
 
 Project registry, Beads issue workflow guidance, and PM-agent coordination service for Oculair project workspaces.
 
@@ -14,7 +14,7 @@ Project registry, Beads issue workflow guidance, and PM-agent coordination servi
 ## Quick Start
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 cp .env.example .env
 docker-compose up -d
 docker-compose logs -f

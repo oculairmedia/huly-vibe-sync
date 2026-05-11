@@ -10,7 +10,7 @@
 | **letta-letta-1** | **100.36%** | 528MB / 4GB | ⚠️ MAXED OUT |
 | **legacy-collaborator-1** | **60.26%** | 181MB | ⚠️ HIGH |
 | **letta-postgres-1** | **43.53%** | 420MB / 2GB | ⚠️ HIGH |
-| **vibe-sync** | **29.58%** | 122MB | ⚠️ MEDIUM |
+| **vibesync** | **29.58%** | 122MB | ⚠️ MEDIUM |
 
 **Issues**:
 - Letta server maxed out at 100% CPU
@@ -43,22 +43,22 @@ SKIP_EMPTY_PROJECTS=true  # Was: false
 |-----------|-------|--------|--------|
 | **letta-letta-1** | **30-33%** | 525MB / 4GB | ✅ **-70%** |
 | **letta-postgres-1** | **3%** | 147MB / 2GB | ✅ **-93%** |
-| **vibe-sync** | **4-7%** | 40MB / 72GB | ✅ **-76%** |
+| **vibesync** | **4-7%** | 40MB / 72GB | ✅ **-76%** |
 
 **Idle State**:
-- vibe-sync: **~5% CPU** (was 29%)
+- vibesync: **~5% CPU** (was 29%)
 - letta-letta-1: **~30% CPU** (was 100%)
 - letta-postgres-1: **~3% CPU** (was 43%)
 
 **During Sync Cycle**:
-- Brief spike to ~30% for vibe-sync
+- Brief spike to ~30% for vibesync
 - Returns to ~5% after cycle completes
 - No more database errors
 
 ## Impact Analysis
 
 ### CPU Reduction
-- **vibe-sync**: 29.58% → **5%** = **83% reduction**
+- **vibesync**: 29.58% → **5%** = **83% reduction**
 - **letta-letta-1**: 100.36% → **30%** = **70% reduction**
 - **letta-postgres-1**: 43.53% → **3%** = **93% reduction**
 - **Combined**: **173% → 38%** = **78% overall reduction**
@@ -88,28 +88,28 @@ Reduction: 93% fewer API calls
 
 **Sample 1** (40s after restart):
 ```
-4.76%  vibe-sync
+4.76%  vibesync
 50.75% letta-letta-1
 11.40% letta-postgres-1
 ```
 
 **Sample 2** (during sync cycle):
 ```
-32.92% vibe-sync (processing 44 projects)
+32.92% vibesync (processing 44 projects)
 85.49% letta-letta-1
 47.74% letta-postgres-1
 ```
 
 **Sample 3** (idle state):
 ```
-4.27%  vibe-sync
+4.27%  vibesync
 30.82% letta-letta-1
 3.04%  letta-postgres-1
 ```
 
 **Sample 4** (20s later, idle):
 ```
-6.82%  vibe-sync
+6.82%  vibesync
 33.33% letta-letta-1
 3.22%  letta-postgres-1
 ```
@@ -230,11 +230,11 @@ docker stats --no-stream | grep -E "(letta|legacy-vibe)"
 docker logs letta-letta-1 --tail=100 | grep -i error
 
 # Verify sync timing
-docker logs vibe-sync | grep "Starting bidirectional"
+docker logs vibesync | grep "Starting bidirectional"
 ```
 
 ### Alert Thresholds
-- **vibe-sync > 15%**: Investigate if stuck in sync
+- **vibesync > 15%**: Investigate if stuck in sync
 - **letta-letta-1 > 50%**: Check for other API clients
 - **letta-postgres-1 > 20%**: Database query optimization needed
 

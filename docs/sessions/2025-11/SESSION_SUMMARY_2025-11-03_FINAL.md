@@ -509,11 +509,11 @@ Three levels of documentation served different needs:
 
 ### Start Service with New Features
 ```bash
-cd /opt/stacks/vibe-sync
-docker-compose up -d vibe-sync
+cd /opt/stacks/vibesync
+docker-compose up -d vibesync
 
 # Watch tool sync in action
-docker-compose logs -f vibe-sync | grep -E "(Syncing tools|Tools synced)"
+docker-compose logs -f vibesync | grep -E "(Syncing tools|Tools synced)"
 ```
 
 ### Manual Tool Sync
@@ -557,7 +557,7 @@ curl -s "https://letta.oculair.ca/v1/agents/AGENT_ID/tools" \
 - **File Cleanup:** `cleanup-all-letta-files.sh`
 
 ### Git
-- **Repository:** https://github.com/oculairmedia/vibe-sync
+- **Repository:** https://github.com/oculairmedia/vibesync
 - **Branch:** `main`
 - **Latest Commit:** `2945acc`
 

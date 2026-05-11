@@ -1,4 +1,4 @@
-# Vibe Sync File Upload Status
+# Vibesync File Upload Status
 **Date:** 2025-11-04
 **Issue:** Agents missing project files/folders
 
@@ -101,7 +101,7 @@ Added Letta environment variables:
 ## Code Locations
 
 ### Where File Upload Happens
-**File:** `/opt/stacks/vibe-sync/index.js`
+**File:** `/opt/stacks/vibesync/index.js`
 **Lines:** 1126-1136
 
 ```javascript
@@ -119,7 +119,7 @@ if (process.env.LETTA_UPLOAD_PROJECT_FILES === 'true') {
 ```
 
 ### Where Errors Need Fixing
-**File:** `/opt/stacks/vibe-sync/lib/LettaService.js`
+**File:** `/opt/stacks/vibesync/lib/LettaService.js`
 **Methods:**
 - `uploadReadme()` - README file upload
 - `uploadProjectFiles()` - Bulk file upload
@@ -135,7 +135,7 @@ export LETTA_BASE_URL=http://192.168.50.90:8289
 export LETTA_PASSWORD=lettaSecurePass123
 
 # Get agent ID
-AGENT_ID=$(curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibe-sync&limit=1" \
+AGENT_ID=$(curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibesync&limit=1" \
   -H "Authorization: Bearer ${LETTA_PASSWORD}" | jq -r '.[0].id')
 
 # List folders attached to agent
@@ -156,7 +156,7 @@ curl -s "${LETTA_BASE_URL}/v1/folders/${FOLDER_ID}/files?limit=10" \
 
 ### Check Upload Logs
 ```bash
-docker logs vibe-sync 2>&1 | grep -E "uploading|uploaded|Discovering.*files"
+docker logs vibesync 2>&1 | grep -E "uploading|uploaded|Discovering.*files"
 ```
 
 ---

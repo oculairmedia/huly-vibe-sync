@@ -118,7 +118,7 @@ docker-compose logs --tail=100 | grep -A 3 "Vibe change is newer"
 ### Watch Logs in Real-Time
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose logs -f
 ```
 
@@ -168,7 +168,7 @@ LIMIT 10;
 If issues arise, you can roll back to the previous version:
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 
 # 1. Revert code changes
 git checkout HEAD~1 lib/SyncOrchestrator.js lib/database.js

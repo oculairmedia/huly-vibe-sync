@@ -1,7 +1,7 @@
 services:
-  vibe-sync:
-    image: ghcr.io/oculairmedia/vibe-sync:latest
-    container_name: vibe-sync
+  vibesync:
+    image: ghcr.io/oculairmedia/vibesync:latest
+    container_name: vibesync
     restart: unless-stopped
     environment:
       # Vibe Kanban Configuration
@@ -113,6 +113,9 @@ services:
       # Access to stacks directory (read-write for state persistence)
       - /opt/stacks:/opt/stacks:rw
 
+      # Static Beads CLI for project-local tracker hydration
+      - /usr/local/bin/bd-binary:/usr/local/bin/bd:ro
+
     network_mode: host
     user: '1000:1000'
 
@@ -164,16 +167,16 @@ services:
       # No individual mounts needed; image node_modules already contains these
     network_mode: host
     depends_on:
-      - vibe-sync
+      - vibesync
     logging:
       driver: 'json-file'
       options:
         max-size: '10m'
         max-file: '3'
 
-  vibe-sync-ui:
+  vibesync-ui:
     image: node:18-alpine
-    container_name: vibe-sync-ui
+    container_name: vibesync-ui
     init: true
     restart: unless-stopped
     working_dir: /app
@@ -192,7 +195,7 @@ services:
       - '3000'
     labels:
       - homepage.group=Productivity
-      - homepage.name=Vibe Sync UI
+      - homepage.name=Vibesync UI
       - homepage.icon=si-react
       - homepage.href=http://192.168.50.90:3110
       - homepage.description=Project synchronization dashboard

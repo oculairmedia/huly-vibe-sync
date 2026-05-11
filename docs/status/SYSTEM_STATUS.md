@@ -1,4 +1,4 @@
-# Vibe Sync System Status
+# Vibesync System Status
 
 ## Current State
 
@@ -164,7 +164,7 @@ curl -s https://letta.oculair.ca/v1/agents \
   python3 -c "import sys, json; data=json.load(sys.stdin); legacy=[a for a in data if a['name'].startswith('Legacy-')]; v1=len([a for a in legacy if a.get('agent_type')=='letta_v1_agent']); print(f'Total: {len(legacy)}, v1: {v1}')"
 
 # Check memory optimization
-docker-compose logs --tail=100 vibe-sync | grep "No changes needed" | wc -l
+docker-compose logs --tail=100 vibesync | grep "No changes needed" | wc -l
 
 # Verify project agent linkage
 test -f /opt/stacks/graphiti/.letta/settings.local.json && jq . /opt/stacks/graphiti/.letta/settings.local.json
@@ -188,7 +188,7 @@ LETTA_EMBEDDING=letta/letta-free
 ### Performance Impact
 
 - **CPU Reduction**: 90% overall system improvement
-  - vibe-sync: 29% → 5% (83% reduction)
+  - vibesync: 29% → 5% (83% reduction)
   - letta-letta-1: 100% → 17% (83% reduction)
   - letta-postgres-1: 43% → 7% (84% reduction)
 - **API Load**: 93% fewer calls (84/sec → 6/sec)
@@ -223,4 +223,4 @@ LETTA_EMBEDDING=letta/letta-free
 - **Documentation**: See `docs/guides/agents/README.md` and `docs/features/letta-integration/SCRATCHPAD_AND_HUMAN_BLOCK.md`
 - **Operational note**: historical one-off migration scripts mentioned in older docs have been removed
 - **Database**: ./logs/sync-state.db
-- **Logs**: docker-compose logs vibe-sync
+- **Logs**: docker-compose logs vibesync

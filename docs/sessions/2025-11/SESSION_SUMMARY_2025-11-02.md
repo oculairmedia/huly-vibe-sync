@@ -11,7 +11,7 @@
 
 ### 2. ✅ **Investigated Letta CPU Usage**
 - **Found**: Two traffic sources hitting Letta
-  1. vibe-sync (172.20.0.1) - 72% of traffic, normal and expected
+  1. vibesync (172.20.0.1) - 72% of traffic, normal and expected
   2. External IP (192.168.50.99) - 28% of traffic, hammering one block
 - **Identified**: 192.168.50.99 = Cloudflare tunnel proxying HTTPS traffic
 - **Verdict**: 17-30% CPU is normal for syncing 42 projects every 30s
@@ -64,7 +64,7 @@
 ## System Status
 
 ### Current Performance
-- ✅ **vibe-sync**: 0-5% CPU (idle most of the time)
+- ✅ **vibesync**: 0-5% CPU (idle most of the time)
 - ✅ **Letta**: 3-62% CPU (much improved from 25-75%)
 - ✅ **searxng_app**: 0.01% CPU (stable, no recycling)
 - ✅ **Overall system**: Running smoothly
@@ -81,7 +81,7 @@
 
 ### Total CPU Reduction
 - **Overall system**: 500% → ~50% CPU (90% reduction)
-- **vibe-sync**: 29% → 0-5% CPU (83-98% reduction)
+- **vibesync**: 29% → 0-5% CPU (83-98% reduction)
 - **Letta**: 25-75% → 3-62% CPU (60-88% reduction at baseline)
 - **searxng**: 30-35% → 0.01% CPU (99.97% reduction)
 
@@ -138,7 +138,7 @@
 
 ### CPU Usage (Steady State)
 - **Letta CPU**: **3.16%** (down from 25-75%) - **88-96% reduction!**
-- **vibe-sync**: 2.61% (normal during sync)
+- **vibesync**: 2.61% (normal during sync)
 - **Total impact**: System baseline CPU dramatically reduced
 
 ### API Request Rate

@@ -489,18 +489,18 @@ curl http://localhost:3099/health
 
 ### Run Tests
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 npm test
 ```
 
 ### View Logs
 ```bash
-docker logs vibe-sync --tail 50
+docker logs vibesync --tail 50
 ```
 
 ### Restart Service
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose restart
 ```
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Fix .letta directory ownership for huly-vibe-sync
+# Fix .letta directory ownership for vibesync
 # Ensures directories are owned by mcp-user (UID 1000) to match container user
 
 echo "Fixing .letta directory ownership..."

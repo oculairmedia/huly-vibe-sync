@@ -43,7 +43,7 @@ After reviewing both the updated proposal and the `letta-code` repository, I rec
 
 ## Key Differences: Our Service vs Letta Code
 
-| Feature | Vibe Sync Service | Letta Code |
+| Feature | Vibesync Service | Letta Code |
 |---------|----------------------|------------|
 | **Purpose** | Automated PM agent with board analysis | Interactive dev agent with code editing |
 | **Execution** | Headless, runs on schedule | Interactive CLI, user-initiated |

@@ -125,9 +125,12 @@ if (config.doltHub?.enabled || config.doltHub?.dryRun) {
 }
 
 let beadsIssueService = null;
+let beadsAdapter = null;
 try {
   const { createBeadsIssueService } = await import('./lib/beads/BeadsIssueService.js');
+  const { BeadsAdapter } = await import('./lib/beads/BeadsAdapter.js');
   beadsIssueService = createBeadsIssueService({ db, logger });
+  beadsAdapter = new BeadsAdapter({ actor: 'vibesync', readonly: true });
   logger.info('Beads issue mutation service initialized');
 } catch (beadsIssueError) {
   logger.warn({ err: beadsIssueError }, 'Failed to initialize Beads issue mutation service');
@@ -223,7 +226,7 @@ if (codePerceptionWatcher && lettaService) {
   logger.info('AstMemorySync initialized - PM agents will receive codebase summaries');
 }
 
-logger.info({ service: 'vibe-sync' }, 'Service starting');
+logger.info({ service: 'vibesync' }, 'Service starting');
 logger.info({ config: getConfigSummary(config) }, 'Configuration loaded');
 
 async function main() {
@@ -280,6 +283,7 @@ async function main() {
     projectRegistry,
     doltHubProvisioner,
     beadsIssueService,
+    beadsAdapter,
   });
 
   await syncController.runSyncWithTimeout();

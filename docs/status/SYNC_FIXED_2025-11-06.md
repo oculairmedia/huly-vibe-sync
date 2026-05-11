@@ -143,7 +143,7 @@ docker-compose logs -f | grep "Vibe→Legacy"
 
 ```bash
 # Restart sync
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose restart
 
 # View logs

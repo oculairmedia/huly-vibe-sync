@@ -1,6 +1,6 @@
 # Systems Engineering Review Update: Proxy Query Parameter Bug Fix
 **Date:** 2025-11-03
-**Scope:** Letta Webhook Proxy + Vibe Sync Duplicate Agent Resolution
+**Scope:** Letta Webhook Proxy + Vibesync Duplicate Agent Resolution
 
 ---
 
@@ -10,7 +10,7 @@ This update documents the resolution of a **critical production bug** that was c
 
 ### Impact Assessment
 - **Severity:** P0 - Critical Production Bug
-- **Affected Systems:** All services using Letta API through the proxy (vibe-sync, potentially others)
+- **Affected Systems:** All services using Letta API through the proxy (vibesync, potentially others)
 - **User Impact:** Severe - duplicate agents consuming resources, sync failures, incorrect state
 - **Resolution Time:** ~2 hours (investigation + fix + verification)
 
@@ -38,7 +38,7 @@ GET /v1/agents/
 ### Cascading Failures
 
 1. **Agent Lookup Failed:**
-   - Sync service query: "Find agent with name X and tags [vibe-sync, project:LMS]"
+   - Sync service query: "Find agent with name X and tags [vibesync, project:LMS]"
    - Actual query sent: "List all agents (no filters)"
    - Result: Returns ALL agents instead of specific agent
    - Consequence: Agent not found → creates duplicate
@@ -102,10 +102,10 @@ if (contentType.includes("application/json")) {
 2. **Built image:** `oculair/letta-webhook-proxy:fixed`
 3. **Updated compose:** `/opt/stacks/letta-proxy/compose.yaml` to use `:fixed` tag
 4. **Restarted services:**
-   - Stopped vibe-sync
+   - Stopped vibesync
    - Deleted all 185 duplicate agents (ran cleanup script 2x)
    - Restarted letta-proxy with fixed image
-   - Started vibe-sync fresh
+   - Started vibesync fresh
 
 ### Verification (2+ minutes, 4+ sync cycles)
 ```bash
@@ -125,7 +125,7 @@ if (contentType.includes("application/json")) {
 - `GET /v1/agents?name=Agent+Name&limit=50` ✅
 - `GET /v1/agents?include=agent.blocks&include=agent.tools` ✅
 - `GET /v1/agents?order=asc&order_by=created_at` ✅
-- `GET /v1/agents/count?tags=vibe-sync` ✅ (returned 89 agents)
+- `GET /v1/agents/count?tags=vibesync` ✅ (returned 89 agents)
 
 ### Path Parameter Endpoints ✅
 - `GET /v1/agents/{agent_id}` ✅
@@ -270,8 +270,8 @@ Client → Proxy (preserves ?params) → Letta API
 3. `/opt/stacks/letta-proxy/compose.yaml` - Updated to use `:fixed` image tag
 
 ### No Changes Needed
-- `/opt/stacks/vibe-sync/lib/LettaService.js` - Already had correct API calls
-- `/opt/stacks/vibe-sync/lib/database.js` - Already had required methods
+- `/opt/stacks/vibesync/lib/LettaService.js` - Already had correct API calls
+- `/opt/stacks/vibesync/lib/database.js` - Already had required methods
 
 ---
 
@@ -299,7 +299,7 @@ export LETTA_BASE_URL=http://192.168.50.90:8289
 export LETTA_PASSWORD=lettaSecurePass123
 
 # Test filtered query
-curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibe-sync&tags=project:GRAPH&match_all_tags=true&limit=5" \
+curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibesync&tags=project:GRAPH&match_all_tags=true&limit=5" \
   -H "Authorization: Bearer ${LETTA_PASSWORD}" | jq 'length'
 # Expected: 1 (only GRAPH project agent)
 ```
@@ -315,7 +315,7 @@ curl -s -X PATCH "${LETTA_BASE_URL}/v1/agents/{agent_id}/tools/approval/send_mes
 ### Duplicate Detection Test
 ```bash
 # Count agents per project
-curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibe-sync&limit=200" \
+curl -s "${LETTA_BASE_URL}/v1/agents?tags=vibesync&limit=200" \
   -H "Authorization: Bearer ${LETTA_PASSWORD}" | \
   jq '[.[] | .name] | group_by(.) | map({name: .[0], count: length}) | map(select(.count > 1))'
 # Expected: [] (empty array = no duplicates)

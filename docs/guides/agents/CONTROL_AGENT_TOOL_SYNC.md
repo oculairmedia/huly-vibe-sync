@@ -68,7 +68,7 @@ Tools automatically sync during regular sync cycles:
 LETTA_SYNC_TOOLS_FROM_CONTROL=true
 
 # Restart service
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 
 # Tools will sync on next cycle (every 30 seconds)
 ```
@@ -127,7 +127,7 @@ await letta.syncToolsFromControl(agentId, true);
 2. **Wait for Auto-Sync** (or trigger manually):
    ```bash
    # Option A: Wait ~30 seconds for next sync cycle
-   docker-compose logs -f vibe-sync | grep "Tools synced"
+   docker-compose logs -f vibesync | grep "Tools synced"
 
    # Option B: Trigger immediately
    node sync-tools-from-control.js
@@ -144,7 +144,7 @@ await letta.syncToolsFromControl(agentId, true);
 1. **Enable Force Mode**:
    ```bash
    echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-   docker-compose restart vibe-sync
+   docker-compose restart vibesync
    ```
 
 2. **Detach Tool from Control Agent**:
@@ -156,13 +156,13 @@ await letta.syncToolsFromControl(agentId, true);
 3. **Verify Propagation**:
    ```bash
    # Check sync logs
-   docker-compose logs vibe-sync | grep "detached"
+   docker-compose logs vibesync | grep "detached"
    ```
 
 4. **Disable Force Mode** (optional):
    ```bash
    echo "LETTA_SYNC_TOOLS_FORCE=false" >> .env
-   docker-compose restart vibe-sync
+   docker-compose restart vibesync
    ```
 
 ### Creating a New "Tool Profile"
@@ -219,7 +219,7 @@ node sync-tools-from-control.js
 
 ```bash
 # View sync logs
-docker-compose logs -f vibe-sync | grep -E "(Syncing tools|Tools synced)"
+docker-compose logs -f vibesync | grep -E "(Syncing tools|Tools synced)"
 
 # Example output:
 # [Letta] Syncing tools from control agent...
@@ -259,7 +259,7 @@ grep LETTA_SYNC_TOOLS_FROM_CONTROL .env
 
 **Check:** Are there errors in logs?
 ```bash
-docker-compose logs vibe-sync | grep "Error syncing tools"
+docker-compose logs vibesync | grep "Error syncing tools"
 ```
 
 **Fix:** Run manual sync to see detailed errors
@@ -277,7 +277,7 @@ node sync-tools-from-control.js
 LETTA_SYNC_TOOLS_FORCE=false
 
 # Restart
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 ```
 
 ### Sync Takes Too Long
@@ -381,7 +381,7 @@ curl -X PATCH "https://letta.oculair.ca/v1/agents/CONTROL_AGENT_ID/tools/attach/
 
 # Enable force mode
 echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 
 # Wait for next sync cycle or trigger manually
 node sync-tools-from-control.js
@@ -401,7 +401,7 @@ node sync-tools-from-control.js --dry-run
 
 # Phase 3: Enable force mode to remove old tools
 echo "LETTA_SYNC_TOOLS_FORCE=true" >> .env
-docker-compose restart vibe-sync
+docker-compose restart vibesync
 ```
 
 ## API Reference

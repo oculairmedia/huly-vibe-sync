@@ -1,7 +1,7 @@
 {
-  "name": "vibe-sync-ui",
+  "name": "vibesync-ui",
   "version": "1.0.0",
-  "description": "Frontend dashboard for Vibe Sync service",
+  "description": "Frontend dashboard for Vibesync service",
   "private": true,
   "scripts": {
     "dev": "next dev",

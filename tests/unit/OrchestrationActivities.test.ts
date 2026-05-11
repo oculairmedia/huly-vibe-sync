@@ -87,9 +87,9 @@ describe('Orchestration Activities', () => {
 
   describe('resolveGitRepoPath', () => {
     it('prefers sync DB filesystem_path', async () => {
-      mockSyncDb.getProjectFilesystemPath.mockReturnValue('/opt/stacks/huly-vibe-sync');
+      mockSyncDb.getProjectFilesystemPath.mockReturnValue('/opt/stacks/vibesync');
       await expect(resolveGitRepoPath({ projectIdentifier: 'HVSYN' })).resolves.toBe(
-        '/opt/stacks/huly-vibe-sync'
+        '/opt/stacks/vibesync'
       );
     });
 

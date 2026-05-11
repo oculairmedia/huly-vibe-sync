@@ -84,7 +84,7 @@ docker logs -f searxng_app
 
 ### Before Fix
 - Workers restart every 60 seconds
-- CPU usage: 0.01% (already low due to vibe-sync optimizations)
+- CPU usage: 0.01% (already low due to vibesync optimizations)
 - 5 workers × 8 threads = 40 concurrent handlers
 
 ### After Fix
@@ -109,10 +109,10 @@ docker stats --no-stream searxng_app
 ## Why CPU Usage Already Low (0.01%)
 
 The worker recycling was causing **30-35% CPU** during the previous session.
-After reducing `vibe-sync` SYNC_INTERVAL from 3s to 30s, the request
+After reducing `vibesync` SYNC_INTERVAL from 3s to 30s, the request
 rate to SearXNG dropped dramatically:
 
-- **Before**: vibe-sync polling constantly → many health/internal requests
+- **Before**: vibesync polling constantly → many health/internal requests
 - **After**: Much lower request rate → workers still recycle but with less impact
 
 However, fixing the worker recycling completely will:

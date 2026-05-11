@@ -1,4 +1,4 @@
-# Vibe Sync - Product Roadmap
+# Vibesync - Product Roadmap
 
 **Last Updated**: October 27, 2025
 **Project**: VIBEK (Vibe Kanban)

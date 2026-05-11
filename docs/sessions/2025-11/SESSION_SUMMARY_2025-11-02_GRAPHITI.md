@@ -18,7 +18,7 @@ Ran `docker stats` to identify next target:
 ```
 NAME                                        CPU %     MEM USAGE
 graphiti-falkordb-1                         16.06%    1.222GiB / 8GiB      ← TARGET
-vibe-sync                              8.32%     45.59MiB
+vibesync                              8.32%     45.59MiB
 graphiti-graphiti-worker-1                  6.41%     215.4MiB
 letta-letta-1                               5.04%     522.2MiB (was 18-20%)
 matrix-synapse-deployment-matrix-client-1   0.00%     68.48MiB (was 14.33%)
@@ -80,7 +80,7 @@ let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
 ### Rationale
 
 **Same pattern as previous optimizations**:
-1. vibe-sync: 3s → 30s (10x reduction)
+1. vibesync: 3s → 30s (10x reduction)
 2. matrix-client: 0.5s → 30s (60x reduction)
 3. graph-visualizer: 5s → 30s (6x reduction) ← Current
 
@@ -147,7 +147,7 @@ All three optimizations targeted the **same fundamental issue**:
 
 | Service | Original Interval | New Interval | Reduction |
 |---------|------------------|--------------|-----------|
-| vibe-sync | 3s | 30s | 90% |
+| vibesync | 3s | 30s | 90% |
 | matrix-client | 0.5s | 30s | 98% |
 | graph-visualizer | 5s | 30s | 83% |
 
@@ -175,7 +175,7 @@ All three optimizations targeted the **same fundamental issue**:
 |--------------|--------|-------|-----------|
 | **Letta** (Phase 1) | 100.36% | 30-33% | **70%** |
 | **Postgres** (Phase 1) | 43.53% | 3% | **93%** |
-| **vibe-sync** (Phase 1) | 29.58% | 5-7% | **78%** |
+| **vibesync** (Phase 1) | 29.58% | 5-7% | **78%** |
 | **matrix-client** (Phase 2) | 14.33% | 0% | **100%** |
 | **FalkorDB** (Phase 3) | 16.06% | 2-3%* | **85%*** |
 
@@ -189,7 +189,7 @@ All three optimizations targeted the **same fundamental issue**:
 
 ## Files Modified
 
-1. `/opt/stacks/vibe-sync/.env` - Phase 1 (Letta/sync intervals)
+1. `/opt/stacks/vibesync/.env` - Phase 1 (Letta/sync intervals)
 2. `/opt/stacks/matrix-synapse-deployment/custom_matrix_client.py` - Phase 2
 3. `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs` - Phase 3
 

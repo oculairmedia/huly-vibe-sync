@@ -1,6 +1,6 @@
 # Database Migrations
 
-This directory contains SQL migration scripts for the vibe-sync database.
+This directory contains SQL migration scripts for the vibesync database.
 
 ## Running Migrations
 

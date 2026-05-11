@@ -147,7 +147,7 @@ curl -s https://letta.oculair.ca/v1/agents \
 
 **Check memory update efficiency:**
 ```bash
-docker-compose logs --tail=100 vibe-sync | grep "No changes needed"
+docker-compose logs --tail=100 vibesync | grep "No changes needed"
 ```
 
 **List all agents:**
@@ -181,4 +181,4 @@ node manage-agents.js show-agent GRAPH
 - **Agent Management Guide:** `AGENT_MANAGEMENT.md`
 - **Database:** `./logs/sync-state.db`
 - **Letta API:** https://letta.oculair.ca
-- **Repository:** https://github.com/oculairmedia/vibe-sync
+- **Repository:** https://github.com/oculairmedia/vibesync

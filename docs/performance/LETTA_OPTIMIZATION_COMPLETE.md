@@ -111,7 +111,7 @@ vs old way:
 - **More hits expected**: As projects stabilize
 
 ### CPU Impact
-- **vibe-sync**: 0-5% (idle most of the time)
+- **vibesync**: 0-5% (idle most of the time)
 - **Letta**: 3-62% (much lower baseline, fewer spikes)
 - **Postgres**: Lower load from fewer queries
 
@@ -147,11 +147,11 @@ vs old way:
 ### Check Cache Performance
 ```bash
 # Watch cache hits
-docker logs -f vibe-sync | grep "All blocks match cache"
+docker logs -f vibesync | grep "All blocks match cache"
 
 # Count cache hits vs total
-docker logs vibe-sync --since 1m | grep -c "All blocks match cache"
-docker logs vibe-sync --since 1m | grep -c "Upserting 6 memory blocks"
+docker logs vibesync --since 1m | grep -c "All blocks match cache"
+docker logs vibesync --since 1m | grep -c "Upserting 6 memory blocks"
 
 # Check Letta request rate
 docker logs letta-letta-1 --since 1m | grep -E "GET|PATCH|POST" | wc -l

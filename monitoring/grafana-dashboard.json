@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "Vibe Sync Dashboard",
+    "title": "Vibesync Dashboard",
     "tags": ["vibe", "sync"],
     "timezone": "browser",
     "schemaVersion": 16,

@@ -1,6 +1,6 @@
 # Testing Quick Start Guide
 
-Quick reference for running tests in the Vibe Sync project.
+Quick reference for running tests in the Vibesync project.
 
 ## 🚀 Running Tests
 

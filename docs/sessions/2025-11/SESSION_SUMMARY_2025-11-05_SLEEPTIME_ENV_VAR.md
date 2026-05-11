@@ -55,7 +55,7 @@ body: JSON.stringify({
   embedding: this.embedding,
   enable_sleeptime: this.enableSleeptime, // Controlled by LETTA_ENABLE_SLEEPTIME
   sleeptime_agent_frequency: this.sleeptimeFrequency, // Controlled by LETTA_SLEEPTIME_FREQUENCY
-  tags: ['vibe-sync', `project:${projectIdentifier}`],
+  tags: ['vibesync', `project:${projectIdentifier}`],
 }),
 ```
 
@@ -108,7 +108,7 @@ if (lettaService && !config.sync.dryRun) {
 ### 1. Deleted Project `.letta` Folders
 
 ```bash
-find /opt/stacks -type d -name ".letta" ! -path "*/vibe-sync/*" -exec rm -rf {} +
+find /opt/stacks -type d -name ".letta" ! -path "*/vibesync/*" -exec rm -rf {} +
 ```
 
 **Result**: 45 folders deleted

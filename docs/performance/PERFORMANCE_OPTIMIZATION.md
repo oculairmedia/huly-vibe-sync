@@ -69,7 +69,7 @@ MAX_WORKERS=5
 
 ### Step 1: Apply Phase 1 Optimizations (NOW)
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 cp .env .env.backup
 cat > .env << 'EOF'
 # Legacy API Configuration
@@ -169,7 +169,7 @@ docker-compose logs --follow | grep -E "Phase 1|Phase 2|Legacy→Vibe|Vibe→Leg
 
 If issues occur:
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 cp .env.backup .env
 docker-compose down && docker-compose up -d
 ```
@@ -200,7 +200,7 @@ After each optimization phase:
 
 ```bash
 # Quick command to apply Phase 1:
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 sed -i 's/SKIP_EMPTY_PROJECTS=false/SKIP_EMPTY_PROJECTS=true/' .env
 sed -i 's/SYNC_INTERVAL=8000/SYNC_INTERVAL=3000/' .env
 docker-compose restart

@@ -153,14 +153,14 @@ New log entries provide visibility into conflict resolution:
 ### 1. Apply Migration to Production Database
 
 ```bash
-cd /opt/stacks/vibe-sync
-sqlite3 vibe-sync.db < migrations/003_add_issue_timestamps.sql
+cd /opt/stacks/vibesync
+sqlite3 vibesync.db < migrations/003_add_issue_timestamps.sql
 ```
 
 ### 2. Rebuild and Deploy Docker Container
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose build
 docker-compose up -d
 ```

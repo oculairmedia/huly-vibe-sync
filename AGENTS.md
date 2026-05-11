@@ -5,7 +5,7 @@
 ## Project Identity
 
 - **Project Code**: `HVSYN`
-- **Project Name**: Vibe Sync Service
+- **Project Name**: Vibesync Service
 - **Letta Agent ID**: `agent-b417b8da-84d2-40dd-97ad-3a35454934f7`
 
 ## Workflow Instructions
@@ -20,7 +20,7 @@
 
 ## PM Agent Communication
 
-**Project PM Agent:** `PM - Vibe Sync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
+**Project PM Agent:** `PM - Vibesync Service` (agent-b417b8da-84d2-40dd-97ad-3a35454934f7)
 
 ### Reporting Hierarchy
 
@@ -41,9 +41,9 @@ You (Developer Agent - experienced)
 ```json
 {
   "operation": "talk_to_agent",
-  "agent": "PM - Vibe Sync Service",
+  "agent": "PM - Vibesync Service",
   "message": "<your report>",
-  "caller_directory": "/opt/stacks/huly-vibe-sync"
+  "caller_directory": "/opt/stacks/vibesync"
 }
 ```
 
@@ -145,8 +145,8 @@ bd close <id>         # Complete work
 
 ## Codebase Context
 
-**Project**: Vibe Sync Service (`HVSYN`)
-**Path**: `/opt/stacks/huly-vibe-sync`
+**Project**: Vibesync Service (`HVSYN`)
+**Path**: `/opt/stacks/vibesync`
 
 This project's PM agent has a `codebase_ast` memory block with live structural data including:
 

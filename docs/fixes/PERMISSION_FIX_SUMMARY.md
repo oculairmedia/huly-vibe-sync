@@ -6,7 +6,7 @@
 
 ## Problem
 
-The vibe-sync service runs as `node` user (UID 1000) in Docker container, but many project `.letta` directories were owned by `root` with `755` permissions, preventing writes.
+The vibesync service runs as `node` user (UID 1000) in Docker container, but many project `.letta` directories were owned by `root` with `755` permissions, preventing writes.
 
 ### Affected Projects
 - `/opt/stacks/augment-mcp-tool`
@@ -25,7 +25,7 @@ The vibe-sync service runs as `node` user (UID 1000) in Docker container, but ma
 Created `fix-letta-permissions.sh` to automatically fix all `.letta` directories:
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 ./fix-letta-permissions.sh
 ```
 

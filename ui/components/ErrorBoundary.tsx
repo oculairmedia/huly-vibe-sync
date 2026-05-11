@@ -144,7 +144,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <p className="text-sm text-gray-600 pt-2">
                 If this problem persists, please contact support or report an issue on{' '}
                 <a
-                  href="https://github.com/oculairmedia/huly-vibe-sync/issues"
+                  href="https://github.com/oculairmedia/vibesync/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 underline"

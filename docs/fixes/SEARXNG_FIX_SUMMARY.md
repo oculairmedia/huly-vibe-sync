@@ -108,7 +108,7 @@ workers = 4  ✓
 - ✅ Right-sized for actual traffic (4 workers instead of 5)
 
 ### Why CPU Was Already Low
-The 30-35% CPU usage from worker recycling was already reduced to 0.01% in the previous session when we optimized vibe-sync:
+The 30-35% CPU usage from worker recycling was already reduced to 0.01% in the previous session when we optimized vibesync:
 - Changed `SYNC_INTERVAL` from 3s → 30s (10x reduction in requests)
 - Enabled `SKIP_EMPTY_PROJECTS`
 - This reduced request rate to SearXNG, which reduced recycling impact
@@ -118,9 +118,9 @@ The 30-35% CPU usage from worker recycling was already reduced to 0.01% in the p
 ## Files Modified
 - `/opt/stacks/searxng/config/uwsgi.ini` - Applied optimized config
 - `/opt/stacks/searxng/config/uwsgi.ini.backup-20251102-195839` - Backup of old config
-- `/opt/stacks/vibe-sync/SEARXNG_WORKER_ANALYSIS.md` - Root cause analysis
-- `/opt/stacks/vibe-sync/SEARXNG_FIX_SUMMARY.md` - This summary
-- `/opt/stacks/vibe-sync/fix-searxng-workers.sh` - Fix automation script
+- `/opt/stacks/vibesync/SEARXNG_WORKER_ANALYSIS.md` - Root cause analysis
+- `/opt/stacks/vibesync/SEARXNG_FIX_SUMMARY.md` - This summary
+- `/opt/stacks/vibesync/fix-searxng-workers.sh` - Fix automation script
 
 ## Monitoring Commands
 ```bash

@@ -1,6 +1,6 @@
 # Systems Engineering Review - Document Index
 
-**Project:** Vibe Sync
+**Project:** Vibesync
 **Review Date:** 2025-11-03
 **Overall Score:** 7.5/10
 **Production Ready:** ❌ No (3-4 weeks minimum)

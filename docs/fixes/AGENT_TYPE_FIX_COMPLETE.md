@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-The vibe-sync service was incorrectly using **sleeptime agents** instead of **primary agents** for project management tasks. Letta creates two types of agents per project when `enable_sleeptime: true`:
+The vibesync service was incorrectly using **sleeptime agents** instead of **primary agents** for project management tasks. Letta creates two types of agents per project when `enable_sleeptime: true`:
 
 - **Primary Agent** (`Legacy-{PROJECT}-PM`) - For direct interaction and PM tasks
 - **Sleeptime Agent** (`Legacy-{PROJECT}-PM-sleeptime`) - For background memory consolidation
@@ -73,10 +73,10 @@ To verify the fix is working:
 
 ```bash
 # Check logs for sleeptime detection
-docker logs vibe-sync 2>&1 | grep "sleeptime"
+docker logs vibesync 2>&1 | grep "sleeptime"
 
 # Query database to see current mappings
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 sqlite3 logs/sync-state.db "SELECT identifier, letta_agent_id FROM projects WHERE identifier IN ('OPCDE', 'BKMCP', 'LMS');"
 
 # Verify agent types via Letta API
@@ -88,7 +88,7 @@ curl -s http://192.168.50.90:8289/v1/agents/{agent-id} -H "Authorization: Bearer
 The logs show **47-49 duplicate agents** per project name due to past issues. Run the cleanup script:
 
 ```bash
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 node cleanup-agents.js
 ```
 

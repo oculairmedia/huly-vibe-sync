@@ -84,7 +84,7 @@ function toArray(value) {
 
 program
   .name('vibesync')
-  .description('Huly-Vibe Sync CLI')
+  .description('Vibesync CLI')
   .version('2.0.0')
   .option('--api-url <url>', 'API server base URL', 'http://localhost:3099')
   .option('--json', 'Force JSON output')

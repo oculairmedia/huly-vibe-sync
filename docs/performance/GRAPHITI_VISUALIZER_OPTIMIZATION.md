@@ -97,7 +97,7 @@ docker logs graphiti-graph-visualizer-rust-1 | grep "Graph changed" | tail -10
 
 This is the **3rd service** with aggressive polling:
 
-1. ✅ **vibe-sync**: 3s → 30s (89% reduction)
+1. ✅ **vibesync**: 3s → 30s (89% reduction)
 2. ✅ **matrix-client**: 0.5s → 30s (98% reduction)
 3. ⏳ **graph-visualizer**: 5s → 30s (83% reduction) - **PENDING REBUILD**
 

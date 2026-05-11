@@ -99,13 +99,13 @@ groups:
 
       # Health Check Alerts
       - alert: ServiceDown
-        expr: up{job="vibe-sync"} == 0
+        expr: up{job="vibesync"} == 0
         for: 1m
         labels:
           severity: critical
           component: health
         annotations:
-          summary: 'Vibe Sync service is down'
+          summary: 'Vibesync service is down'
           description: 'The sync service has been down for more than 1 minute'
 
       # Data Volume Alerts

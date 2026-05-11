@@ -1846,7 +1846,7 @@ describe('createApiServer - HTTP Routes', () => {
       expect(res.statusCode).toBe(200);
       // body is plain text, not JSON
       expect(typeof res.body).toBe('string');
-      expect(res.body).toContain('Vibe Sync Service API');
+      expect(res.body).toContain('Vibesync Service API');
     });
   });
 

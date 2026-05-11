@@ -1,8 +1,8 @@
-# Vibe Sync Frontend Architecture
+# Vibesync Frontend Architecture
 
 ## Overview
 
-This document describes the architecture of the Vibe Sync management dashboard - a modern web-based UI for monitoring and configuring the bidirectional synchronization service.
+This document describes the architecture of the Vibesync management dashboard - a modern web-based UI for monitoring and configuring the bidirectional synchronization service.
 
 ## Architecture Principles
 
@@ -506,11 +506,11 @@ Users
 ### 1. Local Development
 ```bash
 # Terminal 1: Backend
-cd /home/user/vibe-sync
+cd /home/user/vibesync
 npm run dev
 
 # Terminal 2: Frontend
-cd /home/user/vibe-sync/ui
+cd /home/user/vibesync/ui
 npm run dev
 ```
 
@@ -596,4 +596,4 @@ For questions or issues:
 
 **Last Updated:** 2025-11-11
 **Version:** 1.0.0
-**Authors:** Vibe Sync Team
+**Authors:** Vibesync Team

@@ -35,7 +35,7 @@ function createTestConfig(overrides = {}) {
     exportMeta: true,
     modifyMarkdownLinks: true,
     docsSubdir: 'docs/bookstack',
-    projectBookMappings: [{ projectIdentifier: 'HVSYN', bookSlug: 'huly-vibe-sync-docs' }],
+    projectBookMappings: [{ projectIdentifier: 'HVSYN', bookSlug: 'vibesync-docs' }],
     exporterOutputPath: '/bookstack-exports',
     ...overrides,
   };
@@ -103,12 +103,12 @@ describe('BookStackExporter', () => {
   describe('findBookDir', () => {
     it('finds book directory by slug at top level', () => {
       fs.readdirSync.mockReturnValue([
-        { name: 'huly-vibe-sync-docs', isDirectory: () => true },
+        { name: 'vibesync-docs', isDirectory: () => true },
         { name: 'other-book', isDirectory: () => true },
       ]);
 
-      const result = exporter.findBookDir('/tmp/extract', 'huly-vibe-sync-docs');
-      expect(result).toBe(path.join('/tmp/extract', 'huly-vibe-sync-docs'));
+      const result = exporter.findBookDir('/tmp/extract', 'vibesync-docs');
+      expect(result).toBe(path.join('/tmp/extract', 'vibesync-docs'));
     });
 
     it('returns null when book not found', () => {
@@ -152,7 +152,7 @@ describe('BookStackService', () => {
 
   describe('getBookSlugForProject', () => {
     it('returns slug for mapped project', () => {
-      expect(service.getBookSlugForProject('HVSYN')).toBe('huly-vibe-sync-docs');
+      expect(service.getBookSlugForProject('HVSYN')).toBe('vibesync-docs');
     });
 
     it('returns null for unmapped project', () => {
@@ -170,7 +170,7 @@ describe('BookStackService', () => {
     it('skips when export is not due', async () => {
       db.getBookStackLastExport.mockReturnValue(Date.now() - 1000);
 
-      const result = await service.syncExport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      const result = await service.syncExport('HVSYN', '/opt/stacks/vibesync');
       expect(result.skipped).toBe(true);
       expect(result.reason).toBe('not_due');
     });
@@ -179,7 +179,7 @@ describe('BookStackService', () => {
       db.getBookStackLastExport.mockReturnValue(null);
       fs.existsSync.mockReturnValue(false);
 
-      const result = await service.syncExport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      const result = await service.syncExport('HVSYN', '/opt/stacks/vibesync');
       expect(result.success).toBe(false);
       expect(result.reason).toBe('no_archive');
     });
@@ -213,7 +213,7 @@ describe('BookStackService', () => {
 
     it('skips when API not connected', async () => {
       service.apiConnected = false;
-      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      const result = await service.syncImport('HVSYN', '/opt/stacks/vibesync');
       expect(result.skipped).toBe(true);
       expect(result.reason).toBe('api_not_connected');
     });
@@ -221,7 +221,7 @@ describe('BookStackService', () => {
     it('skips when docs directory does not exist', async () => {
       service.apiConnected = true;
       fs.existsSync.mockReturnValue(false);
-      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      const result = await service.syncImport('HVSYN', '/opt/stacks/vibesync');
       expect(result.skipped).toBe(true);
       expect(result.reason).toBe('no_docs_dir');
     });
@@ -236,7 +236,7 @@ describe('BookStackService', () => {
 
       db.getBookStackPages.mockReturnValue([
         {
-          local_path: 'huly-vibe-sync-docs/page.md',
+          local_path: 'vibesync-docs/page.md',
           content_hash: 'oldhash',
           bookstack_page_id: 123,
         },
@@ -246,7 +246,7 @@ describe('BookStackService', () => {
         updatePage: vi.fn().mockResolvedValue({ id: 123, slug: 'test-page' }),
       };
 
-      const result = await service.syncImport('HVSYN', '/opt/stacks/huly-vibe-sync');
+      const result = await service.syncImport('HVSYN', '/opt/stacks/vibesync');
       expect(result.success).toBe(true);
       expect(result.imported).toBe(1);
       expect(result.failed).toBe(0);
@@ -269,7 +269,7 @@ describe('BookStackService', () => {
 
       db.getBookStackPages.mockReturnValue([
         {
-          local_path: 'huly-vibe-sync-docs/page.md',
+          local_path: 'vibesync-docs/page.md',
           content_hash: 'oldhash',
           bookstack_page_id: 123,
         },
@@ -277,12 +277,12 @@ describe('BookStackService', () => {
 
       const changes = service.detectLocalChanges(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs'
       );
 
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe('update');
-      expect(changes[0].localPath).toBe('huly-vibe-sync-docs/page.md');
+      expect(changes[0].localPath).toBe('vibesync-docs/page.md');
       expect(changes[0].contentHash).not.toBe('oldhash');
     });
 
@@ -296,13 +296,13 @@ describe('BookStackService', () => {
 
       const changes = service.detectLocalChanges(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs'
       );
 
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe('create');
       expect(changes[0].title).toBe('New Page Title');
-      expect(changes[0].localPath).toBe('huly-vibe-sync-docs/new-page.md');
+      expect(changes[0].localPath).toBe('vibesync-docs/new-page.md');
     });
 
     it('skips new files without # Title heading', () => {
@@ -315,7 +315,7 @@ describe('BookStackService', () => {
 
       const changes = service.detectLocalChanges(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs'
       );
 
       expect(changes).toHaveLength(0);
@@ -330,7 +330,7 @@ describe('BookStackService', () => {
       const now = Date.now();
       db.getBookStackPages.mockReturnValue([
         {
-          local_path: 'huly-vibe-sync-docs/recent.md',
+          local_path: 'vibesync-docs/recent.md',
           content_hash: 'oldhash',
           last_export_at: now - 30000,
           sync_direction: 'export',
@@ -339,7 +339,7 @@ describe('BookStackService', () => {
 
       const changes = service.detectLocalChanges(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs'
       );
 
       expect(changes).toHaveLength(0);
@@ -361,7 +361,7 @@ describe('BookStackService', () => {
     it('updates existing page via API', async () => {
       const change = {
         type: 'update',
-        localPath: 'bookstack/huly-vibe-sync-docs/page.md',
+        localPath: 'bookstack/vibesync-docs/page.md',
         content: '# Updated Page',
         contentHash: 'newhash',
         tracked: {
@@ -386,14 +386,14 @@ describe('BookStackService', () => {
     it('creates new page in book root', async () => {
       const change = {
         type: 'create',
-        localPath: 'bookstack/huly-vibe-sync-docs/new-page.md',
+        localPath: 'bookstack/vibesync-docs/new-page.md',
         content: '# New Page',
         contentHash: 'hash123',
         title: 'New Page',
       };
 
       service.apiClient.listBooks.mockResolvedValue([
-        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+        { id: 1, slug: 'vibesync-docs', name: 'Vibesync Docs' },
       ]);
       service.apiClient.getBookContents.mockResolvedValue({ chapters: [] });
       service.apiClient.createPage.mockResolvedValue({
@@ -418,14 +418,14 @@ describe('BookStackService', () => {
     it('creates new page in existing chapter', async () => {
       const change = {
         type: 'create',
-        localPath: 'bookstack/huly-vibe-sync-docs/my-chapter/page.md',
+        localPath: 'bookstack/vibesync-docs/my-chapter/page.md',
         content: '# Chapter Page',
         contentHash: 'hash456',
         title: 'Chapter Page',
       };
 
       service.apiClient.listBooks.mockResolvedValue([
-        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+        { id: 1, slug: 'vibesync-docs', name: 'Vibesync Docs' },
       ]);
       service.apiClient.getBookContents.mockResolvedValue({
         chapters: [{ id: 10, slug: 'my-chapter', name: 'My Chapter' }],
@@ -450,14 +450,14 @@ describe('BookStackService', () => {
     it('auto-creates chapter when not found', async () => {
       const change = {
         type: 'create',
-        localPath: 'bookstack/huly-vibe-sync-docs/new-chapter/page.md',
+        localPath: 'bookstack/vibesync-docs/new-chapter/page.md',
         content: '# Page in New Chapter',
         contentHash: 'hash789',
         title: 'Page in New Chapter',
       };
 
       service.apiClient.listBooks.mockResolvedValue([
-        { id: 1, slug: 'huly-vibe-sync-docs', name: 'Huly Vibe Sync Docs' },
+        { id: 1, slug: 'vibesync-docs', name: 'Vibesync Docs' },
       ]);
       service.apiClient.getBookContents.mockResolvedValue({ chapters: [] });
       service.apiClient.createChapter.mockResolvedValue({
@@ -498,7 +498,7 @@ describe('BookStackService', () => {
       fs.existsSync.mockReturnValue(true);
       const result = await service.importSingleFile(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/file.txt'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs/file.txt'
       );
       expect(result.skipped).toBe(true);
       expect(result.reason).toBe('invalid_file');
@@ -510,7 +510,7 @@ describe('BookStackService', () => {
 
       const now = Date.now();
       db.getBookStackPageByPath.mockReturnValue({
-        local_path: 'bookstack/huly-vibe-sync-docs/page.md',
+        local_path: 'bookstack/vibesync-docs/page.md',
         content_hash: 'oldhash',
         last_export_at: now - 30000,
         sync_direction: 'export',
@@ -518,7 +518,7 @@ describe('BookStackService', () => {
 
       const result = await service.importSingleFile(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/page.md'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs/page.md'
       );
 
       expect(result.skipped).toBe(true);
@@ -533,13 +533,13 @@ describe('BookStackService', () => {
 
       const contentHash = crypto.createHash('sha256').update(content).digest('hex');
       db.getBookStackPageByPath.mockReturnValue({
-        local_path: 'bookstack/huly-vibe-sync-docs/page.md',
+        local_path: 'bookstack/vibesync-docs/page.md',
         content_hash: contentHash,
       });
 
       const result = await service.importSingleFile(
         'HVSYN',
-        '/opt/stacks/huly-vibe-sync/docs/bookstack/huly-vibe-sync-docs/page.md'
+        '/opt/stacks/vibesync/docs/bookstack/vibesync-docs/page.md'
       );
 
       expect(result.skipped).toBe(true);
@@ -580,8 +580,8 @@ describe('BookStackService', () => {
 
   describe('syncBidirectional', () => {
     const projectId = 'HVSYN';
-    const projectPath = '/opt/stacks/huly-vibe-sync';
-    const bookSlug = 'huly-vibe-sync-docs';
+    const projectPath = '/opt/stacks/vibesync';
+    const bookSlug = 'vibesync-docs';
     const docsDir = path.join(projectPath, 'docs/bookstack', bookSlug);
 
     const hashOf = content => crypto.createHash('sha256').update(content).digest('hex');
@@ -618,7 +618,7 @@ describe('BookStackService', () => {
       service.apiClient = {
         listBooks: vi
           .fn()
-          .mockResolvedValue([{ id: 1, slug: bookSlug, name: 'Huly Vibe Sync Docs' }]),
+          .mockResolvedValue([{ id: 1, slug: bookSlug, name: 'Vibesync Docs' }]),
         getBookContents: vi.fn().mockResolvedValue({
           chapters: [],
           pages: [{ id: 100, slug: 'test-page', name: 'Test Page' }],

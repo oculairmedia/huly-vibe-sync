@@ -111,7 +111,7 @@ Two external tools complement each other:
                        │  + Sync orchestrator
                        ▼
 ┌──────────────────────────────────────────────────────────┐
-│              vibe-sync                              │
+│              vibesync                              │
 │                                                          │
 │  BookStackService.js      ← Service layer               │
 │  BookStackWatcher.js      ← File watcher (chokidar)     │
@@ -397,7 +397,7 @@ BOOKSTACK_EXPORT_ATTACHMENTS=true
 BOOKSTACK_EXPORT_META=true
 BOOKSTACK_MODIFY_LINKS=true               # Rewrite image links to local paths
 BOOKSTACK_DOCS_SUBDIR=docs/bookstack      # Where to store exported content
-BOOKSTACK_PROJECT_BOOKS=HVSYN:vibe-sync-service,GRAPH:graphiti-knowledge-graph
+BOOKSTACK_PROJECT_BOOKS=HVSYN:vibesync-service,GRAPH:graphiti-knowledge-graph
 ```
 
 ## 7. Sync Flow Diagram
@@ -454,7 +454,7 @@ services:
       - BOOKSTACK_TOKEN_ID=${BOOKSTACK_TOKEN_ID}
       - BOOKSTACK_TOKEN_SECRET=${BOOKSTACK_TOKEN_SECRET}
 
-  vibe-sync:
+  vibesync:
     # ... existing config ...
     volumes:
       - bookstack-exports:/bookstack-exports:ro # Read exports

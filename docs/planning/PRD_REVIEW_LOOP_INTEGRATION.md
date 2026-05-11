@@ -42,7 +42,7 @@ This PRD defines the implementation of a **real-time review notification system*
 
 ### Current State
 
-The vibe-sync service currently provides **bidirectional synchronization** between Legacy and Vibe Kanban:
+The vibesync service currently provides **bidirectional synchronization** between Legacy and Vibe Kanban:
 
 - ✅ Task status changes sync in both directions
 - ✅ Task creation and updates propagate automatically
@@ -136,7 +136,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
                                          │ EventSource Connection
                                          ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│                     Vibe Sync Service                       │
+│                     Vibesync Service                       │
 │  ┌────────────────────────────────────────────────────┐         │
 │  │           Review Loop Notification Module          │         │
 │  │  ┌──────────────────────────────────────────────┐ │         │
@@ -293,7 +293,7 @@ When a coding agent completes work on a task and moves it to "InReview" status:
 ### Phase 4: Integration (Week 3)
 
 **Deliverables:**
-- [ ] Integrate with existing vibe-sync service
+- [ ] Integrate with existing vibesync service
 - [ ] Add configuration options to `.env`
 - [ ] Update `index.js` to start review loop service
 - [ ] Add health check endpoints
@@ -1205,7 +1205,7 @@ SSE_MAX_RECONNECT_ATTEMPTS=10
 # Notification Queue
 NOTIFICATION_MAX_RETRIES=5
 NOTIFICATION_RETRY_BACKOFF_MS=1000,2000,4000,8000,16000
-NOTIFICATION_QUEUE_PERSISTENCE_PATH=/opt/stacks/vibe-sync/logs/notification-queue.json
+NOTIFICATION_QUEUE_PERSISTENCE_PATH=/opt/stacks/vibesync/logs/notification-queue.json
 NOTIFICATION_QUEUE_FLUSH_INTERVAL_MS=5000
 
 # Agent Routing
@@ -1222,7 +1222,7 @@ REVIEW_LOOP_DRY_RUN=false
 ### Appendix B: File Structure
 
 ```
-/opt/stacks/vibe-sync/
+/opt/stacks/vibesync/
 ├── lib/
 │   ├── ReviewLoopService.js           # Main service module
 │   ├── SSEEventConsumer.js            # SSE connection handler

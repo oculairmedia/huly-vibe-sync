@@ -1,4 +1,4 @@
-# Vibe Sync - Issues Created
+# Vibesync - Issues Created
 
 **Date**: October 27, 2025
 **Project**: VIBEK (Vibe Kanban)

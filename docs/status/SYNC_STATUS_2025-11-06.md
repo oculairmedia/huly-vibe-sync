@@ -112,7 +112,7 @@ vibe_modified_at: NULL
 
 ```bash
 # Watch sync logs
-cd /opt/stacks/vibe-sync
+cd /opt/stacks/vibesync
 docker-compose logs -f | grep "Vibe→Legacy"
 
 # Check database
@@ -150,4 +150,4 @@ docker-compose logs | grep -i "405\|error" | grep -v "duplicate project"
 
 **Last Updated**: 2025-11-06 02:09 AM EST
 **Last Test**: LMS-46 sync successful
-**Container**: vibe-sync (rebuilt with fixes)
+**Container**: vibesync (rebuilt with fixes)

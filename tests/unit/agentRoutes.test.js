@@ -14,9 +14,9 @@ describe('Agent lookup API', () => {
 
     db.upsertProject({
       identifier: 'HVSYN',
-      name: 'Huly-Vibe Sync Service',
-      git_url: 'https://github.com/oculairmedia/huly-vibe-sync',
-      filesystem_path: '/opt/stacks/huly-vibe-sync',
+      name: 'Vibesync Service',
+      git_url: 'https://github.com/oculairmedia/vibesync',
+      filesystem_path: '/opt/stacks/vibesync',
       status: 'active',
     });
     db.projects.setProjectLettaAgent('HVSYN', {
@@ -63,10 +63,10 @@ describe('Agent lookup API', () => {
       const hvsyn = agents.find(a => a.project_identifier === 'HVSYN');
       expect(hvsyn).toEqual({
         agent_id: 'agent-b417b8da-84d2-40dd-97ad-3a35454934f7',
-        agent_name: 'Huly-Vibe Sync Service',
+        agent_name: 'Vibesync Service',
         project_identifier: 'HVSYN',
-        git_url: 'https://github.com/oculairmedia/huly-vibe-sync',
-        filesystem_path: '/opt/stacks/huly-vibe-sync',
+        git_url: 'https://github.com/oculairmedia/vibesync',
+        filesystem_path: '/opt/stacks/vibesync',
       });
     });
 
@@ -78,14 +78,14 @@ describe('Agent lookup API', () => {
 
   describe('lookupProjectByRepo', () => {
     it('should match by repo name', () => {
-      const result = db.lookupProjectByRepo('huly-vibe-sync');
+      const result = db.lookupProjectByRepo('vibesync');
       expect(result).not.toBeNull();
       expect(result.project_identifier).toBe('HVSYN');
       expect(result.agent_id).toBe('agent-b417b8da-84d2-40dd-97ad-3a35454934f7');
     });
 
     it('should match by full org/repo', () => {
-      const result = db.lookupProjectByRepo('oculairmedia/huly-vibe-sync');
+      const result = db.lookupProjectByRepo('oculairmedia/vibesync');
       expect(result).not.toBeNull();
       expect(result.project_identifier).toBe('HVSYN');
     });

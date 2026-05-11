@@ -26,16 +26,11 @@ RUN pip3 install --no-cache-dir --break-system-packages --prefix=/python-deps -r
 FROM node:20-alpine AS runtime
 
 LABEL maintainer="Oculair Media"
-LABEL description="Huly to Vibe Kanban bidirectional sync service with Letta Code support"
+LABEL description="Vibesync project registry and PM-agent coordination service"
 
-# Runtime-only system packages + build tools for node-pty native compilation
-RUN apk add --no-cache git curl bash python3 make g++
-
-# Install Letta Code CLI globally (node-pty requires native build)
-RUN npm install -g @letta-ai/letta-code
-
-# Remove build tools after install to keep image lean
-RUN apk del make g++
+# Runtime-only system packages.
+# gcompat keeps glibc-linked helper binaries such as Beads runnable on Alpine.
+RUN apk add --no-cache git curl bash python3 gcompat
 
 # Copy Python packages from builder
 COPY --from=python-builder /python-deps /usr
@@ -57,15 +52,15 @@ COPY *.md ./
 # Copy Letta configuration (shared settings, local state will be generated)
 COPY .letta ./.letta
 
-# Create logs directory, .letta-code state dir, and ensure writable by node user
-RUN mkdir -p /app/logs /app/.letta-code && \
-    chown -R node:node /app /app/.letta /app/.letta-code /app/logs && \
-    chmod -R 755 /app/.letta /app/.letta-code
+# Create logs directory and ensure writable by node user
+RUN mkdir -p /app/logs && \
+    chown -R node:node /app /app/.letta /app/logs && \
+    chmod -R 755 /app/.letta
 
 # Configure git identity and safe directory as node user (UID 1000)
 USER node
-RUN git config --global user.email "huly-vibe-sync@oculairmedia.com" && \
-    git config --global user.name "Huly Vibe Sync Service" && \
+RUN git config --global user.email "vibesync@oculairmedia.com" && \
+    git config --global user.name "Vibesync Service" && \
     git config --global --add safe.directory '*'
 
 # Health check - query the /health endpoint

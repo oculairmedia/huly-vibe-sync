@@ -409,7 +409,7 @@ Projects compete for developer agent slots based on their work queue priority. T
 
 5. **T=4h+2m**: PM agent processes message, reads its `codebase_ast` block to understand the codebase, and dispatches to developer agent:
    ```
-   talk_to_opencode(target="vibe-sync", message="Please work on HVSYN-157...")
+   talk_to_opencode(target="vibesync", message="Please work on HVSYN-157...")
    ```
 
 6. **T=4h+30m**: Developer agent adds JSDoc to all 15 functions in BeadsService.js. Pushes commit. Reports to PM agent. Closes HVSYN-157.
