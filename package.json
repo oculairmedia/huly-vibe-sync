@@ -81,6 +81,7 @@
   "devDependencies": {
     "@jest/globals": "^30.2.0",
     "@temporalio/testing": "^1.14.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "@vitest/coverage-v8": "^4.0.6",
     "@vitest/ui": "^4.0.6",
