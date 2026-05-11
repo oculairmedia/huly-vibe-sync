@@ -13,12 +13,45 @@ Project registry, Beads issue workflow guidance, and PM-agent coordination servi
 
 ## Quick Start
 
+Host runtime with Bun:
+
+```bash
+cd /opt/stacks/vibesync
+bun install --frozen-lockfile
+bun run type-check:all
+bun run start
+```
+
+Build a host-runnable binary:
+
+```bash
+bun run build:binary
+./dist/vibesync
+```
+
+The binary bundles the Bun service entrypoint. Runtime integrations that shell
+out to host tools, Python helpers, Beads, Dolt, Git, or mounted workspace paths
+still need those tools/files available on the host.
+
+Docker remains available for the current deployment topology:
+
 ```bash
 cd /opt/stacks/vibesync
 cp .env.example .env
 docker-compose up -d
 docker-compose logs -f
 ```
+
+For production restarts that need the DoltHub provisioning token, use the
+Vaultwarden-backed compose wrapper instead of storing the token in `.env`:
+
+```bash
+./scripts/vibesync-compose-vaultwarden.sh pull vibesync
+./scripts/vibesync-compose-vaultwarden.sh up -d vibesync
+```
+
+The wrapper reads the `DoltHub API Token` item from Vaultwarden at runtime and
+exports `DOLTHUB_API_TOKEN` only for that `docker compose` invocation.
 
 ## Configuration
 
