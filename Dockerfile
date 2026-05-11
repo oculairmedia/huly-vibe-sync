@@ -1,19 +1,19 @@
 # =============================================================================
-# Stage 1: Install Node.js production dependencies (with native compilation)
+# Stage 1: Install Bun production dependencies (with native compilation)
 # =============================================================================
-FROM node:20-alpine AS node-builder
+FROM oven/bun:1.2.10-alpine AS bun-builder
 
 # Native deps needed to compile better-sqlite3, etc.
 RUN apk add --no-cache make g++ python3
 
 WORKDIR /build
-COPY package*.json ./
-RUN npm ci --production
+COPY package.json bun.lock ./
+RUN bun install --production --frozen-lockfile
 
 # =============================================================================
 # Stage 2: Install Python tree-sitter dependencies
 # =============================================================================
-FROM node:20-alpine AS python-builder
+FROM oven/bun:1.2.10-alpine AS python-builder
 
 RUN apk add --no-cache python3 py3-pip
 
@@ -23,7 +23,7 @@ RUN pip3 install --no-cache-dir --break-system-packages --prefix=/python-deps -r
 # =============================================================================
 # Stage 3: Runtime image
 # =============================================================================
-FROM node:20-alpine AS runtime
+FROM oven/bun:1.2.10-alpine AS runtime
 
 LABEL maintainer="Oculair Media"
 LABEL description="Vibesync project registry and PM-agent coordination service"
@@ -38,27 +38,30 @@ COPY --from=python-builder /python-deps /usr
 WORKDIR /app
 
 # Copy node_modules from builder
-COPY --from=node-builder /build/node_modules ./node_modules
+COPY --from=bun-builder /build/node_modules ./node_modules
 
 # Copy package files (needed at runtime for version info, etc.)
-COPY package*.json ./
+COPY package.json bun.lock tsconfig*.json ./
 
 # Copy application files
-COPY index.js ./
+COPY index.js cli.js ./
+COPY src ./src
 COPY lib ./lib
 COPY python ./python
+COPY templates ./templates
+COPY migrations ./migrations
 COPY *.md ./
 
 # Copy Letta configuration (shared settings, local state will be generated)
 COPY .letta ./.letta
 
-# Create logs directory and ensure writable by node user
+# Create logs directory and ensure writable by bun user
 RUN mkdir -p /app/logs && \
-    chown -R node:node /app /app/.letta /app/logs && \
+    chown -R bun:bun /app /app/.letta /app/logs && \
     chmod -R 755 /app/.letta
 
-# Configure git identity and safe directory as node user (UID 1000)
-USER node
+# Configure git identity and safe directory as bun user (UID 1000)
+USER bun
 RUN git config --global user.email "vibesync@oculairmedia.com" && \
     git config --global user.name "Vibesync Service" && \
     git config --global --add safe.directory '*'
@@ -68,7 +71,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:${HEALTH_PORT:-3099}/health | grep -q '"status": "healthy"' || exit 1
 
 # Run as node user (UID 1000) — matches host mcp-user for correct file ownership
-USER node
+USER bun
 
 # Default command
-CMD ["node", "index.js"]
+CMD ["bun", "src/index.ts"]

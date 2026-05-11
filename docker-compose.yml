@@ -79,9 +79,11 @@ services:
 
       # Use local source code (override image bundle)
       - ./index.js:/app/index.js:ro
+      - ./cli.js:/app/cli.js:ro
+      - ./src:/app/src:ro
       - ./lib:/app/lib:ro
       - ./package.json:/app/package.json:ro
-      - ./package-lock.json:/app/package-lock.json:ro
+      - ./bun.lock:/app/bun.lock:ro
 
       # Temporal workflows and activities
       - ./temporal/dist:/app/temporal/dist:ro
@@ -115,6 +117,7 @@ services:
 
       # Beads CLI with Dolt/CGO support for project-local tracker hydration
       - /usr/local/bin/bd:/usr/local/bin/bd:ro
+      - /usr/local/bin/dolt:/usr/local/bin/dolt:ro
 
     network_mode: host
     user: '1000:1000'
