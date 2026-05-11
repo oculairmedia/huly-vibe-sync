@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 import 'dotenv/config';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 import { createSyncDatabase } from './lib/database.js';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './lib/config.js';
@@ -19,6 +17,7 @@ import { ProjectRegistry } from './lib/ProjectRegistry.js';
 import { createSyncController } from './lib/SyncController.js';
 import { createEventHandlers } from './lib/EventHandlers.js';
 import { setupScheduler } from './lib/SchedulerSetup.js';
+import { resolveFromAppRoot } from './lib/runtimePaths.js';
 
 let temporalOrchestration = null;
 const USE_TEMPORAL_ORCHESTRATION = process.env.USE_TEMPORAL_ORCHESTRATION === 'true';
@@ -66,14 +65,11 @@ async function getTemporalOrchestration() {
   return temporalOrchestration;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const config = loadConfig();
 
 const healthStats = initializeHealthStats();
 
-const DB_PATH = path.join(__dirname, 'logs', 'sync-state.db');
+const DB_PATH = process.env.VIBESYNC_DB_PATH || resolveFromAppRoot('logs', 'sync-state.db');
 
 let db;
 try {
