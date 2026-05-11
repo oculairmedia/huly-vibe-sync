@@ -2,26 +2,36 @@
   "name": "vibesync",
   "version": "1.0.0",
   "description": "Project sync service with PM agent orchestration",
-  "main": "index.js",
+  "main": "src/index.ts",
   "type": "module",
+  "bin": {
+    "vibesync": "src/cli.ts"
+  },
   "scripts": {
-    "start": "node index.js",
-    "dev": "DRY_RUN=true SYNC_INTERVAL=0 node index.js",
-    "sync-once": "SYNC_INTERVAL=0 node index.js",
-    "temporal:worker": "npx ts-node temporal/worker.ts",
-    "temporal:build": "tsc -p temporal/tsconfig.json",
-    "test": "node scripts/run-vitest-safe.mjs run",
-    "test:watch": "node scripts/run-vitest-safe.mjs",
-    "test:coverage": "node scripts/run-vitest-safe.mjs run --coverage",
-    "test:ui": "node scripts/run-vitest-safe.mjs --ui",
-    "test:unit": "node scripts/run-vitest-safe.mjs run tests/unit",
-    "test:integration": "node scripts/run-vitest-safe.mjs run tests/integration",
-    "test:temporal": "node scripts/run-vitest-safe.mjs run tests/unit/temporal tests/unit/TemporalOrchestration.test.ts tests/unit/AgentProvisioning.test.ts",
+    "start": "bun src/index.ts",
+    "start:node": "node index.js",
+    "dev": "DRY_RUN=true SYNC_INTERVAL=0 bun src/index.ts",
+    "sync-once": "SYNC_INTERVAL=0 bun src/index.ts",
+    "build": "bun build --target=bun --outdir=dist src/index.ts src/cli.ts",
+    "build:binary": "bun scripts/build-binary.ts",
+    "build:binary:windows": "bun scripts/build-binary.ts",
+    "build:cli": "bun build --target=bun --outfile dist/vibesync-cli.js src/cli.ts",
+    "temporal:worker": "bunx ts-node temporal/worker.ts",
+    "temporal:build": "bunx tsc -p temporal/tsconfig.json",
+    "test": "bunx vitest run",
+    "test:watch": "bunx vitest",
+    "test:coverage": "bunx vitest run --coverage",
+    "test:ui": "bunx vitest --ui",
+    "test:unit": "bunx vitest run tests/unit",
+    "test:integration": "bunx vitest run tests/integration",
+    "test:temporal": "bunx vitest run tests/unit/temporal tests/unit/TemporalOrchestration.test.ts tests/unit/AgentProvisioning.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "type-check": "tsc --noEmit",
+    "type-check": "bunx tsc -p tsconfig.json --noEmit",
+    "type-check:runtime-js": "bunx tsc -p tsconfig.runtime-js.json --noEmit",
+    "type-check:all": "bun run type-check && bun run type-check:runtime-js && bun run temporal:build",
     "manage": "node manage-agents.js",
     "agents": "node manage-agents.js list-agents",
     "migrate": "node migrate-agents-to-v1.js",
@@ -29,7 +39,7 @@
     "compare-agents": "node tests/compare-agent-sources.js",
     "migrate-agents-md": "node migrate-agents-md.js",
     "migrate-agents-db": "node migrate-agents-to-db.js",
-    "vibesync": "node cli.js"
+    "vibesync": "bun src/cli.ts"
   },
   "keywords": [
     "vibesync",
@@ -65,7 +75,8 @@
     "zod": "^4.3.6"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "bun": ">=1.2.10",
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
