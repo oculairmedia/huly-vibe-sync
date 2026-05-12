@@ -14,9 +14,9 @@ import { logger } from './src/logger';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
 import { ProjectRegistry } from './lib/ProjectRegistry.js';
 
-import { createSyncController } from './lib/SyncController.js';
+import { createSyncController } from './src/SyncController.js';
 import { createEventHandlers } from './src/EventHandlers';
-import { setupScheduler } from './lib/SchedulerSetup.js';
+import { setupScheduler } from './src/SchedulerSetup.js';
 import { resolveFromAppRoot } from './src/runtimePaths';
 
 let temporalOrchestration = null;
