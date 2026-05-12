@@ -15,12 +15,24 @@ vi.mock('../../lib/logger.js', () => ({
     debug: vi.fn(),
   },
 }));
+vi.mock('../../src/logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() })),
+  },
+}));
+vi.mock('../../lib/HealthService.js', () => ({
+  recordApiLatency: vi.fn(),
+}));
 vi.mock('../../lib/HealthService.js', () => ({
   recordApiLatency: vi.fn(),
 }));
 
-const { BookStackExporter } = await import('../../lib/BookStackExporter.js');
-const { BookStackService } = await import('../../lib/BookStackService.js');
+const { BookStackExporter } = await import('../../src/BookStackExporter.js');
+const { BookStackService } = await import('../../src/BookStackService.js');
 
 function createTestConfig(overrides = {}) {
   return {

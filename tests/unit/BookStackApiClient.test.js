@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../../lib/http.js', () => ({
+vi.mock('../../src/http.js', () => ({
   fetchWithPool: vi.fn(),
 }));
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('../../lib/HealthService.js', () => ({
   recordApiLatency: vi.fn(),
 }));
 
-const { BookStackApiClient } = await import('../../lib/BookStackApiClient.js');
+const { BookStackApiClient } = await import('../../src/BookStackApiClient.js');
 const { fetchWithPool } = await import('../../lib/http.js');
 const { recordApiLatency } = await import('../../lib/HealthService.js');
 

@@ -1,16 +1,52 @@
 import chokidar from 'chokidar';
-import path from 'path';
-import fs from 'fs';
-import { logger } from '../src/logger';
+import path from 'node:path';
+import fs from 'node:fs';
+import { logger } from './logger';
 
 const DEBOUNCE_DELAY = 2000;
 
+interface WatcherInfo {
+  watcher: ReturnType<typeof chokidar.watch>;
+  projectPath: string;
+  bookSlug: string;
+}
+
+interface BookStackWatcherOptions {
+  db: { getProjectsWithFilesystemPath: () => Array<{ identifier: string; filesystem_path: string }> };
+  bookstackService: {
+    config: { docsSubdir: string };
+    getBookSlugForProject: (id: string) => string | null;
+  };
+  onBookStackChange: ((event: {
+    projectIdentifier: string;
+    projectPath: string;
+    changedFiles: string[];
+    timestamp: string;
+  }) => Promise<void>) | null;
+  debounceDelay?: number;
+}
+
+interface WatcherStats {
+  projectsWatched: number;
+  changesDetected: number;
+  syncsTriggered: number;
+}
+
 export class BookStackWatcher {
-  constructor({ db, bookstackService, onBookStackChange, debounceDelay = DEBOUNCE_DELAY }) {
-    this.db = db;
-    this.bookstackService = bookstackService;
-    this.onBookStackChange = onBookStackChange;
-    this.debounceDelay = debounceDelay;
+  private db: BookStackWatcherOptions['db'];
+  private bookstackService: BookStackWatcherOptions['bookstackService'];
+  private onBookStackChange: BookStackWatcherOptions['onBookStackChange'];
+  private debounceDelay: number;
+  private watchers: Map<string, WatcherInfo>;
+  private pendingChanges: Map<string, Set<string>>;
+  private debounceTimers: Map<string, ReturnType<typeof setTimeout>>;
+  private stats: WatcherStats;
+
+  constructor(options: BookStackWatcherOptions) {
+    this.db = options.db;
+    this.bookstackService = options.bookstackService;
+    this.onBookStackChange = options.onBookStackChange;
+    this.debounceDelay = options.debounceDelay ?? DEBOUNCE_DELAY;
     this.watchers = new Map();
     this.pendingChanges = new Map();
     this.debounceTimers = new Map();
@@ -21,7 +57,7 @@ export class BookStackWatcher {
     };
   }
 
-  watchProject(projectIdentifier, projectPath, bookSlug) {
+  watchProject(projectIdentifier: string, projectPath: string, bookSlug: string): boolean {
     if (this.watchers.has(projectIdentifier)) {
       return true;
     }
@@ -49,14 +85,16 @@ export class BookStackWatcher {
       });
 
       watcher
-        .on('add', filePath => this.handleChange(projectIdentifier, projectPath, filePath, 'add'))
-        .on('change', filePath =>
-          this.handleChange(projectIdentifier, projectPath, filePath, 'change')
+        .on('add', (filePath: string) =>
+          this.handleChange(projectIdentifier, projectPath, filePath, 'add'),
         )
-        .on('unlink', filePath =>
-          this.handleChange(projectIdentifier, projectPath, filePath, 'unlink')
+        .on('change', (filePath: string) =>
+          this.handleChange(projectIdentifier, projectPath, filePath, 'change'),
         )
-        .on('error', error => {
+        .on('unlink', (filePath: string) =>
+          this.handleChange(projectIdentifier, projectPath, filePath, 'unlink'),
+        )
+        .on('error', (error: unknown) => {
           logger.error({ project: projectIdentifier, err: error }, 'BookStack watcher error');
         })
         .on('ready', () => {
@@ -69,20 +107,20 @@ export class BookStackWatcher {
 
       logger.info(
         { project: projectIdentifier, docsDir },
-        'Started watching BookStack docs directory'
+        'Started watching BookStack docs directory',
       );
 
       return true;
     } catch (error) {
       logger.error(
         { project: projectIdentifier, docsDir, err: error },
-        'Failed to start BookStack watcher'
+        'Failed to start BookStack watcher',
       );
       return false;
     }
   }
 
-  async unwatchProject(projectIdentifier) {
+  async unwatchProject(projectIdentifier: string): Promise<void> {
     const watcherInfo = this.watchers.get(projectIdentifier);
     if (watcherInfo) {
       await watcherInfo.watcher.close();
@@ -100,7 +138,12 @@ export class BookStackWatcher {
     }
   }
 
-  handleChange(projectIdentifier, projectPath, filePath, eventType) {
+  private handleChange(
+    projectIdentifier: string,
+    projectPath: string,
+    filePath: string,
+    eventType: string,
+  ): void {
     if (!filePath.endsWith('.md')) {
       return;
     }
@@ -108,7 +151,7 @@ export class BookStackWatcher {
     if (eventType === 'unlink') {
       logger.warn(
         { project: projectIdentifier, file: path.relative(projectPath, filePath) },
-        'BookStack doc file deleted - will NOT delete from BookStack (Phase 2 policy)'
+        'BookStack doc file deleted - will NOT delete from BookStack (Phase 2 policy)',
       );
       return;
     }
@@ -118,7 +161,7 @@ export class BookStackWatcher {
     const relativePath = path.relative(projectPath, filePath);
     logger.debug(
       { project: projectIdentifier, file: relativePath, event: eventType },
-      'BookStack doc file change detected'
+      'BookStack doc file change detected',
     );
 
     const pending = this.pendingChanges.get(projectIdentifier);
@@ -129,7 +172,7 @@ export class BookStackWatcher {
     this.scheduleSync(projectIdentifier, projectPath);
   }
 
-  scheduleSync(projectIdentifier, projectPath) {
+  private scheduleSync(projectIdentifier: string, projectPath: string): void {
     const existingTimer = this.debounceTimers.get(projectIdentifier);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -143,7 +186,7 @@ export class BookStackWatcher {
     this.debounceTimers.set(projectIdentifier, timer);
   }
 
-  async triggerSync(projectIdentifier, projectPath) {
+  private async triggerSync(projectIdentifier: string, projectPath: string): Promise<void> {
     const pending = this.pendingChanges.get(projectIdentifier);
     const changedFiles = pending ? Array.from(pending) : [];
 
@@ -159,9 +202,9 @@ export class BookStackWatcher {
       {
         project: projectIdentifier,
         fileCount: changedFiles.length,
-        files: changedFiles.slice(0, 5).map(f => path.relative(projectPath, f)),
+        files: changedFiles.slice(0, 5).map((f) => path.relative(projectPath, f)),
       },
-      'Triggering BookStack import from file changes'
+      'Triggering BookStack import from file changes',
     );
 
     this.stats.syncsTriggered++;
@@ -177,13 +220,13 @@ export class BookStackWatcher {
       } catch (error) {
         logger.error(
           { project: projectIdentifier, err: error },
-          'Error in BookStack change callback'
+          'Error in BookStack change callback',
         );
       }
     }
   }
 
-  async syncWithDatabase() {
+  async syncWithDatabase(): Promise<{ watching: number; available: number }> {
     if (!this.db) {
       return { watching: 0, available: 0 };
     }
@@ -198,7 +241,11 @@ export class BookStackWatcher {
       const bookSlug = this.bookstackService.getBookSlugForProject(identifier);
       if (!bookSlug) continue;
 
-      const docsDir = path.join(filesystem_path, this.bookstackService.config.docsSubdir, bookSlug);
+      const docsDir = path.join(
+        filesystem_path,
+        this.bookstackService.config.docsSubdir,
+        bookSlug,
+      );
 
       if (fs.existsSync(docsDir)) {
         available++;
@@ -206,7 +253,7 @@ export class BookStackWatcher {
       }
     }
 
-    const activeProjectIds = new Set(projects.map(p => p.identifier));
+    const activeProjectIds = new Set(projects.map((p) => p.identifier));
     for (const [projectIdentifier] of this.watchers) {
       if (!activeProjectIds.has(projectIdentifier)) {
         await this.unwatchProject(projectIdentifier);
@@ -215,20 +262,20 @@ export class BookStackWatcher {
 
     logger.info(
       { watching: this.watchers.size, available },
-      'Synced BookStack watchers with database'
+      'Synced BookStack watchers with database',
     );
 
     return { watching: this.watchers.size, available };
   }
 
-  getStats() {
+  getStats(): WatcherStats & { watchedProjects: string[] } {
     return {
       ...this.stats,
       watchedProjects: Array.from(this.watchers.keys()),
     };
   }
 
-  async closeAll() {
+  async closeAll(): Promise<void> {
     for (const [projectIdentifier] of this.watchers) {
       await this.unwatchProject(projectIdentifier);
     }
@@ -236,7 +283,7 @@ export class BookStackWatcher {
   }
 }
 
-export function createBookStackWatcher(options) {
+export function createBookStackWatcher(options: BookStackWatcherOptions): BookStackWatcher {
   return new BookStackWatcher(options);
 }
 

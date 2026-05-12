@@ -32,11 +32,11 @@ vi.mock('fs', () => ({
   existsSync: mockFs.existsSync,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   logger: mockLogger,
 }));
 
-const { BookStackWatcher } = await import('../../lib/BookStackWatcher.js');
+const { BookStackWatcher } = await import('../../src/BookStackWatcher.js');
 
 describe('BookStackWatcher', () => {
   let watcher;

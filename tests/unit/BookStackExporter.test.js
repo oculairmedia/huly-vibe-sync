@@ -18,7 +18,7 @@ vi.mock('crypto', () => ({
     createHash: vi.fn(),
   },
 }));
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock('../../lib/HealthService.js', () => ({
 }));
 
 const { BookStackExporter, createBookStackExporter } = await import(
-  '../../lib/BookStackExporter.js'
+  '../../src/BookStackExporter.js'
 );
 const { execSync } = await import('child_process');
 const fs = (await import('fs')).default;

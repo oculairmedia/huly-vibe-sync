@@ -1,12 +1,43 @@
-import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-import { logger } from '../src/logger';
-import { recordApiLatency } from './HealthService.js';
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { logger } from './logger';
+import { recordApiLatency } from '../lib/HealthService.js';
+
+interface ExporterConfig {
+  exporterOutputPath: string;
+  docsSubdir: string;
+}
+
+interface ExporterStats {
+  lastExportAt: number | null;
+  lastExportDuration: number | null;
+  totalExports: number;
+  errors: number;
+}
+
+interface ExportResult {
+  success: boolean;
+  reason?: string;
+  pages?: ExportPage[];
+  duration?: number;
+  error?: string;
+}
+
+interface ExportPage {
+  relativePath: string;
+  contentHash: string;
+  modified: boolean;
+  meta: Record<string, unknown> | null;
+}
 
 export class BookStackExporter {
-  constructor(config) {
+  private config: ExporterConfig;
+  private exporterOutputPath: string;
+  private stats: ExporterStats;
+
+  constructor(config: ExporterConfig) {
     this.config = config;
     this.exporterOutputPath = config.exporterOutputPath;
     this.stats = {
@@ -17,21 +48,21 @@ export class BookStackExporter {
     };
   }
 
-  getLatestArchive() {
+  getLatestArchive(): string | null {
     if (!fs.existsSync(this.exporterOutputPath)) {
       return null;
     }
 
     const files = fs
       .readdirSync(this.exporterOutputPath)
-      .filter(f => f.startsWith('bookstack_export_') && f.endsWith('.tgz'))
+      .filter((f) => f.startsWith('bookstack_export_') && f.endsWith('.tgz'))
       .sort()
       .reverse();
 
-    return files.length > 0 ? path.join(this.exporterOutputPath, files[0]) : null;
+    return files.length > 0 ? path.join(this.exporterOutputPath, files[0]!) : null;
   }
 
-  extractArchive(archivePath, outputDir) {
+  extractArchive(archivePath: string, outputDir: string): boolean {
     fs.mkdirSync(outputDir, { recursive: true });
 
     try {
@@ -46,7 +77,7 @@ export class BookStackExporter {
     }
   }
 
-  async exportToProject(projectPath, bookSlug) {
+  async exportToProject(projectPath: string, bookSlug: string): Promise<ExportResult> {
     const startTime = Date.now();
     const docsDir = path.join(projectPath, this.config.docsSubdir);
 
@@ -86,7 +117,7 @@ export class BookStackExporter {
 
       logger.info(
         { bookSlug, pages: pages.length, durationMs: duration },
-        'BookStack export completed'
+        'BookStack export completed',
       );
 
       return { success: true, pages, duration };
@@ -95,14 +126,14 @@ export class BookStackExporter {
       const duration = Date.now() - startTime;
       recordApiLatency('bookstack', 'export', duration);
       logger.error({ err: error, bookSlug }, 'BookStack export failed');
-      return { success: false, reason: 'error', error: error.message };
+      return { success: false, reason: 'error', error: (error as Error).message };
     }
   }
 
-  findBookDir(extractDir, bookSlug) {
+  private findBookDir(extractDir: string, bookSlug: string): string | null {
     const slugNormalized = bookSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
 
-    const searchDirs = (dir, depth = 0) => {
+    const searchDirs = (dir: string, depth: number = 0): string | null => {
       if (depth > 3) return null;
 
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -127,13 +158,18 @@ export class BookStackExporter {
     return searchDirs(extractDir);
   }
 
-  syncDirectory(sourceDir, targetDir) {
-    const pages = [];
+  private syncDirectory(sourceDir: string, targetDir: string): ExportPage[] {
+    const pages: ExportPage[] = [];
     this.walkAndSync(sourceDir, targetDir, sourceDir, pages);
     return pages;
   }
 
-  walkAndSync(currentSource, targetRoot, sourceRoot, pages) {
+  private walkAndSync(
+    currentSource: string,
+    targetRoot: string,
+    sourceRoot: string,
+    pages: ExportPage[],
+  ): void {
     const entries = fs.readdirSync(currentSource, { withFileTypes: true });
 
     for (const entry of entries) {
@@ -168,10 +204,10 @@ export class BookStackExporter {
           entry.name.endsWith('.txt')
         ) {
           const metaPath = sourcePath.replace(/\.[^.]+$/, '_meta.json');
-          let meta = null;
+          let meta: Record<string, unknown> | null = null;
           if (fs.existsSync(metaPath)) {
             try {
-              meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+              meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as Record<string, unknown>;
             } catch {
               // meta parse failure is non-fatal
             }
@@ -188,7 +224,7 @@ export class BookStackExporter {
     }
   }
 
-  cleanup(dir) {
+  private cleanup(dir: string): void {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
     } catch {
@@ -196,11 +232,11 @@ export class BookStackExporter {
     }
   }
 
-  getStats() {
+  getStats(): ExporterStats {
     return { ...this.stats };
   }
 }
 
-export function createBookStackExporter(config) {
+export function createBookStackExporter(config: ExporterConfig): BookStackExporter {
   return new BookStackExporter(config);
 }
