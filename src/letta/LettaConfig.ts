@@ -1,30 +1,31 @@
-/**
- * LettaConfig — shared configuration DTO for all Letta sub-services.
- */
+import path from 'node:path';
+import { resolveFromAppRoot } from '../runtimePaths';
 
-import path from 'path';
-import { resolveFromAppRoot } from '../../src/runtimePaths';
-
-/**
- * @typedef {Object} LettaConfigOptions
- * @property {any} [client]
- * @property {string} [model]
- * @property {string} [embedding]
- * @property {boolean} [enableSleeptime]
- * @property {number} [sleeptimeFrequency]
- * @property {string} [controlAgentName]
- * @property {string | null} [sharedHumanBlockId]
- */
+interface LettaConfigOptions {
+  client?: unknown;
+  model?: string;
+  embedding?: string;
+  enableSleeptime?: boolean;
+  sleeptimeFrequency?: number;
+  controlAgentName?: string;
+  sharedHumanBlockId?: string | null;
+}
 
 export class LettaConfig {
-  /**
-   * @param {string} baseURL
-   * @param {string} password
-   * @param {LettaConfigOptions} options
-   */
-  constructor(baseURL, password, options = {}) {
-    // Client is injected by the facade so that test mocks on service.client
-    // propagate to every sub-service (they all read config.client).
+  client: unknown;
+  baseURL: string;
+  apiURL: string;
+  password: string;
+  model: string;
+  embedding: string;
+  enableSleeptime: boolean;
+  sleeptimeFrequency: number;
+  controlAgentName: string;
+  sharedHumanBlockId: string | null;
+  lettaDir: string;
+  settingsPath: string;
+
+  constructor(baseURL: string, password: string, options: LettaConfigOptions = {}) {
     this.client = options.client;
 
     this.baseURL = baseURL;
@@ -39,7 +40,7 @@ export class LettaConfig {
         ? options.enableSleeptime
         : process.env.LETTA_ENABLE_SLEEPTIME === 'true';
     this.sleeptimeFrequency =
-      options.sleeptimeFrequency || parseInt(process.env.LETTA_SLEEPTIME_FREQUENCY || '5');
+      options.sleeptimeFrequency || parseInt(process.env.LETTA_SLEEPTIME_FREQUENCY || '5', 10);
 
     this.controlAgentName =
       options.controlAgentName || process.env.LETTA_CONTROL_AGENT || 'PM-Control';
@@ -47,7 +48,6 @@ export class LettaConfig {
     this.sharedHumanBlockId =
       options.sharedHumanBlockId || process.env.LETTA_SHARED_HUMAN_BLOCK_ID || null;
 
-    // Paths
     this.lettaDir = resolveFromAppRoot('.letta');
     this.settingsPath = path.join(this.lettaDir, 'settings.local.json');
   }

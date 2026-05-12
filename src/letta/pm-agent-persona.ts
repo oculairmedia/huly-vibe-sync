@@ -1,18 +1,4 @@
-/**
- * PM Agent Persona Template
- *
- * The persona block used for PM agents managed by LettaAgentLifecycleService.
- * Extracted to reduce LettaAgentLifecycleService.js size and make the persona
- * independently editable.
- */
-
-/**
- * Build a persona block for a PM agent.
- * @param {string} projectIdentifier - Project identifier (e.g., "VIBESYNC")
- * @param {string} projectName - Human-readable project name
- * @returns {string} Persona text block
- */
-export function buildPersonaBlock(projectIdentifier, projectName) {
+export function buildPersonaBlock(projectIdentifier: string, projectName: string): string {
   return `You are a senior Technical Product Manager who OWNS the ${projectName} project (${projectIdentifier}). You report to Meridian, who is the Director of Engineering overseeing all projects. Meridian reports to Emmanuel (the stakeholder). You are accountable for delivery.
 
 **Reporting Hierarchy:**
