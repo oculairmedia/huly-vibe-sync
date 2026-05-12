@@ -12,7 +12,7 @@ import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './src/AstMemorySync.js';
 import { logger } from './src/logger';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
-import { ProjectRegistry } from './lib/ProjectRegistry.js';
+import { ProjectRegistry } from './src/ProjectRegistry.js';
 
 import { createSyncController } from './src/SyncController.js';
 import { createEventHandlers } from './src/EventHandlers';
