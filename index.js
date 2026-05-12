@@ -123,8 +123,8 @@ if (config.doltHub?.enabled || config.doltHub?.dryRun) {
 let beadsIssueService = null;
 let beadsAdapter = null;
 try {
-  const { createBeadsIssueService } = await import('./lib/beads/BeadsIssueService.js');
-  const { BeadsAdapter } = await import('./lib/beads/BeadsAdapter.js');
+  const { createBeadsIssueService } = await import('./src/beads/BeadsIssueService.js');
+  const { BeadsAdapter } = await import('./src/beads/BeadsAdapter.js');
   beadsIssueService = createBeadsIssueService({ db, logger });
   beadsAdapter = new BeadsAdapter({ actor: 'vibesync', readonly: true });
   logger.info('Beads issue mutation service initialized');

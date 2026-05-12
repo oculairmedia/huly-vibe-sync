@@ -1,5 +1,5 @@
 /**
- * Beads issue types. Source from BeadsAdapter.js JSON output,
+ * Beads issue types. Source from BeadsAdapter JSON output,
  * LettaMemoryBuilders.d.ts NormalizedIssue, and API route payloads.
  */
 
@@ -45,6 +45,50 @@ export interface NormalizedIssue {
   modifiedOn: number;
   component: string | null;
   assignee: string | null;
+}
+
+/**
+ * Canonical normalized Beads issue shape produced by BeadsAdapter._normalizeIssue.
+ * Reused across BeadsAdapter, BeadsIssueService, and API routes (Phase 5).
+ */
+export interface NormalizedBeadsIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: string;
+  type: string;
+  issue_type: string;
+  description: string;
+  assignee: string | null;
+  labels: string[];
+  notes: string[];
+  comments: string[];
+  blockedBy: string[];
+  blocked_by: string[];
+  blocks: string[];
+  parent_huly_id: string | null;
+  parent_vibe_id: string | null;
+  sub_issue_count: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | undefined;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | undefined;
+  acceptance_criteria: string | undefined;
+  dependency_count: number | undefined;
+  dependent_count: number | undefined;
+  comment_count: number | undefined;
+}
+
+export interface NormalizedWorkItems {
+  items: NormalizedBeadsIssue[];
+}
+
+export interface BeadsProject {
+  identifier: string;
+  filesystem_path: string;
 }
 
 export interface BeadsIssueSummary {

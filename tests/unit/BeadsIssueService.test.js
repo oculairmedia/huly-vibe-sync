@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BeadsIssueService, buildBdArgs } from '../../lib/beads/BeadsIssueService.js';
+import { BeadsIssueService, buildBdArgs } from '../../src/beads/BeadsIssueService.js';
 
 describe('BeadsIssueService', () => {
   let db;

@@ -11,7 +11,7 @@ describe('BeadsAdapter default command runner', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    ({ BeadsAdapter } = await import('../../lib/beads/BeadsAdapter.js'));
+    ({ BeadsAdapter } = await import('../../src/beads/BeadsAdapter.js'));
   });
 
   it('executes bd with argv instead of a shell command string', async () => {

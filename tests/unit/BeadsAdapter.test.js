@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BeadsAdapter } from '../../lib/beads/BeadsAdapter.js';
+import { BeadsAdapter } from '../../src/beads/BeadsAdapter.js';
 
 describe('BeadsAdapter cache controls', () => {
   beforeEach(() => {
