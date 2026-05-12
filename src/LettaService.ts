@@ -111,4 +111,4 @@ export function createLettaService(): LettaService {
 }
 
 export { buildProjectMeta, buildBoardConfig, buildBoardMetrics, buildHotspots, buildBacklogSummary, buildRecentActivity, buildComponentsSummary, buildChangeLog, buildScratchpad, buildExpression } from './LettaMemoryBuilders.js';
-export { LettaFileService } from '../lib/LettaFileService.js';
+export { LettaFileService } from './LettaFileService.js';

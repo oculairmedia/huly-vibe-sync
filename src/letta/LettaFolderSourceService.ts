@@ -1,5 +1,5 @@
 import { fetchWithPool } from '../http';
-import { LettaFileService } from '../../lib/LettaFileService.js';
+import { LettaFileService } from '../LettaFileService.js';
 
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
