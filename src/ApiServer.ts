@@ -63,8 +63,7 @@ interface ApiServerDeps {
 
 export function createApiServer(deps: ApiServerDeps): http.Server {
   const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || '3099', 10);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const configHandler = new (ConfigurationHandler as any)(deps.config, deps.onConfigUpdate, { sseManager, parseJsonBody, sendJson, sendError });
+  const configHandler = new (ConfigurationHandler as unknown as new (...args: unknown[]) => ConfigurationHandler)(deps.config, deps.onConfigUpdate, { sseManager, parseJsonBody, sendJson, sendError });
 
   interface Route { match: (ctx: { pathname: string; method: string }) => boolean; handle: (ctx: unknown) => Promise<void> }
   const routes: Route[] = [];
@@ -72,8 +71,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
 
   const routeDeps = { ...deps, configHandler, sseManager, syncHistory, getHealthMetrics, getMetricsRegistry, parseJsonBody, sendJson, sendError, logger };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  registerHealthRoutes(app, routeDeps as any);
+  registerHealthRoutes(app, routeDeps as never);
   registerProjectRoutes(app, routeDeps as never);
   registerConfigRoutes(app, routeDeps as never);
   registerSyncRoutes(app, routeDeps as never);

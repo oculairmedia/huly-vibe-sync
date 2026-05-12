@@ -53,7 +53,7 @@ export class AstMemorySync {
       graphitiConnected: this.watcher.graphitiClients?.has(projectIdentifier) || false,
     };
 
-    const summaryData = this.summary.generateSummary(astCache as any, projectIdentifier, health as any);
+    const summaryData = this.summary.generateSummary(astCache as unknown as Parameters<typeof this.summary.generateSummary>[0], projectIdentifier, health as unknown as Parameters<typeof this.summary.generateSummary>[2]);
     if (!summaryData) return false;
 
     return this.updater.updateAgentBlock(agentId, summaryData);
