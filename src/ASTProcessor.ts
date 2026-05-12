@@ -3,6 +3,7 @@ import { parseFiles, isSupported as isAstSupported } from './ASTParser.js';
 import { ASTCache } from './ASTCache.js';
 import { extractFileSummary, getActiveProjectFiles } from './FileUtils.js';
 import { ModuleSummaryBuilder } from './ModuleSummaryBuilder.js';
+import type { AstCacheInput } from './ModuleSummaryBuilder.js';
 
 type State = Record<string, any>;
 
@@ -70,8 +71,8 @@ export class ASTProcessor {
     const astCache = this._s.astCaches.get(projectIdentifier) as ASTCache | undefined;
     if (!astCache) return { modules: 0, edges: 0, errors: [] };
 
-    const modules = this._moduleSummaryBuilder.buildModuleSummaries(astCache, projectIdentifier);
-    const edges = this._moduleSummaryBuilder.buildDependencyEdges(astCache, projectIdentifier);
+    const modules = this._moduleSummaryBuilder.buildModuleSummaries(astCache as unknown as AstCacheInput, projectIdentifier);
+    const edges = this._moduleSummaryBuilder.buildDependencyEdges(astCache as unknown as AstCacheInput, projectIdentifier);
     if (modules.length === 0) return { modules: 0, edges: 0, errors: [] };
 
     const result: { modules: number; edges: number; errors: unknown[] } = { modules: 0, edges: 0, errors: [] };

@@ -9,7 +9,7 @@ type BlockRecord = { label?: string; value?: unknown; id?: string };
 
 export class LettaMemoryService {
   config: { client: Client; sharedHumanBlockId?: string };
-  private _blockHashCache = new Map<string, Map<string, any>>();
+  private _blockHashCache = new Map<string, Map<string, number>>();
 
   constructor(config: { client: Client; sharedHumanBlockId?: string }) {
     this.config = config;
@@ -92,7 +92,7 @@ export class LettaMemoryService {
       }
 
       if (skippedCount > 0) console.log(`[Letta] Skipped ${skippedCount} unchanged blocks`);
-      if (updateOperations.length === 0) { console.log('[Letta] No changes needed, all blocks up to date'); this._blockHashCache.set(agentId, newBlockHashes); return; }
+      if (updateOperations.length === 0) { console.log('[Letta] No changes needed, all blocks up to date'); this._blockHashCache.set(agentId, newBlockHashes as unknown as Map<string, number>); return; }
 
       console.log(`[Letta] Executing ${updateOperations.length} operations with concurrency limit of ${CONCURRENCY_LIMIT}`);
       for (let i = 0; i < updateOperations.length; i += CONCURRENCY_LIMIT) {
@@ -106,7 +106,7 @@ export class LettaMemoryService {
       console.log(`[Letta] Successfully upserted all ${blocks.length} memory blocks`);
       const cacheMap = new Map<string, number>();
       for (const [label, { hash }] of newBlockHashes) cacheMap.set(label, hash);
-      this._blockHashCache.set(agentId, cacheMap as any);
+      this._blockHashCache.set(agentId, cacheMap);
     } catch (error) { console.error('[Letta] Error upserting memory blocks:', (error as Error).message); throw error; }
   }
 

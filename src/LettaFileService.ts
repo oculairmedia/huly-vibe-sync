@@ -5,20 +5,37 @@ import { execSync } from 'child_process';
 import { Blob } from 'buffer';
 import { fetchWithPool } from './http';
 
-type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+interface LettaClient {
+  sources: { files: { list: (id: string) => Promise<Record<string, unknown>[]>; upload: (...args: unknown[]) => Promise<Record<string, unknown>> } };
+  agents: { files: { closeAll: (id: string) => Promise<void> } };
+  folders: { files: { upload: (...args: unknown[]) => Promise<Record<string, unknown>> } };
+}
+
+export interface LettaServiceHost {
+  client: LettaClient;
+  apiURL: string;
+  password: string;
+}
+
+export interface SyncDatabase {
+  getProjectFiles: (projectId: string) => { relative_path: string; letta_file_id?: string; content_hash?: string }[];
+  getOrphanedFiles: (projectId: string, currentFiles: string[]) => { relative_path: string; letta_file_id?: string }[];
+  deleteProjectFile: (projectId: string, relativePath: string) => void;
+  upsertProjectFile: (record: { project_identifier: string; relative_path: string; content_hash: string; letta_file_id: string; file_size: number }) => void;
+}
 
 export class LettaFileService {
-  private _host: Any;
+  private _host: LettaServiceHost;
 
-  constructor(host: Any) {
+  constructor(host: LettaServiceHost) {
     this._host = host;
   }
 
-  get client(): Any { return this._host.client; }
+  get client(): LettaServiceHost['client'] { return this._host.client; }
   get apiURL(): string { return this._host.apiURL; }
   get password(): string { return this._host.password; }
 
-  async listFolderFiles(folderId: string): Promise<Any[]> {
+  async listFolderFiles(folderId: string): Promise<Record<string, unknown>[]> {
     try {
       const files = await this.client.sources.files.list(folderId);
       return files || [];
@@ -143,11 +160,11 @@ export class LettaFileService {
     }
   }
 
-  async uploadProjectFiles(folderId: string, projectPath: string, files: string[], maxFiles = 50): Promise<Any[]> {
+  async uploadProjectFiles(folderId: string, projectPath: string, files: string[], maxFiles = 50): Promise<Record<string, unknown>[]> {
     console.log(`[Letta] Uploading up to ${maxFiles} files to folder ${folderId}...`);
 
     try {
-      const uploadedFiles: Any[] = [];
+      const uploadedFiles: Record<string, unknown>[] = [];
       const filesToUpload = files.slice(0, maxFiles);
 
       for (const file of filesToUpload) {
@@ -168,7 +185,7 @@ export class LettaFileService {
           const fileName = file.replace(/\//g, '_');
 
           const fileMetadata = await this.client.folders.files.upload(fileBlob, folderId, { name: fileName, duplicateHandling: 'replace' });
-          uploadedFiles.push(fileMetadata);
+          uploadedFiles.push(fileMetadata as Record<string, unknown>);
           console.log(`[Letta] Uploaded: ${file}`);
         } catch (fileError) {
           console.warn(`[Letta] Failed to upload ${file}:`, (fileError as Error).message);
@@ -192,7 +209,7 @@ export class LettaFileService {
     await fetchWithPool(`${this.apiURL}/sources/${folderId}/${fileId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${this.password}` } });
   }
 
-  async syncProjectFilesIncremental(folderId: string, projectPath: string, files: string[], db: Any, projectIdentifier: string): Promise<{ uploaded: number; deleted: number; skipped: number; errors: number }> {
+  async syncProjectFilesIncremental(folderId: string, projectPath: string, files: string[], db: SyncDatabase, projectIdentifier: string): Promise<{ uploaded: number; deleted: number; skipped: number; errors: number }> {
     console.log(`[Letta] Starting incremental file sync for ${projectIdentifier}...`);
 
     const stats = { uploaded: 0, deleted: 0, skipped: 0, errors: 0 };
@@ -271,7 +288,7 @@ export class LettaFileService {
     }
   }
 
-  async uploadReadme(sourceId: string, readmePath: string, projectIdentifier: string): Promise<Any | null> {
+  async uploadReadme(sourceId: string, readmePath: string, projectIdentifier: string): Promise<Record<string, unknown> | null> {
     if (!sourceId) {
       console.warn(`[Letta] Source ID is null, skipping README upload for ${projectIdentifier}`);
       return null;
@@ -287,7 +304,7 @@ export class LettaFileService {
 
       const fileStream = fs.createReadStream(readmePath);
       const fileName = `${projectIdentifier}-README.md`;
-      const fileMetadata = await this.client.sources.files.upload(fileStream, sourceId, { name: fileName, duplicateHandling: 'replace' });
+      const fileMetadata = await this.client.sources.files.upload(fileStream, sourceId, { name: fileName, duplicateHandling: 'replace' } as unknown as Parameters<LettaClient['sources']['files']['upload']>[0]);
       console.log(`[Letta] README uploaded successfully: ${fileMetadata.id}`);
       return fileMetadata;
     } catch (error) {

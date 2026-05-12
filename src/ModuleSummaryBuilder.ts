@@ -6,10 +6,10 @@ const KNOWN_EXTENSIONS = ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.jsx', 
 
 interface ModuleFile { path: string; name: string; lineCount: number | null; functionCount: number }
 interface ModuleStats { files: ModuleFile[]; functionCount: number; asyncFunctionCount: number; classCount: number; classNames: Set<string>; exportFrequency: Map<string, number>; languages: Set<string> }
+export interface AstCacheInput { cache?: { files?: Record<string, object> } | null }
 
 export class ModuleSummaryBuilder {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  buildModuleSummaries(astCache: any, projectId: string): { name: string; summary: string; files: string[]; functionCount: number; classCount: number; keyExports: string[]; languages: string[] }[] {
+  buildModuleSummaries(astCache: AstCacheInput | null | undefined, projectId: string): { name: string; summary: string; files: string[]; functionCount: number; classCount: number; keyExports: string[]; languages: string[] }[] {
     const files = this._getFilesMap(astCache);
     const moduleStats = new Map<string, ModuleStats>();
 
@@ -54,7 +54,7 @@ export class ModuleSummaryBuilder {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  buildDependencyEdges(astCache: any, projectId: string): { sourceModule: string; targetModule: string; fact: string }[] {
+  buildDependencyEdges(astCache: AstCacheInput | null | undefined, projectId: string): { sourceModule: string; targetModule: string; fact: string }[] {
     const files = this._getFilesMap(astCache);
     const knownFiles = new Set<string>();
     for (const rawFilePath of Object.keys(files)) {
@@ -89,7 +89,7 @@ export class ModuleSummaryBuilder {
     });
   }
 
-  private _getFilesMap(astCache: Record<string, unknown> | null | undefined): Record<string, Record<string, unknown>> {
+  private _getFilesMap(astCache: AstCacheInput | null | undefined): Record<string, Record<string, unknown>> {
     const files = (astCache as Record<string, Record<string, Record<string, Record<string, unknown>>>>)?.cache?.files;
     return files && typeof files === 'object' ? files as Record<string, Record<string, unknown>> : {};
   }

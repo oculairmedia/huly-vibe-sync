@@ -1,5 +1,5 @@
 type Issue = Record<string, unknown>;
-type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
 
 export function buildProjectMeta(project: Record<string, unknown>, repoPath: string | null, gitUrl: string | null): Record<string, unknown> {
   return {
@@ -133,7 +133,7 @@ export function buildRecentActivity(activityData: Record<string, unknown> | null
   }));
 
   const patterns: Record<string, unknown>[] = [];
-  if ((summary as Any)?.total >= 20) patterns.push({ type: 'high_activity', message: `High activity: ${summary?.total} changes since ${since}`, severity: 'info' });
+  if (Number(summary?.total) >= 20) patterns.push({ type: 'high_activity', message: `High activity: ${summary?.total} changes since ${since}`, severity: 'info' });
   if (byStatus?.Done && byStatus.Done >= 5) patterns.push({ type: 'completion_streak', message: `Good progress: ${byStatus.Done} items completed`, severity: 'positive' });
   if (byStatus?.['In Progress'] && byStatus['In Progress'] >= 5) patterns.push({ type: 'high_wip', message: `${byStatus['In Progress']} items in progress - monitor for bottlenecks`, severity: 'info' });
   if (summary?.total === 0) patterns.push({ type: 'no_activity', message: 'No recent activity detected', severity: 'info' });

@@ -74,7 +74,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerHealthRoutes(app, routeDeps as any);
-  registerProjectRoutes(app, routeDeps);
+  registerProjectRoutes(app, routeDeps as never);
   registerConfigRoutes(app, routeDeps as never);
   registerSyncRoutes(app, routeDeps as never);
   registerEventsRoutes(app, routeDeps as never);
