@@ -2,7 +2,7 @@ import path from 'path';
 import { parseFiles, isSupported as isAstSupported } from './ASTParser.js';
 import { ASTCache } from './ASTCache.js';
 import { extractFileSummary, getActiveProjectFiles } from './FileUtils.js';
-import { ModuleSummaryBuilder } from '../lib/ModuleSummaryBuilder.js';
+import { ModuleSummaryBuilder } from './ModuleSummaryBuilder.js';
 
 type State = Record<string, any>;
 
