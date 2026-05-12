@@ -1,37 +1,42 @@
-/**
- * AgentsMdGenerator - Composable AGENTS.md generation with marker-based sections
- *
- * Each section is independently managed via HTML comment markers:
- *   <!-- VIBESYNC:section-name:START -->
- *   ...content...
- *   <!-- VIBESYNC:section-name:END -->
- *
- * Sections marked as CUSTOM are never overwritten:
- *   <!-- VIBESYNC:section-name:CUSTOM -->
- *
- * @see HVSYN-910
- */
+import fs from 'node:fs';
+import path from 'node:path';
+import { logger } from './logger';
+import { resolveFromAppRoot } from './runtimePaths';
 
-import fs from 'fs';
-import path from 'path';
-import { logger } from '../src/logger';
-import { resolveFromAppRoot } from '../src/runtimePaths';
-
-/** Ordered list of section IDs (determines output order) */
 const SECTION_ORDER = [
-  'project-info',
-  'reporting-hierarchy',
-  'beads-instructions',
-  'bookstack-docs',
-  'session-completion',
-  'codebase-context',
-  'custom-rules',
-];
+  'project-info', 'reporting-hierarchy', 'beads-instructions', 'bookstack-docs',
+  'session-completion', 'codebase-context', 'custom-rules',
+] as const;
 
-/**
- * Build start/end/custom markers for a section
- */
-function markers(sectionId) {
+type SectionId = (typeof SECTION_ORDER)[number];
+
+interface Markers {
+  start: string;
+  end: string;
+  custom: string;
+}
+
+interface ChangeRecord {
+  section: SectionId;
+  action: string;
+  reason?: string;
+}
+
+interface SectionInfo {
+  exists: boolean;
+  custom?: boolean;
+}
+
+interface GenerateOptions {
+  sections?: string[];
+  dryRun?: boolean;
+}
+
+interface TemplateVars {
+  [key: string]: string | number | boolean | undefined;
+}
+
+function markers(sectionId: string): Markers {
   return {
     start: `<!-- VIBESYNC:${sectionId}:START -->`,
     end: `<!-- VIBESYNC:${sectionId}:END -->`,
@@ -39,65 +44,54 @@ function markers(sectionId) {
   };
 }
 
-/**
- * Simple Mustache-style template interpolation: {{key}}
- */
-function interpolate(template, vars) {
+function interpolate(template: string, vars: TemplateVars): string {
   if (!vars || !template) return template;
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
     return vars[key] !== undefined ? String(vars[key]) : `{{${key}}}`;
   });
 }
 
-/**
- * Load a section template from disk
- */
-function loadTemplate(sectionId) {
+function loadTemplate(sectionId: string): string | null {
   const templatePath = resolveFromAppRoot('templates', 'agents-md', `${sectionId}.md`);
   if (!fs.existsSync(templatePath)) return null;
   return fs.readFileSync(templatePath, 'utf8');
 }
 
-export class AgentsMdGenerator {
-  constructor() {
-    this.log = logger.child({ service: 'AgentsMdGenerator' });
-  }
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-  /**
-   * Generate or update an AGENTS.md file with composable sections.
-   *
-   * @param {string} filePath - Absolute path to AGENTS.md
-   * @param {Object} vars - Template variables (identifier, name, agentId, agentName, projectPath, etc.)
-   * @param {Object} [options]
-   * @param {string[]} [options.sections] - Section IDs to include (defaults to all)
-   * @param {boolean} [options.dryRun=false] - Return content without writing
-   * @returns {{ content: string, changes: Object[] }} Generated content and change log
-   */
-  generate(filePath, vars, options = {}) {
-    const sections = options.sections || SECTION_ORDER;
+function findEndOfCustomBlock(content: string, afterMarkerIdx: number): number {
+  const nextMarkerMatch = content.slice(afterMarkerIdx).search(/<!-- VIBESYNC:/);
+  if (nextMarkerMatch === -1) return content.length;
+  const absoluteIdx = afterMarkerIdx + nextMarkerMatch;
+  let insertAt = absoluteIdx;
+  while (insertAt > 0 && content[insertAt - 1] === '\n') insertAt--;
+  return insertAt;
+}
+
+export class AgentsMdGenerator {
+  private log = logger.child({ service: 'AgentsMdGenerator' });
+
+  generate(filePath: string, vars: TemplateVars, options: GenerateOptions = {}): { content: string; changes: ChangeRecord[] } {
+    const sections = options.sections || [...SECTION_ORDER];
     const dryRun = options.dryRun || false;
 
-    // Read existing content
     let existing = '';
-    if (fs.existsSync(filePath)) {
-      existing = fs.readFileSync(filePath, 'utf8');
-    }
+    if (fs.existsSync(filePath)) existing = fs.readFileSync(filePath, 'utf8');
 
-    const changes = [];
+    const changes: ChangeRecord[] = [];
     let result = existing;
 
     for (const sectionId of SECTION_ORDER) {
       if (!sections.includes(sectionId)) continue;
 
       const m = markers(sectionId);
-
-      // Check if section is marked CUSTOM — never touch it
       if (result.includes(m.custom)) {
         changes.push({ section: sectionId, action: 'skipped', reason: 'CUSTOM marker' });
         continue;
       }
 
-      // Load and interpolate template
       const template = loadTemplate(sectionId);
       if (!template) {
         changes.push({ section: sectionId, action: 'skipped', reason: 'no template file' });
@@ -107,20 +101,16 @@ export class AgentsMdGenerator {
       const rendered = interpolate(template.trim(), vars);
       const block = `${m.start}\n${rendered}\n${m.end}`;
 
-      // Check if section already exists
       if (result.includes(m.start)) {
-        // Replace existing block
         const regex = new RegExp(`${escapeRegex(m.start)}[\\s\\S]*?${escapeRegex(m.end)}`, 'g');
         result = result.replace(regex, block);
         changes.push({ section: sectionId, action: 'updated' });
       } else {
-        // Insert at correct position based on SECTION_ORDER
         result = this._insertSection(result, sectionId, block);
         changes.push({ section: sectionId, action: 'inserted' });
       }
     }
 
-    // Clean up excessive blank lines
     result = result.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 
     if (!dryRun) {
@@ -133,10 +123,7 @@ export class AgentsMdGenerator {
     return { content: result, changes };
   }
 
-  /**
-   * Remove a section from an AGENTS.md file
-   */
-  removeSection(filePath, sectionId) {
+  removeSection(filePath: string, sectionId: string): boolean {
     if (!fs.existsSync(filePath)) return false;
 
     const content = fs.readFileSync(filePath, 'utf8');
@@ -145,12 +132,8 @@ export class AgentsMdGenerator {
     if (!content.includes(m.start) && !content.includes(m.custom)) return false;
 
     let result = content;
-
-    // Remove managed block
     const regex = new RegExp(`${escapeRegex(m.start)}[\\s\\S]*?${escapeRegex(m.end)}\\n*`, 'g');
     result = result.replace(regex, '');
-
-    // Remove custom marker if present
     result = result.replace(new RegExp(`${escapeRegex(m.custom)}\\n*`, 'g'), '');
 
     result = result.replace(/\n{3,}/g, '\n\n').trim() + '\n';
@@ -158,10 +141,7 @@ export class AgentsMdGenerator {
     return true;
   }
 
-  /**
-   * Check if a section exists (managed or custom) in an AGENTS.md
-   */
-  hasSection(filePath, sectionId) {
+  hasSection(filePath: string, sectionId: string): SectionInfo {
     if (!fs.existsSync(filePath)) return { exists: false };
     const content = fs.readFileSync(filePath, 'utf8');
     const m = markers(sectionId);
@@ -171,27 +151,20 @@ export class AgentsMdGenerator {
     return { exists: false };
   }
 
-  /**
-   * Get info about all sections in an AGENTS.md
-   */
-  inspect(filePath) {
-    const result = {};
+  inspect(filePath: string): Record<string, SectionInfo> {
+    const result: Record<string, SectionInfo> = {};
     for (const sectionId of SECTION_ORDER) {
       result[sectionId] = this.hasSection(filePath, sectionId);
     }
     return result;
   }
 
-  /**
-   * Insert a section block at the correct position relative to other sections.
-   * Finds the last existing section that should come before this one,
-   * and inserts after it. If none found, prepends.
-   */
-  _insertSection(content, sectionId, block) {
-    const idx = SECTION_ORDER.indexOf(sectionId);
+  private _insertSection(content: string, sectionId: string, block: string): string {
+    const idx = SECTION_ORDER.indexOf(sectionId as SectionId);
 
     for (let i = idx - 1; i >= 0; i--) {
       const prevId = SECTION_ORDER[i];
+      if (!prevId) continue;
       const prevMarkers = markers(prevId);
 
       const endIdx = content.indexOf(prevMarkers.end);
@@ -207,39 +180,11 @@ export class AgentsMdGenerator {
       }
     }
 
-    if (content.trim()) {
-      return block + '\n\n' + content;
-    }
+    if (content.trim()) return block + '\n\n' + content;
     return block + '\n';
   }
 }
 
-/**
- * Find the end of a CUSTOM block's content.
- * A CUSTOM block extends from the CUSTOM marker until the next VIBESYNC marker or EOF.
- * Returns the index where the next section should be inserted.
- */
-function findEndOfCustomBlock(content, afterMarkerIdx) {
-  const nextMarkerMatch = content.slice(afterMarkerIdx).search(/<!-- VIBESYNC:/);
-  if (nextMarkerMatch === -1) {
-    return content.length;
-  }
-  const absoluteIdx = afterMarkerIdx + nextMarkerMatch;
-  let insertAt = absoluteIdx;
-  while (insertAt > 0 && content[insertAt - 1] === '\n') {
-    insertAt--;
-  }
-  return insertAt;
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Singleton for convenience */
 export const agentsMdGenerator = new AgentsMdGenerator();
-
-/** Export markers helper for migration script */
 export { markers, SECTION_ORDER, interpolate, loadTemplate };
-
 export default AgentsMdGenerator;

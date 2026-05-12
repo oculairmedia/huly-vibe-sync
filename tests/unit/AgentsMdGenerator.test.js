@@ -4,7 +4,7 @@ import {
   markers,
   SECTION_ORDER,
   interpolate,
-} from '../../lib/AgentsMdGenerator.js';
+} from '../../src/AgentsMdGenerator.js';
 import fs from 'fs';
 
 vi.mock('fs');

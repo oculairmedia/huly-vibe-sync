@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { agentsMdGenerator } from '../../lib/AgentsMdGenerator.js';
+import { agentsMdGenerator } from '../AgentsMdGenerator.js';
 import type { LettaConfig } from './LettaConfig';
 
 interface AgentState {

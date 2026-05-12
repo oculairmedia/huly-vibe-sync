@@ -2,13 +2,14 @@ import { Mutex } from 'async-mutex';
 import pDebounce from 'p-debounce';
 import { logger } from './logger';
 import { broadcastSyncEvent } from '../lib/ApiServer.js';
-import { recordSuccessfulSync, recordFailedSync } from '../lib/HealthService.js';
+import { recordSuccessfulSync, recordFailedSync } from './HealthService.js';
+import type { HealthStats } from './HealthService.js';
 
 interface SyncControllerDeps {
   config: {
     sync: { maxWorkers?: number; dryRun?: boolean; interval: number };
   };
-  healthStats: Record<string, number>;
+  healthStats: HealthStats;
   lettaService: { clearCache: () => void } | null;
   fileWatcher: { syncWatchedProjects: () => Promise<void> } | null;
   codePerceptionWatcher: { syncWatchedProjects: () => Promise<void> } | null;

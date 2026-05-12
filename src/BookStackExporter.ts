@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { logger } from './logger';
-import { recordApiLatency } from '../lib/HealthService.js';
+import { recordApiLatency } from './HealthService.js';
 
 interface ExporterConfig {
   exporterOutputPath: string;

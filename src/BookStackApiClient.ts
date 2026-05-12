@@ -1,5 +1,5 @@
 import { fetchWithPool } from './http';
-import { recordApiLatency } from '../lib/HealthService.js';
+import { recordApiLatency } from './HealthService.js';
 
 interface BookStackConfig {
   url: string;

@@ -16,7 +16,7 @@ import {
   updateSystemMetrics,
   getMetricsRegistry,
   createHealthServer,
-} from '../../lib/HealthService.js';
+} from '../../src/HealthService.js';
 
 describe('HealthService', () => {
   describe('initializeHealthStats', () => {
