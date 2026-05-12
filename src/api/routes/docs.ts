@@ -1,9 +1,13 @@
-export function registerDocsRoutes(app) {
+interface App {
+  registerRoute(opts: { match: (ctx: { pathname: string; method: string }) => boolean; handle: (ctx: { res: unknown }) => Promise<void> }): void;
+}
+
+export function registerDocsRoutes(app: App): void {
   app.registerRoute({
     match: ({ pathname, method }) => pathname === '/' && method === 'GET',
     handle: async ({ res }) => {
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(`Vibesync Service API
+      (res as { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void }).writeHead(200, { 'Content-Type': 'text/plain' });
+      (res as { end: (body: string) => void }).end(`Vibesync Service API
 
 Available Endpoints:
 
@@ -49,16 +53,16 @@ Temporal Schedule Management:
   GET  /api/temporal/workflows       - List sync workflows
 
 Event Types (SSE):
-   - connected                  - Client connected
-   - sync:triggered             - Sync manually triggered
-   - sync:started               - Sync cycle started
-   - sync:completed             - Sync cycle completed
-   - sync:error                 - Error during sync
-   - config:updated             - Configuration changed
-   - health:updated             - Health metrics updated
-   - temporal:schedule-started  - Temporal schedule started
-   - temporal:schedule-stopped  - Temporal schedule stopped
-   - temporal:schedule-updated  - Temporal schedule interval updated
+    - connected                  - Client connected
+    - sync:triggered             - Sync manually triggered
+    - sync:started               - Sync cycle started
+    - sync:completed             - Sync cycle completed
+    - sync:error                 - Error during sync
+    - config:updated             - Configuration changed
+    - health:updated             - Health metrics updated
+    - temporal:schedule-started  - Temporal schedule started
+    - temporal:schedule-stopped  - Temporal schedule stopped
+    - temporal:schedule-updated  - Temporal schedule interval updated
 `);
     },
   });
