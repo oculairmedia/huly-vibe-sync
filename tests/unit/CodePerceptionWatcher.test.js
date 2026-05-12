@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CodePerceptionWatcher } from '../../lib/CodePerceptionWatcher.js';
+import { CodePerceptionWatcher } from '../../src/CodePerceptionWatcher.js';
 
 // Mock ASTParser module to avoid Python subprocess dependency
 vi.mock('../../lib/ASTParser.js', async importOriginal => {

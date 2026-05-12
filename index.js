@@ -8,7 +8,7 @@ import { initializeHealthStats } from './src/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';
 import { createLettaService } from './lib/LettaService.js';
 import { FileWatcher } from './src/FileWatcher.js';
-import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
+import { CodePerceptionWatcher } from './src/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './src/AstMemorySync.js';
 import { logger } from './src/logger';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
