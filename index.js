@@ -7,7 +7,7 @@ import { loadConfig, getConfigSummary, isLettaEnabled } from './src/config';
 import { initializeHealthStats } from './src/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';
 import { createLettaService } from './lib/LettaService.js';
-import { FileWatcher } from './lib/FileWatcher.js';
+import { FileWatcher } from './src/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
 import { createAstMemorySync } from './src/AstMemorySync.js';
 import { logger } from './src/logger';

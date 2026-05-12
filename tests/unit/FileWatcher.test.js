@@ -16,7 +16,7 @@ const mockLogger = {
   debug: vi.fn(),
   child: vi.fn(() => mockLogger),
 };
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   logger: { child: vi.fn(() => mockLogger) },
 }));
 
@@ -68,7 +68,7 @@ vi.mock('crypto', () => ({
   createHash: vi.fn(() => mockHashInstance),
 }));
 
-import { FileWatcher } from '../../lib/FileWatcher.js';
+import { FileWatcher } from '../../src/FileWatcher.js';
 import chokidar from 'chokidar';
 import fs from 'fs';
 import crypto from 'crypto';
