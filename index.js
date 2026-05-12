@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { createSyncDatabase } from './src/database';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './src/config';
 import { initializeHealthStats } from './src/HealthService.js';
-import { createApiServer } from './lib/ApiServer.js';
+import { createApiServer } from './src/ApiServer.js';
 import { createLettaService } from './lib/LettaService.js';
 import { FileWatcher } from './src/FileWatcher.js';
 import { CodePerceptionWatcher } from './src/CodePerceptionWatcher.js';

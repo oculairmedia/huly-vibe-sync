@@ -1,7 +1,7 @@
 import { Mutex } from 'async-mutex';
 import pDebounce from 'p-debounce';
 import { logger } from './logger';
-import { broadcastSyncEvent } from '../lib/ApiServer.js';
+import { broadcastSyncEvent } from './ApiServer.js';
 import { recordSuccessfulSync, recordFailedSync } from './HealthService.js';
 import type { HealthStats } from './HealthService.js';
 

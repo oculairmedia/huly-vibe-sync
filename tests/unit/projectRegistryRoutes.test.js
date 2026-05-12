@@ -22,7 +22,7 @@ vi.mock('../../lib/HealthService.js', () => ({
   })),
 }));
 
-import { createApiServer } from '../../lib/ApiServer.js';
+import { createApiServer } from '../../src/ApiServer.js';
 
 function getRandomPort() {
   return 10000 + Math.floor(Math.random() * 50000);

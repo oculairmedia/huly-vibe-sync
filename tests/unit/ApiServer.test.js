@@ -1220,7 +1220,7 @@ import {
   recordIssueMapping,
   sseManager,
   syncHistory,
-} from '../../lib/ApiServer.js';
+} from '../../src/ApiServer.js';
 
 function getRandomPort() {
   return 10000 + Math.floor(Math.random() * 50000);
