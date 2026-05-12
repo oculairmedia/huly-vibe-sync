@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { parseFile, parseFiles, isSupported, isAvailable } from '../../lib/ASTParser.js';
+import { parseFile, parseFiles, isSupported, isAvailable } from '../../src/ASTParser.js';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';

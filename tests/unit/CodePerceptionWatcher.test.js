@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CodePerceptionWatcher } from '../../src/CodePerceptionWatcher.js';
 
 // Mock ASTParser module to avoid Python subprocess dependency
-vi.mock('../../lib/ASTParser.js', async importOriginal => {
+vi.mock('../../src/ASTParser.js', async importOriginal => {
   const actual = await importOriginal();
   return {
     ...actual,
@@ -42,7 +42,7 @@ vi.mock('../../lib/ASTParser.js', async importOriginal => {
 });
 
 // Mock ASTCache module to avoid filesystem dependency
-vi.mock('../../lib/ASTCache.js', async importOriginal => {
+vi.mock('../../src/ASTCache.js', async importOriginal => {
   const actual = await importOriginal();
   return {
     ...actual,

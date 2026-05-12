@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ASTCache } from '../../lib/ASTCache.js';
+import { ASTCache } from '../../src/ASTCache.js';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';

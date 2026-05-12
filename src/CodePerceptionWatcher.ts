@@ -2,9 +2,9 @@ import path from 'path';
 import { logger } from './logger';
 import { FsAdapter } from './FsAdapter';
 import { Clock } from './Clock';
-import { FileChangeDetector } from '../lib/perception/FileChangeDetector.js';
-import { ChangeProcessor } from '../lib/perception/ChangeProcessor.js';
-import { ASTProcessor } from '../lib/perception/ASTProcessor.js';
+import { FileChangeDetector } from './FileChangeDetector.js';
+import { ChangeProcessor } from './ChangeProcessor.js';
+import { ASTProcessor } from './ASTProcessor.js';
 import {
   computeFileHash,
   extractFileSummary,
@@ -12,7 +12,7 @@ import {
   detectLanguage,
   shouldIgnoreDir,
   shouldIgnorePath,
-} from '../lib/perception/FileUtils.js';
+} from './FileUtils.js';
 
 type GraphitiClient = {
   upsertEntity: (opts: { name: string; summary: string }) => Promise<unknown>;
@@ -164,10 +164,10 @@ export class CodePerceptionWatcher {
       astParseFailure: 0, errors: 0,
     };
 
-    const state = this;
-    this._detector = new FileChangeDetector(state, this.config);
-    this._processor = new ChangeProcessor(state, this.config);
-    this._astProcessor = new ASTProcessor(state, this.config);
+    const state = this as unknown as Record<string, unknown>;
+    this._detector = new FileChangeDetector(state, this.config as Record<string, unknown>);
+    this._processor = new ChangeProcessor(state, this.config as Record<string, unknown>);
+    this._astProcessor = new ASTProcessor(state, this.config as Record<string, unknown>);
   }
 
   watchProject(projectIdentifier: string, projectPath: string): unknown {
@@ -199,11 +199,11 @@ export class CodePerceptionWatcher {
   }
 
   computeFileHash(filePath: string): string | null {
-    return computeFileHash(this.fs, filePath) as string | null;
+    return computeFileHash(this.fs as never, filePath) as string | null;
   }
 
   extractFileSummary(filePath: string): Promise<string | null> {
-    return extractFileSummary(this.fs, this.log, filePath) as Promise<string | null>;
+    return extractFileSummary(this.fs as never, this.log, filePath) as Promise<string>;
   }
 
   detectLanguage(ext: string): string | null {
@@ -211,7 +211,7 @@ export class CodePerceptionWatcher {
   }
 
   getActiveProjectFiles(projectPath: string): Promise<string[]> {
-    return getActiveProjectFiles(this.fs, projectPath, this.allowedExtensions) as Promise<string[]>;
+    return getActiveProjectFiles(this.fs as never, projectPath, this.allowedExtensions) as Promise<string[]>;
   }
 
   shouldIgnoreDir(name: string): boolean {
