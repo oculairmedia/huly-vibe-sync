@@ -1,13 +1,26 @@
-/**
- * Graphiti Entity Operations - Entity CRUD and batch operations
- */
+import type { GraphitiHttpClient } from './GraphitiHttpClient';
+
+interface EntityPayload {
+  uuid?: string;
+  name: string;
+  summary?: string;
+}
+
+interface BatchResult {
+  success: number;
+  failed: number;
+  errors: Array<{ entity?: string; error: string }>;
+  successfulEntities: string[];
+}
 
 export class GraphitiEntityOps {
-  constructor(httpClient) {
+  private _http: GraphitiHttpClient;
+
+  constructor(httpClient: GraphitiHttpClient) {
     this._http = httpClient;
   }
 
-  async upsertEntity(entity) {
+  async upsertEntity(entity: EntityPayload): Promise<unknown> {
     const uuid = entity.uuid || (await this._http.getEntityUuid(entity.name));
 
     const requestBody = {
@@ -17,7 +30,10 @@ export class GraphitiEntityOps {
       summary: entity.summary || '',
     };
 
-    this._http.log.debug({ name: entity.name, uuid }, 'Upserting entity');
+    (this._http.log as unknown as { debug?: (ctx: Record<string, unknown>, msg: string) => void }).debug?.(
+      { name: entity.name, uuid },
+      'Upserting entity',
+    );
 
     const result = await this._http._fetch(`${this._http.baseUrl}/entity-node`, {
       method: 'POST',
@@ -29,8 +45,8 @@ export class GraphitiEntityOps {
     return result;
   }
 
-  async upsertEntitiesBatch(entities, batchSize = 50) {
-    const results = {
+  async upsertEntitiesBatch(entities: EntityPayload[], batchSize: number = 50): Promise<BatchResult> {
+    const results: BatchResult = {
       success: 0,
       failed: 0,
       errors: [],
@@ -40,14 +56,14 @@ export class GraphitiEntityOps {
     for (let i = 0; i < entities.length; i += batchSize) {
       const batch = entities.slice(i, i + batchSize);
 
-      const batchPromises = batch.map(async entity => {
+      const batchPromises = batch.map(async (entity) => {
         try {
           await this.upsertEntity(entity);
           results.success++;
           results.successfulEntities.push(entity.name);
         } catch (error) {
           results.failed++;
-          results.errors.push({ entity: entity.name, error: error.message });
+          results.errors.push({ entity: entity.name, error: (error as Error).message });
         }
       });
 
@@ -58,16 +74,19 @@ export class GraphitiEntityOps {
       }
     }
 
-    this._http.log.info(
+    (this._http.log as unknown as { info?: (ctx: Record<string, unknown>, msg: string) => void }).info?.(
       { total: entities.length, success: results.success, failed: results.failed },
-      'Batch upsert completed'
+      'Batch upsert completed',
     );
 
     return results;
   }
 
-  async updateNodeSummary(uuid, summary) {
-    this._http.log.debug({ uuid }, 'Updating node summary');
+  async updateNodeSummary(uuid: string, summary: string): Promise<unknown> {
+    (this._http.log as unknown as { debug?: (ctx: Record<string, unknown>, msg: string) => void }).debug?.(
+      { uuid },
+      'Updating node summary',
+    );
 
     const result = await this._http._fetch(`${this._http.baseUrl}/nodes/${uuid}/summary`, {
       method: 'PATCH',
@@ -79,24 +98,27 @@ export class GraphitiEntityOps {
     return result;
   }
 
-  async pruneDeletedFiles(activeFiles) {
-    this._http.log.info({ activeFileCount: activeFiles.length }, 'Pruning deleted files');
+  async pruneDeletedFiles(activeFiles: string[]): Promise<{ invalidated_count: number; invalidated_files?: string[] }> {
+    (this._http.log as unknown as { info?: (ctx: Record<string, unknown>, msg: string) => void }).info?.(
+      { activeFileCount: activeFiles.length },
+      'Pruning deleted files',
+    );
 
-    const result = await this._http._fetch(`${this._http.baseUrl}/api/tools/prune-missing`, {
+    const result = (await this._http._fetch(`${this._http.baseUrl}/api/tools/prune-missing`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         group_id: this._http.groupId,
         active_files: activeFiles,
       }),
-    });
+    })) as { invalidated_count: number; invalidated_files?: string[] };
 
     this._http.stats.pruneOperations++;
 
     if (result.invalidated_count > 0) {
-      this._http.log.info(
+      (this._http.log as unknown as { info?: (ctx: Record<string, unknown>, msg: string) => void }).info?.(
         { invalidatedCount: result.invalidated_count, invalidatedFiles: result.invalidated_files },
-        'Files marked as invalid'
+        'Files marked as invalid',
       );
     }
 

@@ -1,45 +1,71 @@
-/**
- * Graphiti Module Operations - Module entity and dependency edge management
- */
+import type { GraphitiHttpClient } from './GraphitiHttpClient';
+import type { GraphitiEntityOps } from './GraphitiEntityOps';
+import type { GraphitiEdgeOps } from './GraphitiEdgeOps';
+
+interface ModulePayload {
+  name: string;
+  summary: string;
+}
+
+interface ModuleBatchResult {
+  success: number;
+  failed: number;
+  errors: Array<Record<string, unknown>>;
+  successfulEntities?: string[];
+}
+
+interface DependencyEdgePayload {
+  sourceModule: string;
+  targetModule: string;
+  fact: string;
+}
+
+interface EdgeBatchResult {
+  success: number;
+  failed: number;
+  errors: Array<{ sourceModule?: string; targetModule?: string; module?: string; error: string }>;
+}
+
+interface SyncModulesOptions {
+  projectId: string;
+  modules: ModulePayload[];
+  edges: DependencyEdgePayload[];
+  concurrency?: number;
+}
+
+interface SyncModulesResult {
+  modules: { success: number; failed: number; errors: Array<Record<string, unknown>> };
+  containmentEdges: { success: number; failed: number; errors: Array<{ module?: string; error: string }> };
+  dependencyEdges: { success: number; failed: number; errors: Array<{ sourceModule?: string; targetModule?: string; module?: string; error: string }> };
+}
 
 export class GraphitiModuleOps {
-  constructor(httpClient, entityOps, edgeOps) {
+  private _http: GraphitiHttpClient;
+  private _entities: GraphitiEntityOps;
+
+  constructor(
+    httpClient: GraphitiHttpClient,
+    entityOps: GraphitiEntityOps,
+    _edgeOps: GraphitiEdgeOps,
+  ) {
     this._http = httpClient;
     this._entities = entityOps;
-    this._edges = edgeOps;
   }
 
-  /**
-   * Upserts a single module entity.
-   *
-   * @param {{ name: string, summary: string }} options - Module entity payload.
-   * @returns {Promise<object>} Upsert result.
-   */
-  async upsertModule(options) {
+  async upsertModule(options: ModulePayload): Promise<unknown> {
     const { name, summary } = options;
     return this._entities.upsertEntity({ name, summary });
   }
 
-  /**
-   * Upserts module entities in batches.
-   *
-   * @param {{ name: string, summary: string }[]} modules - Module entities to upsert.
-   * @param {number} [batchSize=50] - Number of entities per batch.
-   * @returns {Promise<{ success: number, failed: number, errors: Array<object>, successfulEntities: string[] }>} Batch result.
-   */
-  async upsertModulesBatch(modules, batchSize = 50) {
+  async upsertModulesBatch(modules: ModulePayload[], batchSize: number = 50): Promise<ModuleBatchResult> {
     return this._entities.upsertEntitiesBatch(modules, batchSize);
   }
 
-  /**
-   * Creates a DEPENDS_ON edge between two module entities.
-   *
-   * @param {string} sourceModuleName - Source module entity name.
-   * @param {string} targetModuleName - Target module entity name.
-   * @param {string} fact - Edge fact text.
-   * @returns {Promise<object>} Edge creation result.
-   */
-  async createDependencyEdge(sourceModuleName, targetModuleName, fact) {
+  async createDependencyEdge(
+    sourceModuleName: string,
+    targetModuleName: string,
+    fact: string,
+  ): Promise<unknown> {
     try {
       const [sourceUuid, targetUuid] = await Promise.all([
         this._http.getEntityUuid(sourceModuleName),
@@ -65,28 +91,21 @@ export class GraphitiModuleOps {
       this._http.stats.edgesCreated = (this._http.stats.edgesCreated || 0) + 1;
       return result;
     } catch (error) {
-      this._http.log.warn(
-        { sourceModuleName, targetModuleName, error: error.message },
-        'Failed to create module dependency edge'
+      (this._http.log as unknown as { warn?: (ctx: Record<string, unknown>, msg: string) => void }).warn?.(
+        { sourceModuleName, targetModuleName, error: (error as Error).message },
+        'Failed to create module dependency edge',
       );
       throw error;
     }
   }
 
-  /**
-   * Creates dependency edges in batches.
-   *
-   * @param {{ sourceModule: string, targetModule: string, fact: string }[]} edges - Dependency edge payloads.
-   * @param {number} [batchSize=50] - Number of edges per batch.
-   * @returns {Promise<{ success: number, failed: number, errors: Array<object> }>} Batch result.
-   */
-  async createDependencyEdgesBatch(edges, batchSize = 50) {
-    const results = { success: 0, failed: 0, errors: [] };
+  async createDependencyEdgesBatch(edges: DependencyEdgePayload[], batchSize: number = 50): Promise<EdgeBatchResult> {
+    const results: EdgeBatchResult = { success: 0, failed: 0, errors: [] };
 
     for (let i = 0; i < edges.length; i += batchSize) {
       const batch = edges.slice(i, i + batchSize);
 
-      const batchPromises = batch.map(async edge => {
+      const batchPromises = batch.map(async (edge) => {
         try {
           await this.createDependencyEdge(edge.sourceModule, edge.targetModule, edge.fact);
           results.success++;
@@ -95,7 +114,7 @@ export class GraphitiModuleOps {
           results.errors.push({
             sourceModule: edge.sourceModule,
             targetModule: edge.targetModule,
-            error: error.message,
+            error: (error as Error).message,
           });
         }
       });
@@ -110,27 +129,25 @@ export class GraphitiModuleOps {
     return results;
   }
 
-  /**
-   * Synchronizes module entities and their relationships for a project.
-   *
-   * @param {{ projectId: string, modules: { name: string, summary: string }[], edges: { sourceModule: string, targetModule: string, fact: string }[], concurrency?: number }} options - Sync payload.
-   * @returns {Promise<{ modules: { success: number, failed: number, errors: Array<object> }, containmentEdges: { success: number, failed: number, errors: Array<object> }, dependencyEdges: { success: number, failed: number, errors: Array<object> } }>} Sync result.
-   */
-  async syncModules(options) {
+  async syncModules(options: SyncModulesOptions): Promise<SyncModulesResult> {
     const { projectId, modules, edges, concurrency = 10 } = options;
 
     const modulesResult = await this.upsertModulesBatch(modules);
 
-    const containmentResults = { success: 0, failed: 0, errors: [] };
+    const containmentResults: { success: number; failed: number; errors: Array<{ module?: string; error: string }> } = {
+      success: 0,
+      failed: 0,
+      errors: [],
+    };
     const successfulModules = modulesResult.successfulEntities || [];
 
-    const processModuleContainment = async moduleName => {
+    const processModuleContainment = async (moduleName: string): Promise<void> => {
       try {
         await this._createProjectModuleContainmentEdge(projectId, moduleName);
         containmentResults.success++;
       } catch (error) {
         containmentResults.failed++;
-        containmentResults.errors.push({ module: moduleName, error: error.message });
+        containmentResults.errors.push({ module: moduleName, error: (error as Error).message });
       }
     };
 
@@ -138,7 +155,7 @@ export class GraphitiModuleOps {
 
     const dependencyResults = await this.createDependencyEdgesBatch(edges);
 
-    const result = {
+    const result: SyncModulesResult = {
       modules: {
         success: modulesResult.success,
         failed: modulesResult.failed,
@@ -148,7 +165,7 @@ export class GraphitiModuleOps {
       dependencyEdges: dependencyResults,
     };
 
-    this._http.log.info(
+    (this._http.log as unknown as { info?: (ctx: Record<string, unknown>, msg: string) => void }).info?.(
       {
         projectId,
         modulesSuccess: result.modules.success,
@@ -158,13 +175,16 @@ export class GraphitiModuleOps {
         dependencyEdgesSuccess: result.dependencyEdges.success,
         dependencyEdgesFailed: result.dependencyEdges.failed,
       },
-      'Module sync completed'
+      'Module sync completed',
     );
 
     return result;
   }
 
-  async _createProjectModuleContainmentEdge(projectId, moduleName) {
+  private async _createProjectModuleContainmentEdge(
+    projectId: string,
+    moduleName: string,
+  ): Promise<unknown> {
     const sourceName = `Project:${projectId}`;
     const targetName = moduleName;
 

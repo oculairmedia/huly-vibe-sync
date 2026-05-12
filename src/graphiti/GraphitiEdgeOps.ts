@@ -1,13 +1,19 @@
-/**
- * Graphiti Edge Operations - Edge creation and batch operations
- */
+import type { GraphitiHttpClient } from './GraphitiHttpClient';
+
+interface BatchEdgeResult {
+  success: number;
+  failed: number;
+  errors: Array<{ file?: string; error: string }>;
+}
 
 export class GraphitiEdgeOps {
-  constructor(httpClient) {
+  private _http: GraphitiHttpClient;
+
+  constructor(httpClient: GraphitiHttpClient) {
     this._http = httpClient;
   }
 
-  async createContainmentEdge(projectId, fileRelativePath) {
+  async createContainmentEdge(projectId: string, fileRelativePath: string): Promise<unknown> {
     const sourceName = `Project:${projectId}`;
     const targetName = `File:${fileRelativePath}`;
 
@@ -27,9 +33,9 @@ export class GraphitiEdgeOps {
       fact: `Project ${projectId} contains file ${fileRelativePath}`,
     };
 
-    this._http.log.debug(
+    (this._http.log as unknown as { debug?: (ctx: Record<string, unknown>, msg: string) => void }).debug?.(
       { projectId, file: fileRelativePath, edgeUuid },
-      'Creating containment edge'
+      'Creating containment edge',
     );
 
     try {
@@ -42,10 +48,10 @@ export class GraphitiEdgeOps {
       this._http.stats.edgesCreated = (this._http.stats.edgesCreated || 0) + 1;
       return result;
     } catch (error) {
-      if (error.message?.includes('HTTP 500')) {
-        this._http.log.warn(
-          { projectId, file: fileRelativePath, error: error.message },
-          'Direct edge creation failed, using message queue fallback'
+      if ((error as Error).message?.includes('HTTP 500')) {
+        (this._http.log as unknown as { warn?: (ctx: Record<string, unknown>, msg: string) => void }).warn?.(
+          { projectId, file: fileRelativePath, error: (error as Error).message },
+          'Direct edge creation failed, using message queue fallback',
         );
         return this._createEdgeViaMessageQueue(projectId, fileRelativePath);
       }
@@ -53,7 +59,7 @@ export class GraphitiEdgeOps {
     }
   }
 
-  async _createEdgeViaMessageQueue(projectId, fileRelativePath) {
+  async _createEdgeViaMessageQueue(projectId: string, fileRelativePath: string): Promise<unknown> {
     const message = {
       content: `CODE_INDEX_EVENT: Project "${projectId}" contains file "${fileRelativePath}". This file is part of the ${projectId} project structure.`,
       role_type: 'system',
@@ -76,19 +82,23 @@ export class GraphitiEdgeOps {
     return result;
   }
 
-  async createContainmentEdgesBatch(projectId, fileRelativePaths, batchSize = 50) {
-    const results = { success: 0, failed: 0, errors: [] };
+  async createContainmentEdgesBatch(
+    projectId: string,
+    fileRelativePaths: string[],
+    batchSize: number = 50,
+  ): Promise<BatchEdgeResult> {
+    const results: BatchEdgeResult = { success: 0, failed: 0, errors: [] };
 
     for (let i = 0; i < fileRelativePaths.length; i += batchSize) {
       const batch = fileRelativePaths.slice(i, i + batchSize);
 
-      const batchPromises = batch.map(async filePath => {
+      const batchPromises = batch.map(async (filePath) => {
         try {
           await this.createContainmentEdge(projectId, filePath);
           results.success++;
         } catch (error) {
           results.failed++;
-          results.errors.push({ file: filePath, error: error.message });
+          results.errors.push({ file: filePath, error: (error as Error).message });
         }
       });
 
@@ -99,20 +109,24 @@ export class GraphitiEdgeOps {
       }
     }
 
-    this._http.log.info(
+    (this._http.log as unknown as { info?: (ctx: Record<string, unknown>, msg: string) => void }).info?.(
       {
         projectId,
         total: fileRelativePaths.length,
         success: results.success,
         failed: results.failed,
       },
-      'Batch edge creation completed'
+      'Batch edge creation completed',
     );
 
     return results;
   }
 
-  async createFileFunctionEdge(projectId, filePath, functionName) {
+  async createFileFunctionEdge(
+    projectId: string,
+    filePath: string,
+    functionName: string,
+  ): Promise<unknown> {
     const sourceName = `File:${filePath}`;
     const targetName = `function:${projectId}:${filePath}:${functionName}`;
 
@@ -132,7 +146,10 @@ export class GraphitiEdgeOps {
       fact: `File ${filePath} contains function ${functionName}`,
     };
 
-    this._http.log.debug({ filePath, functionName, edgeUuid }, 'Creating file-function edge');
+    (this._http.log as unknown as { debug?: (ctx: Record<string, unknown>, msg: string) => void }).debug?.(
+      { filePath, functionName, edgeUuid },
+      'Creating file-function edge',
+    );
 
     const result = await this._http._fetch(`${this._http.baseUrl}/entity-edge`, {
       method: 'POST',
