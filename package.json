@@ -2,17 +2,17 @@
   "name": "vibesync",
   "version": "1.0.0",
   "description": "Project sync service with PM agent orchestration",
-  "main": "src/index.ts",
+  "main": "index.js",
   "type": "module",
   "bin": {
     "vibesync": "src/cli.ts"
   },
   "scripts": {
-    "start": "bun src/index.ts",
+    "start": "bun index.js",
     "start:node": "node index.js",
-    "dev": "DRY_RUN=true SYNC_INTERVAL=0 bun src/index.ts",
-    "sync-once": "SYNC_INTERVAL=0 bun src/index.ts",
-    "build": "bun build --target=bun --outdir=dist src/index.ts src/cli.ts",
+    "dev": "DRY_RUN=true SYNC_INTERVAL=0 bun index.js",
+    "sync-once": "SYNC_INTERVAL=0 bun index.js",
+    "build": "bun build --target=bun --outdir=dist index.js src/cli.ts",
     "build:binary": "bun scripts/build-binary.ts",
     "build:binary:windows": "bun scripts/build-binary.ts",
     "build:cli": "bun build --target=bun --outfile dist/vibesync-cli.js src/cli.ts",

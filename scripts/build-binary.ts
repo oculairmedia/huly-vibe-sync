@@ -48,7 +48,7 @@ if (existsSync(nodeModules)) {
 
 const result = spawnSync(
   'bun',
-  ['build', '--compile', '--target=bun', '--outfile', tempOutput, 'src/index.ts'],
+  ['build', '--compile', '--target=bun', '--outfile', tempOutput, 'index.js'],
   {
     cwd: tempRoot,
     stdio: 'inherit',
