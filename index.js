@@ -2,7 +2,7 @@
 
 import 'dotenv/config';
 
-import { createSyncDatabase } from './lib/database.js';
+import { createSyncDatabase } from './src/database';
 import { loadConfig, getConfigSummary, isLettaEnabled } from './src/config';
 import { initializeHealthStats } from './lib/HealthService.js';
 import { createApiServer } from './lib/ApiServer.js';

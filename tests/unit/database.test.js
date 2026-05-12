@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SyncDatabase } from '../../lib/database.js';
+import { SyncDatabase } from '../../src/database';
 import fs from 'fs';
 import path from 'path';
 
@@ -1999,13 +1999,13 @@ describe('SyncDatabase', () => {
 
     describe('migrateFromJSON (exported function)', () => {
       it('should return false if JSON file does not exist', async () => {
-        const { migrateFromJSON } = await import('../../lib/database.js');
+        const { migrateFromJSON } = await import('../../src/database');
         const result = migrateFromJSON(db, '/nonexistent/file.json');
         expect(result).toBe(false);
       });
 
       it('should return false if database already has data', async () => {
-        const { migrateFromJSON } = await import('../../lib/database.js');
+        const { migrateFromJSON } = await import('../../src/database');
         db.setLastSync(Date.now());
 
         // Create a temp JSON file
@@ -2021,7 +2021,7 @@ describe('SyncDatabase', () => {
       });
 
       it('should import data and backup old file', async () => {
-        const { migrateFromJSON } = await import('../../lib/database.js');
+        const { migrateFromJSON } = await import('../../src/database');
 
         const tmpFile = path.join(path.dirname(testDbPath), 'migrate-import.json');
         fs.writeFileSync(
@@ -2049,7 +2049,7 @@ describe('SyncDatabase', () => {
       });
 
       it('should handle malformed JSON gracefully', async () => {
-        const { migrateFromJSON } = await import('../../lib/database.js');
+        const { migrateFromJSON } = await import('../../src/database');
 
         const tmpFile = path.join(path.dirname(testDbPath), 'bad-json.json');
         fs.writeFileSync(tmpFile, 'NOT VALID JSON {{{');

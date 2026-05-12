@@ -7,7 +7,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { createSyncDatabase } from '../lib/database.js';
+import { createSyncDatabase } from '../src/database';
 import { createLettaService } from '../lib/LettaService.js';
 import dotenv from 'dotenv';
 

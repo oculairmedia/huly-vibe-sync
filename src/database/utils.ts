@@ -1,11 +1,11 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
-export function computeDescriptionHash(description) {
+export function computeDescriptionHash(description: string | null | undefined): string | null {
   if (!description) return null;
   return crypto.createHash('sha256').update(description).digest('hex').substring(0, 16);
 }
 
-export function computeIssueContentHash(issue) {
+export function computeIssueContentHash(issue: Record<string, unknown> | null | undefined): string | null {
   if (!issue) return null;
 
   const content = [
@@ -18,7 +18,10 @@ export function computeIssueContentHash(issue) {
   return crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
 }
 
-export function hasIssueContentChanged(newIssue, storedHash) {
+export function hasIssueContentChanged(
+  newIssue: Record<string, unknown>,
+  storedHash: string | null | undefined,
+): boolean {
   if (!storedHash) return true;
   const newHash = computeIssueContentHash(newIssue);
   return newHash !== storedHash;

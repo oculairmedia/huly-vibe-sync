@@ -10,7 +10,7 @@
  * - Clear only Vibe Kanban mappings (keeps Huly data)
  */
 
-import { createSyncDatabase } from './lib/database.js';
+import { createSyncDatabase } from './src/database';
 import { createSyncLogger } from './lib/logger.js';
 import fs from 'fs';
 import path from 'path';

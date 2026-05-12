@@ -14,7 +14,7 @@
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { createSyncDatabase } from '../lib/database.js';
+import { createSyncDatabase } from '../src/database';
 
 const DB_PATH = path.join(process.cwd(), 'logs', 'sync-state.db');
 
