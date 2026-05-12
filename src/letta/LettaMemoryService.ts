@@ -1,4 +1,4 @@
-import { buildScratchpad, buildExpression } from '../../lib/LettaMemoryBuilders.js';
+import { buildScratchpad, buildExpression } from '../LettaMemoryBuilders.js';
 
 const AGENT_ROLE_OVERRIDES: Record<string, string> = {
   Kitchen: 'companion', Incognito: 'developer', Memo: 'developer',

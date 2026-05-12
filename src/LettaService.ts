@@ -110,5 +110,5 @@ export function createLettaService(): LettaService {
   return new LettaService(baseURL, password, { model: process.env.LETTA_MODEL, embedding: process.env.LETTA_EMBEDDING });
 }
 
-export { buildProjectMeta, buildBoardConfig, buildBoardMetrics, buildHotspots, buildBacklogSummary, buildRecentActivity, buildComponentsSummary, buildChangeLog, buildScratchpad, buildExpression } from '../lib/LettaMemoryBuilders.js';
+export { buildProjectMeta, buildBoardConfig, buildBoardMetrics, buildHotspots, buildBacklogSummary, buildRecentActivity, buildComponentsSummary, buildChangeLog, buildScratchpad, buildExpression } from './LettaMemoryBuilders.js';
 export { LettaFileService } from '../lib/LettaFileService.js';
