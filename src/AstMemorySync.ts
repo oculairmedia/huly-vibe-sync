@@ -1,5 +1,5 @@
 import { logger } from './logger';
-import { AstSummaryService } from '../lib/AstSummaryService.js';
+import { AstSummaryService } from './AstSummaryService.js';
 import { AstBlockUpdater } from './AstBlockUpdater';
 
 interface CodePerceptionWatcher {
@@ -53,7 +53,7 @@ export class AstMemorySync {
       graphitiConnected: this.watcher.graphitiClients?.has(projectIdentifier) || false,
     };
 
-    const summaryData = this.summary.generateSummary(astCache, projectIdentifier, health);
+    const summaryData = this.summary.generateSummary(astCache as any, projectIdentifier, health as any);
     if (!summaryData) return false;
 
     return this.updater.updateAgentBlock(agentId, summaryData);
