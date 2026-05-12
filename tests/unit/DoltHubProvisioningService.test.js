@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   DoltHubProvisioningService,
   normalizeDoltHubRepoName,
-} from '../../lib/DoltHubProvisioningService.js';
+} from '../../src/DoltHubProvisioningService.js';
 
 describe('DoltHubProvisioningService', () => {
   let db;

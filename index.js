@@ -99,7 +99,7 @@ let doltHubProvisioner = null;
 if (config.doltHub?.enabled || config.doltHub?.dryRun) {
   try {
     const { createDoltHubProvisioningService } = await import(
-      './lib/DoltHubProvisioningService.js'
+      './src/DoltHubProvisioningService.js'
     );
     doltHubProvisioner = createDoltHubProvisioningService({
       config: config.doltHub,

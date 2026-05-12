@@ -1,16 +1,91 @@
-import path from 'path';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { logger as defaultLogger } from '../src/logger';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { logger as defaultLogger } from './logger';
+import type {
+  DoltHubProvisioningConfig,
+  DoltHubProvisioningResult,
+} from './types/dolthub';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = 'main';
 
-function trimTrailingSlash(value) {
+interface CommandResult {
+  stdout: string;
+  stderr: string;
+}
+
+interface CommandOptions {
+  cwd: string;
+  timeout: number;
+  env: NodeJS.ProcessEnv;
+}
+
+interface BeadsRemote {
+  name: string;
+  url: string;
+  raw: string;
+}
+
+interface ProvisioningPlan {
+  owner: string;
+  repo: string;
+  remoteName: string;
+  remoteUrl: string;
+  visibility: string;
+  apiEndpoint: string;
+}
+
+interface CreateDbResult {
+  created: boolean;
+  alreadyExists: boolean;
+  dryRun?: boolean;
+  response?: unknown;
+}
+
+interface RemoteConfigResult {
+  changed: boolean;
+  pushed: boolean;
+}
+
+interface ProvisionOptions {
+  push?: boolean;
+}
+
+interface BeadsProject {
+  identifier: string;
+  filesystem_path: string;
+  name?: string;
+}
+
+interface DbProject {
+  projects?: {
+    setProjectBeadsRemote?: (identifier: string, data: Record<string, unknown>) => void;
+    setProjectBeadsRemoteError?: (identifier: string, error: string) => void;
+  };
+}
+
+type CommandRunner = (
+  command: string,
+  args: string[],
+  options: CommandOptions,
+) => Promise<CommandResult>;
+
+type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
+
+interface DoltHubServiceOptions {
+  config?: Partial<DoltHubProvisioningConfig>;
+  db?: DbProject | null;
+  logger?: { child?: (ctx: Record<string, unknown>) => unknown; error?: (ctx: Record<string, unknown>, msg: string) => void; info?: (ctx: Record<string, unknown>, msg: string) => void };
+  fetchImpl?: FetchImpl;
+  commandRunner?: CommandRunner;
+}
+
+function trimTrailingSlash(value: string): string {
   return String(value || '').replace(/\/+$/, '');
 }
 
-export function normalizeDoltHubRepoName(value) {
+export function normalizeDoltHubRepoName(value: string): string {
   const normalized = String(value || '')
     .trim()
     .toLowerCase()
@@ -21,7 +96,7 @@ export function normalizeDoltHubRepoName(value) {
   return normalized || 'project';
 }
 
-function sanitizeErrorMessage(error) {
+function sanitizeErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || 'Unknown error');
   return message
     .replace(/authorization:\s*[^\s,)]+/gi, 'authorization: [redacted]')
@@ -30,16 +105,16 @@ function sanitizeErrorMessage(error) {
     .slice(0, 240);
 }
 
-function parseJsonMaybe(text) {
+function parseJsonMaybe(text: string): unknown {
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as unknown;
   } catch {
     return null;
   }
 }
 
-function parseRemoteList(output) {
+function parseRemoteList(output: string): BeadsRemote[] {
   return String(output || '')
     .split('\n')
     .map((line) => line.trim())
@@ -49,62 +124,77 @@ function parseRemoteList(output) {
       if (parts.length < 2) return null;
       return { name: parts[0], url: parts[1], raw: line };
     })
-    .filter(Boolean);
+    .filter((r): r is BeadsRemote => r !== null);
 }
 
-async function defaultCommandRunner(command, args, options) {
+async function defaultCommandRunner(
+  command: string,
+  args: string[],
+  options: CommandOptions,
+): Promise<CommandResult> {
   const result = await execFileAsync(command, args, {
     cwd: options.cwd,
     timeout: options.timeout,
     env: options.env,
   });
-  return { stdout: result.stdout || '', stderr: result.stderr || '' };
+  return { stdout: (result as { stdout?: string }).stdout || '', stderr: (result as { stderr?: string }).stderr || '' };
 }
 
 export class DoltHubProvisioningService {
-  /**
-   * @param {{config?: object, db?: object, logger?: object, fetchImpl?: Function, commandRunner?: Function}=} options
-   */
-  constructor(options = {}) {
+  private config: DoltHubProvisioningConfig;
+  private db: DbProject | null;
+  private logger: DoltHubServiceOptions['logger'];
+  private fetchImpl: FetchImpl;
+  private commandRunner: CommandRunner;
+
+  constructor(options: DoltHubServiceOptions = {}) {
     const {
-      config,
-      db,
+      config = {},
+      db = null,
       logger = defaultLogger,
-      fetchImpl = globalThis.fetch,
+      fetchImpl = globalThis.fetch as FetchImpl,
       commandRunner,
     } = options;
-    this.config = config || {};
+    this.config = {
+      enabled: Boolean(config.enabled),
+      dryRun: Boolean(config.dryRun),
+      apiUrl: config.apiUrl || '',
+      apiToken: config.apiToken,
+      owner: config.owner || 'oulair',
+      defaultVisibility: config.defaultVisibility || 'private',
+      remoteName: config.remoteName || 'origin',
+    } as DoltHubProvisioningConfig;
     this.db = db;
     this.logger = logger;
     this.fetchImpl = fetchImpl;
     this.commandRunner = commandRunner || defaultCommandRunner;
   }
 
-  get enabled() {
-    return Boolean(this.config.enabled);
+  get enabled(): boolean {
+    return this.config.enabled;
   }
 
-  get dryRun() {
-    return Boolean(this.config.dryRun);
+  get dryRun(): boolean {
+    return this.config.dryRun;
   }
 
-  get owner() {
-    return this.config.owner || 'oulair';
+  get owner(): string {
+    return this.config.owner;
   }
 
-  get remoteName() {
-    return this.config.remoteName || 'origin';
+  get remoteName(): string {
+    return this.config.remoteName;
   }
 
-  get visibility() {
-    return this.config.defaultVisibility || 'private';
+  get visibility(): string {
+    return this.config.defaultVisibility;
   }
 
-  get apiUrl() {
+  get apiUrl(): string {
     return trimTrailingSlash(this.config.apiUrl || 'https://www.dolthub.com/api/v1alpha1');
   }
 
-  buildPlan(project) {
+  buildPlan(project: BeadsProject): ProvisioningPlan {
     const sourceName =
       path.basename(project.filesystem_path || '') || project.name || project.identifier;
     const repo = normalizeDoltHubRepoName(sourceName);
@@ -120,7 +210,10 @@ export class DoltHubProvisioningService {
     };
   }
 
-  async provisionProject(project, options = {}) {
+  async provisionProject(
+    project: BeadsProject,
+    options: ProvisionOptions = {},
+  ): Promise<DoltHubProvisioningResult> {
     if (!project?.identifier) {
       throw new Error('Project identifier is required');
     }
@@ -132,14 +225,15 @@ export class DoltHubProvisioningService {
     }
 
     const plan = this.buildPlan(project);
-    const commands = [];
+    const commands: string[] = [];
 
     try {
       const createResult = await this.createDoltHubDatabase(project, plan);
-      const remoteResult = await this.configureBeadsRemote(project.filesystem_path, plan, {
-        push: options.push !== false,
-        commands,
-      });
+      const remoteResult = await this.configureBeadsRemote(
+        project.filesystem_path,
+        plan,
+        { push: options.push !== false, commands },
+      );
       const status = this.dryRun ? 'dry_run' : 'provisioned';
       const lastPushAt = remoteResult.pushed ? Date.now() : null;
 
@@ -154,7 +248,10 @@ export class DoltHubProvisioningService {
       });
 
       return {
+        success: true,
         status,
+        databaseName: plan.repo,
+        databaseUrl: plan.remoteUrl,
         dry_run: this.dryRun,
         project_identifier: project.identifier,
         owner: plan.owner,
@@ -171,7 +268,7 @@ export class DoltHubProvisioningService {
     } catch (error) {
       const safeError = sanitizeErrorMessage(error);
       this.db?.projects?.setProjectBeadsRemoteError?.(project.identifier, safeError);
-      this.logger?.error?.(
+      (this.logger as { error?: (ctx: Record<string, unknown>, msg: string) => void })?.error?.(
         { err: error, project_identifier: project.identifier },
         'Beads remote provisioning failed',
       );
@@ -179,7 +276,10 @@ export class DoltHubProvisioningService {
     }
   }
 
-  async createDoltHubDatabase(project, plan) {
+  private async createDoltHubDatabase(
+    project: BeadsProject,
+    plan: ProvisioningPlan,
+  ): Promise<CreateDbResult> {
     if (this.dryRun) {
       return { created: false, alreadyExists: false, dryRun: true };
     }
@@ -205,8 +305,8 @@ export class DoltHubProvisioningService {
     });
 
     const responseText = await response.text().catch(() => '');
-    const responseJson = parseJsonMaybe(responseText);
-    const message = responseJson?.error || responseJson?.message || responseText;
+    const responseJson = parseJsonMaybe(responseText) as Record<string, unknown> | null;
+    const message = String(responseJson?.error || responseJson?.message || responseText);
 
     if (response.ok) {
       return { created: true, alreadyExists: false, response: responseJson };
@@ -224,7 +324,11 @@ export class DoltHubProvisioningService {
     );
   }
 
-  async configureBeadsRemote(projectPath, plan, options = {}) {
+  private async configureBeadsRemote(
+    projectPath: string,
+    plan: ProvisioningPlan,
+    options: { commands: string[]; push?: boolean },
+  ): Promise<RemoteConfigResult> {
     const commands = options.commands || [];
     const remotes = await this.listBeadsRemotes(projectPath, commands);
     const existing = remotes.find((remote) => remote.name === plan.remoteName);
@@ -267,12 +371,20 @@ export class DoltHubProvisioningService {
     return { changed, pushed };
   }
 
-  async listBeadsRemotes(projectPath, commands) {
+  private async listBeadsRemotes(
+    projectPath: string,
+    commands: string[],
+  ): Promise<BeadsRemote[]> {
     const result = await this.runBd(projectPath, ['dolt', 'remote', 'list'], commands);
     return parseRemoteList(result.stdout);
   }
 
-  async runBd(projectPath, args, commands, timeout = 30000) {
+  private async runBd(
+    projectPath: string,
+    args: string[],
+    commands: string[],
+    timeout: number = 30000,
+  ): Promise<CommandResult> {
     commands.push(['bd', ...args].join(' '));
 
     if (this.dryRun) {
@@ -282,11 +394,13 @@ export class DoltHubProvisioningService {
     return this.commandRunner('bd', args, {
       cwd: projectPath,
       timeout,
-      env: process.env,
+      env: process.env as NodeJS.ProcessEnv,
     });
   }
 }
 
-export function createDoltHubProvisioningService(options) {
+export function createDoltHubProvisioningService(
+  options: DoltHubServiceOptions,
+): DoltHubProvisioningService {
   return new DoltHubProvisioningService(options);
 }

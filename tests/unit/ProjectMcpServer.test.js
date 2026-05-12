@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createProjectMcpServer } from '../../lib/mcp/ProjectMcpServer.js';
+import { createProjectMcpServer } from '../../src/mcp/ProjectMcpServer.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-vi.mock('../../lib/logger.js', () => ({
+vi.mock('../../src/logger.js', () => ({
   logger: {
     child: vi.fn(() => ({
       info: vi.fn(),

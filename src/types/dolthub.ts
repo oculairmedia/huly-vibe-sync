@@ -6,10 +6,22 @@ export interface DoltHubProvisioningResult {
   databaseUrl: string;
   remoteUrl?: string;
   owner: string;
+  repo?: string;
   error?: string;
   alreadyExists?: boolean;
   pushCompleted?: boolean;
   pushError?: string;
+  status?: string;
+  dry_run?: boolean;
+  project_identifier?: string;
+  remote_name?: string;
+  remote_url?: string;
+  visibility?: string;
+  database_created?: boolean;
+  database_already_exists?: boolean;
+  remote_changed?: boolean;
+  pushed?: boolean;
+  commands?: string[];
 }
 
 export interface DoltHubDatabase {
