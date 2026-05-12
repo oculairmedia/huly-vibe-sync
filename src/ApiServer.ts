@@ -3,7 +3,7 @@ import { URL } from 'url';
 import { logger } from './logger';
 import { getHealthMetrics, updateSystemMetrics, getMetricsRegistry } from './HealthService.js';
 import { registerHealthRoutes } from './api/routes/health.js';
-import { registerProjectRoutes } from '../lib/api/routes/projects.js';
+import { registerProjectRoutes } from './api/routes/projects.js';
 import { registerConfigRoutes } from './api/routes/config.js';
 import { registerSyncRoutes } from './api/routes/sync.js';
 import { registerEventsRoutes } from './api/routes/events.js';
