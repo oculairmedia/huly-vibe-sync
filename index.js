@@ -9,7 +9,7 @@ import { createApiServer } from './lib/ApiServer.js';
 import { createLettaService } from './lib/LettaService.js';
 import { FileWatcher } from './lib/FileWatcher.js';
 import { CodePerceptionWatcher } from './lib/CodePerceptionWatcher.js';
-import { createAstMemorySync } from './lib/AstMemorySync.js';
+import { createAstMemorySync } from './src/AstMemorySync.js';
 import { logger } from './src/logger';
 import { createBookStackWatcher } from './lib/BookStackWatcher.js';
 import { ProjectRegistry } from './lib/ProjectRegistry.js';

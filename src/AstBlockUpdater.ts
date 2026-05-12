@@ -1,23 +1,37 @@
-/**
- * AstBlockUpdater - Updates PM agent memory blocks with AST summaries
- */
-
-import { logger } from '../src/logger';
+import { logger } from './logger';
 
 const CODEBASE_AST_LABEL = 'codebase_ast';
 
+interface LettaClient {
+  agents: {
+    retrieve: (id: string) => Promise<{ memory?: { blocks?: Array<{ id: string; label: string }> } }>;
+    blocks: { attach: (agentId: string, blockId: string) => Promise<unknown> };
+  };
+  blocks: {
+    modify: (id: string, data: { value: string }) => Promise<unknown>;
+    create: (data: { label: string; value: string; limit: number }) => Promise<{ id: string }>;
+  };
+}
+
+interface LettaService {
+  client: LettaClient;
+}
+
 export class AstBlockUpdater {
-  constructor(lettaService) {
+  private letta: LettaService;
+  private log: ReturnType<typeof logger.child>;
+
+  constructor(lettaService: LettaService) {
     this.letta = lettaService;
     this.log = logger.child({ service: 'AstBlockUpdater' });
   }
 
-  async updateAgentBlock(agentId, summary) {
+  async updateAgentBlock(agentId: string, summary: unknown): Promise<boolean> {
     if (!summary) return false;
 
     try {
       const agent = await this.letta.client.agents.retrieve(agentId);
-      const existingBlock = agent.memory?.blocks?.find(b => b.label === CODEBASE_AST_LABEL);
+      const existingBlock = agent.memory?.blocks?.find((b) => b.label === CODEBASE_AST_LABEL);
       const value = JSON.stringify(summary, null, 2);
 
       if (existingBlock) {

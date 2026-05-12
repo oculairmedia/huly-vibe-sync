@@ -1,17 +1,7 @@
-/**
- * Git Path Resolvers - Filesystem path extraction and git URL handling
- */
+import fs from 'node:fs';
+import path from 'node:path';
 
-import fs from 'fs';
-import path from 'path';
-
-/**
- * Extract filesystem path from Huly project description
- *
- * @param {string} description - The project description
- * @returns {string|null} The extracted filesystem path or null
- */
-export function extractFilesystemPath(description) {
+export function extractFilesystemPath(description: string | null | undefined): string | null {
   if (!description) {
     return null;
   }
@@ -21,7 +11,7 @@ export function extractFilesystemPath(description) {
   for (const pattern of patterns) {
     const match = description.match(pattern);
     if (match) {
-      const p = match[1].trim();
+      const p = match[1]!.trim();
       return p.replace(/[,;.]$/, '').trim();
     }
   }
@@ -29,16 +19,8 @@ export function extractFilesystemPath(description) {
   return null;
 }
 
-/**
- * Get git URL from local repository
- *
- * @param {string} repoPath - Path to the git repository
- * @returns {string|null} The git remote URL or null if not found
- */
-export function getGitUrl(repoPath) {
-  const fs = require('fs');
-  const path = require('path');
-  const { execSync } = require('child_process');
+export function getGitUrl(repoPath: string): string | null {
+  const { execSync } = require('node:child_process');
 
   try {
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
@@ -51,18 +33,12 @@ export function getGitUrl(repoPath) {
     }).trim();
 
     return url || null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
 
-/**
- * Validate a git repository path
- *
- * @param {string} repoPath
- * @returns {{ valid: boolean, reason?: string }}
- */
-export function validateGitRepoPath(repoPath) {
+export function validateGitRepoPath(repoPath: string | null | undefined): { valid: boolean; reason?: string } {
   if (!repoPath || typeof repoPath !== 'string') {
     return { valid: false, reason: 'path is null or not a string' };
   }
@@ -92,13 +68,12 @@ export function validateGitRepoPath(repoPath) {
   return { valid: true };
 }
 
-/**
- * Determine git repository path for a Huly project
- *
- * @param {Object} hulyProject - The Huly project object
- * @returns {string} The determined git repository path
- */
-export function determineGitRepoPath(hulyProject) {
+interface HulyProject {
+  identifier: string;
+  description?: string | null;
+}
+
+export function determineGitRepoPath(hulyProject: HulyProject): string {
   const filesystemPath = extractFilesystemPath(hulyProject.description);
   if (filesystemPath && fs.existsSync(filesystemPath)) {
     console.log(`[Vibe] Using filesystem path from Huly: ${filesystemPath}`);
@@ -110,22 +85,17 @@ export function determineGitRepoPath(hulyProject) {
   return placeholder;
 }
 
-/**
- * Resolve the GitHub remote URL for a filesystem path.
- *
- * @param {string} filesystemPath - Absolute path to a potential git repo
- * @param {Object} [options] - Options
- * @param {number} [options.timeoutMs=3000] - Timeout in milliseconds
- * @returns {Promise<string|null>} Clean GitHub URL or null
- */
-export async function resolveGitUrl(filesystemPath, { timeoutMs = 3000 } = {}) {
+export async function resolveGitUrl(
+  filesystemPath: string,
+  { timeoutMs = 3000 }: { timeoutMs?: number } = {},
+): Promise<string | null> {
   if (!filesystemPath || !fs.existsSync(path.join(filesystemPath, '.git'))) {
     return null;
   }
 
   try {
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
     const execFileAsync = promisify(execFile);
 
     const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
@@ -133,22 +103,16 @@ export async function resolveGitUrl(filesystemPath, { timeoutMs = 3000 } = {}) {
       timeout: timeoutMs,
     });
 
-    return cleanGitUrl(stdout.trim());
+    return cleanGitUrl((stdout as string).trim());
   } catch {
     return null;
   }
 }
 
-/**
- * Strip credentials and normalize a git remote URL.
- *
- * @param {string} rawUrl - Raw git remote URL
- * @returns {string|null} Clean URL or null if not a GitHub URL
- */
-export function cleanGitUrl(rawUrl) {
+export function cleanGitUrl(rawUrl: string | null): string | null {
   if (!rawUrl) return null;
 
-  let url = rawUrl
+  const url = rawUrl
     .replace(/https?:\/\/[^@]+@github\.com\//, 'https://github.com/')
     .replace(/^git@github\.com:/, 'https://github.com/')
     .replace(/\.git$/, '');

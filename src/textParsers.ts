@@ -3,7 +3,7 @@ export {
   extractHulyIdentifierFromDescription,
   extractHulyParentIdentifier,
   extractFullDescription,
-} from '../lib/parsers/hulyIdentifierParser.js';
+} from './parsers/hulyIdentifierParser.js';
 export {
   extractFilesystemPath,
   getGitUrl,
@@ -11,4 +11,4 @@ export {
   determineGitRepoPath,
   resolveGitUrl,
   cleanGitUrl,
-} from '../lib/parsers/gitPathResolvers.js';
+} from './parsers/gitPathResolvers.js';

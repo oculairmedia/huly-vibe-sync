@@ -1,21 +1,38 @@
-/**
- * AstMemorySync - Coordinates AST summary generation and PM agent block updates
- */
+import { logger } from './logger';
+import { AstSummaryService } from '../lib/AstSummaryService.js';
+import { AstBlockUpdater } from './AstBlockUpdater';
 
-import { logger } from '../src/logger';
-import { AstSummaryService } from './AstSummaryService.js';
-import { AstBlockUpdater } from './AstBlockUpdater.js';
+interface CodePerceptionWatcher {
+  astCaches?: Map<string, { cache: Map<string, unknown> }>;
+  stats?: { errors?: number };
+  graphitiClients?: Map<string, unknown>;
+}
+
+interface Database {
+  getProjectsWithFilesystemPath?: () => Array<{ identifier: string }>;
+  getProject?: (id: string) => { letta_agent_id?: string | null } | null;
+}
 
 export class AstMemorySync {
-  constructor({ codePerceptionWatcher, lettaService, db }) {
-    this.watcher = codePerceptionWatcher;
+  private watcher: CodePerceptionWatcher | null;
+  private db: Database;
+  private summary: AstSummaryService;
+  private updater: AstBlockUpdater | null;
+  private log: ReturnType<typeof logger.child>;
+
+  constructor({ codePerceptionWatcher, lettaService, db }: {
+    codePerceptionWatcher?: CodePerceptionWatcher | null;
+    lettaService?: unknown;
+    db: Database;
+  }) {
+    this.watcher = codePerceptionWatcher ?? null;
     this.db = db;
     this.summary = new AstSummaryService();
-    this.updater = lettaService ? new AstBlockUpdater(lettaService) : null;
+    this.updater = lettaService ? new AstBlockUpdater(lettaService as never) : null;
     this.log = logger.child({ service: 'AstMemorySync' });
   }
 
-  async syncProjectAstToAgent(projectIdentifier) {
+  async syncProjectAstToAgent(projectIdentifier: string): Promise<boolean> {
     if (!this.watcher || !this.updater) return false;
 
     const astCache = this.watcher.astCaches?.get(projectIdentifier);
@@ -42,7 +59,7 @@ export class AstMemorySync {
     return this.updater.updateAgentBlock(agentId, summaryData);
   }
 
-  async syncAllProjects(changeStats = {}) {
+  async syncAllProjects(changeStats: Record<string, unknown> = {}): Promise<void> {
     if (!this.watcher || !this.updater) return;
 
     const projects = this.db.getProjectsWithFilesystemPath?.() || [];
@@ -63,7 +80,7 @@ export class AstMemorySync {
     }
   }
 
-  _getAgentIdForProject(projectIdentifier) {
+  private _getAgentIdForProject(projectIdentifier: string): string | null {
     try {
       const project = this.db.getProject?.(projectIdentifier);
       return project?.letta_agent_id || null;
@@ -72,12 +89,16 @@ export class AstMemorySync {
     }
   }
 
-  recordFileChange(projectId, filePath, changeType, functionsDelta = 0) {
+  recordFileChange(projectId: string, filePath: string, changeType: string, functionsDelta: number = 0): void {
     this.summary.recordChange(projectId, filePath, changeType, functionsDelta);
   }
 }
 
-export function createAstMemorySync(options) {
+export function createAstMemorySync(options: {
+  codePerceptionWatcher?: CodePerceptionWatcher | null;
+  lettaService?: unknown;
+  db: Database;
+}): AstMemorySync {
   return new AstMemorySync(options);
 }
 
