@@ -1,12 +1,42 @@
-type Issue = Record<string, unknown>;
+/** Loose issue shape consumed by Letta memory builders. Accepts DB rows, bd issues, and synthesized activity entries. */
+export interface MemoryIssue {
+  id?: string | number;
+  identifier?: string;
+  title?: string | null;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | number | null;
+  labels?: string[] | string | null;
+  modifiedOn?: number | string | null;
+  modifiedAt?: number | string | null;
+  createdAt?: number | string | null;
+  previousStatus?: string | null;
+  // Activity log fields
+  type?: string;
+  issue?: string;
+  timestamp?: string | number;
+  // Dolt change log fields
+  change_type?: string;
+  issue_id?: string;
+  status_label?: string;
+  updated_at?: string | number | null;
+}
 
+type Issue = MemoryIssue;
 
-export function buildProjectMeta(project: Record<string, unknown>, repoPath: string | null, gitUrl: string | null): Record<string, unknown> {
+export interface MemoryProject {
+  identifier?: string;
+  name?: string;
+  description?: string | null;
+  status?: string | null;
+}
+
+export function buildProjectMeta(project: MemoryProject, repoPath: string | null, gitUrl: string | null): Record<string, unknown> {
   return {
     name: project.name,
-    identifier: project.identifier || project.name,
-    description: project.description || '',
-    status: project.status || 'active',
+    identifier: project.identifier ?? project.name,
+    description: project.description ?? '',
+    status: project.status ?? 'active',
     repository: { filesystem_path: repoPath || null, git_url: gitUrl || null },
   };
 }
@@ -39,8 +69,8 @@ export function buildBoardConfig(): Record<string, unknown> {
 
 export function buildBoardMetrics(issues: Issue[]): Record<string, unknown> {
   const statusCounts: Record<string, number> = { open: 0, 'in-progress': 0, closed: 0 };
-  issues.forEach(issue => {
-    const status = (issue.status as string) || 'open';
+  issues.forEach((issue) => {
+    const status = issue.status || 'open';
     if (Object.hasOwn(statusCounts, status)) statusCounts[status]!++;
   });
   const total = issues.length;
@@ -58,35 +88,35 @@ export function buildHotspots(issues: Issue[]): Record<string, unknown> {
   const AGEING_THRESHOLD_DAYS = 7;
   const AGEING_THRESHOLD_MS = AGEING_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
 
-  issues.forEach(issue => {
-    const status = (issue.status as string) || 'open';
-    const title = (issue.title as string) || '';
-    const description = (issue.description as string) || '';
+  issues.forEach((issue) => {
+    const status = issue.status || 'open';
+    const title = issue.title || '';
+    const description = issue.description || '';
     const blockedKeywords = ['blocked', 'blocker', 'waiting on', 'waiting for', 'stuck'];
-    const isBlocked = blockedKeywords.some(kw => title.toLowerCase().includes(kw) || description.toLowerCase().includes(kw));
+    const isBlocked = blockedKeywords.some((kw) => title.toLowerCase().includes(kw) || description.toLowerCase().includes(kw));
 
     if (isBlocked) {
-      hotspots.blocked_items.push({ id: issue.identifier || issue.id, title, status });
+      hotspots.blocked_items.push({ id: issue.identifier ?? issue.id, title, status });
     }
 
     if (status === 'in-progress' && issue.modifiedOn) {
-      const updatedAt = typeof issue.modifiedOn === 'number' ? issue.modifiedOn : new Date(issue.modifiedOn as string).getTime();
+      const updatedAt = typeof issue.modifiedOn === 'number' ? issue.modifiedOn : new Date(issue.modifiedOn).getTime();
       const age = now - updatedAt;
       if (age > AGEING_THRESHOLD_MS) {
         const ageInDays = Math.floor(age / (24 * 60 * 60 * 1000));
-        hotspots.ageing_wip.push({ id: issue.identifier || issue.id, title, age_days: ageInDays, last_updated: issue.modifiedOn });
+        hotspots.ageing_wip.push({ id: issue.identifier ?? issue.id, title, age_days: ageInDays, last_updated: issue.modifiedOn });
       }
     }
 
     if (status === 'open' && issue.priority) {
-      const priority = (issue.priority as string).toLowerCase();
+      const priority = String(issue.priority).toLowerCase();
       if (priority === 'urgent' || priority === 'high') {
-        hotspots.high_priority_open.push({ id: issue.identifier || issue.id, title, priority: issue.priority });
+        hotspots.high_priority_open.push({ id: issue.identifier ?? issue.id, title, priority: issue.priority });
       }
     }
   });
 
-  hotspots.ageing_wip.sort((a: Record<string, unknown>, b: Record<string, unknown>) => (b.age_days as number) - (a.age_days as number));
+  hotspots.ageing_wip.sort((a, b) => (b.age_days as number) - (a.age_days as number));
   hotspots.blocked_items = hotspots.blocked_items.slice(0, 10);
   hotspots.ageing_wip = hotspots.ageing_wip.slice(0, 10);
   hotspots.high_priority_open = hotspots.high_priority_open.slice(0, 10);
@@ -102,33 +132,40 @@ export function buildBacklogSummary(issues: Issue[]): Record<string, unknown> {
   const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
 
   openItems.sort((a, b) => {
-    const aPriority = ((a.priority as string) || 'none').toLowerCase();
-    const bPriority = ((b.priority as string) || 'none').toLowerCase();
+    const aPriority = String(a.priority ?? 'none').toLowerCase();
+    const bPriority = String(b.priority ?? 'none').toLowerCase();
     return (priorityOrder[aPriority] ?? 4) - (priorityOrder[bPriority] ?? 4);
   });
 
-  const topItems = openItems.slice(0, 15).map(issue => ({
-    id: issue.identifier || issue.id, title: issue.title || 'Untitled', priority: issue.priority || 'none',
+  const topItems = openItems.slice(0, 15).map((issue) => ({
+    id: issue.identifier ?? issue.id, title: issue.title || 'Untitled', priority: issue.priority || 'none',
   }));
 
   return {
     total_backlog: openItems.length, top_items: topItems,
     priority_breakdown: {
-      urgent: openItems.filter(t => ((t.priority as string) || '').toLowerCase() === 'urgent').length,
-      high: openItems.filter(t => ((t.priority as string) || '').toLowerCase() === 'high').length,
-      medium: openItems.filter(t => ((t.priority as string) || '').toLowerCase() === 'medium').length,
-      low: openItems.filter(t => ((t.priority as string) || '').toLowerCase() === 'low').length,
+      urgent: openItems.filter((t) => String(t.priority ?? '').toLowerCase() === 'urgent').length,
+      high: openItems.filter((t) => String(t.priority ?? '').toLowerCase() === 'high').length,
+      medium: openItems.filter((t) => String(t.priority ?? '').toLowerCase() === 'medium').length,
+      low: openItems.filter((t) => String(t.priority ?? '').toLowerCase() === 'low').length,
     },
   };
 }
 
-export function buildRecentActivity(activityData: Record<string, unknown> | null | undefined): Record<string, unknown> {
-  if (!activityData || !activityData.activities) {
+export interface ActivityData {
+  activities?: MemoryIssue[];
+  summary?: { created?: number; updated?: number; total?: number };
+  byStatus?: Record<string, number>;
+  since?: string;
+}
+
+export function buildRecentActivity(activityData: ActivityData | null | undefined): Record<string, unknown> {
+  if (!activityData?.activities) {
     return { since: null, summary: { created: 0, updated: 0, total: 0 }, by_status: {}, recent_items: [], patterns: [] };
   }
 
-  const { activities, summary, byStatus, since } = activityData as { activities: Issue[]; summary?: Record<string, unknown>; byStatus?: Record<string, number>; since: string };
-  const recentItems = activities.slice(0, 10).map(activity => ({
+  const { activities, summary, byStatus, since } = activityData;
+  const recentItems = activities.slice(0, 10).map((activity) => ({
     type: activity.type, issue: activity.issue, title: activity.title, status: activity.status, timestamp: activity.timestamp,
   }));
 
@@ -143,13 +180,13 @@ export function buildRecentActivity(activityData: Record<string, unknown> | null
 
 export function buildComponentsSummary(issues: Issue[]): Record<string, unknown> {
   const componentMap = new Map<string, Set<string>>();
-  issues.forEach(issue => {
-    const components = issue.labels as string[] || [];
-    const validComponents = components.filter(c => c !== 'bug' && c !== 'feature' && c !== 'enhancement' && c !== 'documentation' && c !== 'wontfix');
+  issues.forEach((issue) => {
+    const components = Array.isArray(issue.labels) ? issue.labels : [];
+    const validComponents = components.filter((c) => c !== 'bug' && c !== 'feature' && c !== 'enhancement' && c !== 'documentation' && c !== 'wontfix');
     if (validComponents.length === 0) return;
-    validComponents.forEach(comp => {
+    validComponents.forEach((comp) => {
       if (!componentMap.has(comp)) componentMap.set(comp, new Set());
-      componentMap.get(comp)!.add((issue.title as string) || 'Untitled');
+      componentMap.get(comp)!.add(issue.title || 'Untitled');
     });
   });
 
@@ -164,9 +201,9 @@ export function buildChangeLog(currentIssues: Issue[], lastSyncTimestamp: number
   const now = Date.now();
   const changes: Record<string, unknown>[] = [];
 
-  currentIssues.forEach(issue => {
-    const created = typeof issue.createdAt === 'number' ? issue.createdAt : issue.createdAt ? new Date(issue.createdAt as string).getTime() : null;
-    const modified = typeof issue.modifiedAt === 'number' ? issue.modifiedAt : issue.modifiedAt ? new Date(issue.modifiedAt as string).getTime() : null;
+  currentIssues.forEach((issue) => {
+    const created = typeof issue.createdAt === 'number' ? issue.createdAt : issue.createdAt ? new Date(issue.createdAt).getTime() : null;
+    const modified = typeof issue.modifiedAt === 'number' ? issue.modifiedAt : issue.modifiedAt ? new Date(issue.modifiedAt).getTime() : null;
 
     if (created && lastSyncTimestamp && created > lastSyncTimestamp) {
       changes.push({ type: 'created', issue: issue.identifier, title: issue.title, timestamp: issue.createdAt });
@@ -181,8 +218,8 @@ export function buildChangeLog(currentIssues: Issue[], lastSyncTimestamp: number
   });
 
   changes.sort((a, b) => {
-    const aTime = new Date(a.timestamp as string).getTime();
-    const bTime = new Date(b.timestamp as string).getTime();
+    const aTime = new Date(String(a.timestamp ?? '')).getTime();
+    const bTime = new Date(String(b.timestamp ?? '')).getTime();
     return bTime - aTime;
   });
 
@@ -257,12 +294,12 @@ export function buildBacklogSummaryFromSQL(openIssues: Issue[]): Record<string, 
 
 export function buildHotspotsFromSQL({ blocked, agingWip, highPriority }: { blocked: Issue[]; agingWip: Issue[]; highPriority: Issue[] }): Record<string, unknown> {
   return {
-    blocked_items: blocked.slice(0, 10).map(i => ({ id: i.identifier || i.id, title: i.title || '', status: i.status || 'open' })),
-    ageing_wip: agingWip.slice(0, 10).map(i => {
-      const updatedAt = typeof i.modifiedOn === 'number' ? i.modifiedOn : new Date(i.modifiedOn as string).getTime();
-      return { id: i.identifier || i.id, title: i.title || '', age_days: Math.floor((Date.now() - updatedAt) / (24 * 60 * 60 * 1000)), last_updated: i.modifiedOn };
+    blocked_items: blocked.slice(0, 10).map((i) => ({ id: i.identifier ?? i.id, title: i.title || '', status: i.status || 'open' })),
+    ageing_wip: agingWip.slice(0, 10).map((i) => {
+      const updatedAt = typeof i.modifiedOn === 'number' ? i.modifiedOn : new Date(String(i.modifiedOn ?? '')).getTime();
+      return { id: i.identifier ?? i.id, title: i.title || '', age_days: Math.floor((Date.now() - updatedAt) / (24 * 60 * 60 * 1000)), last_updated: i.modifiedOn };
     }).sort((a, b) => b.age_days - a.age_days),
-    high_priority_open: highPriority.slice(0, 10).map(i => ({ id: i.identifier || i.id, title: i.title || '', priority: i.priority })),
+    high_priority_open: highPriority.slice(0, 10).map((i) => ({ id: i.identifier ?? i.id, title: i.title || '', priority: i.priority })),
     summary: { blocked_count: blocked.length, ageing_wip_count: agingWip.length, high_priority_count: highPriority.length },
   };
 }
@@ -273,12 +310,12 @@ export function buildComponentsSummaryFromSQL(typeStats: Record<string, number>)
 }
 
 export function buildRecentActivityFromSQL(doltChanges: Issue[]): Record<string, unknown> {
-  const activities = (doltChanges || []).slice(0, 10).map(c => ({
+  const activities = (doltChanges || []).slice(0, 10).map((c) => ({
     type: c.change_type || 'updated', issue: c.issue_id, title: c.title || '', status: c.status_label || c.status || '', timestamp: c.updated_at || new Date().toISOString(),
   }));
 
   const byStatus: Record<string, number> = {};
-  activities.forEach(a => { const s = a.status as string; byStatus[s] = (byStatus[s] || 0) + 1; });
+  activities.forEach((a) => { const s = a.status; byStatus[s] = (byStatus[s] || 0) + 1; });
 
   return {
     since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
