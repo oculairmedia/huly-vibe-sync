@@ -96,6 +96,65 @@ function isIssueReady(issue: Record<string, unknown>): boolean {
   return !issue.isBlocked && (!issue.blockedBy || (issue.blockedBy as unknown[]).length === 0);
 }
 
+function parseJsonArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((x) => String(x));
+  if (typeof value === 'string' && value.trim().startsWith('[')) {
+    try { return JSON.parse(value) as string[]; } catch { return []; }
+  }
+  return [];
+}
+
+function serializeIssueDetail(issue: Record<string, unknown>): Record<string, unknown> {
+  const normalizedStatus = normalizeIssueStatus(issue.status as string);
+  const labels = parseJsonArray(issue.labels ?? issue.labels_json);
+  const blockedByIds = parseJsonArray(issue.blocked_by ?? issue.blocked_by_json ?? issue.blockedBy);
+  const blockedByRefs = blockedByIds.map((id) => ({ id }));
+  const updatedAt = toIsoTimestamp(issue.beads_updated_at ?? issue.updated_at ?? issue.updatedAt);
+  const createdAt = toIsoTimestamp(issue.created_at ?? issue.createdAt);
+  const lastSyncAt = toIsoTimestamp(issue.last_sync_at);
+  const id = String(issue.identifier ?? issue.id ?? '');
+  const projectId = String(issue.project_identifier ?? issue.projectId ?? issue.project_id ?? '');
+  return {
+    id,
+    project_id: projectId,
+    provider: (issue.source as string) || TRACKER_PROVIDER,
+    title: String(issue.title ?? ''),
+    type: (issue.issue_type ?? issue.type ?? 'task') as string,
+    priority: String(issue.priority ?? 'medium'),
+    status: normalizedStatus,
+    status_label: String(issue.status ?? 'todo'),
+    ready: isIssueReady(issue),
+    assignee: (issue.assignee ?? issue.owner ?? null) as string | null,
+    blocked_by: blockedByRefs,
+    blocks: [],
+    is_blocked: blockedByIds.length > 0 || normalizedStatus === 'blocked',
+    updated_at: updatedAt,
+    created_at: createdAt,
+    summary: String(issue.title ?? '').slice(0, 200),
+    acceptance_criteria: [],
+    labels,
+    parent_id: (issue.parent_huly_id ?? issue.parent_id ?? null) as string | null,
+    child_count: Number(issue.sub_issue_count ?? 0),
+    validation_warnings: [],
+    etag: `${id}:${updatedAt ?? ''}`,
+    description: String(issue.description ?? ''),
+    design_notes: null,
+    notes: [],
+    comments: [],
+    children: [],
+    timestamps: {
+      created_at: createdAt,
+      updated_at: updatedAt,
+      last_sync_at: lastSyncAt,
+    },
+    metadata: {
+      huly_id: (issue.huly_id ?? null) as string | null,
+      vibe_task_id: (issue.vibe_task_id ?? null) as number | null,
+    },
+  };
+}
+
 function serializeIssue(issue: Record<string, unknown>): Record<string, unknown> {
   if (!issue) return null as unknown as Record<string, unknown>;
   const normalizedStatus = normalizeIssueStatus(issue.status as string);
@@ -289,9 +348,20 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       const issueId = pathname.replace('/api/issues/', '');
       if (!db) { sendError(res, 503, 'Database not available'); return; }
       try {
-        const issue = db.getIssue ? db.getIssue(issueId) : (beadsIssueService?.getIssue ? beadsIssueService.getIssue(issueId) : null);
+        let issue = (db.getIssue ? db.getIssue(issueId) : null) as Record<string, unknown> | null;
+        if (issue && beadsIssueMirror?.ensureFresh) {
+          const projectId = String(issue.project_identifier ?? '');
+          if (projectId) {
+            try { await beadsIssueMirror.ensureFresh(projectId); }
+            catch (mirrorErr) { logger.warn({ err: mirrorErr, issueId }, 'Mirror ensureFresh on detail failed'); }
+            issue = (db.getIssue?.(issueId) ?? issue) as Record<string, unknown> | null;
+          }
+        }
+        if (!issue && beadsIssueService?.getIssue) {
+          issue = beadsIssueService.getIssue(issueId) as Record<string, unknown> | null;
+        }
         if (!issue) { sendError(res, 404, 'Issue not found'); return; }
-        sendJson(res, 200, serializeIssue(issue));
+        sendJson(res, 200, { issue: serializeIssueDetail(issue), timestamp: new Date().toISOString() });
       } catch (error) { logger.error({ err: error }, 'Failed to get issue'); sendError(res, 500, 'Failed to get issue', { error: (error as Error).message }); }
     },
   });
