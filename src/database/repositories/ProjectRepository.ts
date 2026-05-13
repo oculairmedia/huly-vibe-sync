@@ -1,5 +1,41 @@
 import type Database from 'better-sqlite3';
 import { ProjectLettaRepository } from './ProjectLettaRepository';
+import type { ProjectRow } from '../../types/db.js';
+
+export interface ProjectUpsert {
+  identifier: string;
+  name: string;
+  huly_id?: string | null;
+  vibe_id?: number | null;
+  filesystem_path?: string | null;
+  git_url?: string | null;
+  issue_count?: number | null;
+  last_checked_at?: number | null;
+  last_sync_at?: number | null;
+  status?: string | null;
+  created_at?: number | null;
+  description_hash?: string | null;
+}
+
+export interface ProjectUpdate {
+  name?: string | null;
+  filesystem_path?: string | null;
+  git_url?: string | null;
+  status?: string | null;
+  last_checked_at?: number | null;
+}
+
+export interface BeadsRemoteSnapshot {
+  owner?: string | null;
+  repo?: string | null;
+  url?: string | null;
+  name?: string | null;
+  status?: string | null;
+  visibility?: string | null;
+  provisioned_at?: number | null;
+  last_push_at?: number | null;
+  last_error?: string | null;
+}
 
 export class ProjectRepository {
   public letta: ProjectLettaRepository;
@@ -8,7 +44,7 @@ export class ProjectRepository {
     this.letta = new ProjectLettaRepository(db);
   }
 
-  upsertProject(project: Record<string, unknown>): void {
+  upsertProject(project: ProjectUpsert): void {
     const now = Date.now();
     this.db
       .prepare(
@@ -33,8 +69,8 @@ export class ProjectRepository {
       );
   }
 
-  getProject(identifier: string): unknown {
-    return this.db
+  getProject(identifier: string): ProjectRow | null {
+    const row = this.db
       .prepare(
         `SELECT p.*, COALESCE(issue_counts.actual_issue_count, 0) AS actual_issue_count,
          CASE WHEN COALESCE(issue_counts.actual_issue_count, 0) > p.issue_count
@@ -44,15 +80,17 @@ export class ProjectRepository {
          ) issue_counts ON issue_counts.project_identifier = p.identifier
          WHERE p.identifier = ?`,
       )
-      .get(identifier);
+      .get(identifier) as ProjectRow | undefined;
+    return row ?? null;
   }
 
-  getProjectByVibeId(vibeId: number): unknown {
-    return this.db.prepare('SELECT * FROM projects WHERE vibe_id = ?').get(vibeId);
+  getProjectByVibeId(vibeId: number): ProjectRow | null {
+    const row = this.db.prepare('SELECT * FROM projects WHERE vibe_id = ?').get(vibeId) as ProjectRow | undefined;
+    return row ?? null;
   }
 
-  updateProject(identifier: string, updates: Record<string, unknown>) {
-    const existing = this.getProject(identifier) as Record<string, unknown> | undefined;
+  updateProject(identifier: string, updates: ProjectUpdate): ProjectRow | null {
+    const existing = this.getProject(identifier);
     if (!existing) return null;
 
     const nextName = updates.name ?? existing.name;
@@ -68,11 +106,11 @@ export class ProjectRepository {
     return this.getProject(identifier);
   }
 
-  archiveProject(identifier: string) {
+  archiveProject(identifier: string): ProjectRow | null {
     return this.updateProject(identifier, { status: 'archived' });
   }
 
-  unarchiveProject(identifier: string) {
+  unarchiveProject(identifier: string): ProjectRow | null {
     return this.updateProject(identifier, { status: 'active' });
   }
 
@@ -91,20 +129,20 @@ export class ProjectRepository {
     return true;
   }
 
-  getAllProjects(): unknown[] {
-    return this.db.prepare('SELECT * FROM projects ORDER BY name').all();
+  getAllProjects(): ProjectRow[] {
+    return this.db.prepare('SELECT * FROM projects ORDER BY name').all() as ProjectRow[];
   }
 
-  getProjectsToSync(now = Date.now(), staleThreshold = 3600000): unknown[] {
+  getProjectsToSync(now = Date.now(), staleThreshold = 3600000): ProjectRow[] {
     return this.db.prepare(
       `SELECT * FROM projects WHERE status = 'active'
        AND (last_checked_at IS NULL OR ? - last_checked_at > ?)
        ORDER BY name`,
-    ).all(now, staleThreshold);
+    ).all(now, staleThreshold) as ProjectRow[];
   }
 
-  getActiveProjects(): unknown[] {
-    return this.db.prepare('SELECT * FROM projects WHERE status = ? ORDER BY name').all('active');
+  getActiveProjects(): ProjectRow[] {
+    return this.db.prepare('SELECT * FROM projects WHERE status = ? ORDER BY name').all('active') as ProjectRow[];
   }
 
   updateProjectActivity(identifier: string, issueCount: number, checkedAt: number = Date.now()): void {
@@ -113,10 +151,10 @@ export class ProjectRepository {
     ).run(issueCount, checkedAt, checkedAt, identifier);
   }
 
-  getProjectsWithFilesystemPath(): unknown[] {
+  getProjectsWithFilesystemPath(): ProjectRow[] {
     return this.db
       .prepare('SELECT * FROM projects WHERE filesystem_path IS NOT NULL AND status = ? ORDER BY name')
-      .all('active');
+      .all('active') as ProjectRow[];
   }
 
   getProjectFilesystemPath(identifier: string): string | null {
@@ -126,26 +164,25 @@ export class ProjectRepository {
     return row?.filesystem_path ?? null;
   }
 
-  getProjectByFolderName(folderName: string): unknown {
+  getProjectByFolderName(folderName: string): ProjectRow | null {
     if (!folderName) return null;
-    return this.db
+    const row = this.db
       .prepare(
         `SELECT * FROM projects
          WHERE LOWER(filesystem_path) = LOWER(?) OR LOWER(filesystem_path) LIKE LOWER(?) ESCAPE '\\'
          LIMIT 1`,
       )
-      .get(folderName, `%${folderName}`);
+      .get(folderName, `%${folderName}`) as ProjectRow | undefined;
+    return row ?? null;
   }
 
   resolveProjectIdentifier(input: string | null): string | null {
     if (!input) return null;
-    const direct = this.getProject(input) as Record<string, unknown> | undefined;
-    if (direct) return input;
-    const byFolder = this.getProjectByFolderName(input) as Record<string, unknown> | undefined;
-    return (byFolder?.identifier as string) ?? null;
+    if (this.getProject(input)) return input;
+    return this.getProjectByFolderName(input)?.identifier ?? null;
   }
 
-  setProjectBeadsRemote(identifier: string, remote: Record<string, unknown>): void {
+  setProjectBeadsRemote(identifier: string, remote: BeadsRemoteSnapshot): void {
     const now = Date.now();
     this.db.prepare(
       `UPDATE projects SET beads_remote_owner = ?, beads_remote_repo = ?, beads_remote_url = ?,
@@ -153,16 +190,17 @@ export class ProjectRepository {
        beads_remote_provisioned_at = ?, beads_remote_last_push_at = ?,
        beads_remote_last_error = ?, updated_at = ? WHERE identifier = ?`,
     ).run(
-      remote.owner, remote.repo, remote.url, remote.name, remote.status,
-      remote.visibility, remote.provisioned_at || now, remote.last_push_at || null,
-      remote.last_error || null, now, identifier,
+      remote.owner ?? null, remote.repo ?? null, remote.url ?? null,
+      remote.name ?? null, remote.status ?? null, remote.visibility ?? null,
+      remote.provisioned_at ?? now, remote.last_push_at ?? null,
+      remote.last_error ?? null, now, identifier,
     );
   }
 
-  getProjectsWithLettaFolders(): unknown[] {
+  getProjectsWithLettaFolders(): ProjectRow[] {
     return this.db.prepare(
       'SELECT * FROM projects WHERE filesystem_path IS NOT NULL AND letta_folder_id IS NOT NULL AND status = ? ORDER BY name',
-    ).all('active');
+    ).all('active') as ProjectRow[];
   }
 
   getBeadsMirrorSyncedAt(identifier: string): number | null {

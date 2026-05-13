@@ -1,5 +1,49 @@
 import type Database from 'better-sqlite3';
 import { computeIssueContentHash, hasIssueContentChanged } from '../utils';
+import type { IssueRow } from '../../types/db.js';
+
+export interface IssueUpsert {
+  identifier: string;
+  project_identifier: string;
+  huly_id?: string | null;
+  vibe_task_id?: number | null;
+  title?: string | null;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  created_at?: number | null;
+  huly_modified_at?: number | null;
+  vibe_modified_at?: number | null;
+  vibe_status?: string | null;
+  parent_huly_id?: string | null;
+  parent_vibe_id?: string | null;
+  sub_issue_count?: number | null;
+  huly_content_hash?: string | null;
+  [key: string]: unknown;
+}
+
+export interface BeadsIssueInput {
+  id?: string;
+  identifier?: string;
+  title?: string;
+  description?: string | null;
+  status?: string | null;
+  priority?: string | number | null;
+  issue_type?: string;
+  type?: string;
+  assignee?: string | null;
+  owner?: string | null;
+  labels?: string[] | string | null;
+  blocked_by?: string[] | string | null;
+  blockedBy?: string[];
+  parent_huly_id?: string | null;
+  parent?: string | null;
+  sub_issue_count?: number;
+  dependent_count?: number;
+  created_at?: number | string | null;
+  updated_at?: number | string | null;
+  [key: string]: unknown;
+}
 
 function toMs(value: unknown): number | null {
   if (value == null) return null;
@@ -14,7 +58,7 @@ function toMs(value: unknown): number | null {
 export class IssueRepository {
   constructor(private db: Database.Database) {}
 
-  upsertIssue(issue: Record<string, unknown>): void {
+  upsertIssue(issue: IssueUpsert): void {
     const now = Date.now();
     const contentHash = computeIssueContentHash(issue);
 
@@ -50,13 +94,13 @@ export class IssueRepository {
       );
   }
 
-  getProjectIssues(projectIdentifier: string): unknown[] {
+  getProjectIssues(projectIdentifier: string): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? ORDER BY identifier')
-      .all(projectIdentifier);
+      .all(projectIdentifier) as IssueRow[];
   }
 
-  upsertBeadsIssue(projectIdentifier: string, issue: Record<string, unknown>): void {
+  upsertBeadsIssue(projectIdentifier: string, issue: BeadsIssueInput): void {
     const now = Date.now();
     const beadsUpdatedAt = toMs(issue.updated_at);
     const createdAt = toMs(issue.created_at) ?? now;
@@ -115,14 +159,16 @@ export class IssueRepository {
     return row?.m ?? null;
   }
 
-  getIssue(identifier: string): unknown {
-    return this.db.prepare('SELECT * FROM issues WHERE identifier = ?').get(identifier);
+  getIssue(identifier: string): IssueRow | null {
+    const row = this.db.prepare('SELECT * FROM issues WHERE identifier = ?').get(identifier) as IssueRow | undefined;
+    return row ?? null;
   }
 
-  getIssueByVibeTaskId(projectIdentifier: string, vibeTaskId: number): unknown {
-    return this.db
+  getIssueByVibeTaskId(projectIdentifier: string, vibeTaskId: number): IssueRow | null {
+    const row = this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? AND vibe_task_id = ? ORDER BY updated_at DESC LIMIT 1')
-      .get(projectIdentifier, vibeTaskId);
+      .get(projectIdentifier, vibeTaskId) as IssueRow | undefined;
+    return row ?? null;
   }
 
   markDeletedFromHuly(identifier: string) {
@@ -148,55 +194,55 @@ export class IssueRepository {
     return this.db.prepare('DELETE FROM issues WHERE identifier = ?').run(identifier);
   }
 
-  getAllIssues(): unknown[] {
-    return this.db.prepare('SELECT * FROM issues ORDER BY identifier').all();
+  getAllIssues(): IssueRow[] {
+    return this.db.prepare('SELECT * FROM issues ORDER BY identifier').all() as IssueRow[];
   }
 
-  getIssuesWithVibeTaskId(projectIdentifier: string | null = null): unknown[] {
+  getIssuesWithVibeTaskId(projectIdentifier: string | null = null): IssueRow[] {
     if (projectIdentifier) {
       return this.db
         .prepare('SELECT * FROM issues WHERE project_identifier = ? AND vibe_task_id IS NOT NULL AND deleted_from_vibe = 0 ORDER BY identifier')
-        .all(projectIdentifier);
+        .all(projectIdentifier) as IssueRow[];
     }
     return this.db
       .prepare('SELECT * FROM issues WHERE vibe_task_id IS NOT NULL AND deleted_from_vibe = 0 ORDER BY identifier')
-      .all();
+      .all() as IssueRow[];
   }
 
-  getModifiedIssues(projectIdentifier: string, sinceTimestamp: number): unknown[] {
+  getModifiedIssues(projectIdentifier: string, sinceTimestamp: number): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? AND last_sync_at > ? ORDER BY identifier')
-      .all(projectIdentifier, sinceTimestamp);
+      .all(projectIdentifier, sinceTimestamp) as IssueRow[];
   }
 
-  hasIssueChanged(identifier: string, newIssue: Record<string, unknown>): boolean {
-    const stored = this.getIssue(identifier) as { content_hash?: string } | undefined;
+  hasIssueChanged(identifier: string, newIssue: IssueUpsert): boolean {
+    const stored = this.getIssue(identifier);
     if (!stored || !stored.content_hash) return true;
     return hasIssueContentChanged(newIssue, stored.content_hash);
   }
 
-  getIssuesWithContentMismatch(projectIdentifier: string): unknown[] {
+  getIssuesWithContentMismatch(projectIdentifier: string): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? AND content_hash IS NOT NULL AND huly_content_hash IS NOT NULL AND content_hash != huly_content_hash ORDER BY identifier')
-      .all(projectIdentifier);
+      .all(projectIdentifier) as IssueRow[];
   }
 
-  getChildIssuesByHulyParent(parentHulyId: string): unknown[] {
+  getChildIssuesByHulyParent(parentHulyId: string): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE parent_huly_id = ? ORDER BY identifier')
-      .all(parentHulyId);
+      .all(parentHulyId) as IssueRow[];
   }
 
-  getParentIssues(projectIdentifier: string): unknown[] {
+  getParentIssues(projectIdentifier: string): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? AND sub_issue_count > 0 ORDER BY identifier')
-      .all(projectIdentifier);
+      .all(projectIdentifier) as IssueRow[];
   }
 
-  getChildIssues(projectIdentifier: string): unknown[] {
+  getChildIssues(projectIdentifier: string): IssueRow[] {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? AND parent_huly_id IS NOT NULL ORDER BY identifier')
-      .all(projectIdentifier);
+      .all(projectIdentifier) as IssueRow[];
   }
 
   updateParentChild(identifier: string, parentHulyId: string | null): void {

@@ -9,6 +9,9 @@ import { computeDescriptionHash, computeIssueContentHash, hasIssueContentChanged
 import { runAllMigrations } from './database/migrations';
 
 import type BetterSqlite3 from 'better-sqlite3';
+import type { ProjectRow, IssueRow } from './types/db.js';
+import type { ProjectUpsert, ProjectUpdate, BeadsRemoteSnapshot } from './database/repositories/ProjectRepository';
+import type { IssueUpsert, BeadsIssueInput } from './database/repositories/IssueRepository';
 
 // ... rest of imports ...
 
@@ -183,22 +186,22 @@ export class SyncDatabase {
   }
 
   // Convenience proxies — tests call these directly on SyncDatabase
-  upsertProject(project: Record<string, unknown>): void { return this.projects!.upsertProject(project); }
-  getProject(identifier: string): unknown { return this.projects!.getProject(identifier); }
-  getProjectByVibeId(vibeId: number): unknown { return this.projects!.getProjectByVibeId(vibeId); }
-  updateProject(identifier: string, updates: Record<string, unknown>) { return this.projects!.updateProject(identifier, updates); }
-  archiveProject(identifier: string) { return this.projects!.archiveProject(identifier); }
+  upsertProject(project: ProjectUpsert): void { return this.projects!.upsertProject(project); }
+  getProject(identifier: string): ProjectRow | null { return this.projects!.getProject(identifier); }
+  getProjectByVibeId(vibeId: number): ProjectRow | null { return this.projects!.getProjectByVibeId(vibeId); }
+  updateProject(identifier: string, updates: ProjectUpdate): ProjectRow | null { return this.projects!.updateProject(identifier, updates); }
+  archiveProject(identifier: string): ProjectRow | null { return this.projects!.archiveProject(identifier); }
   deleteProject(identifier: string): boolean { return this.projects!.deleteProject(identifier); }
-  getAllProjects(): unknown[] { return this.projects!.getAllProjects(); }
-  getProjectsToSync(now?: number, stale?: number): unknown[] { return this.projects!.getProjectsToSync(now, stale); }
-  getActiveProjects(): unknown[] { return this.projects!.getActiveProjects(); }
+  getAllProjects(): ProjectRow[] { return this.projects!.getAllProjects(); }
+  getProjectsToSync(now?: number, stale?: number): ProjectRow[] { return this.projects!.getProjectsToSync(now, stale); }
+  getActiveProjects(): ProjectRow[] { return this.projects!.getActiveProjects(); }
   updateProjectActivity(id: string, count: number, at?: number): void { return this.projects!.updateProjectActivity(id, count, at); }
-  getProjectsWithFilesystemPath(): unknown[] { return this.projects!.getProjectsWithFilesystemPath(); }
+  getProjectsWithFilesystemPath(): ProjectRow[] { return this.projects!.getProjectsWithFilesystemPath(); }
   getProjectFilesystemPath(id: string): string | null { return this.projects!.getProjectFilesystemPath(id); }
-  getProjectByFolderName(name: string): unknown { return this.projects!.getProjectByFolderName(name); }
+  getProjectByFolderName(name: string): ProjectRow | null { return this.projects!.getProjectByFolderName(name); }
   resolveProjectIdentifier(input: string | null): string | null { return this.projects!.resolveProjectIdentifier(input); }
-  setProjectBeadsRemote(id: string, remote: Record<string, unknown>): void { return this.projects!.setProjectBeadsRemote(id, remote); }
-  getProjectsWithLettaFolders(): unknown[] { return this.projects!.getProjectsWithLettaFolders(); }
+  setProjectBeadsRemote(id: string, remote: BeadsRemoteSnapshot): void { return this.projects!.setProjectBeadsRemote(id, remote); }
+  getProjectsWithLettaFolders(): ProjectRow[] { return this.projects!.getProjectsWithLettaFolders(); }
 
   // Letta convenience proxies
   getProjectLettaInfo(identifier: string) { return this.projects!.letta.getProjectLettaInfo(identifier); }
@@ -210,26 +213,26 @@ export class SyncDatabase {
   lookupByRepo(repo: string): unknown { return this.projects!.letta.lookupByRepo(repo); }
 
   // Issue convenience proxies
-  upsertIssue(issue: Record<string, unknown>): void { return this.issues!.upsertIssue(issue); }
-  upsertBeadsIssue(pid: string, issue: Record<string, unknown>): void { return this.issues!.upsertBeadsIssue(pid, issue); }
+  upsertIssue(issue: IssueUpsert): void { return this.issues!.upsertIssue(issue); }
+  upsertBeadsIssue(pid: string, issue: BeadsIssueInput): void { return this.issues!.upsertBeadsIssue(pid, issue); }
   getMaxBeadsUpdatedAt(pid: string): number | null { return this.issues!.getMaxBeadsUpdatedAt(pid); }
   getBeadsMirrorSyncedAt(pid: string): number | null { return this.projects!.getBeadsMirrorSyncedAt(pid); }
   setBeadsMirrorSyncedAt(pid: string, ts: number, err: string | null = null): void { return this.projects!.setBeadsMirrorSyncedAt(pid, ts, err); }
-  getProjectIssues(pid: string): unknown[] { return this.issues!.getProjectIssues(pid); }
-  getIssue(identifier: string): unknown { return this.issues!.getIssue(identifier); }
-  getIssueByVibeTaskId(pid: string, vid: number): unknown { return this.issues!.getIssueByVibeTaskId(pid, vid); }
+  getProjectIssues(pid: string): IssueRow[] { return this.issues!.getProjectIssues(pid); }
+  getIssue(identifier: string): IssueRow | null { return this.issues!.getIssue(identifier); }
+  getIssueByVibeTaskId(pid: string, vid: number): IssueRow | null { return this.issues!.getIssueByVibeTaskId(pid, vid); }
   markDeletedFromHuly(id: string) { return this.issues!.markDeletedFromHuly(id); }
   isDeletedFromHuly(id: string): boolean { return this.issues!.isDeletedFromHuly(id); }
   markDeletedFromVibe(id: string) { return this.issues!.markDeletedFromVibe(id); }
   deleteIssue(id: string) { return this.issues!.deleteIssue(id); }
-  getAllIssues(): unknown[] { return this.issues!.getAllIssues(); }
-  getIssuesWithVibeTaskId(pid: string | null): unknown[] { return this.issues!.getIssuesWithVibeTaskId(pid); }
-  getModifiedIssues(pid: string, since: number): unknown[] { return this.issues!.getModifiedIssues(pid, since); }
-  hasIssueChanged(id: string, issue: Record<string, unknown>): boolean { return this.issues!.hasIssueChanged(id, issue); }
-  getIssuesWithContentMismatch(pid: string): unknown[] { return this.issues!.getIssuesWithContentMismatch(pid); }
-  getChildIssuesByHulyParent(phid: string): unknown[] { return this.issues!.getChildIssuesByHulyParent(phid); }
-  getParentIssues(pid: string): unknown[] { return this.issues!.getParentIssues(pid); }
-  getChildIssues(pid: string): unknown[] { return this.issues!.getChildIssues(pid); }
+  getAllIssues(): IssueRow[] { return this.issues!.getAllIssues(); }
+  getIssuesWithVibeTaskId(pid: string | null): IssueRow[] { return this.issues!.getIssuesWithVibeTaskId(pid); }
+  getModifiedIssues(pid: string, since: number): IssueRow[] { return this.issues!.getModifiedIssues(pid, since); }
+  hasIssueChanged(id: string, issue: IssueUpsert): boolean { return this.issues!.hasIssueChanged(id, issue); }
+  getIssuesWithContentMismatch(pid: string): IssueRow[] { return this.issues!.getIssuesWithContentMismatch(pid); }
+  getChildIssuesByHulyParent(phid: string): IssueRow[] { return this.issues!.getChildIssuesByHulyParent(phid); }
+  getParentIssues(pid: string): IssueRow[] { return this.issues!.getParentIssues(pid); }
+  getChildIssues(pid: string): IssueRow[] { return this.issues!.getChildIssues(pid); }
   updateParentChild(id: string, phid: string | null): void { return this.issues!.updateParentChild(id, phid); }
   updateSubIssueCount(id: string, count: number): void { return this.issues!.updateSubIssueCount(id, count); }
 
@@ -287,7 +290,7 @@ export function migrateFromJSON(db: SyncDatabase, jsonFilePath: string): boolean
     }
     if (data.projectTimestamps && db.projects) {
       for (const [identifier, ts] of Object.entries(data.projectTimestamps)) {
-        db.projects.updateProject(identifier, { last_checked_at: ts });
+        db.projects.updateProject(identifier, { last_checked_at: ts as number });
       }
     }
     console.log('[Migration] ✓ Imported sync state from JSON');
