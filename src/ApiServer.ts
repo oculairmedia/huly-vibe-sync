@@ -2,6 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import { logger } from './logger';
 import { getHealthMetrics, updateSystemMetrics, getMetricsRegistry } from './HealthService.js';
+import type { HealthStats } from './HealthService.js';
 import { registerHealthRoutes } from './api/routes/health.js';
 import { registerProjectRoutes } from './api/routes/projects.js';
 import { registerConfigRoutes } from './api/routes/config.js';
@@ -16,6 +17,17 @@ import { syncHistory } from './api/SyncHistoryStore.js';
 import { ConfigurationHandler } from './api/ConfigurationHandler.js';
 import { createProjectMcpServer } from './mcp/ProjectMcpServer.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { SyncDatabase } from './database.js';
+import type {
+  App,
+  BeadsAdapterApi,
+  BeadsIssueMirrorApi,
+  BeadsIssueServiceApi,
+  DoltHubProvisionerApi,
+  HandleContext,
+  ProjectRegistryApi,
+  RouteContext,
+} from './types/api.js';
 
 export { sseManager, syncHistory };
 
@@ -48,27 +60,27 @@ function sendError(res: http.ServerResponse, statusCode: number, message: string
 
 interface ApiServerDeps {
   config: Record<string, unknown>;
-  healthStats: Record<string, number>;
-  db: Record<string, unknown> | null;
+  healthStats: HealthStats;
+  db: SyncDatabase | null;
   onSyncTrigger: ((projectId: string | null) => Promise<void>) | null;
   onConfigUpdate: ((updates: Record<string, unknown>) => void) | null;
   webhookHandler?: ((req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>) | null;
   getTemporalClient?: (() => Promise<unknown>) | null;
   codePerceptionWatcher?: Record<string, unknown> | null;
-  projectRegistry?: Record<string, unknown> | null;
-  doltHubProvisioner?: Record<string, unknown> | null;
-  beadsIssueService?: Record<string, unknown> | null;
-  beadsAdapter?: Record<string, unknown> | null;
-  beadsIssueMirror?: Record<string, unknown> | null;
+  projectRegistry?: ProjectRegistryApi | null;
+  doltHubProvisioner?: DoltHubProvisionerApi | null;
+  beadsIssueService?: BeadsIssueServiceApi | null;
+  beadsAdapter?: BeadsAdapterApi | null;
+  beadsIssueMirror?: BeadsIssueMirrorApi | null;
 }
 
 export function createApiServer(deps: ApiServerDeps): http.Server {
   const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || '3099', 10);
   const configHandler = new (ConfigurationHandler as unknown as new (...args: unknown[]) => ConfigurationHandler)(deps.config, deps.onConfigUpdate, { sseManager, parseJsonBody, sendJson, sendError });
 
-  interface Route { match: (ctx: { pathname: string; method: string }) => boolean; handle: (ctx: unknown) => Promise<void> }
+  interface Route { match: (ctx: RouteContext) => boolean; handle: (ctx: HandleContext) => Promise<void> }
   const routes: Route[] = [];
-  const app = { registerRoute(route: Route) { routes.push(route); } };
+  const app: App = { registerRoute(route: Route) { routes.push(route); } };
 
   const routeDeps = { ...deps, configHandler, sseManager, syncHistory, getHealthMetrics, getMetricsRegistry, parseJsonBody, sendJson, sendError, logger };
 
@@ -128,7 +140,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
         }
       }
 
-      const context = { req, res, url, pathname, method };
+      const context: HandleContext & RouteContext = { req, res, url, pathname, method };
       for (const route of routes) {
         if (route.match(context)) { await route.handle(context); return; }
       }

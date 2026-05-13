@@ -1,22 +1,24 @@
 import { fetchWithPool } from './http.js';
 import { logger as rootLogger } from './logger.js';
+import type { ProjectRow } from './types/db.js';
 
-interface ProjectRow {
-  identifier: string;
-  name: string;
-  letta_agent_id?: string | null;
-  status?: string;
-}
+type ReconcilerProject = Pick<ProjectRow, 'identifier' | 'name' | 'letta_agent_id' | 'status'>;
 
-interface ProjectDb {
-  getAllProjects: () => ProjectRow[];
+interface ReconcilerDb {
+  getAllProjects: () => ReconcilerProject[];
   setProjectLettaAgent: (identifier: string, info: { agentId: string }) => void;
 }
 
-interface LettaLike {
+interface ReconcilerLetta {
   apiURL: string;
   password: string;
   saveAgentId?: (projectIdentifier: string, agentId: string) => void;
+}
+
+interface LettaAgent {
+  id: string;
+  name?: string;
+  created_at?: string;
 }
 
 interface ReconcileOptions {
@@ -72,8 +74,8 @@ async function findAgentByName(apiURL: string, password: string, projectIdentifi
       signal: controller.signal,
     });
     if (tagged.ok) {
-      const rows = (await tagged.json()) as { id: string; name?: string; created_at?: string }[];
-      const exact = rows.filter(a => a.name === agentName);
+      const rows = (await tagged.json()) as LettaAgent[];
+      const exact = rows.filter((a) => a.name === agentName);
       if (exact.length > 0) return pickMostRecent(exact);
     }
 
@@ -84,8 +86,8 @@ async function findAgentByName(apiURL: string, password: string, projectIdentifi
       signal: controller.signal,
     });
     if (!fallback.ok) return null;
-    const rows = (await fallback.json()) as { id: string; name?: string; created_at?: string }[];
-    const exact = rows.filter(a => a.name === agentName);
+    const rows = (await fallback.json()) as LettaAgent[];
+    const exact = rows.filter((a) => a.name === agentName);
     if (exact.length === 0) return null;
     return pickMostRecent(exact);
   } catch {
@@ -95,7 +97,7 @@ async function findAgentByName(apiURL: string, password: string, projectIdentifi
   }
 }
 
-function pickMostRecent(rows: { id: string; created_at?: string }[]): string {
+function pickMostRecent(rows: LettaAgent[]): string {
   const sorted = [...rows].sort((a, b) => {
     const at = new Date(a.created_at || 0).getTime();
     const bt = new Date(b.created_at || 0).getTime();
@@ -118,8 +120,8 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (i
 }
 
 export async function reconcileLettaAgents(
-  db: ProjectDb,
-  letta: LettaLike,
+  db: ReconcilerDb,
+  letta: ReconcilerLetta,
   opts: ReconcileOptions = {},
 ): Promise<ReconcileSummary> {
   const start = Date.now();
