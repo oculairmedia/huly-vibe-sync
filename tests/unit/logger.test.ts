@@ -2,7 +2,7 @@
  * Tests for logger module
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { logger, createSyncLogger, createContextLogger, LogLevel } from '../../src/logger';
 
 describe('logger', () => {
@@ -136,7 +136,7 @@ describe('logger', () => {
     it('should accept Error objects', () => {
       expect(() => {
         const testLogger = createSyncLogger('test');
-        const error = new Error('Test error');
+        const error = new Error('Test error') as Error & { code: string };
         error.code = 'TEST_ERROR';
         testLogger.error({ err: error }, 'Error occurred');
       }).not.toThrow();

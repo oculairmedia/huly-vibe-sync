@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { SyncDatabase } from '../lib/database.js';
+import { SyncDatabase } from '../src/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 import dotenv from 'dotenv';
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-function loadAgentStateFromFile() {
+function loadAgentStateFromFile(): Record<string, string> {
   const lettaDir = path.join(__dirname, '..', '.letta');
   const settingsPath = path.join(lettaDir, 'settings.local.json');
 
@@ -25,21 +25,25 @@ function loadAgentStateFromFile() {
   }
 
   const data = fs.readFileSync(settingsPath, 'utf8');
-  const state = JSON.parse(data);
-  return state.agents || {};
+  const state = JSON.parse(data) as { agents?: Record<string, string> };
+  return state.agents ?? {};
 }
 
-function loadAgentStateFromDB(dbPath) {
+function loadAgentStateFromDB(dbPath: string): Record<string, string> {
   const db = new SyncDatabase(dbPath);
   db.initialize();
+
+  if (!db.db) {
+    throw new Error('Database not initialized');
+  }
 
   const rows = db.db.prepare(`
     SELECT identifier, letta_agent_id 
     FROM projects 
     WHERE letta_agent_id IS NOT NULL
-  `).all();
+  `).all() as Array<{ identifier: string; letta_agent_id: string }>;
 
-  const agents = {};
+  const agents: Record<string, string> = {};
   for (const row of rows) {
     agents[row.identifier] = row.letta_agent_id;
   }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BeadsAdapter as BeadsAdapterType } from '../../src/beads/BeadsAdapter.js';
 
 const execFileSync = vi.fn();
 
@@ -7,7 +8,7 @@ vi.mock('child_process', () => ({
 }));
 
 describe('BeadsAdapter default command runner', () => {
-  let BeadsAdapter;
+  let BeadsAdapter: typeof BeadsAdapterType;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -66,7 +67,7 @@ describe('BeadsAdapter default command runner', () => {
       beadsDb: '/srv/default/.beads',
     });
 
-    await adapter.listIssues({ identifier: 'PROJ' }, {}, { forceRefresh: true });
+    await adapter.listIssues({ identifier: 'PROJ', filesystem_path: '/tmp/project' }, {}, { forceRefresh: true });
 
     expect(execFileSync).toHaveBeenCalledWith(
       'bd',

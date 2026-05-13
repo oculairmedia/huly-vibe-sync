@@ -29,7 +29,7 @@ describe('persistIssueSyncState activity', () => {
   });
 
   it('should persist parentVibeId to database', async () => {
-    const { createSyncDatabase } = await import('../../../lib/database.js');
+    const { createSyncDatabase } = await import('../../../src/database.js');
     const setupDb = createSyncDatabase(tempDbPath) as any;
     setupDb.upsertProject({ identifier: 'TEST', name: 'Test Project' });
     setupDb.close();
@@ -49,7 +49,7 @@ describe('persistIssueSyncState activity', () => {
   });
 
   it('should persist supported parent IDs together', async () => {
-    const { createSyncDatabase } = await import('../../../lib/database.js');
+    const { createSyncDatabase } = await import('../../../src/database.js');
     const setupDb = createSyncDatabase(tempDbPath) as any;
     setupDb.upsertProject({ identifier: 'TEST', name: 'Test Project' });
     setupDb.close();

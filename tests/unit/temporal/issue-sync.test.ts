@@ -188,7 +188,7 @@ describe('IssueSyncWorkflow', () => {
   describe('Operations', () => {
     it('should handle create operation from Huly source', async () => {
       const input: IssueSyncInput = {
-        issue: createMockIssue({ hulyId: undefined, vibeId: undefined }),
+        issue: createMockIssue({}),
         operation: 'create',
         source: 'huly',
       };

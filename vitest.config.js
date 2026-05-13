@@ -49,7 +49,7 @@ export default defineConfig({
     globals: true,
 
     // Setup files
-    setupFiles: ['./tests/setup.js'],
+    setupFiles: ['./tests/setup.ts'],
 
     // Include/exclude patterns
     include: ['tests/**/*.test.{js,ts}'],

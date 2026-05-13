@@ -15,16 +15,42 @@ import { existsSync, mkdirSync, rmSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Declare global test utilities and console spies
+declare global {
+  // eslint-disable-next-line no-var
+  var consoleInfo: string[];
+  // eslint-disable-next-line no-var
+  var consoleErrors: string[];
+  // eslint-disable-next-line no-var
+  var consoleWarns: string[];
+  // eslint-disable-next-line no-var
+  var testUtils: {
+    resetConsoleSpies: () => void;
+    getConsoleLogs: () => {
+      info: string[];
+      errors: string[];
+      warns: string[];
+    };
+    cleanTestDb: () => Promise<void>;
+    cleanAllTestData: () => void;
+    wait: (ms: number) => Promise<void>;
+    createMockHulyProject: (overrides?: Record<string, unknown>) => Record<string, unknown>;
+    createMockHulyIssue: (overrides?: Record<string, unknown>) => Record<string, unknown>;
+    createMockVibeTask: (overrides?: Record<string, unknown>) => Record<string, unknown>;
+    createMockLettaAgent: (overrides?: Record<string, unknown>) => Record<string, unknown>;
+  };
+}
+
 // Set up test environment variables
 process.env.NODE_ENV = 'test';
 
 // Override environment variables for testing
-process.env.HULY_API_URL = process.env.TEST_HULY_API_URL || 'http://localhost:3458';
+process.env.HULY_API_URL = process.env.TEST_HULY_API_URL ?? 'http://localhost:3458';
 process.env.HULY_USE_REST = 'true';
-process.env.VIBE_MCP_URL = process.env.TEST_VIBE_MCP_URL || 'http://localhost:9717/mcp';
-process.env.VIBE_API_URL = process.env.TEST_VIBE_API_URL || 'http://localhost:3105/api';
-process.env.LETTA_BASE_URL = process.env.TEST_LETTA_BASE_URL || 'http://localhost:8289';
-process.env.LETTA_PASSWORD = process.env.TEST_LETTA_PASSWORD || 'test-password';
+process.env.VIBE_MCP_URL = process.env.TEST_VIBE_MCP_URL ?? 'http://localhost:9717/mcp';
+process.env.VIBE_API_URL = process.env.TEST_VIBE_API_URL ?? 'http://localhost:3105/api';
+process.env.LETTA_BASE_URL = process.env.TEST_LETTA_BASE_URL ?? 'http://localhost:8289';
+process.env.LETTA_PASSWORD = process.env.TEST_LETTA_PASSWORD ?? 'test-password';
 process.env.LETTA_MODEL = 'anthropic/sonnet-4-5';
 process.env.LETTA_EMBEDDING = 'letta/letta-free';
 
@@ -72,13 +98,13 @@ const originalConsole = {
 
 // Quiet mode for tests (only show errors by default)
 if (!process.env.VERBOSE_TESTS) {
-  console.log = vi.fn((...args) => global.consoleInfo.push(args.join(' ')));
-  console.info = vi.fn((...args) => global.consoleInfo.push(args.join(' ')));
-  console.warn = vi.fn((...args) => global.consoleWarns.push(args.join(' ')));
-  console.error = vi.fn((...args) => {
+  console.log = vi.fn((...args: unknown[]) => global.consoleInfo.push(args.join(' '))) as typeof console.log;
+  console.info = vi.fn((...args: unknown[]) => global.consoleInfo.push(args.join(' '))) as typeof console.info;
+  console.warn = vi.fn((...args: unknown[]) => global.consoleWarns.push(args.join(' '))) as typeof console.warn;
+  console.error = vi.fn((...args: unknown[]) => {
     global.consoleErrors.push(args.join(' '));
     originalConsole.error(...args); // Still show errors
-  });
+  }) as typeof console.error;
 }
 
 // Global test utilities
@@ -100,7 +126,7 @@ global.testUtils = {
   // Clean up test database
   cleanTestDb: async () => {
     const dbPath = process.env.DB_PATH;
-    if (existsSync(dbPath)) {
+    if (dbPath && existsSync(dbPath)) {
       rmSync(dbPath, { force: true });
     }
   },
@@ -110,15 +136,17 @@ global.testUtils = {
     if (existsSync(TEST_DB_DIR)) {
       rmSync(TEST_DB_DIR, { recursive: true, force: true });
       mkdirSync(TEST_DB_DIR, { recursive: true });
-      mkdirSync(process.env.STACKS_DIR, { recursive: true });
+      if (process.env.STACKS_DIR) {
+        mkdirSync(process.env.STACKS_DIR, { recursive: true });
+      }
     }
   },
 
   // Wait helper for async operations
-  wait: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+  wait: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)),
 
   // Create mock Huly project
-  createMockHulyProject: (overrides = {}) => ({
+  createMockHulyProject: (overrides: Record<string, unknown> = {}) => ({
     _id: 'test-project-id',
     identifier: 'TEST',
     name: 'Test Project',
@@ -131,7 +159,7 @@ global.testUtils = {
   }),
 
   // Create mock Huly issue
-  createMockHulyIssue: (overrides = {}) => ({
+  createMockHulyIssue: (overrides: Record<string, unknown> = {}) => ({
     _id: 'test-issue-id',
     identifier: 'TEST-1',
     title: 'Test Issue',
@@ -149,7 +177,7 @@ global.testUtils = {
   }),
 
   // Create mock Vibe task
-  createMockVibeTask: (overrides = {}) => ({
+  createMockVibeTask: (overrides: Record<string, unknown> = {}) => ({
     id: 'test-task-id',
     title: 'Test Task',
     description: 'Test task description',
@@ -161,7 +189,7 @@ global.testUtils = {
   }),
 
   // Create mock Letta agent
-  createMockLettaAgent: (overrides = {}) => ({
+  createMockLettaAgent: (overrides: Record<string, unknown> = {}) => ({
     id: 'test-agent-id',
     name: 'Test-Agent',
     description: 'Test agent description',

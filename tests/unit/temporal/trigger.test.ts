@@ -49,7 +49,7 @@ describe('Temporal Trigger Functions - Interface Tests', () => {
     });
 
     it('should work with partial fields', () => {
-      const linkedIds = {
+      const linkedIds: Record<string, string> = {
         hulyId: 'PROJ-123',
       };
 
