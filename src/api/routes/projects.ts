@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { buildIssueAnalytics, getAnalyticsRange } from './issueAnalytics.js';
 
 const ALLOWED_PROJECT_STATUSES = new Set(['active', 'archived']);
 const DEFAULT_PAGE_LIMIT = 25;
@@ -381,6 +382,67 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
         const page = paginate(serialized, cursor || undefined, limit);
         sendJson(res, 200, { projectId, ready_work: page.items, page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known } });
       } catch (error) { logger.error({ err: error }, 'Failed to get ready work'); sendError(res, 500, 'Failed to get ready work', { error: (error as Error).message }); }
+    },
+  });
+
+  // GET /api/projects/:id/issue-analytics
+  app.registerRoute({
+    match: ({ pathname, method }) => method === 'GET' && /^\/api\/projects\/[^/]+\/issue-analytics$/.test(pathname),
+    handle: async ({ res, url, pathname }) => {
+      if (!db) { sendError(res, 503, 'Database not available'); return; }
+      try {
+        const projectId = decodeURIComponent(pathname.split('/')[3]!);
+        const project = (db.getProject ? db.getProject(projectId) : null) as Record<string, unknown> | null;
+        if (!project) { sendError(res, 404, 'Project not found', { projectIdentifier: projectId }); return; }
+        let range: ReturnType<typeof getAnalyticsRange>;
+        try { range = getAnalyticsRange(url); }
+        catch (rangeErr) { sendError(res, 400, 'Failed to fetch issue analytics', { error: (rangeErr as Error).message }); return; }
+        let mirrorError: string | null = null;
+        let issueSource: 'mirror' | 'database' | 'beads' = 'database';
+        if (beadsIssueMirror?.ensureFresh && project.filesystem_path) {
+          try {
+            const r = await beadsIssueMirror.ensureFresh(projectId);
+            mirrorError = r.error;
+            issueSource = r.source === 'cached' ? 'database' : 'mirror';
+          } catch (mirrorErr) { logger.warn({ err: mirrorErr, projectId }, 'Mirror ensureFresh on analytics failed'); }
+        }
+        let issues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
+        if (issues.length === 0 && beadsAdapter?.listIssues && project.filesystem_path) {
+          const hydrated = await hydrateIssuesFromBeads(beadsAdapter, project, getBeadsListFilters(url), logger);
+          if (hydrated.issues.length > 0) { issues = hydrated.issues; issueSource = 'beads'; }
+          if (hydrated.error) mirrorError = hydrated.error;
+        }
+        const analytics = buildIssueAnalytics(issues, range, url);
+        const lastSyncIso = toIsoTimestamp(project.last_sync_at);
+        const dataFreshness: Record<string, unknown> = {
+          status: mirrorError ? 'stale' : 'fresh',
+          last_sync_at: lastSyncIso,
+          source: issueSource,
+        };
+        if (mirrorError) dataFreshness.error = mirrorError;
+        sendJson(res, 200, {
+          schema_version: 1,
+          projectId,
+          rangeStart: range.rangeStart,
+          rangeEnd: range.rangeEnd,
+          granularity: range.granularity,
+          timezone: range.timezone,
+          createdBuckets: analytics.createdBuckets,
+          completedBuckets: analytics.completedBuckets,
+          completedTimeline: analytics.completedTimeline,
+          summary: analytics.summary,
+          nextTimelineCursor: analytics.nextTimelineCursor,
+          timelinePage: analytics.timelinePage,
+          completionSource: 'issue_close_metadata',
+          isPartial: false,
+          etag: lastSyncIso ? `${projectId}:issue-analytics:${lastSyncIso}` : null,
+          data_freshness: dataFreshness,
+          generatedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to get issue analytics');
+        sendError(res, 500, 'Failed to fetch issue analytics', { error: (error as Error).message });
+      }
     },
   });
 
