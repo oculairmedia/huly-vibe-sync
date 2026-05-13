@@ -38,11 +38,10 @@ export interface BeadsIssueInput {
   blockedBy?: string[];
   parent_huly_id?: string | null;
   parent?: string | null;
-  sub_issue_count?: number;
-  dependent_count?: number;
-  created_at?: number | string | null;
-  updated_at?: number | string | null;
-  [key: string]: unknown;
+  sub_issue_count?: number | undefined;
+  dependent_count?: number | undefined;
+  created_at?: number | string | null | undefined;
+  updated_at?: number | string | null | undefined;
 }
 
 function toMs(value: unknown): number | null {

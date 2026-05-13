@@ -1,29 +1,21 @@
 import { logger as rootLogger } from '../logger.js';
+import type { ProjectRow } from '../types/db.js';
+import type { NormalizedBeadsIssue } from '../types/beads.js';
+import type { BeadsAdapterApi, BeadsListFilters } from '../types/api.js';
+import type { BeadsIssueInput } from '../database/repositories/IssueRepository.js';
 
-interface ProjectRow {
-  identifier: string;
-  name?: string;
-  filesystem_path?: string | null;
-  status?: string;
-  beads_mirror_synced_at?: number | null;
-}
+type MirrorProject = Pick<ProjectRow, 'identifier' | 'name' | 'filesystem_path' | 'status'>;
 
 interface MirrorDb {
-  getAllProjects: () => ProjectRow[];
-  getProject: (id: string) => ProjectRow | null;
-  upsertBeadsIssue: (projectId: string, issue: Record<string, unknown>) => void;
+  getAllProjects: () => MirrorProject[];
+  getProject: (id: string) => MirrorProject | null;
+  upsertBeadsIssue: (projectId: string, issue: BeadsIssueInput) => void;
   getMaxBeadsUpdatedAt: (projectId: string) => number | null;
   getBeadsMirrorSyncedAt: (projectId: string) => number | null;
   setBeadsMirrorSyncedAt: (projectId: string, ts: number, error?: string | null) => void;
 }
 
-interface MirrorBeadsAdapter {
-  listIssues: (
-    project: { identifier: string; filesystem_path?: string | null },
-    filters?: Record<string, unknown>,
-    options?: { forceRefresh?: boolean },
-  ) => Promise<{ items: Record<string, unknown>[] }>;
-}
+type MirrorBeadsAdapter = Pick<BeadsAdapterApi, 'listIssues'>;
 
 interface MirrorOptions {
   freshnessMs?: number;
@@ -66,7 +58,7 @@ export class BeadsIssueMirror {
     return this.syncProject(project);
   }
 
-  async syncProject(project: ProjectRow): Promise<SyncResult> {
+  async syncProject(project: MirrorProject): Promise<SyncResult> {
     const key = project.identifier;
     const existing = this.inflight.get(key);
     if (existing) return existing;
@@ -89,15 +81,10 @@ export class BeadsIssueMirror {
     return job;
   }
 
-  private async fullSync(project: ProjectRow): Promise<SyncResult> {
+  private async fullSync(project: MirrorProject): Promise<SyncResult> {
     log.info({ project: project.identifier }, 'Full mirror sync starting');
     try {
-      const result = await this.adapter.listIssues(
-        { identifier: project.identifier, filesystem_path: project.filesystem_path ?? null },
-        {},
-        { forceRefresh: true },
-      );
-      const items = result.items || [];
+      const items = await this._fetch(project, {});
       for (const issue of items) {
         this.db.upsertBeadsIssue(project.identifier, issue);
       }
@@ -112,17 +99,12 @@ export class BeadsIssueMirror {
     }
   }
 
-  private async incrementalSync(project: ProjectRow, since: number | null): Promise<SyncResult> {
+  private async incrementalSync(project: MirrorProject, since: number | null): Promise<SyncResult> {
     if (!since) return this.fullSync(project);
     const sinceIso = new Date(since).toISOString();
     log.debug({ project: project.identifier, since: sinceIso }, 'Incremental mirror sync starting');
     try {
-      const result = await this.adapter.listIssues(
-        { identifier: project.identifier, filesystem_path: project.filesystem_path ?? null },
-        { updated_after: sinceIso },
-        { forceRefresh: true },
-      );
-      const items = result.items || [];
+      const items = await this._fetch(project, { updated_after: sinceIso });
       for (const issue of items) {
         this.db.upsertBeadsIssue(project.identifier, issue);
       }
@@ -137,6 +119,15 @@ export class BeadsIssueMirror {
       this.db.setBeadsMirrorSyncedAt(project.identifier, Date.now(), msg);
       return { changed: 0, source: 'incremental', error: msg, durationMs: 0 };
     }
+  }
+
+  private async _fetch(project: MirrorProject, filters: BeadsListFilters): Promise<NormalizedBeadsIssue[]> {
+    const result = await this.adapter.listIssues(
+      { identifier: project.identifier, filesystem_path: project.filesystem_path ?? null },
+      filters,
+      { forceRefresh: true },
+    );
+    return result.items || [];
   }
 
   async preloadAll(options: { concurrency?: number } = {}): Promise<{ projects: number; ok: number; failed: number; durationMs: number }> {

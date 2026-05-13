@@ -55,6 +55,16 @@ interface UpdateOptions {
   skipIdempotencyCheck?: boolean;
 }
 
+export interface IssueUpdates {
+  status?: string;
+  priority?: string | number;
+  type?: string;
+  title?: string;
+  description?: string;
+  labels?: string[];
+  assignee?: string | null;
+}
+
 interface CloseOptions {
   reason?: string;
 }
@@ -351,7 +361,7 @@ export class BeadsAdapter {
   async updateIssue(
     issueId: string,
     project: BeadsProject,
-    updates: Record<string, unknown> = {},
+    updates: IssueUpdates = {},
     options: UpdateOptions = {},
   ): Promise<NormalizedBeadsIssue> {
     this._readonlyGuard('update issue');
@@ -371,15 +381,12 @@ export class BeadsAdapter {
 
     if (updates.labels && !options.skipIdempotencyCheck) {
       const current = await this.getIssue(issueId, project);
-      const labelArr = updates.labels as string[];
-      const newLabels = labelArr.filter(
-        (l) => !current.labels?.includes(l),
-      );
+      const newLabels = updates.labels.filter((l) => !current.labels?.includes(l));
       if (newLabels.length > 0) {
         args.push(`--add-label=${newLabels.join(',')}`);
       }
     } else if (updates.labels) {
-      args.push(`--add-label=${(updates.labels as string[]).join(',')}`);
+      args.push(`--add-label=${updates.labels.join(',')}`);
     }
 
     this._addProjectBeadsDir(args, project);

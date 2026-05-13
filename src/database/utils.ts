@@ -1,11 +1,18 @@
 import crypto from 'node:crypto';
 
+export interface HashableIssue {
+  title?: unknown;
+  description?: unknown;
+  status?: unknown;
+  priority?: unknown;
+}
+
 export function computeDescriptionHash(description: string | null | undefined): string | null {
   if (!description) return null;
   return crypto.createHash('sha256').update(description).digest('hex').substring(0, 16);
 }
 
-export function computeIssueContentHash(issue: Record<string, unknown> | null | undefined): string | null {
+export function computeIssueContentHash(issue: HashableIssue | null | undefined): string | null {
   if (!issue) return null;
 
   const content = [
@@ -19,7 +26,7 @@ export function computeIssueContentHash(issue: Record<string, unknown> | null | 
 }
 
 export function hasIssueContentChanged(
-  newIssue: Record<string, unknown>,
+  newIssue: HashableIssue,
   storedHash: string | null | undefined,
 ): boolean {
   if (!storedHash) return true;

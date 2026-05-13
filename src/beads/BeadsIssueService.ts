@@ -1,6 +1,8 @@
+import type Database from 'better-sqlite3';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { logger as defaultLogger } from '../logger';
+import type { Logger } from '../types/api.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,16 +17,36 @@ interface CommandOptions {
   env: NodeJS.ProcessEnv;
 }
 
-interface BeadsIssue {
+interface BeadsIssueRef {
   identifier: string;
   project_identifier: string;
 }
 
+export interface MutateBody {
+  status?: string;
+  note?: string;
+  text?: string;
+  content?: string;
+  reason?: string;
+}
+
+export interface MutateResult {
+  applied: boolean;
+  command?: string;
+  stdout?: string;
+  idempotent_replay?: boolean;
+}
+
 interface MutateParams {
   action: string;
-  issue: BeadsIssue;
-  body?: Record<string, unknown>;
+  issue: BeadsIssueRef;
+  body?: MutateBody;
   idempotencyKey?: string | null;
+}
+
+interface ServiceDb {
+  db?: Database.Database;
+  getProjectFilesystemPath?: (id: string) => string | null;
 }
 
 type CommandRunner = (command: string, args: string[], options: CommandOptions) => Promise<CommandResult>;
@@ -34,7 +56,7 @@ function sanitizeErrorMessage(error: unknown): string {
   return message.slice(0, 240);
 }
 
-function buildBdArgs(action: string, issueId: string, body: Record<string, unknown> = {}): string[] {
+function buildBdArgs(action: string, issueId: string, body: MutateBody = {}): string[] {
   switch (action) {
     case 'claim':
       return ['update', issueId, '--claim', '--json'];
@@ -68,33 +90,33 @@ async function defaultCommandRunner(command: string, args: string[], options: Co
 }
 
 export class BeadsIssueService {
-  private db: Record<string, unknown> | null;
-  private logger: Record<string, unknown>;
+  private db: ServiceDb | null;
+  private logger: Logger;
   private commandRunner: CommandRunner;
 
-  constructor(options: { db?: Record<string, unknown>; logger?: Record<string, unknown>; commandRunner?: CommandRunner } = {}) {
-    const { db, logger = defaultLogger, commandRunner } = options;
-    this.db = db as Record<string, unknown> | null;
-    this.logger = logger as Record<string, unknown>;
+  constructor(options: { db?: ServiceDb | null; logger?: Logger; commandRunner?: CommandRunner } = {}) {
+    const { db, logger = defaultLogger as unknown as Logger, commandRunner } = options;
+    this.db = db ?? null;
+    this.logger = logger;
     this.commandRunner = commandRunner || defaultCommandRunner;
   }
 
-  getIdempotencyRecord(idempotencyKey: string | null, issueIdentifier: string, action: string): Record<string, unknown> | null {
-    if (!idempotencyKey || !(this.db as { db?: { prepare: (...args: unknown[]) => { get: (...args: unknown[]) => unknown } } })?.db) return null;
-    const row = (this.db as { db: { prepare: (...args: unknown[]) => { get: (...args: unknown[]) => { result_json?: string } } } }).db
+  getIdempotencyRecord(idempotencyKey: string | null, issueIdentifier: string, action: string): MutateResult | null {
+    if (!idempotencyKey || !this.db?.db) return null;
+    const row = this.db.db
       .prepare(
         `SELECT result_json FROM issue_mutation_idempotency
          WHERE idempotency_key = ? AND issue_identifier = ? AND action = ?`,
       )
-      .get(idempotencyKey, issueIdentifier, action);
+      .get(idempotencyKey, issueIdentifier, action) as { result_json?: string } | undefined;
 
-    if (!row) return null;
-    return JSON.parse(row.result_json!);
+    if (!row?.result_json) return null;
+    return JSON.parse(row.result_json) as MutateResult;
   }
 
-  storeIdempotencyRecord(idempotencyKey: string | null, issueIdentifier: string, action: string, result: Record<string, unknown>): void {
-    if (!idempotencyKey || !(this.db as { db?: { prepare: (...args: unknown[]) => { run: (...args: unknown[]) => unknown } } })?.db) return;
-    (this.db as { db: { prepare: (...args: unknown[]) => { run: (...args: unknown[]) => unknown } } }).db
+  storeIdempotencyRecord(idempotencyKey: string | null, issueIdentifier: string, action: string, result: MutateResult): void {
+    if (!idempotencyKey || !this.db?.db) return;
+    this.db.db
       .prepare(
         `INSERT OR IGNORE INTO issue_mutation_idempotency (idempotency_key, issue_identifier, action, result_json, created_at)
          VALUES (?, ?, ?, ?, ?)`,
@@ -102,13 +124,13 @@ export class BeadsIssueService {
       .run(idempotencyKey, issueIdentifier, action, JSON.stringify(result), Date.now());
   }
 
-  async mutateIssue({ action, issue, body = {}, idempotencyKey = null }: MutateParams): Promise<Record<string, unknown>> {
+  async mutateIssue({ action, issue, body = {}, idempotencyKey = null }: MutateParams): Promise<MutateResult> {
     const cached = this.getIdempotencyRecord(idempotencyKey, issue.identifier, action);
     if (cached) {
       return { ...cached, applied: false, idempotent_replay: true };
     }
 
-    const projectPath = (this.db as { getProjectFilesystemPath?: (id: string) => string | null })?.getProjectFilesystemPath?.(issue.project_identifier);
+    const projectPath = this.db?.getProjectFilesystemPath?.(issue.project_identifier);
     if (!projectPath) {
       throw new Error('Project filesystem path is required for Beads mutations');
     }
@@ -121,7 +143,7 @@ export class BeadsIssueService {
         timeout: 60000,
         env: process.env as NodeJS.ProcessEnv,
       });
-      const result: Record<string, unknown> = {
+      const result: MutateResult = {
         applied: true,
         command: ['bd', ...args].join(' '),
         stdout: commandResult.stdout,
@@ -129,7 +151,7 @@ export class BeadsIssueService {
       this.storeIdempotencyRecord(idempotencyKey, issue.identifier, action, result);
       return result;
     } catch (error) {
-      (this.logger as { error?: (...args: unknown[]) => void })?.error?.(
+      this.logger.error(
         { err: error, action, issue: issue.identifier },
         'Beads issue command failed',
       );
@@ -138,7 +160,7 @@ export class BeadsIssueService {
   }
 }
 
-export function createBeadsIssueService(options: { db?: Record<string, unknown>; logger?: Record<string, unknown>; commandRunner?: CommandRunner }): BeadsIssueService {
+export function createBeadsIssueService(options: { db?: ServiceDb | null; logger?: Logger; commandRunner?: CommandRunner }): BeadsIssueService {
   return new BeadsIssueService(options);
 }
 
