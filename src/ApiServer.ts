@@ -59,6 +59,7 @@ interface ApiServerDeps {
   doltHubProvisioner?: Record<string, unknown> | null;
   beadsIssueService?: Record<string, unknown> | null;
   beadsAdapter?: Record<string, unknown> | null;
+  beadsIssueMirror?: Record<string, unknown> | null;
 }
 
 export function createApiServer(deps: ApiServerDeps): http.Server {

@@ -1,0 +1,177 @@
+import { logger as rootLogger } from '../logger.js';
+
+interface ProjectRow {
+  identifier: string;
+  name?: string;
+  filesystem_path?: string | null;
+  status?: string;
+  beads_mirror_synced_at?: number | null;
+}
+
+interface MirrorDb {
+  getAllProjects: () => ProjectRow[];
+  getProject: (id: string) => ProjectRow | null;
+  upsertBeadsIssue: (projectId: string, issue: Record<string, unknown>) => void;
+  getMaxBeadsUpdatedAt: (projectId: string) => number | null;
+  getBeadsMirrorSyncedAt: (projectId: string) => number | null;
+  setBeadsMirrorSyncedAt: (projectId: string, ts: number, error?: string | null) => void;
+}
+
+interface MirrorBeadsAdapter {
+  listIssues: (
+    project: { identifier: string; filesystem_path?: string | null },
+    filters?: Record<string, unknown>,
+    options?: { forceRefresh?: boolean },
+  ) => Promise<{ items: Record<string, unknown>[] }>;
+}
+
+interface MirrorOptions {
+  freshnessMs?: number;
+  preloadConcurrency?: number;
+  perCallTimeoutMs?: number;
+}
+
+interface SyncResult {
+  changed: number;
+  source: 'full' | 'incremental' | 'cached' | 'skipped';
+  error: string | null;
+  durationMs: number;
+}
+
+const log = rootLogger.child({ module: 'beads-mirror' });
+
+export class BeadsIssueMirror {
+  private db: MirrorDb;
+  private adapter: MirrorBeadsAdapter;
+  private freshnessMs: number;
+  private inflight: Map<string, Promise<SyncResult>> = new Map();
+
+  constructor(deps: { db: MirrorDb; beadsAdapter: MirrorBeadsAdapter }, options: MirrorOptions = {}) {
+    this.db = deps.db;
+    this.adapter = deps.beadsAdapter;
+    this.freshnessMs = options.freshnessMs ?? 30_000;
+  }
+
+  async ensureFresh(projectIdentifier: string, maxAgeMs?: number): Promise<SyncResult> {
+    const project = this.db.getProject(projectIdentifier);
+    if (!project || !project.filesystem_path) {
+      return { changed: 0, source: 'skipped', error: 'project_missing_or_no_filesystem_path', durationMs: 0 };
+    }
+    const ttl = maxAgeMs ?? this.freshnessMs;
+    const syncedAt = this.db.getBeadsMirrorSyncedAt(projectIdentifier);
+    const age = syncedAt ? Date.now() - syncedAt : Infinity;
+    if (syncedAt && age < ttl) {
+      return { changed: 0, source: 'cached', error: null, durationMs: 0 };
+    }
+    return this.syncProject(project);
+  }
+
+  async syncProject(project: ProjectRow): Promise<SyncResult> {
+    const key = project.identifier;
+    const existing = this.inflight.get(key);
+    if (existing) return existing;
+    const job = (async () => {
+      const start = Date.now();
+      const hasMirror = (this.db.getBeadsMirrorSyncedAt(project.identifier) ?? 0) > 0;
+      try {
+        if (!hasMirror) {
+          const r = await this.fullSync(project);
+          return { ...r, durationMs: Date.now() - start };
+        }
+        const since = this.db.getMaxBeadsUpdatedAt(project.identifier) || this.db.getBeadsMirrorSyncedAt(project.identifier);
+        const r = await this.incrementalSync(project, since);
+        return { ...r, durationMs: Date.now() - start };
+      } finally {
+        this.inflight.delete(key);
+      }
+    })();
+    this.inflight.set(key, job);
+    return job;
+  }
+
+  private async fullSync(project: ProjectRow): Promise<SyncResult> {
+    log.info({ project: project.identifier }, 'Full mirror sync starting');
+    try {
+      const result = await this.adapter.listIssues(
+        { identifier: project.identifier, filesystem_path: project.filesystem_path ?? null },
+        {},
+        { forceRefresh: true },
+      );
+      const items = result.items || [];
+      for (const issue of items) {
+        this.db.upsertBeadsIssue(project.identifier, issue);
+      }
+      this.db.setBeadsMirrorSyncedAt(project.identifier, Date.now(), null);
+      log.info({ project: project.identifier, count: items.length }, 'Full mirror sync complete');
+      return { changed: items.length, source: 'full', error: null, durationMs: 0 };
+    } catch (err) {
+      const msg = (err as Error).message ?? String(err);
+      log.warn({ project: project.identifier, err }, 'Full mirror sync failed');
+      this.db.setBeadsMirrorSyncedAt(project.identifier, Date.now(), msg);
+      return { changed: 0, source: 'full', error: msg, durationMs: 0 };
+    }
+  }
+
+  private async incrementalSync(project: ProjectRow, since: number | null): Promise<SyncResult> {
+    if (!since) return this.fullSync(project);
+    const sinceIso = new Date(since).toISOString();
+    log.debug({ project: project.identifier, since: sinceIso }, 'Incremental mirror sync starting');
+    try {
+      const result = await this.adapter.listIssues(
+        { identifier: project.identifier, filesystem_path: project.filesystem_path ?? null },
+        { updated_after: sinceIso },
+        { forceRefresh: true },
+      );
+      const items = result.items || [];
+      for (const issue of items) {
+        this.db.upsertBeadsIssue(project.identifier, issue);
+      }
+      this.db.setBeadsMirrorSyncedAt(project.identifier, Date.now(), null);
+      if (items.length > 0) {
+        log.info({ project: project.identifier, count: items.length, since: sinceIso }, 'Incremental mirror sync applied');
+      }
+      return { changed: items.length, source: 'incremental', error: null, durationMs: 0 };
+    } catch (err) {
+      const msg = (err as Error).message ?? String(err);
+      log.warn({ project: project.identifier, err }, 'Incremental mirror sync failed');
+      this.db.setBeadsMirrorSyncedAt(project.identifier, Date.now(), msg);
+      return { changed: 0, source: 'incremental', error: msg, durationMs: 0 };
+    }
+  }
+
+  async preloadAll(options: { concurrency?: number } = {}): Promise<{ projects: number; ok: number; failed: number; durationMs: number }> {
+    const start = Date.now();
+    const concurrency = Math.max(1, options.concurrency ?? 4);
+    const projects = this.db.getAllProjects().filter((p) => p.status !== 'archived' && p.filesystem_path);
+    log.info({ projects: projects.length, concurrency }, 'Beads mirror preload starting');
+
+    const queue = projects.slice();
+    let ok = 0;
+    let failed = 0;
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const project = queue.shift();
+        if (!project) return;
+        try {
+          const r = await this.syncProject(project);
+          if (r.error) failed++; else ok++;
+        } catch {
+          failed++;
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, projects.length) }, worker));
+    const durationMs = Date.now() - start;
+    log.info({ projects: projects.length, ok, failed, durationMs }, 'Beads mirror preload complete');
+    return { projects: projects.length, ok, failed, durationMs };
+  }
+}
+
+export function createBeadsIssueMirror(
+  deps: { db: MirrorDb; beadsAdapter: MirrorBeadsAdapter },
+  options?: MirrorOptions,
+): BeadsIssueMirror {
+  return new BeadsIssueMirror(deps, options);
+}

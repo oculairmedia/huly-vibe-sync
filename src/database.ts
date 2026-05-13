@@ -211,6 +211,10 @@ export class SyncDatabase {
 
   // Issue convenience proxies
   upsertIssue(issue: Record<string, unknown>): void { return this.issues!.upsertIssue(issue); }
+  upsertBeadsIssue(pid: string, issue: Record<string, unknown>): void { return this.issues!.upsertBeadsIssue(pid, issue); }
+  getMaxBeadsUpdatedAt(pid: string): number | null { return this.issues!.getMaxBeadsUpdatedAt(pid); }
+  getBeadsMirrorSyncedAt(pid: string): number | null { return this.projects!.getBeadsMirrorSyncedAt(pid); }
+  setBeadsMirrorSyncedAt(pid: string, ts: number, err: string | null = null): void { return this.projects!.setBeadsMirrorSyncedAt(pid, ts, err); }
   getProjectIssues(pid: string): unknown[] { return this.issues!.getProjectIssues(pid); }
   getIssue(identifier: string): unknown { return this.issues!.getIssue(identifier); }
   getIssueByVibeTaskId(pid: string, vid: number): unknown { return this.issues!.getIssueByVibeTaskId(pid, vid); }
@@ -265,7 +269,9 @@ export class SyncDatabase {
 }
 
 export function createSyncDatabase(dbPath: string): SyncDatabase {
-  return new SyncDatabase(dbPath);
+  const db = new SyncDatabase(dbPath);
+  db.initialize();
+  return db;
 }
 
 export function migrateFromJSON(db: SyncDatabase, jsonFilePath: string): boolean {

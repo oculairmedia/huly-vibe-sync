@@ -194,6 +194,36 @@ export function migrateProjectBeadsRemoteColumns(db: BetterSqlite3.Database): vo
   `);
 }
 
+export function migrateBeadsIssueMirrorColumns(db: BetterSqlite3.Database): void {
+  const projectCols = (db.prepare('PRAGMA table_info(projects)').all() as ColumnInfo[]).map((c) => c.name);
+  if (!projectCols.includes('beads_mirror_synced_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN beads_mirror_synced_at INTEGER');
+  }
+  if (!projectCols.includes('beads_mirror_last_error')) {
+    db.exec('ALTER TABLE projects ADD COLUMN beads_mirror_last_error TEXT');
+  }
+
+  const issueCols = (db.prepare('PRAGMA table_info(issues)').all() as ColumnInfo[]).map((c) => c.name);
+  if (!issueCols.includes('beads_updated_at')) {
+    db.exec('ALTER TABLE issues ADD COLUMN beads_updated_at INTEGER');
+  }
+  if (!issueCols.includes('issue_type')) {
+    db.exec('ALTER TABLE issues ADD COLUMN issue_type TEXT');
+  }
+  if (!issueCols.includes('assignee')) {
+    db.exec('ALTER TABLE issues ADD COLUMN assignee TEXT');
+  }
+  if (!issueCols.includes('labels_json')) {
+    db.exec('ALTER TABLE issues ADD COLUMN labels_json TEXT');
+  }
+  if (!issueCols.includes('blocked_by_json')) {
+    db.exec('ALTER TABLE issues ADD COLUMN blocked_by_json TEXT');
+  }
+  if (!issueCols.includes('source')) {
+    db.exec("ALTER TABLE issues ADD COLUMN source TEXT");
+  }
+}
+
 export function migrateIssueMutationIdempotencyTable(db: BetterSqlite3.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS issue_mutation_idempotency (
@@ -218,5 +248,6 @@ export function runAllMigrations(db: BetterSqlite3.Database): void {
   migrateVibeIndexes(db);
   migrateProjectRegistryColumns(db);
   migrateProjectBeadsRemoteColumns(db);
+  migrateBeadsIssueMirrorColumns(db);
   migrateIssueMutationIdempotencyTable(db);
 }

@@ -29,11 +29,16 @@ export class LettaAgentPersistenceService {
     try {
       if (fs.existsSync(this.settingsPath)) {
         const data = fs.readFileSync(this.settingsPath, 'utf8');
-        const state = JSON.parse(data) as AgentState;
+        const state = JSON.parse(data) as Partial<AgentState>;
+        const normalized: AgentState = {
+          version: state.version || '1.0.0',
+          description: state.description || 'Local Letta agent persistence (gitignored, personal to this instance)',
+          agents: state.agents || {},
+        };
         console.log(
-          `[Letta] Loaded agent state for ${Object.keys(state.agents || {}).length} projects`,
+          `[Letta] Loaded agent state for ${Object.keys(normalized.agents).length} projects`,
         );
-        return state;
+        return normalized;
       }
     } catch (error) {
       console.error(`[Letta] Error loading agent state:`, (error as Error).message);

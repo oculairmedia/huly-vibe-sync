@@ -164,4 +164,16 @@ export class ProjectRepository {
       'SELECT * FROM projects WHERE filesystem_path IS NOT NULL AND letta_folder_id IS NOT NULL AND status = ? ORDER BY name',
     ).all('active');
   }
+
+  getBeadsMirrorSyncedAt(identifier: string): number | null {
+    const row = this.db.prepare('SELECT beads_mirror_synced_at FROM projects WHERE identifier = ?')
+      .get(identifier) as { beads_mirror_synced_at: number | null } | undefined;
+    return row?.beads_mirror_synced_at ?? null;
+  }
+
+  setBeadsMirrorSyncedAt(identifier: string, timestamp: number, error: string | null = null): void {
+    this.db.prepare(
+      'UPDATE projects SET beads_mirror_synced_at = ?, beads_mirror_last_error = ?, updated_at = ? WHERE identifier = ?',
+    ).run(timestamp, error, Date.now(), identifier);
+  }
 }

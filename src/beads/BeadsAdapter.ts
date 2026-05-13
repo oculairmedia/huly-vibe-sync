@@ -36,6 +36,7 @@ interface ListFilters {
   priority?: string;
   type?: string;
   assignee?: string;
+  updated_after?: string;
 }
 
 interface WorkItemOptions {
@@ -266,6 +267,8 @@ export class BeadsAdapter {
     if (filters.priority) args.push(`--priority=${filters.priority}`);
     if (filters.type) args.push(`--type=${filters.type}`);
     if (filters.assignee) args.push(`--assignee=${filters.assignee}`);
+    if (filters.updated_after) args.push(`--updated-after=${filters.updated_after}`);
+    args.push('--limit=0');
     this._addProjectBeadsDir(args, project);
 
     const result = (await this.runCommand('list', args)) as

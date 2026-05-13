@@ -20,7 +20,17 @@ interface RouteDeps {
   projectRegistry: { registerProject?: (p: string) => Record<string, unknown> | null; getProject?: (id: string) => Record<string, unknown> | null; getProjects?: (filters?: Record<string, unknown>) => Record<string, unknown>[] } | null;
   doltHubProvisioner: { provisionProjectBeadsRemote?: (id: string, opts: Record<string, unknown>) => Promise<Record<string, unknown>> } | null;
   beadsIssueService: { getIssue?: (id: string) => Record<string, unknown> | null; claimIssue?: (...args: unknown[]) => Promise<unknown>; unclaimIssue?: (...args: unknown[]) => Promise<unknown>; closeIssue?: (...args: unknown[]) => Promise<unknown>; reopenIssue?: (...args: unknown[]) => Promise<unknown>; updateIssueStatus?: (id: string, status: string, opts: Record<string, unknown>) => Promise<unknown>; addIssueNote?: (id: string, content: string, opts: Record<string, unknown>) => Promise<unknown> } | null;
-  beadsAdapter: Record<string, unknown> | null;
+  beadsAdapter: {
+    listIssues?: (
+      project: { identifier: string; filesystem_path?: string | null },
+      filters?: Record<string, unknown>,
+      options?: { forceRefresh?: boolean },
+    ) => Promise<{ items: Record<string, unknown>[] }>;
+    [key: string]: unknown;
+  } | null;
+  beadsIssueMirror?: {
+    ensureFresh: (projectId: string, maxAgeMs?: number) => Promise<{ source: string; error: string | null; changed: number; durationMs: number }>;
+  } | null;
 }
 
 interface RouteContext { pathname: string; method: string }
@@ -65,6 +75,7 @@ function toIsoTimestamp(value: unknown): string | null {
 }
 
 function toNumber(value: unknown, fallback = 0): number {
+  if (value === null || value === undefined || value === '') return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
@@ -124,8 +135,47 @@ function paginate<T>(items: T[], cursor?: string, limit = DEFAULT_PAGE_LIMIT): {
   };
 }
 
+function getBeadsListFilters(url: URL): Record<string, unknown> {
+  const filters: Record<string, unknown> = {};
+  const status = url.searchParams.get('status');
+  const priority = url.searchParams.get('priority');
+  const type = url.searchParams.get('type');
+  const assignee = url.searchParams.get('assignee');
+  if (status) filters.status = normalizeIssueStatus(status);
+  if (priority) filters.priority = priority;
+  if (type) filters.type = type;
+  if (assignee) filters.assignee = assignee;
+  return filters;
+}
+
+async function hydrateIssuesFromBeads(
+  beadsAdapter: RouteDeps['beadsAdapter'],
+  project: Record<string, unknown>,
+  filters: Record<string, unknown>,
+  logger: RouteDeps['logger'],
+): Promise<{ issues: Record<string, unknown>[]; source: 'beads' | 'database'; error: string | null }> {
+  if (!beadsAdapter?.listIssues || !project?.filesystem_path) {
+    return { issues: [], source: 'database', error: null };
+  }
+  try {
+    const result = await beadsAdapter.listIssues(
+      project as { identifier: string; filesystem_path?: string | null },
+      filters,
+      { forceRefresh: true },
+    );
+    const issues = (result.items || []).filter((i: Record<string, unknown>) => i?.id || i?.identifier);
+    return { issues, source: 'beads', error: null };
+  } catch (error) {
+    logger.warn(
+      { err: error, project_identifier: project.identifier as string },
+      'Failed to hydrate issues from Beads',
+    );
+    return { issues: [], source: 'database', error: 'Issue data temporarily unavailable from Beads' };
+  }
+}
+
 export function registerProjectRoutes(app: App, deps: RouteDeps): void {
-  const { db, sendJson, sendError, logger, projectRegistry, doltHubProvisioner, beadsIssueService, beadsAdapter } = deps;
+  const { db, sendJson, sendError, logger, projectRegistry, doltHubProvisioner, beadsIssueService, beadsAdapter, beadsIssueMirror } = deps;
 
   // GET /api/projects
   app.registerRoute({
@@ -142,10 +192,27 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
         if (mcpEnabledFilter !== null) filters.mcp_enabled = mcpEnabledFilter === 'true';
         const rows = db.getAllProjects ? db.getAllProjects(filters) : (projectRegistry?.getProjects ? projectRegistry.getProjects(filters) : []);
         const projects = rows.map((p: Record<string, unknown>) => serializeProject(p)).filter(Boolean);
-        const cursor = url.searchParams.get('cursor');
-        const limit = Math.min(toNumber(url.searchParams.get('limit'), DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
-        const page = paginate(projects, cursor || undefined, limit);
-        sendJson(res, 200, { projects: page.items, page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known } });
+        const cursorParam = url.searchParams.get('cursor');
+        const limitParam = url.searchParams.get('limit');
+        const paginated = cursorParam !== null || limitParam !== null;
+        const timestamp = new Date().toISOString();
+        if (paginated) {
+          const limit = Math.min(toNumber(limitParam, DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
+          const page = paginate(projects, cursorParam || undefined, limit);
+          sendJson(res, 200, {
+            total: page.total_known,
+            projects: page.items,
+            timestamp,
+            page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known },
+          });
+        } else {
+          sendJson(res, 200, {
+            total: projects.length,
+            projects,
+            timestamp,
+            page: { next_cursor: null, has_more: false, total_known: projects.length },
+          });
+        }
       } catch (error) { logger.error({ err: error }, 'Failed to list projects'); sendError(res, 500, 'Failed to list projects', { error: (error as Error).message }); }
     },
   });
@@ -159,7 +226,23 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       try {
         const project = db.getProject ? db.getProject(projectId) : (projectRegistry?.getProject ? projectRegistry.getProject(projectId) : null);
         if (!project) { sendError(res, 404, 'Project not found'); return; }
-        const allIssues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
+        let issueSource: 'database' | 'mirror' | 'beads' = 'database';
+        let hydrationError: string | null = null;
+        let mirrorResult: { source: string; error: string | null; changed: number; durationMs: number } | null = null;
+        if (beadsIssueMirror?.ensureFresh && project.filesystem_path) {
+          try { mirrorResult = await beadsIssueMirror.ensureFresh(projectId); }
+          catch (mirrorErr) { logger.warn({ err: mirrorErr, project_identifier: projectId }, 'Mirror ensureFresh failed; serving stale DB rows'); }
+          if (mirrorResult) {
+            hydrationError = mirrorResult.error;
+            issueSource = mirrorResult.source === 'cached' ? 'database' : 'mirror';
+          }
+        }
+        let allIssues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
+        if (allIssues.length === 0 && beadsAdapter?.listIssues && project.filesystem_path) {
+          const hydrated = await hydrateIssuesFromBeads(beadsAdapter, project, getBeadsListFilters(url), logger);
+          if (hydrated.issues.length > 0) { allIssues = hydrated.issues; issueSource = 'beads'; }
+          if (hydrated.error) hydrationError = hydrated.error;
+        }
         let filtered = allIssues;
         const statusFilter = url.searchParams.get('status');
         const priorityFilter = url.searchParams.get('priority');
@@ -192,7 +275,9 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
           closed: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'closed').length,
           blocked: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'blocked').length,
         };
-        sendJson(res, 200, { projectId, project: serializeProject(project), issues: page.items, tracker_stats: trackerStats, data_freshness: { status: 'fresh', last_sync_at: toIsoTimestamp(project.last_sync_at) }, page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known } });
+        const dataFreshness: Record<string, unknown> = { status: hydrationError ? 'stale' : 'fresh', last_sync_at: toIsoTimestamp(project.last_sync_at), source: issueSource };
+        if (hydrationError) dataFreshness.error = hydrationError;
+        sendJson(res, 200, { projectId, project: serializeProject(project), issues: page.items, tracker_stats: trackerStats, data_freshness: dataFreshness, page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known } });
       } catch (error) { logger.error({ err: error }, 'Failed to list issues'); sendError(res, 500, 'Failed to list issues', { error: (error as Error).message }); }
     },
   });

@@ -1,6 +1,16 @@
 import type Database from 'better-sqlite3';
 import { computeIssueContentHash, hasIssueContentChanged } from '../utils';
 
+function toMs(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const s = String(value);
+  const n = Number(s);
+  if (Number.isFinite(n) && n > 1e11) return n;
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
 export class IssueRepository {
   constructor(private db: Database.Database) {}
 
@@ -44,6 +54,65 @@ export class IssueRepository {
     return this.db
       .prepare('SELECT * FROM issues WHERE project_identifier = ? ORDER BY identifier')
       .all(projectIdentifier);
+  }
+
+  upsertBeadsIssue(projectIdentifier: string, issue: Record<string, unknown>): void {
+    const now = Date.now();
+    const beadsUpdatedAt = toMs(issue.updated_at);
+    const createdAt = toMs(issue.created_at) ?? now;
+    const identifier = String(issue.id ?? issue.identifier ?? '');
+    if (!identifier) return;
+    const labels = Array.isArray(issue.labels) ? JSON.stringify(issue.labels) : null;
+    const blockedBy = Array.isArray(issue.blocked_by)
+      ? JSON.stringify(issue.blocked_by)
+      : Array.isArray(issue.blockedBy)
+        ? JSON.stringify(issue.blockedBy)
+        : null;
+    this.db
+      .prepare(
+        `INSERT INTO issues (identifier, project_identifier, title, description, status, priority,
+          last_sync_at, created_at, updated_at, beads_updated_at, parent_huly_id, sub_issue_count,
+          content_hash, issue_type, assignee, labels_json, blocked_by_json, source)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'beads')
+         ON CONFLICT(identifier) DO UPDATE SET
+           title = excluded.title, description = excluded.description,
+           status = excluded.status, priority = excluded.priority,
+           last_sync_at = excluded.last_sync_at,
+           updated_at = excluded.updated_at,
+           beads_updated_at = excluded.beads_updated_at,
+           parent_huly_id = COALESCE(excluded.parent_huly_id, parent_huly_id),
+           sub_issue_count = COALESCE(excluded.sub_issue_count, sub_issue_count),
+           content_hash = excluded.content_hash,
+           issue_type = excluded.issue_type, assignee = excluded.assignee,
+           labels_json = excluded.labels_json, blocked_by_json = excluded.blocked_by_json,
+           source = 'beads'`,
+      )
+      .run(
+        identifier,
+        projectIdentifier,
+        String(issue.title ?? identifier),
+        String(issue.description ?? ''),
+        String(issue.status ?? 'unknown'),
+        String(issue.priority ?? 'medium'),
+        now,
+        createdAt,
+        beadsUpdatedAt ?? now,
+        beadsUpdatedAt ?? null,
+        (issue.parent_huly_id ?? issue.parent ?? null) as string | null,
+        Number(issue.sub_issue_count ?? issue.dependent_count ?? 0),
+        computeIssueContentHash(issue),
+        (issue.issue_type ?? issue.type ?? null) as string | null,
+        (issue.assignee ?? issue.owner ?? null) as string | null,
+        labels,
+        blockedBy,
+      );
+  }
+
+  getMaxBeadsUpdatedAt(projectIdentifier: string): number | null {
+    const row = this.db
+      .prepare('SELECT MAX(beads_updated_at) AS m FROM issues WHERE project_identifier = ? AND source = \'beads\'')
+      .get(projectIdentifier) as { m: number | null } | undefined;
+    return row?.m ?? null;
   }
 
   getIssue(identifier: string): unknown {
