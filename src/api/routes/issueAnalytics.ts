@@ -34,6 +34,36 @@ interface AnalyticsFilters {
   labels: string[];
 }
 
+/** Loose issue shape accepted by analytics — same union of DB rows and bd-sourced records used by the route layer. */
+export interface AnalyticsIssue {
+  id?: string | number;
+  identifier?: string;
+  status?: string | null;
+  priority?: string | number | null;
+  type?: string;
+  issue_type?: string | null;
+  assignee?: string | null;
+  owner?: string | null;
+  labels?: string[] | string | null;
+  labels_json?: string | null;
+  tags?: string[] | string | null;
+  title?: string;
+  created_at?: number | string | null;
+  createdAt?: string;
+  updated_at?: number | string | null;
+  updatedAt?: string;
+  closed_at?: string | null | undefined;
+  closedAt?: string | undefined;
+  completed_at?: string | null;
+  completedAt?: string;
+  closed_by?: string | null;
+  completed_by?: string | null;
+  close_reason?: string | null;
+  completion_reason?: string | null;
+  beads_updated_at?: number | null;
+  last_sync_at?: number | string | null;
+}
+
 const ISSUE_ANALYTICS_GRANULARITIES = new Set(['day', 'week', 'month']);
 const CLOSED_ISSUE_STATUSES = new Set(['done', 'closed', 'resolved', 'complete', 'completed']);
 const BLOCKED_ISSUE_STATUSES = new Set(['blocked']);
@@ -190,7 +220,7 @@ function matchesIssueStatus(issueStatus: unknown, requestedStatus: string | null
   return i === r || normalizeIssueStatus(i) === normalizeIssueStatus(r);
 }
 
-export function issueMatchesAnalyticsFilters(issue: Record<string, unknown>, filters: AnalyticsFilters): boolean {
+export function issueMatchesAnalyticsFilters(issue: AnalyticsIssue, filters: AnalyticsFilters): boolean {
   if (filters.status && !matchesIssueStatus(issue.status, filters.status)) return false;
   if (filters.type && String(issue.issue_type ?? issue.type ?? '') !== filters.type) return false;
   if (filters.priority && String(issue.priority ?? '') !== filters.priority) return false;
@@ -202,11 +232,11 @@ export function issueMatchesAnalyticsFilters(issue: Record<string, unknown>, fil
   return true;
 }
 
-function getIssueCreatedMs(issue: Record<string, unknown>): number | null {
+function getIssueCreatedMs(issue: AnalyticsIssue): number | null {
   return toDateMs(issue.created_at ?? issue.createdAt);
 }
 
-function getIssueCompletedMs(issue: Record<string, unknown>): number | null {
+function getIssueCompletedMs(issue: AnalyticsIssue): number | null {
   if (normalizeIssueStatus(issue.status) !== 'closed') return null;
   return toDateMs(issue.closed_at ?? issue.closedAt ?? issue.completed_at ?? issue.completedAt ?? issue.updated_at);
 }
@@ -236,46 +266,77 @@ function getTimelinePagination(url: URL, defaultLimit = 25, maxLimit = 100): { l
   return { limit, offset: decodeCursor(url.searchParams.get('cursor')) };
 }
 
-function serializeCompletedTimelineIssue(issue: Record<string, unknown>, completedMs: number): Record<string, unknown> {
+export interface CompletedTimelineEntry {
+  issueId: string;
+  title: string;
+  status: string;
+  statusLabel: string;
+  completedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  priority: string | null;
+  type: string;
+  assignee: string | null;
+  labels: string[];
+  completedBy: string | null;
+  completionReason: string | null;
+}
+
+export interface AnalyticsBucket {
+  bucketStart: string;
+  bucketEnd: string;
+  label: string;
+}
+
+export interface CreatedBucket extends AnalyticsBucket { createdCount: number }
+export interface CompletedBucket extends AnalyticsBucket { completedCount: number }
+
+function serializeCompletedTimelineIssue(issue: AnalyticsIssue, completedMs: number): CompletedTimelineEntry {
   const normalized = normalizeIssueStatus(issue.status);
   return {
-    issueId: (issue.identifier ?? issue.id) as string,
-    title: (issue.title as string) ?? '',
+    issueId: String(issue.identifier ?? issue.id ?? ''),
+    title: issue.title ?? '',
     status: normalized,
     statusLabel: String(issue.status ?? normalized),
     completedAt: toIsoTimestamp(completedMs),
     createdAt: toIsoTimestamp(issue.created_at ?? issue.createdAt),
     updatedAt: toIsoTimestamp(issue.beads_updated_at ?? issue.updated_at ?? issue.last_sync_at ?? issue.created_at),
-    priority: (issue.priority ?? null) as string | null,
-    type: (issue.issue_type ?? issue.type ?? 'task') as string,
-    assignee: (issue.assignee ?? issue.owner ?? null) as string | null,
+    priority: issue.priority == null ? null : String(issue.priority),
+    type: issue.issue_type ?? issue.type ?? 'task',
+    assignee: issue.assignee ?? issue.owner ?? null,
     labels: parseIssueList(issue.labels ?? issue.labels_json ?? issue.tags),
-    completedBy: (issue.closed_by ?? issue.completed_by ?? issue.owner ?? issue.assignee ?? null) as string | null,
-    completionReason: (issue.close_reason ?? issue.completion_reason ?? null) as string | null,
+    completedBy: issue.closed_by ?? issue.completed_by ?? issue.owner ?? issue.assignee ?? null,
+    completionReason: issue.close_reason ?? issue.completion_reason ?? null,
   };
 }
 
-interface AnalyticsResult {
-  createdBuckets: Record<string, unknown>[];
-  completedBuckets: Record<string, unknown>[];
-  completedTimeline: Record<string, unknown>[];
-  summary: {
-    openCount: number; inProgressCount: number; completedCount: number;
-    blockedCount: number; readyCount: number;
-    totalCreatedInRange: number; totalCompletedInRange: number;
-  };
+export interface AnalyticsSummary {
+  openCount: number;
+  inProgressCount: number;
+  completedCount: number;
+  blockedCount: number;
+  readyCount: number;
+  totalCreatedInRange: number;
+  totalCompletedInRange: number;
+}
+
+export interface AnalyticsResult {
+  createdBuckets: CreatedBucket[];
+  completedBuckets: CompletedBucket[];
+  completedTimeline: CompletedTimelineEntry[];
+  summary: AnalyticsSummary;
   nextTimelineCursor: string | null;
   timelinePage: { limit: number; has_more: boolean; total_known: number };
 }
 
-export function buildIssueAnalytics(issues: Record<string, unknown>[], range: AnalyticsRange, url: URL): AnalyticsResult {
+export function buildIssueAnalytics(issues: AnalyticsIssue[], range: AnalyticsRange, url: URL): AnalyticsResult {
   const filters = parseAnalyticsFilters(url);
   const filtered = issues.filter((i) => issueMatchesAnalyticsFilters(i, filters));
   const createdRaw = buildAnalyticsBuckets(range.rangeStartMs, range.rangeEndMs, range.timezone, range.granularity)
     .map((b) => ({ ...b, createdCount: 0 }));
   const completedRaw = buildAnalyticsBuckets(range.rangeStartMs, range.rangeEndMs, range.timezone, range.granularity)
     .map((b) => ({ ...b, completedCount: 0 }));
-  const completedTimeline: Record<string, unknown>[] = [];
+  const completedTimeline: CompletedTimelineEntry[] = [];
   const summary = {
     openCount: 0, inProgressCount: 0, completedCount: 0,
     blockedCount: 0, readyCount: 0,

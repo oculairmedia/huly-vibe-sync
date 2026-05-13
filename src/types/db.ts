@@ -11,6 +11,8 @@ export interface ProjectRow {
   filesystem_path: string | null;
   git_url: string | null;
   status: string;
+  tech_stack?: string | null;
+  mcp_enabled?: number;
   created_at: number;
   updated_at: number;
   letta_agent_id: string | null;
@@ -27,6 +29,9 @@ export interface ProjectRow {
   beads_remote_provisioned_at: number | null;
   beads_remote_last_push_at: number | null;
   beads_remote_last_error: string | null;
+  beads_mirror_synced_at: number | null;
+  beads_mirror_last_error: string | null;
+  bookstack_last_export_at?: number | null;
 }
 
 export interface IssueRow {
@@ -46,6 +51,17 @@ export interface IssueRow {
   vibe_modified_at: number | null;
   deleted_from_huly: number;
   deleted_from_vibe: number;
+  parent_huly_id: string | null;
+  parent_vibe_id: string | null;
+  sub_issue_count: number;
+  content_hash: string | null;
+  huly_content_hash: string | null;
+  beads_updated_at: number | null;
+  issue_type: string | null;
+  assignee: string | null;
+  labels_json: string | null;
+  blocked_by_json: string | null;
+  source: string | null;
 }
 
 export interface SyncStateRow {

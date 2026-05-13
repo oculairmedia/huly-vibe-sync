@@ -1,18 +1,33 @@
+import type { ServerResponse } from 'http';
 import type { SSEManager } from '../SSEManager.js';
 import type { SyncHistoryStore } from '../SyncHistoryStore.js';
+import type { HealthStats } from '../../HealthService.js';
+import type { App, Logger, SendJson } from '../../types/api.js';
+
+export interface HealthMetricsSnapshot {
+  status: string;
+  uptime: Record<string, unknown>;
+  sync: Record<string, unknown>;
+  memory: Record<string, unknown>;
+  connectionPool: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface StatsDb {
+  getStats: () => Record<string, unknown>;
+}
 
 interface HealthDeps {
-  healthStats: Record<string, unknown>;
+  healthStats: HealthStats;
   config: Record<string, unknown>;
-  db: { getStats: () => Record<string, unknown> } | null;
+  db: StatsDb | null;
   sseManager: SSEManager;
   syncHistory: SyncHistoryStore;
-  getHealthMetrics: (stats: Record<string, unknown>, cfg: Record<string, unknown>) => Record<string, unknown>;
+  getHealthMetrics: (stats: HealthStats, cfg: Record<string, unknown>) => HealthMetricsSnapshot;
   getMetricsRegistry: () => { contentType: string; metrics: () => Promise<string> };
-  sendJson: (res: unknown, code: number, data: unknown) => void;
-  logger: { error: (obj: Record<string, unknown>, msg: string) => void };
+  sendJson: SendJson;
+  logger: Logger;
 }
-interface App { registerRoute(opts: { match: (ctx: { pathname: string; method: string }) => boolean; handle: (ctx: { res: unknown }) => Promise<void> }): void }
 
 export function registerHealthRoutes(app: App, deps: HealthDeps): void {
   const { healthStats, config, db, sseManager, syncHistory, getHealthMetrics, getMetricsRegistry, sendJson, logger } = deps;
@@ -26,10 +41,12 @@ export function registerHealthRoutes(app: App, deps: HealthDeps): void {
     match: ({ pathname, method }) => pathname === '/metrics' && method === 'GET',
     handle: async ({ res }) => {
       const register = getMetricsRegistry();
-      (res as { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void }).writeHead(200, {
-        'Content-Type': register.contentType, 'Access-Control-Allow-Origin': '*',
+      const response = res as ServerResponse;
+      response.writeHead(200, {
+        'Content-Type': register.contentType,
+        'Access-Control-Allow-Origin': '*',
       });
-      (res as { end: (body: string) => void }).end(await register.metrics());
+      response.end(await register.metrics());
     },
   });
 

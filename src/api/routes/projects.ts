@@ -1,6 +1,79 @@
 import path from 'path';
 import fs from 'fs';
 import { buildIssueAnalytics, getAnalyticsRange } from './issueAnalytics.js';
+import type { ProjectRow } from '../../types/db.js';
+import type { NormalizedBeadsIssue } from '../../types/beads.js';
+import type {
+  App,
+  BeadsAdapterApi,
+  BeadsIssueMirrorApi,
+  BeadsIssueServiceApi,
+  BeadsListFilters,
+  DoltHubProvisionerApi,
+  Logger,
+  ParseJsonBody,
+  ProjectRegistryApi,
+  RouteDb,
+  SendError,
+  SendJson,
+} from '../../types/api.js';
+
+/** Union of every issue shape the routes accept (DB rows, normalized bd issues, serialized payloads). */
+export interface IssueLike {
+  // Identity
+  id?: string | number;
+  identifier?: string;
+  project_id?: string;
+  projectId?: string;
+  project_identifier?: string;
+  // Core fields
+  title?: string;
+  description?: string | null;
+  status?: string | null;
+  statusLabel?: string;
+  priority?: string | number | null;
+  type?: string;
+  issue_type?: string | null;
+  assignee?: string | null;
+  // Arrays / relations
+  labels?: string[] | string | null;
+  labels_json?: string | null;
+  blockedBy?: string[];
+  blocked_by?: string[] | string | null;
+  blocked_by_json?: string | null;
+  blocks?: string[];
+  isBlocked?: boolean;
+  parent_huly_id?: string | null;
+  parent_vibe_id?: string | null;
+  parent_id?: string | null;
+  sub_issue_count?: number;
+  children?: unknown[];
+  // External system ids
+  huly_id?: string | null;
+  vibe_task_id?: number | null;
+  // Timestamps (each source uses different shapes)
+  created_at?: number | string | null;
+  createdAt?: string;
+  updated_at?: number | string | null;
+  updatedAt?: string;
+  modifiedAt?: string | number | null;
+  last_sync_at?: number | string | null;
+  beads_updated_at?: number | null;
+  closed_at?: string | null | undefined;
+  closedAt?: string | undefined;
+  // Extras
+  acceptanceCriteria?: string[];
+  acceptance_criteria?: string | string[] | undefined;
+  validationWarnings?: string[];
+  ready?: boolean;
+  source?: string | null;
+  notes?: unknown;
+  comments?: unknown;
+}
+
+type ProjectLike = ProjectRow & {
+  description?: string | null;
+};
 
 const ALLOWED_PROJECT_STATUSES = new Set(['active', 'archived']);
 const DEFAULT_PAGE_LIMIT = 25;
@@ -12,56 +85,76 @@ const DEFERRED_ISSUE_STATUSES = new Set(['deferred', 'snoozed', 'later']);
 const IN_PROGRESS_ISSUE_STATUSES = new Set(['inprogress', 'in_progress', 'doing']);
 
 interface RouteDeps {
-  db: { getProject?: (id: string) => Record<string, unknown> | null; getAllProjects?: (filters?: Record<string, unknown>) => Record<string, unknown>[]; getProjectIssues?: (id: string) => Record<string, unknown>[]; getIssue?: (id: string) => Record<string, unknown> | null } | null;
+  db: RouteDb | null;
   config: Record<string, unknown>;
-  parseJsonBody: (req: unknown) => Promise<Record<string, unknown>>;
-  sendJson: (res: unknown, code: number, data: unknown) => void;
-  sendError: (res: unknown, code: number, message: string, details?: Record<string, unknown>) => void;
-  logger: { info: (obj: Record<string, unknown>, msg: string) => void; warn: (obj: Record<string, unknown>, msg: string) => void; error: (obj: Record<string, unknown>, msg: string) => void };
-  projectRegistry: { registerProject?: (p: string) => Record<string, unknown> | null; getProject?: (id: string) => Record<string, unknown> | null; getProjects?: (filters?: Record<string, unknown>) => Record<string, unknown>[] } | null;
-  doltHubProvisioner: { provisionProjectBeadsRemote?: (id: string, opts: Record<string, unknown>) => Promise<Record<string, unknown>> } | null;
-  beadsIssueService: { getIssue?: (id: string) => Record<string, unknown> | null; claimIssue?: (...args: unknown[]) => Promise<unknown>; unclaimIssue?: (...args: unknown[]) => Promise<unknown>; closeIssue?: (...args: unknown[]) => Promise<unknown>; reopenIssue?: (...args: unknown[]) => Promise<unknown>; updateIssueStatus?: (id: string, status: string, opts: Record<string, unknown>) => Promise<unknown>; addIssueNote?: (id: string, content: string, opts: Record<string, unknown>) => Promise<unknown> } | null;
-  beadsAdapter: {
-    listIssues?: (
-      project: { identifier: string; filesystem_path?: string | null },
-      filters?: Record<string, unknown>,
-      options?: { forceRefresh?: boolean },
-    ) => Promise<{ items: Record<string, unknown>[] }>;
-    [key: string]: unknown;
-  } | null;
-  beadsIssueMirror?: {
-    ensureFresh: (projectId: string, maxAgeMs?: number) => Promise<{ source: string; error: string | null; changed: number; durationMs: number }>;
-  } | null;
-}
-
-interface RouteContext { pathname: string; method: string }
-interface HandleContext { req: unknown; res: unknown; url: URL; pathname: string }
-
-interface App {
-  registerRoute(opts: { match: (ctx: RouteContext) => boolean; handle: (ctx: HandleContext) => Promise<void> }): void;
+  parseJsonBody: ParseJsonBody;
+  sendJson: SendJson;
+  sendError: SendError;
+  logger: Logger;
+  projectRegistry: ProjectRegistryApi | null;
+  doltHubProvisioner: DoltHubProvisionerApi | null;
+  beadsIssueService: BeadsIssueServiceApi | null;
+  beadsAdapter: BeadsAdapterApi | null;
+  beadsIssueMirror?: BeadsIssueMirrorApi | null;
 }
 
 function isAbsolutePath(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0 && path.isAbsolute(value.trim());
 }
 
-function serializeProject(project: Record<string, unknown> | null): Record<string, unknown> | null {
+interface SerializedProject {
+  identifier: string;
+  name: string;
+  tech_stack: string | null;
+  letta_agent_id: string | null;
+  status: string;
+  last_scan_at: number | null;
+  issue_count: number;
+  filesystem_path: string | null;
+  git_url: string | null;
+  beads_remote: SerializedRemote;
+  description: string | null;
+  last_sync_at: number | null;
+}
+
+interface SerializedRemote {
+  owner: string | null;
+  repo: string | null;
+  url: string | null;
+  name: string | null;
+  status: string;
+  visibility: string | null;
+  provisioned_at: string | null;
+  last_push_at: string | null;
+  error: string | null;
+}
+
+function serializeProject(project: ProjectLike | null): SerializedProject | null {
   if (!project) return null;
   return {
-    identifier: project.identifier, name: project.name, tech_stack: project.tech_stack,
-    letta_agent_id: project.letta_agent_id, status: project.status, last_scan_at: project.last_scan_at,
-    issue_count: project.issue_count, filesystem_path: project.filesystem_path,
-    git_url: project.git_url, beads_remote: serializeBeadsRemoteStatus(project),
-    description: project.description, last_sync_at: project.last_sync_at,
+    identifier: project.identifier,
+    name: project.name,
+    tech_stack: project.tech_stack ?? null,
+    letta_agent_id: project.letta_agent_id,
+    status: project.status,
+    last_scan_at: project.last_checked_at,
+    issue_count: project.issue_count,
+    filesystem_path: project.filesystem_path,
+    git_url: project.git_url,
+    beads_remote: serializeBeadsRemoteStatus(project),
+    description: project.description ?? null,
+    last_sync_at: project.last_sync_at,
   };
 }
 
-function serializeBeadsRemoteStatus(project: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!project) return null;
+function serializeBeadsRemoteStatus(project: ProjectLike): SerializedRemote {
   return {
-    owner: project.beads_remote_owner || null, repo: project.beads_remote_repo || null,
-    url: project.beads_remote_url || null, name: project.beads_remote_name || null,
+    owner: project.beads_remote_owner || null,
+    repo: project.beads_remote_repo || null,
+    url: project.beads_remote_url || null,
+    name: project.beads_remote_name || null,
     status: project.beads_remote_status || 'not_provisioned',
+    visibility: project.beads_remote_visibility || null,
     provisioned_at: toIsoTimestamp(project.beads_remote_provisioned_at),
     last_push_at: toIsoTimestamp(project.beads_remote_last_push_at),
     error: project.beads_remote_last_error || null,
@@ -91,23 +184,28 @@ function normalizeIssueStatus(status: string | null | undefined): string {
   return 'open';
 }
 
-function isIssueReady(issue: Record<string, unknown>): boolean {
-  const status = normalizeIssueStatus(issue.status as string);
+function isIssueReady(issue: IssueLike): boolean {
+  const status = normalizeIssueStatus(issue.status as string | null | undefined);
   if (status === 'closed' || status === 'blocked' || status === 'deferred') return false;
-  return !issue.isBlocked && (!issue.blockedBy || (issue.blockedBy as unknown[]).length === 0);
+  if (issue.isBlocked) return false;
+  if (issue.blockedBy && issue.blockedBy.length > 0) return false;
+  return true;
 }
 
 function parseJsonArray(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((x) => String(x));
   if (typeof value === 'string' && value.trim().startsWith('[')) {
-    try { return JSON.parse(value) as string[]; } catch { return []; }
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map((x) => String(x)) : [];
+    } catch { return []; }
   }
   return [];
 }
 
-function serializeIssueDetail(issue: Record<string, unknown>): Record<string, unknown> {
-  const normalizedStatus = normalizeIssueStatus(issue.status as string);
+function serializeIssueDetail(issue: IssueLike): Record<string, unknown> {
+  const normalizedStatus = normalizeIssueStatus(issue.status as string | null | undefined);
   const labels = parseJsonArray(issue.labels ?? issue.labels_json);
   const blockedByIds = parseJsonArray(issue.blocked_by ?? issue.blocked_by_json ?? issue.blockedBy);
   const blockedByRefs = blockedByIds.map((id) => ({ id }));
@@ -121,12 +219,12 @@ function serializeIssueDetail(issue: Record<string, unknown>): Record<string, un
     project_id: projectId,
     provider: (issue.source as string) || TRACKER_PROVIDER,
     title: String(issue.title ?? ''),
-    type: (issue.issue_type ?? issue.type ?? 'task') as string,
+    type: (issue.issue_type ?? issue.type ?? 'task'),
     priority: String(issue.priority ?? 'medium'),
     status: normalizedStatus,
     status_label: String(issue.status ?? 'todo'),
     ready: isIssueReady(issue),
-    assignee: (issue.assignee ?? issue.owner ?? null) as string | null,
+    assignee: (issue.assignee ?? (issue as { owner?: string | null }).owner ?? null),
     blocked_by: blockedByRefs,
     blocks: [],
     is_blocked: blockedByIds.length > 0 || normalizedStatus === 'blocked',
@@ -135,7 +233,7 @@ function serializeIssueDetail(issue: Record<string, unknown>): Record<string, un
     summary: String(issue.title ?? '').slice(0, 200),
     acceptance_criteria: [],
     labels,
-    parent_id: (issue.parent_huly_id ?? issue.parent_id ?? null) as string | null,
+    parent_id: (issue.parent_huly_id ?? null),
     child_count: Number(issue.sub_issue_count ?? 0),
     validation_warnings: [],
     etag: `${id}:${updatedAt ?? ''}`,
@@ -150,53 +248,79 @@ function serializeIssueDetail(issue: Record<string, unknown>): Record<string, un
       last_sync_at: lastSyncAt,
     },
     metadata: {
-      huly_id: (issue.huly_id ?? null) as string | null,
-      vibe_task_id: (issue.vibe_task_id ?? null) as number | null,
+      huly_id: issue.huly_id ?? null,
+      vibe_task_id: issue.vibe_task_id ?? null,
     },
   };
 }
 
-function serializeIssue(issue: Record<string, unknown>): Record<string, unknown> {
-  if (!issue) return null as unknown as Record<string, unknown>;
-  const normalizedStatus = normalizeIssueStatus(issue.status as string);
+function serializeIssue(issue: IssueLike | null): Record<string, unknown> | null {
+  if (!issue) return null;
+  const normalizedStatus = normalizeIssueStatus(issue.status as string | null | undefined);
+  const id = issue.id ?? issue.identifier;
+  const blockedBy = parseJsonArray(issue.blockedBy ?? issue.blocked_by ?? issue.blocked_by_json);
+  const labels = parseJsonArray(issue.labels ?? issue.labels_json);
+  const acceptanceCriteria = Array.isArray(issue.acceptanceCriteria)
+    ? issue.acceptanceCriteria
+    : typeof issue.acceptance_criteria === 'string'
+      ? [issue.acceptance_criteria]
+      : [];
+  const updatedAtRaw = issue.updatedAt ?? issue.modifiedAt ?? issue.updated_at ?? issue.beads_updated_at;
   return {
-    id: issue.id || issue.identifier, projectId: issue.project_id || issue.projectId,
-    provider: issue.provider || TRACKER_PROVIDER, title: issue.title || '', type: issue.type || 'task',
-    priority: issue.priority || 'medium', status: normalizedStatus,
-    statusLabel: issue.statusLabel || issue.status || 'todo',
-    ready: isIssueReady(issue), assignee: issue.assignee || null,
-    blockedBy: issue.blockedBy || [], blocks: issue.blocks || [],
-    isBlocked: !!(issue.isBlocked || (issue.blockedBy && (issue.blockedBy as unknown[]).length > 0)),
-    updatedAt: toIsoTimestamp(issue.updatedAt || issue.modifiedAt || issue.updated_at),
-    summary: String(issue.summary || issue.title || '').slice(0, 200),
-    acceptanceCriteria: issue.acceptanceCriteria || issue.acceptance_criteria || [],
-    labels: issue.labels || [], validationWarnings: issue.validationWarnings || [],
-    etag: `${issue.id || issue.identifier}:${issue.updatedAt || issue.modifiedAt || 0}`,
+    id,
+    projectId: issue.project_id ?? issue.projectId ?? issue.project_identifier,
+    provider: TRACKER_PROVIDER,
+    title: issue.title ?? '',
+    type: issue.type ?? issue.issue_type ?? 'task',
+    priority: String(issue.priority ?? 'medium'),
+    status: normalizedStatus,
+    statusLabel: issue.statusLabel ?? issue.status ?? 'todo',
+    ready: isIssueReady(issue),
+    assignee: issue.assignee ?? null,
+    blockedBy,
+    blocks: Array.isArray(issue.blocks) ? issue.blocks : [],
+    isBlocked: !!(issue.isBlocked || blockedBy.length > 0),
+    updatedAt: toIsoTimestamp(updatedAtRaw),
+    summary: String(issue.title ?? '').slice(0, 200),
+    acceptanceCriteria,
+    labels,
+    validationWarnings: issue.validationWarnings ?? [],
+    etag: `${id}:${updatedAtRaw ?? 0}`,
   };
 }
 
-function paginate<T>(items: T[], cursor?: string, limit = DEFAULT_PAGE_LIMIT): { items: T[]; next_cursor: string | null; has_more: boolean; total_known: number } {
+interface Paginated<T> {
+  items: T[];
+  next_cursor: string | null;
+  has_more: boolean;
+  total_known: number;
+}
+
+interface KeyedItem {
+  id?: string | number;
+  identifier?: string | number;
+}
+
+function paginate<T extends KeyedItem>(items: T[], cursor?: string, limit = DEFAULT_PAGE_LIMIT): Paginated<T> {
   const effectiveLimit = Math.min(limit, MAX_PAGE_LIMIT);
   let startIdx = 0;
   if (cursor) {
-    const idx = items.findIndex(item => {
-      const r = item as Record<string, unknown>;
-      return r.id === cursor || r.identifier === cursor;
-    });
+    const idx = items.findIndex((item) => item.id === cursor || item.identifier === cursor);
     if (idx >= 0) startIdx = idx + 1;
   }
   const slice = items.slice(startIdx, startIdx + effectiveLimit);
-  const lastItem = slice[slice.length - 1] as Record<string, unknown> | undefined;
+  const lastItem = slice[slice.length - 1];
+  const lastKey = lastItem ? String(lastItem.id ?? lastItem.identifier ?? '') : '';
   return {
     items: slice,
-    next_cursor: lastItem && slice.length === effectiveLimit ? Buffer.from(String(lastItem.id || lastItem.identifier)).toString('base64') : null,
+    next_cursor: lastItem && slice.length === effectiveLimit ? Buffer.from(lastKey).toString('base64') : null,
     has_more: startIdx + effectiveLimit < items.length,
     total_known: items.length,
   };
 }
 
-function getBeadsListFilters(url: URL): Record<string, unknown> {
-  const filters: Record<string, unknown> = {};
+function getBeadsListFilters(url: URL): BeadsListFilters {
+  const filters: BeadsListFilters = {};
   const status = url.searchParams.get('status');
   const priority = url.searchParams.get('priority');
   const type = url.searchParams.get('type');
@@ -208,26 +332,32 @@ function getBeadsListFilters(url: URL): Record<string, unknown> {
   return filters;
 }
 
+interface BeadsHydrationResult {
+  issues: IssueLike[];
+  source: 'beads' | 'database';
+  error: string | null;
+}
+
 async function hydrateIssuesFromBeads(
-  beadsAdapter: RouteDeps['beadsAdapter'],
-  project: Record<string, unknown>,
-  filters: Record<string, unknown>,
-  logger: RouteDeps['logger'],
-): Promise<{ issues: Record<string, unknown>[]; source: 'beads' | 'database'; error: string | null }> {
-  if (!beadsAdapter?.listIssues || !project?.filesystem_path) {
+  beadsAdapter: BeadsAdapterApi | null,
+  project: ProjectLike,
+  filters: BeadsListFilters,
+  logger: Logger,
+): Promise<BeadsHydrationResult> {
+  if (!beadsAdapter?.listIssues || !project.filesystem_path) {
     return { issues: [], source: 'database', error: null };
   }
   try {
     const result = await beadsAdapter.listIssues(
-      project as { identifier: string; filesystem_path?: string | null },
+      { identifier: project.identifier, filesystem_path: project.filesystem_path },
       filters,
       { forceRefresh: true },
     );
-    const issues = (result.items || []).filter((i: Record<string, unknown>) => i?.id || i?.identifier);
+    const issues = (result.items || []).filter((i): i is NormalizedBeadsIssue => Boolean(i?.id || i?.identifier));
     return { issues, source: 'beads', error: null };
   } catch (error) {
     logger.warn(
-      { err: error, project_identifier: project.identifier as string },
+      { err: error, project_identifier: project.identifier },
       'Failed to hydrate issues from Beads',
     );
     return { issues: [], source: 'database', error: 'Issue data temporarily unavailable from Beads' };
@@ -246,12 +376,16 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
         const statusFilter = url.searchParams.get('status');
         const techStackFilter = url.searchParams.get('tech_stack');
         const mcpEnabledFilter = url.searchParams.get('mcp_enabled');
-        const filters: Record<string, unknown> = {};
+        const filters: { status?: string; tech_stack?: string; mcp_enabled?: boolean } = {};
         if (statusFilter && ALLOWED_PROJECT_STATUSES.has(statusFilter)) filters.status = statusFilter;
         if (techStackFilter) filters.tech_stack = techStackFilter;
         if (mcpEnabledFilter !== null) filters.mcp_enabled = mcpEnabledFilter === 'true';
-        const rows = db.getAllProjects ? db.getAllProjects(filters) : (projectRegistry?.getProjects ? projectRegistry.getProjects(filters) : []);
-        const projects = rows.map((p: Record<string, unknown>) => serializeProject(p)).filter(Boolean);
+        const rows: ProjectRow[] = db.getAllProjects
+          ? db.getAllProjects(filters)
+          : (projectRegistry?.getProjects ? projectRegistry.getProjects(filters) : []);
+        const projects = rows
+          .map((p) => serializeProject(p))
+          .filter((p): p is NonNullable<typeof p> => p !== null);
         const cursorParam = url.searchParams.get('cursor');
         const limitParam = url.searchParams.get('limit');
         const paginated = cursorParam !== null || limitParam !== null;
@@ -297,13 +431,13 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
             issueSource = mirrorResult.source === 'cached' ? 'database' : 'mirror';
           }
         }
-        let allIssues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
+        let allIssues: IssueLike[] = db.getProjectIssues ? db.getProjectIssues(projectId) : [];
         if (allIssues.length === 0 && beadsAdapter?.listIssues && project.filesystem_path) {
           const hydrated = await hydrateIssuesFromBeads(beadsAdapter, project, getBeadsListFilters(url), logger);
           if (hydrated.issues.length > 0) { allIssues = hydrated.issues; issueSource = 'beads'; }
           if (hydrated.error) hydrationError = hydrated.error;
         }
-        let filtered = allIssues;
+        let filtered: IssueLike[] = allIssues;
         const statusFilter = url.searchParams.get('status');
         const priorityFilter = url.searchParams.get('priority');
         const typeFilter = url.searchParams.get('type');
@@ -312,28 +446,61 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
         const updatedSince = url.searchParams.get('updatedSince') || url.searchParams.get('updated_since');
         const sort = url.searchParams.get('sort') || 'priority';
 
-        if (statusFilter) { const statuses = statusFilter.split(',').map(s => s.trim().toLowerCase()); filtered = filtered.filter(i => statuses.includes(normalizeIssueStatus(i.status as string))); }
-        if (priorityFilter) { const priorities = priorityFilter.split(',').map(p => p.trim().toLowerCase()); filtered = filtered.filter(i => priorities.includes(((i.priority as string) || 'medium').toLowerCase())); }
-        if (typeFilter) filtered = filtered.filter(i => i.type === typeFilter);
-        if (readyFilter === 'true') filtered = filtered.filter(i => isIssueReady(i));
-        if (readyFilter === 'false') filtered = filtered.filter(i => !isIssueReady(i));
-        if (q) { const query = q.toLowerCase(); filtered = filtered.filter(i => ((i.title as string) || '').toLowerCase().includes(query) || ((i.description as string) || '').toLowerCase().includes(query)); }
-        if (updatedSince) { const since = toNumber(updatedSince); if (since) filtered = filtered.filter(i => { const t = toNumber(i.updatedAt || i.modifiedAt || i.updated_at); return t >= since; }); }
+        if (statusFilter) {
+          const statuses = statusFilter.split(',').map((s) => s.trim().toLowerCase());
+          filtered = filtered.filter((i) => statuses.includes(normalizeIssueStatus(i.status)));
+        }
+        if (priorityFilter) {
+          const priorities = priorityFilter.split(',').map((p) => p.trim().toLowerCase());
+          filtered = filtered.filter((i) => priorities.includes(String(i.priority ?? 'medium').toLowerCase()));
+        }
+        if (typeFilter) filtered = filtered.filter((i) => (i.type ?? i.issue_type) === typeFilter);
+        if (readyFilter === 'true') filtered = filtered.filter((i) => isIssueReady(i));
+        if (readyFilter === 'false') filtered = filtered.filter((i) => !isIssueReady(i));
+        if (q) {
+          const query = q.toLowerCase();
+          filtered = filtered.filter((i) =>
+            (i.title ?? '').toLowerCase().includes(query) ||
+            (i.description ?? '').toLowerCase().includes(query),
+          );
+        }
+        if (updatedSince) {
+          const since = toNumber(updatedSince);
+          if (since) {
+            filtered = filtered.filter((i) => {
+              const t = toNumber(i.updatedAt ?? i.modifiedAt ?? i.updated_at);
+              return t >= since;
+            });
+          }
+        }
 
-        if (sort === 'updated') filtered.sort((a, b) => { const at = toNumber(a.updatedAt || a.modifiedAt || a.updated_at); const bt = toNumber(b.updatedAt || b.modifiedAt || b.updated_at); return bt - at; });
-        else if (sort === 'created') filtered.sort((a, b) => { const at = toNumber(a.createdAt || a.created_at); const bt = toNumber(b.createdAt || b.created_at); return bt - at; });
-        else { const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 }; filtered.sort((a, b) => (priorityOrder[((a.priority as string) || 'none').toLowerCase()] ?? 4) - (priorityOrder[((b.priority as string) || 'none').toLowerCase()] ?? 4)); }
+        if (sort === 'updated') {
+          filtered.sort((a, b) =>
+            toNumber(b.updatedAt ?? b.modifiedAt ?? b.updated_at) -
+            toNumber(a.updatedAt ?? a.modifiedAt ?? a.updated_at),
+          );
+        } else if (sort === 'created') {
+          filtered.sort((a, b) => toNumber(b.createdAt ?? b.created_at) - toNumber(a.createdAt ?? a.created_at));
+        } else {
+          const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+          filtered.sort((a, b) =>
+            (priorityOrder[String(a.priority ?? 'none').toLowerCase()] ?? 4) -
+            (priorityOrder[String(b.priority ?? 'none').toLowerCase()] ?? 4),
+          );
+        }
 
-        const serialized = filtered.map(serializeIssue);
+        const serialized = filtered
+          .map((issue) => serializeIssue(issue))
+          .filter((s): s is NonNullable<typeof s> => s !== null);
         const cursor = url.searchParams.get('cursor');
         const limit = Math.min(toNumber(url.searchParams.get('limit'), DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
         const page = paginate(serialized, cursor || undefined, limit);
         const trackerStats = {
           total: allIssues.length, filtered: serialized.length,
-          open: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'open').length,
-          inProgress: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'in_progress').length,
-          closed: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'closed').length,
-          blocked: allIssues.filter(i => normalizeIssueStatus(i.status as string) === 'blocked').length,
+          open: allIssues.filter((i) => normalizeIssueStatus(i.status) === 'open').length,
+          inProgress: allIssues.filter((i) => normalizeIssueStatus(i.status) === 'in_progress').length,
+          closed: allIssues.filter((i) => normalizeIssueStatus(i.status) === 'closed').length,
+          blocked: allIssues.filter((i) => normalizeIssueStatus(i.status) === 'blocked').length,
         };
         const dataFreshness: Record<string, unknown> = { status: hydrationError ? 'stale' : 'fresh', last_sync_at: toIsoTimestamp(project.last_sync_at), source: issueSource };
         if (hydrationError) dataFreshness.error = hydrationError;
@@ -349,17 +516,17 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       const issueId = pathname.replace('/api/issues/', '');
       if (!db) { sendError(res, 503, 'Database not available'); return; }
       try {
-        let issue = (db.getIssue ? db.getIssue(issueId) : null) as Record<string, unknown> | null;
+        let issue: IssueLike | null = db.getIssue ? db.getIssue(issueId) : null;
         if (issue && beadsIssueMirror?.ensureFresh) {
           const projectId = String(issue.project_identifier ?? '');
           if (projectId) {
             try { await beadsIssueMirror.ensureFresh(projectId); }
             catch (mirrorErr) { logger.warn({ err: mirrorErr, issueId }, 'Mirror ensureFresh on detail failed'); }
-            issue = (db.getIssue?.(issueId) ?? issue) as Record<string, unknown> | null;
+            issue = (db.getIssue?.(issueId) ?? issue);
           }
         }
         if (!issue && beadsIssueService?.getIssue) {
-          issue = beadsIssueService.getIssue(issueId) as Record<string, unknown> | null;
+          issue = beadsIssueService.getIssue(issueId);
         }
         if (!issue) { sendError(res, 404, 'Issue not found'); return; }
         sendJson(res, 200, { issue: serializeIssueDetail(issue), timestamp: new Date().toISOString() });
@@ -374,9 +541,11 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       const projectId = pathname.replace('/api/projects/', '').replace('/ready-work', '');
       if (!db) { sendError(res, 503, 'Database not available'); return; }
       try {
-        const allIssues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
-        const ready = allIssues.filter(isIssueReady);
-        const serialized = ready.map(serializeIssue);
+        const allIssues: IssueLike[] = db.getProjectIssues ? db.getProjectIssues(projectId) : [];
+        const ready = allIssues.filter((i) => isIssueReady(i));
+        const serialized = ready
+          .map((issue) => serializeIssue(issue))
+          .filter((s): s is NonNullable<typeof s> => s !== null);
         const cursor = url.searchParams.get('cursor');
         const limit = Math.min(toNumber(url.searchParams.get('limit'), DEFAULT_PAGE_LIMIT), MAX_PAGE_LIMIT);
         const page = paginate(serialized, cursor || undefined, limit);
@@ -392,7 +561,7 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       if (!db) { sendError(res, 503, 'Database not available'); return; }
       try {
         const projectId = decodeURIComponent(pathname.split('/')[3]!);
-        const project = (db.getProject ? db.getProject(projectId) : null) as Record<string, unknown> | null;
+        const project = db.getProject ? db.getProject(projectId) : null;
         if (!project) { sendError(res, 404, 'Project not found', { projectIdentifier: projectId }); return; }
         let range: ReturnType<typeof getAnalyticsRange>;
         try { range = getAnalyticsRange(url); }
@@ -406,7 +575,7 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
             issueSource = r.source === 'cached' ? 'database' : 'mirror';
           } catch (mirrorErr) { logger.warn({ err: mirrorErr, projectId }, 'Mirror ensureFresh on analytics failed'); }
         }
-        let issues = (db.getProjectIssues ? db.getProjectIssues(projectId) : []) as Record<string, unknown>[];
+        let issues: IssueLike[] = db.getProjectIssues ? db.getProjectIssues(projectId) : [];
         if (issues.length === 0 && beadsAdapter?.listIssues && project.filesystem_path) {
           const hydrated = await hydrateIssuesFromBeads(beadsAdapter, project, getBeadsListFilters(url), logger);
           if (hydrated.issues.length > 0) { issues = hydrated.issues; issueSource = 'beads'; }
@@ -455,7 +624,7 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
       try {
         const project = db.getProject ? db.getProject(projectId) : (projectRegistry?.getProject ? projectRegistry.getProject(projectId) : null);
         if (!project) { sendError(res, 404, 'Project not found'); return; }
-        sendJson(res, 200, { project: serializeProject(project), etag: `${project.identifier}:${project.last_scan_at || 0}` });
+        sendJson(res, 200, { project: serializeProject(project), etag: `${project.identifier}:${project.last_checked_at || 0}` });
       } catch (error) { logger.error({ err: error }, 'Failed to get project'); sendError(res, 500, 'Failed to get project', { error: (error as Error).message }); }
     },
   });
@@ -508,8 +677,8 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
   for (const action of ISSUE_MUTATIONS) {
     const methodName = `${action}Issue` as const;
     app.registerRoute({
-      match: ({ pathname, method }: RouteContext) => pathname.startsWith('/api/issues/') && pathname.endsWith(`/${action}`) && method === 'POST',
-      handle: async ({ req, res, pathname }: HandleContext) => {
+      match: ({ pathname, method }) => pathname.startsWith('/api/issues/') && pathname.endsWith(`/${action}`) && method === 'POST',
+      handle: async ({ req, res, pathname }) => {
         const issueId = pathname.replace('/api/issues/', '').replace(`/${action}`, '');
         if (!beadsAdapter && !beadsIssueService) { sendError(res, 503, 'Issue mutation service not available'); return; }
         try {
