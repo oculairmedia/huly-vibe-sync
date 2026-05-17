@@ -17,6 +17,21 @@
  *   - extra.contextWindowLimit?: number — context window override.
  *   - extra.spawnPrompt?: string — rich init prompt.
  *   - extra.memfsEnabled?: boolean — memfs lifecycle (default false).
+ *   - extra.runTeamsInit?: boolean — opt back in to letta-teams' built-
+ *     in init.js memory-block bootstrap. Default false. See "Memory
+ *     blocks" below.
+ *
+ * Memory blocks (vibesync-6wn.3):
+ *   letta-teams-sdk ships init.js, which writes opinionated memory-
+ *   block prompts ("you are running inside letta-teams …") onto a new
+ *   teammate. For Gastown, role packs (`packs/<name>/roles/*.toml`)
+ *   are the source of truth for memory block content per role. We do
+ *   not want teams' init to plant prompts we would then have to dig
+ *   out, so this provider passes `skipInit: true` on spawn by default.
+ *   Callers who specifically want teams' init can opt back in via
+ *   `extra.runTeamsInit = true`. Seeding memory blocks from role TOML
+ *   onto the spawned teammate's Letta agent is a follow-up
+ *   (vibesync-6wn.3a).
  *
  * Naming (vibesync-6wn.4):
  *   letta-teams' teammate namespace is flat and global per daemon.
@@ -180,9 +195,14 @@ export class LettaTeamsProvider implements RuntimeProvider {
     const target = resolveTeammateTarget(spec);
     const exists = await runtime.teammates.exists(target);
     if (!exists) {
+      const runTeamsInit = readBoolExtra(spec, 'runTeamsInit') === true;
       const input: SpawnTeammateInput = {
         name: target,
         role: spec.role,
+        // Layering invariant: role packs own memory block content.
+        // Skip teams' built-in init.js unless the caller has explicitly
+        // opted in. See "Memory blocks" in the header comment.
+        skipInit: !runTeamsInit,
         ...(readStringExtra(spec, 'model') !== undefined ? { model: readStringExtra(spec, 'model')! } : {}),
         ...(readNumberExtra(spec, 'contextWindowLimit') !== undefined
           ? { contextWindowLimit: readNumberExtra(spec, 'contextWindowLimit')! }

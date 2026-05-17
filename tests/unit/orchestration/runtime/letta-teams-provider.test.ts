@@ -374,6 +374,24 @@ describe('LettaTeamsProvider', () => {
     expect(spies.remove).toHaveBeenCalledWith('r');
   });
 
+  describe('init handling (role packs own memory blocks)', () => {
+    it('passes skipInit: true on spawn by default', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      await provider.start({ role: 'reviewer' });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ skipInit: true });
+    });
+
+    it('opts back in to teams init when extra.runTeamsInit is true', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      await provider.start({ role: 'reviewer', extra: { runTeamsInit: true } });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ skipInit: false });
+    });
+  });
+
   describe('molecule-scoped naming', () => {
     it('uses ${moleculeId}-${role} as the teammate target when moleculeId is supplied', async () => {
       const provider = newProvider();
