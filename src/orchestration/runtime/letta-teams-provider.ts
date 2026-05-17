@@ -17,9 +17,24 @@
  *   - extra.contextWindowLimit?: number — context window override.
  *   - extra.spawnPrompt?: string — rich init prompt.
  *   - extra.memfsEnabled?: boolean — memfs lifecycle (default false).
+ *   - extra.memfsStartup?: 'blocking' | 'background' | 'skip' — memfs
+ *     startup mode. Default teams' built-in (currently 'background').
+ *     Pass 'blocking' for tests / roles that must have the memfs ready
+ *     before the first prompt; 'skip' to disable the startup sync.
  *   - extra.runTeamsInit?: boolean — opt back in to letta-teams' built-
  *     in init.js memory-block bootstrap. Default false. See "Memory
  *     blocks" below.
+ *
+ * memfs lifecycle (vibesync-6wn.6):
+ *   letta-teams owns the memfs lifecycle inside the teammate's
+ *   process — memfsEnabled and memfsStartup are honored at
+ *   `runtime.teammates.spawn`, and `runtime.teammates.remove` (called
+ *   from this provider's stop()) tears the memfs down with the
+ *   teammate. From the orchestration plane's perspective there is no
+ *   separate "create memfs" / "destroy memfs" step; this provider
+ *   forwards the two knobs and lets teams do the rest. Memfs state
+ *   (memfsMemoryDir, memfsLastSyncedAt, etc.) is visible on
+ *   TeammateState for callers that need to inspect it.
  *
  * Memory blocks (vibesync-6wn.3):
  *   letta-teams-sdk ships init.js, which writes opinionated memory-
@@ -74,9 +89,12 @@ import type {
 // until first construction.
 type TeamsRuntime = import('letta-teams-sdk').TeamsRuntime;
 type SpawnTeammateInput = import('letta-teams-sdk').SpawnTeammateInput;
+type MemfsStartup = import('letta-teams-sdk').MemfsStartup;
 type TaskState = import('letta-teams-sdk').TaskState;
 type TaskStatus = import('letta-teams-sdk').TaskStatus;
 type ToolCallEvent = NonNullable<TaskState['toolCalls']>[number];
+
+const MEMFS_STARTUP_VALUES = new Set<MemfsStartup>(['blocking', 'background', 'skip']);
 
 interface LettaTeamsSessionHandle extends SessionHandle {
   readonly providerKind: 'letta-teams';
@@ -212,6 +230,9 @@ export class LettaTeamsProvider implements RuntimeProvider {
           : {}),
         ...(readBoolExtra(spec, 'memfsEnabled') !== undefined
           ? { memfsEnabled: readBoolExtra(spec, 'memfsEnabled')! }
+          : {}),
+        ...(readMemfsStartup(spec) !== undefined
+          ? { memfsStartup: readMemfsStartup(spec)! }
           : {}),
       };
       await runtime.teammates.spawn(input);
@@ -493,6 +514,11 @@ function readNumberExtra(spec: SessionSpec, key: string): number | undefined {
 function readBoolExtra(spec: SessionSpec, key: string): boolean | undefined {
   const v = spec.extra?.[key];
   return typeof v === 'boolean' ? v : undefined;
+}
+function readMemfsStartup(spec: SessionSpec): MemfsStartup | undefined {
+  const v = spec.extra?.['memfsStartup'];
+  if (typeof v !== 'string') return undefined;
+  return MEMFS_STARTUP_VALUES.has(v as MemfsStartup) ? (v as MemfsStartup) : undefined;
 }
 
 /**

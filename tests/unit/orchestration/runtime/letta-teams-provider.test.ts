@@ -374,6 +374,44 @@ describe('LettaTeamsProvider', () => {
     expect(spies.remove).toHaveBeenCalledWith('r');
   });
 
+  describe('memfs lifecycle', () => {
+    it('forwards memfsStartup when supplied as a valid mode', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      await provider.start({
+        role: 'coder',
+        extra: { memfsEnabled: true, memfsStartup: 'blocking' },
+      });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({
+        memfsEnabled: true,
+        memfsStartup: 'blocking',
+      });
+    });
+
+    it('omits memfsStartup when caller supplies an invalid value', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      await provider.start({
+        role: 'coder',
+        extra: { memfsEnabled: true, memfsStartup: 'nonsense' },
+      });
+      const args = spies.spawn.mock.calls[0]![0] as Record<string, unknown>;
+      expect(args['memfsEnabled']).toBe(true);
+      expect('memfsStartup' in args).toBe(false);
+    });
+
+    it('memfs teardown rides with teammates.remove on stop()', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'coder', extra: { memfsEnabled: true } });
+      await provider.stop(h);
+      expect(spies.remove).toHaveBeenCalledWith('coder');
+    });
+  });
+
   describe('init handling (role packs own memory blocks)', () => {
     it('passes skipInit: true on spawn by default', async () => {
       const provider = newProvider();
