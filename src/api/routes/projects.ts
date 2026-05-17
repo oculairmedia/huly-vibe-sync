@@ -79,6 +79,7 @@ const ALLOWED_PROJECT_STATUSES = new Set(['active', 'archived']);
 const DEFAULT_PAGE_LIMIT = 25;
 const MAX_PAGE_LIMIT = 100;
 const TRACKER_PROVIDER = 'beads';
+const STALE_AFTER_MS = 15 * 60 * 1000;
 const CLOSED_ISSUE_STATUSES = new Set(['done', 'closed', 'resolved', 'complete', 'completed']);
 const BLOCKED_ISSUE_STATUSES = new Set(['blocked']);
 const DEFERRED_ISSUE_STATUSES = new Set(['deferred', 'snoozed', 'later']);
@@ -364,6 +365,80 @@ async function hydrateIssuesFromBeads(
   }
 }
 
+function encodeOffsetCursor(offset: number): string {
+  return Buffer.from(String(offset), 'utf8').toString('base64url');
+}
+
+function decodeOffsetCursor(cursor: string | null): number {
+  if (!cursor) return 0;
+  const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+  const offset = Number.parseInt(decoded, 10);
+  return Number.isFinite(offset) && offset >= 0 ? offset : 0;
+}
+
+function getDataFreshness(
+  lastSyncAt: unknown,
+  options: { status?: string; error?: string | null; source?: string | null } = {},
+): Record<string, unknown> {
+  const lastSyncIso = toIsoTimestamp(lastSyncAt);
+  const status = options.status || (lastSyncIso ? 'available' : 'unknown');
+  const error = options.error || null;
+  const source = options.source || null;
+  const lastSyncMs = lastSyncAt ? new Date(lastSyncAt as string | number).getTime() : null;
+  const isStale =
+    status === 'available' && lastSyncMs ? Date.now() - lastSyncMs > STALE_AFTER_MS : false;
+  return {
+    status: error ? 'error' : status,
+    last_sync_at: lastSyncIso,
+    error,
+    source,
+    is_stale: isStale,
+    stale_threshold_ms: STALE_AFTER_MS,
+  };
+}
+
+function getUnavailableFreshness(lastSyncAt: unknown, error: string): Record<string, unknown> {
+  return getDataFreshness(lastSyncAt, { error });
+}
+
+function getSubresourceEtag(project: ProjectLike, subresource: string, lastSyncAt: unknown): string | null {
+  const version = toIsoTimestamp(lastSyncAt) || toIsoTimestamp(project.updated_at ?? project.last_checked_at);
+  return version ? `${project.identifier}:${subresource}:${version}` : null;
+}
+
+function matchesIssueStatus(issueStatus: unknown, requestedStatus: string | null): boolean {
+  if (!requestedStatus) return true;
+  const i = String(issueStatus ?? '').toLowerCase();
+  const r = requestedStatus.toLowerCase();
+  return i === r || normalizeIssueStatus(i) === normalizeIssueStatus(r);
+}
+
+function serializeWorkItem(issue: IssueLike): Record<string, unknown> {
+  const status = issue.status ?? 'unknown';
+  const isBlocked = String(status).toLowerCase() === 'blocked';
+  return {
+    id: issue.identifier ?? issue.id,
+    provider: TRACKER_PROVIDER,
+    title: issue.title ?? '',
+    status,
+    priority: issue.priority ?? null,
+    type: issue.issue_type ?? issue.type ?? null,
+    labels: [],
+    assignee: issue.assignee ?? null,
+    blocked: isBlocked,
+    dependency_count: 0,
+    parent_id: issue.parent_huly_id ?? issue.parent_vibe_id ?? null,
+    child_count: toNumber(issue.sub_issue_count),
+    updated_at: toIsoTimestamp(issue.updated_at ?? issue.last_sync_at ?? issue.updatedAt),
+    created_at: toIsoTimestamp(issue.created_at ?? issue.createdAt),
+    url: null,
+    metadata: {
+      vibe_task_id: issue.vibe_task_id ?? null,
+      last_sync_at: toIsoTimestamp(issue.last_sync_at),
+    },
+  };
+}
+
 export function registerProjectRoutes(app: App, deps: RouteDeps): void {
   const { db, sendJson, sendError, logger, projectRegistry, doltHubProvisioner, beadsIssueService, beadsAdapter, beadsIssueMirror } = deps;
 
@@ -506,6 +581,106 @@ export function registerProjectRoutes(app: App, deps: RouteDeps): void {
         if (hydrationError) dataFreshness.error = hydrationError;
         sendJson(res, 200, { projectId, project: serializeProject(project), issues: page.items, tracker_stats: trackerStats, data_freshness: dataFreshness, page: { next_cursor: page.next_cursor, has_more: page.has_more, total_known: page.total_known } });
       } catch (error) { logger.error({ err: error }, 'Failed to list issues'); sendError(res, 500, 'Failed to list issues', { error: (error as Error).message }); }
+    },
+  });
+
+  // GET /api/projects/:id/work-items
+  app.registerRoute({
+    match: ({ pathname, method }) => pathname.startsWith('/api/projects/') && pathname.endsWith('/work-items') && method === 'GET',
+    handle: async ({ res, url, pathname }) => {
+      const projectId = pathname.replace('/api/projects/', '').replace('/work-items', '');
+      if (!db) { sendError(res, 503, 'Database not available'); return; }
+      try {
+        const project = db.getProject ? db.getProject(projectId) : (projectRegistry?.getProject ? projectRegistry.getProject(projectId) : null);
+        if (!project) { sendError(res, 404, 'Project not found', { identifier: projectId }); return; }
+
+        const statusFilter = url.searchParams.get('status');
+        const priorityFilter = url.searchParams.get('priority');
+
+        let issueSource: 'database' | 'mirror' | 'beads' = 'database';
+        let hydrationError: string | null = null;
+
+        if (beadsIssueMirror?.ensureFresh && project.filesystem_path) {
+          try {
+            const mirrorResult = await beadsIssueMirror.ensureFresh(projectId);
+            hydrationError = mirrorResult.error;
+            issueSource = mirrorResult.source === 'cached' ? 'database' : 'mirror';
+          } catch (mirrorErr) {
+            logger.warn({ err: mirrorErr, project_identifier: projectId }, 'Mirror ensureFresh failed on work-items; serving DB rows');
+          }
+        }
+
+        let allIssues: IssueLike[] = [];
+        try {
+          allIssues = db.getProjectIssues ? db.getProjectIssues(projectId) : [];
+        } catch (dbErr) {
+          logger.error({ err: dbErr, project_identifier: projectId }, 'Failed to read project issues for work-items');
+          sendJson(res, 200, {
+            project_identifier: projectId,
+            provider: TRACKER_PROVIDER,
+            work_items: [],
+            page: { limit: DEFAULT_PAGE_LIMIT, next_cursor: null, has_more: false, total_known: 0 },
+            etag: getSubresourceEtag(project, 'work-items', project.last_sync_at),
+            data_freshness: getUnavailableFreshness(project.last_sync_at, 'Work item data is temporarily unavailable'),
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        if (allIssues.length === 0 && beadsAdapter?.listIssues && project.filesystem_path) {
+          const filters: BeadsListFilters = {};
+          if (statusFilter) filters.status = normalizeIssueStatus(statusFilter);
+          const hydrated = await hydrateIssuesFromBeads(beadsAdapter, project, filters, logger);
+          if (hydrated.issues.length > 0) {
+            allIssues = hydrated.issues;
+            issueSource = 'beads';
+          }
+          if (hydrated.error) hydrationError = hydrated.error;
+        }
+
+        const filtered = allIssues.filter((i) => {
+          if (!matchesIssueStatus(i.status, statusFilter)) return false;
+          if (priorityFilter && String(i.priority ?? '') !== priorityFilter) return false;
+          return true;
+        });
+
+        const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '', 10);
+        const limit = Math.min(
+          Math.max(Number.isFinite(requestedLimit) ? requestedLimit : DEFAULT_PAGE_LIMIT, 1),
+          MAX_PAGE_LIMIT,
+        );
+        const offset = decodeOffsetCursor(url.searchParams.get('cursor'));
+        const slice = filtered.slice(offset, offset + limit);
+        const nextOffset = offset + slice.length;
+        const hasMore = nextOffset < filtered.length;
+
+        const workItems = slice.map((issue, index) => ({
+          ...serializeWorkItem(issue),
+          cursor: encodeOffsetCursor(offset + index + 1),
+        }));
+
+        const dataFreshness = hydrationError
+          ? getUnavailableFreshness(project.last_sync_at, hydrationError)
+          : getDataFreshness(project.last_sync_at, { source: issueSource });
+
+        sendJson(res, 200, {
+          project_identifier: projectId,
+          provider: TRACKER_PROVIDER,
+          work_items: workItems,
+          page: {
+            limit,
+            next_cursor: hasMore ? encodeOffsetCursor(nextOffset) : null,
+            has_more: hasMore,
+            total_known: filtered.length,
+          },
+          etag: getSubresourceEtag(project, 'work-items', project.last_sync_at),
+          data_freshness: dataFreshness,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to list project work-items');
+        sendError(res, 500, 'Failed to fetch project work items', { error: (error as Error).message });
+      }
     },
   });
 
