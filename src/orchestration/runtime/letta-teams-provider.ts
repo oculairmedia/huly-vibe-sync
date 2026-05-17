@@ -20,12 +20,12 @@
  *   - Daemon lifecycle: call ensureDaemonRunning() before first use.
  *     Idempotent; safe to call from multiple sites.
  *
- * Status: SKELETON. observe() yields synthetic started/turn-done; the
- * SDK's task-progress hooks are reachable via runtime.tasks.wait() but
- * full event-bus mapping is deferred to the daemon (vibesync-uxx
- * follow-up).
+ * Status: IN PROGRESS. start/stop/prompt wired against the SDK;
+ * observe() now polls runtime.tasks.get to translate TaskState
+ * transitions and tool-call frames into SessionEvent. Event-bus
+ * publish is the next hop (vibesync-6wn.7).
  *
- * See vibesync-y0z.
+ * See vibesync-y0z, vibesync-6wn (epic), vibesync-6wn.2 (this journey).
  */
 
 import type {
@@ -36,10 +36,13 @@ import type {
   SessionSpec,
 } from './provider.js';
 
-// Type-only import — keeps the SDK out of the runtime require graph
+// Type-only imports — keep the SDK out of the runtime require graph
 // until first construction.
 type TeamsRuntime = import('letta-teams-sdk').TeamsRuntime;
 type SpawnTeammateInput = import('letta-teams-sdk').SpawnTeammateInput;
+type TaskState = import('letta-teams-sdk').TaskState;
+type TaskStatus = import('letta-teams-sdk').TaskStatus;
+type ToolCallEvent = NonNullable<TaskState['toolCalls']>[number];
 
 interface LettaTeamsSessionHandle extends SessionHandle {
   readonly providerKind: 'letta-teams';
@@ -47,9 +50,43 @@ interface LettaTeamsSessionHandle extends SessionHandle {
   readonly target: string;
 }
 
+/** Per-session bookkeeping needed to stream events for the latest turn. */
+interface SessionState {
+  /** ID of the most recent task dispatched via prompt(). */
+  activeTaskId: string | null;
+  /** Tripped by stop(); observe() exits with a `stopped` event. */
+  stopped: boolean;
+}
+
+export interface LettaTeamsProviderOptions {
+  /** Poll cadence for runtime.tasks.get inside observe(). Default 250ms. */
+  readonly pollIntervalMs?: number;
+  /**
+   * Max time observe() will wait for the first dispatched task on a
+   * fresh handle before yielding a `stopped` event. Default 30s.
+   * Set lower in tests via the constructor.
+   */
+  readonly initialTaskTimeoutMs?: number;
+  /** Injectable sleep — tests pass a fake to avoid real timers. */
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+const DEFAULT_POLL_INTERVAL_MS = 250;
+const DEFAULT_INITIAL_TASK_TIMEOUT_MS = 30_000;
+
 export class LettaTeamsProvider implements RuntimeProvider {
   readonly kind = 'letta-teams';
   private runtime: TeamsRuntime | null = null;
+  private readonly sessions = new Map<string, SessionState>();
+  private readonly pollIntervalMs: number;
+  private readonly initialTaskTimeoutMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+
+  constructor(opts: LettaTeamsProviderOptions = {}) {
+    this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+    this.initialTaskTimeoutMs = opts.initialTaskTimeoutMs ?? DEFAULT_INITIAL_TASK_TIMEOUT_MS;
+    this.sleep = opts.sleep ?? defaultSleep;
+  }
 
   /**
    * Lazily create the TeamsRuntime singleton. The SDK exposes a
@@ -99,12 +136,15 @@ export class LettaTeamsProvider implements RuntimeProvider {
       providerKind: 'letta-teams',
       target,
     };
+    this.sessions.set(handle.id, { activeTaskId: null, stopped: false });
     return handle;
   }
 
   async stop(handle: SessionHandle): Promise<void> {
     const h = expectHandle(handle);
     const runtime = await this.getRuntime();
+    const session = this.sessions.get(h.id);
+    if (session) session.stopped = true;
     // Stop is teammate removal; the SDK does its own confirmation flow
     // for destructive operations. For VibeSync's lifecycle we just call
     // remove and accept the false result if it failed.
@@ -115,7 +155,10 @@ export class LettaTeamsProvider implements RuntimeProvider {
     const h = expectHandle(handle);
     const runtime = await this.getRuntime();
     const message = contentToText(content);
-    await runtime.tasks.dispatch({ target: h.target, message });
+    const { taskId } = await runtime.tasks.dispatch({ target: h.target, message });
+    const session = this.sessions.get(h.id) ?? { activeTaskId: null, stopped: false };
+    session.activeTaskId = taskId;
+    this.sessions.set(h.id, session);
   }
 
   async nudge(_handle: SessionHandle): Promise<void> {
@@ -123,19 +166,130 @@ export class LettaTeamsProvider implements RuntimeProvider {
   }
 
   /**
-   * Skeleton observe — yields a started → turn-done bracket so callers
-   * can integration-test the lifecycle. Full event mapping (tasks.wait
-   * progress → SessionEvent stream) lands when the daemon integrates
-   * this provider end-to-end.
+   * Stream SessionEvents derived from the most recently dispatched task
+   * on this handle. Poll-based because letta-teams-sdk exposes no
+   * progress callback — `runtime.tasks.get(id)` is the source of truth.
+   *
+   * Mapping:
+   *   pending  → `started` (once, on first observation)
+   *   running  → `first-token` (once, on the transition into running)
+   *   toolCalls grown → emit `tool-call` then `tool-result` per new entry
+   *   done     → `turn-done` (stopReason = 'done'), iterator ends
+   *   error    → `error`, iterator ends
+   *   stop()   → `stopped`, iterator ends
+   *
+   * The iterator ends naturally on a terminal task status or when stop()
+   * trips the session flag. Callers can also break out of the for-await.
    */
   async *observe(handle: SessionHandle): AsyncIterable<SessionEvent> {
-    expectHandle(handle);
-    const ts = new Date().toISOString();
-    yield { kind: 'started', ts };
-    yield { kind: 'turn-done', ts };
-    // TODO(vibesync-uxx follow-up): subscribe to runtime.tasks
-    // updates and translate into SessionEvent.
+    const h = expectHandle(handle);
+    const runtime = await this.getRuntime();
+    const session = this.sessions.get(h.id);
+    if (!session) {
+      // Handle never went through start() on this provider instance.
+      yield { kind: 'error', ts: nowIso(), code: 'unknown_session', message: `No session for ${h.id}` };
+      return;
+    }
+
+    // Wait for an active task. prompt() may not have been called yet on
+    // a freshly started handle; bail with `stopped` if we time out or
+    // stop() trips first.
+    const taskWaitStart = Date.now();
+    while (!session.activeTaskId && !session.stopped) {
+      if (Date.now() - taskWaitStart > this.initialTaskTimeoutMs) {
+        yield { kind: 'stopped', ts: nowIso() };
+        return;
+      }
+      await this.sleep(this.pollIntervalMs);
+    }
+    if (session.stopped) {
+      yield { kind: 'stopped', ts: nowIso() };
+      return;
+    }
+    const taskId = session.activeTaskId!;
+
+    let lastStatus: TaskStatus | undefined;
+    let lastToolCount = 0;
+    let startedEmitted = false;
+
+    while (true) {
+      if (session.stopped) {
+        yield { kind: 'stopped', ts: nowIso() };
+        return;
+      }
+
+      const state = await runtime.tasks.get(taskId);
+      if (!state) {
+        yield {
+          kind: 'error',
+          ts: nowIso(),
+          code: 'task_vanished',
+          message: `Task ${taskId} no longer present in runtime`,
+        };
+        return;
+      }
+
+      if (!startedEmitted) {
+        yield { kind: 'started', ts: state.createdAt };
+        startedEmitted = true;
+      }
+
+      if (lastStatus !== 'running' && state.status === 'running') {
+        yield { kind: 'first-token', ts: state.startedAt ?? nowIso() };
+      }
+
+      const toolCalls = state.toolCalls ?? [];
+      for (let i = lastToolCount; i < toolCalls.length; i += 1) {
+        yield* toolCallEvents(toolCalls[i]!);
+      }
+      lastToolCount = toolCalls.length;
+
+      if (state.status === 'done') {
+        yield {
+          kind: 'turn-done',
+          ts: state.completedAt ?? nowIso(),
+          stopReason: 'done',
+        };
+        // Clear the active task so the next observe() waits for the
+        // following prompt() rather than re-streaming this turn.
+        session.activeTaskId = null;
+        return;
+      }
+      if (state.status === 'error') {
+        yield {
+          kind: 'error',
+          ts: state.completedAt ?? nowIso(),
+          code: 'task_error',
+          message: state.error ?? 'task error',
+        };
+        session.activeTaskId = null;
+        return;
+      }
+
+      lastStatus = state.status;
+      await this.sleep(this.pollIntervalMs);
+    }
   }
+}
+
+function* toolCallEvents(tc: ToolCallEvent): Iterable<SessionEvent> {
+  const ts = nowIso();
+  yield { kind: 'tool-call', ts, tool: tc.name, args: tc.input ?? null };
+  yield {
+    kind: 'tool-result',
+    ts,
+    tool: tc.name,
+    result: tc.success ? null : (tc.error ?? null),
+    ok: tc.success,
+  };
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function expectHandle(handle: SessionHandle): LettaTeamsSessionHandle {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { LettaTeamsProvider } from '../../../../src/orchestration/runtime/index.js';
+import type { SessionEvent } from '../../../../src/orchestration/runtime/provider.js';
 
 /**
  * Unit-tests for LettaTeamsProvider. The SDK import is real; we inject
@@ -9,7 +10,18 @@ import { LettaTeamsProvider } from '../../../../src/orchestration/runtime/index.
  * out-of-band; here we pin the interface contract.
  */
 
-function fakeRuntime() {
+type TaskStateLike = {
+  id: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: string;
+  error?: string;
+  toolCalls?: { name: string; input?: string; success: boolean; error?: string }[];
+};
+
+function fakeRuntime(opts: { taskTimeline?: TaskStateLike[] } = {}) {
   const exists = vi.fn(async (_name: string) => false);
   const spawn = vi.fn(async (input: { name: string; role: string }) => ({
     name: input.name,
@@ -20,14 +32,42 @@ function fakeRuntime() {
     taskId: `task-${input.target}`,
   }));
   const ensureRunning = vi.fn(async () => undefined);
+
+  // tasks.get returns successive states from the supplied timeline,
+  // sticking on the last entry once exhausted. Default: a single
+  // done state so observe() short-circuits quickly.
+  const timeline = opts.taskTimeline ?? [
+    {
+      id: 'task-default',
+      status: 'done',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      completedAt: '2026-05-17T00:00:01.000Z',
+    },
+  ];
+  let cursor = 0;
+  const get = vi.fn(async (_id: string): Promise<TaskStateLike> => {
+    const state = timeline[Math.min(cursor, timeline.length - 1)]!;
+    cursor = Math.min(cursor + 1, timeline.length - 1);
+    return state;
+  });
+
   return {
     runtime: {
       daemon: { ensureRunning },
       teammates: { exists, spawn, remove },
-      tasks: { dispatch },
+      tasks: { dispatch, get },
     },
-    spies: { exists, spawn, remove, dispatch, ensureRunning },
+    spies: { exists, spawn, remove, dispatch, ensureRunning, get },
   };
+}
+
+function newProvider(opts: ConstructorParameters<typeof LettaTeamsProvider>[0] = {}): LettaTeamsProvider {
+  return new LettaTeamsProvider({
+    pollIntervalMs: 0,
+    initialTaskTimeoutMs: 50,
+    sleep: async () => undefined,
+    ...opts,
+  });
 }
 
 function inject(provider: LettaTeamsProvider, runtime: unknown): void {
@@ -36,7 +76,7 @@ function inject(provider: LettaTeamsProvider, runtime: unknown): void {
 
 describe('LettaTeamsProvider', () => {
   it('spawns a teammate on first start and reuses it on second start', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
 
@@ -52,7 +92,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('uses an explicit target from spec.extra over the role', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     const h = await provider.start({ role: 'reviewer', extra: { target: 'reviewer-prime' } });
@@ -61,7 +101,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('forwards model/contextWindowLimit/spawnPrompt/memfsEnabled when provided', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     await provider.start({
@@ -82,7 +122,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('prompt joins text content blocks and dispatches to the target', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     const h = await provider.start({ role: 'reviewer' });
@@ -97,7 +137,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('prompt surfaces an [image: <mime>] placeholder for image content', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     const h = await provider.start({ role: 'reviewer' });
@@ -111,7 +151,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('rejects handles from other providers', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     inject(provider, fakeRuntime().runtime);
     await expect(
       provider.prompt({ id: 'x', providerKind: 'letta-pm-agent' } as never, [
@@ -120,19 +160,202 @@ describe('LettaTeamsProvider', () => {
     ).rejects.toThrow(/handle from wrong provider/);
   });
 
-  it('observe yields started → turn-done (skeleton)', async () => {
-    const provider = new LettaTeamsProvider();
+  it('observe yields stopped when no task is dispatched before the timeout', async () => {
+    const provider = newProvider();
     inject(provider, fakeRuntime().runtime);
     const h = await provider.start({ role: 'r' });
     const kinds: string[] = [];
     for await (const ev of provider.observe(h)) {
       kinds.push(ev.kind);
     }
-    expect(kinds).toEqual(['started', 'turn-done']);
+    expect(kinds).toEqual(['stopped']);
+  });
+
+  it('observe maps pending → running → done to started/first-token/turn-done', async () => {
+    const provider = newProvider();
+    const { runtime } = fakeRuntime({
+      taskTimeline: [
+        { id: 'task-r', status: 'pending', createdAt: '2026-05-17T00:00:00.000Z' },
+        {
+          id: 'task-r',
+          status: 'running',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:01.000Z',
+        },
+        {
+          id: 'task-r',
+          status: 'done',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:01.000Z',
+          completedAt: '2026-05-17T00:00:02.000Z',
+          result: 'ok',
+        },
+      ],
+    });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'r' });
+    await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+    const events: SessionEvent[] = [];
+    for await (const ev of provider.observe(h)) events.push(ev);
+
+    expect(events.map((e) => e.kind)).toEqual(['started', 'first-token', 'turn-done']);
+    expect(events[0]!.ts).toBe('2026-05-17T00:00:00.000Z');
+    expect(events[1]!.ts).toBe('2026-05-17T00:00:01.000Z');
+    const last = events[2] as Extract<SessionEvent, { kind: 'turn-done' }>;
+    expect(last.ts).toBe('2026-05-17T00:00:02.000Z');
+    expect(last.stopReason).toBe('done');
+  });
+
+  it('observe emits tool-call + tool-result frames as toolCalls grow', async () => {
+    const provider = newProvider();
+    const { runtime } = fakeRuntime({
+      taskTimeline: [
+        {
+          id: 'task-r',
+          status: 'running',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:00.500Z',
+        },
+        {
+          id: 'task-r',
+          status: 'running',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:00.500Z',
+          toolCalls: [{ name: 'read_file', input: 'src/foo.ts', success: true }],
+        },
+        {
+          id: 'task-r',
+          status: 'done',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:00.500Z',
+          completedAt: '2026-05-17T00:00:02.000Z',
+          toolCalls: [
+            { name: 'read_file', input: 'src/foo.ts', success: true },
+            { name: 'write_file', input: 'src/foo.ts', success: false, error: 'EACCES' },
+          ],
+        },
+      ],
+    });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'r' });
+    await provider.prompt(h, [{ type: 'text', text: 'edit' }]);
+    const events: SessionEvent[] = [];
+    for await (const ev of provider.observe(h)) events.push(ev);
+
+    expect(events.map((e) => e.kind)).toEqual([
+      'started',
+      'first-token',
+      'tool-call',
+      'tool-result',
+      'tool-call',
+      'tool-result',
+      'turn-done',
+    ]);
+    const firstToolCall = events[2] as Extract<SessionEvent, { kind: 'tool-call' }>;
+    expect(firstToolCall.tool).toBe('read_file');
+    expect(firstToolCall.args).toBe('src/foo.ts');
+    const firstResult = events[3] as Extract<SessionEvent, { kind: 'tool-result' }>;
+    expect(firstResult.ok).toBe(true);
+    const secondResult = events[5] as Extract<SessionEvent, { kind: 'tool-result' }>;
+    expect(secondResult.ok).toBe(false);
+    expect(secondResult.result).toBe('EACCES');
+  });
+
+  it('observe surfaces a terminal error when the task fails', async () => {
+    const provider = newProvider();
+    const { runtime } = fakeRuntime({
+      taskTimeline: [
+        {
+          id: 'task-r',
+          status: 'error',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          completedAt: '2026-05-17T00:00:01.000Z',
+          error: 'agent crashed',
+        },
+      ],
+    });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'r' });
+    await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+    const events: SessionEvent[] = [];
+    for await (const ev of provider.observe(h)) events.push(ev);
+
+    expect(events.map((e) => e.kind)).toEqual(['started', 'error']);
+    const err = events[1] as Extract<SessionEvent, { kind: 'error' }>;
+    expect(err.code).toBe('task_error');
+    expect(err.message).toBe('agent crashed');
+  });
+
+  it('observe ends with stopped when stop() is called mid-stream', async () => {
+    const provider = newProvider();
+    const { runtime } = fakeRuntime({
+      taskTimeline: [
+        { id: 'task-r', status: 'pending', createdAt: '2026-05-17T00:00:00.000Z' },
+        {
+          id: 'task-r',
+          status: 'running',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          startedAt: '2026-05-17T00:00:01.000Z',
+        },
+        // After this point, the timeline keeps repeating 'running' so
+        // observe() would loop forever without an external stop.
+      ],
+    });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'r' });
+    await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+
+    const events: SessionEvent[] = [];
+    const consumer = (async () => {
+      for await (const ev of provider.observe(h)) {
+        events.push(ev);
+        if (ev.kind === 'first-token') {
+          await provider.stop(h);
+        }
+      }
+    })();
+
+    await consumer;
+    expect(events.map((e) => e.kind)).toEqual(['started', 'first-token', 'stopped']);
+  });
+
+  it('a second turn re-streams events without re-emitting prior turn-done', async () => {
+    const provider = newProvider();
+    const timeline: TaskStateLike[] = [
+      { id: 'task-r', status: 'pending', createdAt: '2026-05-17T00:00:00.000Z' },
+      {
+        id: 'task-r',
+        status: 'done',
+        createdAt: '2026-05-17T00:00:00.000Z',
+        completedAt: '2026-05-17T00:00:01.000Z',
+      },
+    ];
+    const { runtime, spies } = fakeRuntime({ taskTimeline: timeline });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'r' });
+
+    await provider.prompt(h, [{ type: 'text', text: 'turn 1' }]);
+    const first: SessionEvent[] = [];
+    for await (const ev of provider.observe(h)) first.push(ev);
+    expect(first.map((e) => e.kind)).toEqual(['started', 'turn-done']);
+
+    // Reset the get-cursor so a second turn replays the pending → done arc.
+    spies.get.mockClear();
+    let cursor = 0;
+    spies.get.mockImplementation(async () => {
+      const state = timeline[Math.min(cursor, timeline.length - 1)]!;
+      cursor = Math.min(cursor + 1, timeline.length - 1);
+      return state as never;
+    });
+
+    await provider.prompt(h, [{ type: 'text', text: 'turn 2' }]);
+    const second: SessionEvent[] = [];
+    for await (const ev of provider.observe(h)) second.push(ev);
+    expect(second.map((e) => e.kind)).toEqual(['started', 'turn-done']);
   });
 
   it('ensureDaemonRunning calls daemon.ensureRunning', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     await provider.ensureDaemonRunning();
@@ -140,7 +363,7 @@ describe('LettaTeamsProvider', () => {
   });
 
   it('stop calls teammates.remove', async () => {
-    const provider = new LettaTeamsProvider();
+    const provider = newProvider();
     const { runtime, spies } = fakeRuntime();
     inject(provider, runtime);
     const h = await provider.start({ role: 'r' });
