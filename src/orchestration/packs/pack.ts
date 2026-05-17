@@ -31,6 +31,17 @@ import type { Formula } from '../formula/index.js';
 
 export type PackScope = 'project' | 'agent' | 'global';
 
+/**
+ * One core-memory block carried by a role. Mirrors letta's
+ * `Block` shape (label + value, optional limit) so the seeder can
+ * forward into `@letta-ai/letta-client` without translation.
+ */
+export interface MemoryBlock {
+  readonly label: string;
+  readonly value: string;
+  readonly limit?: number;
+}
+
 export interface RoleConfig {
   /** Role identifier (used in formulas). */
   readonly name: string;
@@ -42,6 +53,14 @@ export interface RoleConfig {
   readonly systemPromptTemplate?: string;
   /** Tools this role should have access to (free-form list of identifiers). */
   readonly tools?: readonly string[];
+  /**
+   * Core memory blocks to seed onto the spawned teammate's Letta
+   * agent. Source of truth per layering invariant AGENTS.md§
+   * "RuntimeProvider discipline" — teams' init.js is suppressed
+   * (skipInit=true) so these are the only writes to the agent's
+   * memory at start time.
+   */
+  readonly memoryBlocks?: readonly MemoryBlock[];
 }
 
 export interface PackManifest {
@@ -172,20 +191,27 @@ function readRoles(packRoot: string): RoleConfig[] {
     if (!isRecord(roleSection)) {
       throw new Error(`pack ${packRoot}: role ${entry.name} missing [role] table`);
     }
-    out.push(parseRole(packRoot, entry.name, roleSection));
+    out.push(parseRoleFromTables(packRoot, entry.name, roleSection, raw));
   }
   return out;
 }
 
-function parseRole(packRoot: string, fileName: string, raw: Record<string, unknown>): RoleConfig {
+function parseRoleFromTables(
+  packRoot: string,
+  fileName: string,
+  roleTable: Record<string, unknown>,
+  topTable: Record<string, unknown> | null,
+): RoleConfig {
   const defaultName = basename(fileName, '.toml');
-  const name = typeof raw['name'] === 'string' && (raw['name'] as string).length > 0 ? (raw['name'] as string) : defaultName;
-  const description = typeof raw['description'] === 'string' ? (raw['description'] as string) : undefined;
-  const model = typeof raw['model'] === 'string' ? (raw['model'] as string) : undefined;
-  const systemPromptTemplate = typeof raw['system_prompt_template'] === 'string'
-    ? (raw['system_prompt_template'] as string)
+  const name = typeof roleTable['name'] === 'string' && (roleTable['name'] as string).length > 0
+    ? (roleTable['name'] as string)
+    : defaultName;
+  const description = typeof roleTable['description'] === 'string' ? (roleTable['description'] as string) : undefined;
+  const model = typeof roleTable['model'] === 'string' ? (roleTable['model'] as string) : undefined;
+  const systemPromptTemplate = typeof roleTable['system_prompt_template'] === 'string'
+    ? (roleTable['system_prompt_template'] as string)
     : undefined;
-  const toolsRaw = raw['tools'];
+  const toolsRaw = roleTable['tools'];
   let tools: string[] | undefined;
   if (Array.isArray(toolsRaw)) {
     if (!toolsRaw.every((v): v is string => typeof v === 'string')) {
@@ -193,12 +219,40 @@ function parseRole(packRoot: string, fileName: string, raw: Record<string, unkno
     }
     tools = toolsRaw;
   }
+  // [[memory_blocks]] lives at the top level of the file (TOML array
+  // of tables), not inside [role]. Fall back to a nested array under
+  // [role] for authors who keep everything in one section.
+  const blocksRaw = (topTable?.['memory_blocks'] ?? roleTable['memory_blocks']) as unknown;
+  let memoryBlocks: MemoryBlock[] | undefined;
+  if (Array.isArray(blocksRaw)) {
+    memoryBlocks = blocksRaw.map((b, idx) => {
+      if (!isRecord(b)) {
+        throw new Error(`pack ${packRoot}: role ${fileName} memory_blocks[${idx}] must be a table`);
+      }
+      const label = b['label'];
+      const value = b['value'];
+      if (typeof label !== 'string' || label.length === 0) {
+        throw new Error(`pack ${packRoot}: role ${fileName} memory_blocks[${idx}].label must be a non-empty string`);
+      }
+      if (typeof value !== 'string') {
+        throw new Error(`pack ${packRoot}: role ${fileName} memory_blocks[${idx}].value must be a string`);
+      }
+      const limit = b['limit'];
+      const limitValue = typeof limit === 'number' && Number.isFinite(limit) && limit > 0 ? limit : undefined;
+      return {
+        label,
+        value,
+        ...(limitValue !== undefined ? { limit: limitValue } : {}),
+      };
+    });
+  }
   return {
     name,
     ...(description !== undefined ? { description } : {}),
     ...(model !== undefined ? { model } : {}),
     ...(systemPromptTemplate !== undefined ? { systemPromptTemplate } : {}),
     ...(tools !== undefined ? { tools } : {}),
+    ...(memoryBlocks !== undefined ? { memoryBlocks } : {}),
   };
 }
 

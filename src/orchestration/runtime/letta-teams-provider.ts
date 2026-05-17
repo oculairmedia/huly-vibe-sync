@@ -89,12 +89,34 @@ import type {
 // until first construction.
 type TeamsRuntime = import('letta-teams-sdk').TeamsRuntime;
 type SpawnTeammateInput = import('letta-teams-sdk').SpawnTeammateInput;
+type TeammateState = import('letta-teams-sdk').TeammateState;
 type MemfsStartup = import('letta-teams-sdk').MemfsStartup;
 type TaskState = import('letta-teams-sdk').TaskState;
 type TaskStatus = import('letta-teams-sdk').TaskStatus;
 type ToolCallEvent = NonNullable<TaskState['toolCalls']>[number];
 
 const MEMFS_STARTUP_VALUES = new Set<MemfsStartup>(['blocking', 'background', 'skip']);
+
+/** Shape of one memory block carried through SessionSpec.extra. */
+export interface MemoryBlockInput {
+  readonly label: string;
+  readonly value: string;
+  readonly limit?: number;
+}
+
+/**
+ * Adapter the provider calls to write a role pack's memory blocks
+ * onto the Letta agent backing a spawned teammate. Implementations
+ * live next to the SDK they wrap (e.g. src/letta/) so the
+ * orchestration plane never imports @letta-ai/letta-client directly.
+ *
+ * Contract: idempotent upsert. Calling with the same blocks twice
+ * must be a no-op on the second call (the seeder is responsible for
+ * diffing). Throwing surfaces as a session start failure.
+ */
+export interface MemoryBlockSeeder {
+  seed(agentId: string, blocks: readonly MemoryBlockInput[]): Promise<void>;
+}
 
 interface LettaTeamsSessionHandle extends SessionHandle {
   readonly providerKind: 'letta-teams';
@@ -132,6 +154,14 @@ export interface LettaTeamsProviderOptions {
    * subscribe instead of polling.
    */
   readonly eventBus?: EventBus;
+  /**
+   * Optional adapter that writes a role pack's memory blocks onto the
+   * spawned teammate's Letta agent after spawn. Required when callers
+   * pass SessionSpec.extra.memoryBlocks; ignored when they don't.
+   * Implementations live in src/letta/ so the orchestration plane
+   * never imports @letta-ai/letta-client directly.
+   */
+  readonly memoryBlockSeeder?: MemoryBlockSeeder;
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
@@ -145,12 +175,14 @@ export class LettaTeamsProvider implements RuntimeProvider {
   private readonly initialTaskTimeoutMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly eventBus: EventBus | null;
+  private readonly memoryBlockSeeder: MemoryBlockSeeder | null;
 
   constructor(opts: LettaTeamsProviderOptions = {}) {
     this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.initialTaskTimeoutMs = opts.initialTaskTimeoutMs ?? DEFAULT_INITIAL_TASK_TIMEOUT_MS;
     this.sleep = opts.sleep ?? defaultSleep;
     this.eventBus = opts.eventBus ?? null;
+    this.memoryBlockSeeder = opts.memoryBlockSeeder ?? null;
   }
 
   /**
@@ -212,6 +244,7 @@ export class LettaTeamsProvider implements RuntimeProvider {
     await runtime.daemon.ensureRunning();
     const target = resolveTeammateTarget(spec);
     const exists = await runtime.teammates.exists(target);
+    let teammate: TeammateState | null = null;
     if (!exists) {
       const runTeamsInit = readBoolExtra(spec, 'runTeamsInit') === true;
       const input: SpawnTeammateInput = {
@@ -235,8 +268,29 @@ export class LettaTeamsProvider implements RuntimeProvider {
           ? { memfsStartup: readMemfsStartup(spec)! }
           : {}),
       };
-      await runtime.teammates.spawn(input);
+      teammate = await runtime.teammates.spawn(input);
+    } else {
+      teammate = await runtime.teammates.get(target);
     }
+
+    // Seed role-pack memory blocks onto the teammate's Letta agent.
+    // Idempotent upsert — calling start() twice with the same blocks
+    // is a no-op on the second pass (the seeder diffs internally).
+    const memoryBlocks = readMemoryBlocks(spec);
+    if (memoryBlocks.length > 0) {
+      if (!this.memoryBlockSeeder) {
+        throw new Error(
+          'LettaTeamsProvider: SessionSpec.extra.memoryBlocks supplied but no memoryBlockSeeder was injected. Wire one at construction time.',
+        );
+      }
+      if (!teammate?.agentId) {
+        throw new Error(
+          `LettaTeamsProvider: cannot seed memory blocks — teammate ${target} has no agentId (teams returned ${teammate ? 'a teammate without an agentId' : 'null'})`,
+        );
+      }
+      await this.memoryBlockSeeder.seed(teammate.agentId, memoryBlocks);
+    }
+
     const handle: LettaTeamsSessionHandle = {
       id: `letta-teams:${target}`,
       providerKind: 'letta-teams',
@@ -519,6 +573,25 @@ function readMemfsStartup(spec: SessionSpec): MemfsStartup | undefined {
   const v = spec.extra?.['memfsStartup'];
   if (typeof v !== 'string') return undefined;
   return MEMFS_STARTUP_VALUES.has(v as MemfsStartup) ? (v as MemfsStartup) : undefined;
+}
+
+function readMemoryBlocks(spec: SessionSpec): MemoryBlockInput[] {
+  const raw = spec.extra?.['memoryBlocks'];
+  if (!Array.isArray(raw)) return [];
+  const out: MemoryBlockInput[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const r = entry as Record<string, unknown>;
+    if (typeof r['label'] !== 'string' || (r['label'] as string).length === 0) continue;
+    if (typeof r['value'] !== 'string') continue;
+    const block: MemoryBlockInput = { label: r['label'] as string, value: r['value'] as string };
+    if (typeof r['limit'] === 'number' && Number.isFinite(r['limit'] as number) && (r['limit'] as number) > 0) {
+      out.push({ ...block, limit: r['limit'] as number });
+    } else {
+      out.push(block);
+    }
+  }
+  return out;
 }
 
 /**

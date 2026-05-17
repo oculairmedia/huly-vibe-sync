@@ -96,6 +96,52 @@ describe('Pack loading', () => {
     expect(pack.roles[0]!.name).toBe('r');
   });
 
+  it('parses [[memory_blocks]] off a role TOML', () => {
+    const packRoot = writePack(tmp, 'gastown', {
+      roles: {
+        'reviewer.toml':
+          '[role]\nname = "reviewer"\n\n' +
+          '[[memory_blocks]]\nlabel = "persona"\nvalue = "You are a senior reviewer."\nlimit = 2000\n\n' +
+          '[[memory_blocks]]\nlabel = "guardrails"\nvalue = "Block PRs that miss tests."\n',
+      },
+    });
+    const pack = loadPack(packRoot, 'global');
+    const reviewer = pack.roles[0]!;
+    expect(reviewer.memoryBlocks).toEqual([
+      { label: 'persona', value: 'You are a senior reviewer.', limit: 2000 },
+      { label: 'guardrails', value: 'Block PRs that miss tests.' },
+    ]);
+  });
+
+  it('rejects memory_blocks entries without a label', () => {
+    writePack(tmp, 'bad', {
+      roles: {
+        'r.toml': '[role]\nname = "r"\n\n[[memory_blocks]]\nvalue = "..."\n',
+      },
+    });
+    expect(() => loadPack(join(tmp, 'bad'))).toThrow(/memory_blocks\[0\]\.label/);
+  });
+
+  it('rejects memory_blocks entries with a non-string value', () => {
+    writePack(tmp, 'bad', {
+      roles: {
+        'r.toml': '[role]\nname = "r"\n\n[[memory_blocks]]\nlabel = "p"\nvalue = 42\n',
+      },
+    });
+    expect(() => loadPack(join(tmp, 'bad'))).toThrow(/memory_blocks\[0\]\.value/);
+  });
+
+  it('drops a non-positive limit silently', () => {
+    const packRoot = writePack(tmp, 'pack', {
+      roles: {
+        'r.toml':
+          '[role]\nname = "r"\n\n[[memory_blocks]]\nlabel = "p"\nvalue = "ok"\nlimit = 0\n',
+      },
+    });
+    const pack = loadPack(packRoot, 'global');
+    expect(pack.roles[0]!.memoryBlocks).toEqual([{ label: 'p', value: 'ok' }]);
+  });
+
   it('validatePackPath returns ok:true for a valid pack', () => {
     writePack(tmp, 'good');
     expect(validatePackPath(join(tmp, 'good'))).toEqual({ ok: true });

@@ -18,6 +18,11 @@ export { LettaPMAgentProvider } from './letta-pm-agent-provider.js';
 export type { LettaPMAgentServices } from './letta-pm-agent-provider.js';
 
 export { LettaTeamsProvider } from './letta-teams-provider.js';
+export type {
+  LettaTeamsProviderOptions,
+  MemoryBlockInput,
+  MemoryBlockSeeder,
+} from './letta-teams-provider.js';
 
 export { LettaCodeSubagentProvider } from './letta-code-subagent-provider.js';
 

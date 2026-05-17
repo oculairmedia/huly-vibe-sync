@@ -22,13 +22,19 @@ type TaskStateLike = {
   toolCalls?: { name: string; input?: string; success: boolean; error?: string }[];
 };
 
-function fakeRuntime(opts: { taskTimeline?: TaskStateLike[] } = {}) {
+function fakeRuntime(opts: { taskTimeline?: TaskStateLike[]; agentId?: string } = {}) {
   const exists = vi.fn(async (_name: string) => false);
   const spawn = vi.fn(async (input: { name: string; role: string }) => ({
     name: input.name,
     role: input.role,
+    agentId: opts.agentId ?? `agent-${input.name}`,
   }));
   const remove = vi.fn(async (_name: string) => true);
+  const getTeammate = vi.fn(async (name: string) => ({
+    name,
+    role: 'r',
+    agentId: opts.agentId ?? `agent-${name}`,
+  }));
   const dispatch = vi.fn(async (input: { target: string; message: string }) => ({
     taskId: `task-${input.target}`,
   }));
@@ -57,10 +63,10 @@ function fakeRuntime(opts: { taskTimeline?: TaskStateLike[] } = {}) {
   return {
     runtime: {
       daemon: { ensureRunning, isRunning: daemonIsRunning, stop: daemonStop },
-      teammates: { exists, spawn, remove },
+      teammates: { exists, spawn, remove, get: getTeammate },
       tasks: { dispatch, get },
     },
-    spies: { exists, spawn, remove, dispatch, ensureRunning, get, daemonIsRunning, daemonStop },
+    spies: { exists, spawn, remove, dispatch, ensureRunning, get, daemonIsRunning, daemonStop, getTeammate },
   };
 }
 
@@ -372,6 +378,88 @@ describe('LettaTeamsProvider', () => {
     const h = await provider.start({ role: 'r' });
     await provider.stop(h);
     expect(spies.remove).toHaveBeenCalledWith('r');
+  });
+
+  describe('memory-block seeding', () => {
+    it('calls the seeder with the role pack blocks after spawning a new teammate', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime, spies } = fakeRuntime({ agentId: 'agent-xyz' });
+      inject(provider, runtime);
+      await provider.start({
+        role: 'reviewer',
+        extra: {
+          memoryBlocks: [
+            { label: 'persona', value: 'You are a senior reviewer.', limit: 2000 },
+            { label: 'guardrails', value: 'Block PRs that miss tests.' },
+          ],
+        },
+      });
+      expect(spies.spawn).toHaveBeenCalledTimes(1);
+      expect(seed).toHaveBeenCalledTimes(1);
+      expect(seed).toHaveBeenCalledWith('agent-xyz', [
+        { label: 'persona', value: 'You are a senior reviewer.', limit: 2000 },
+        { label: 'guardrails', value: 'Block PRs that miss tests.' },
+      ]);
+    });
+
+    it('seeds against an existing teammate via teammates.get', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime, spies } = fakeRuntime({ agentId: 'agent-existing' });
+      spies.exists.mockResolvedValueOnce(true);
+      inject(provider, runtime);
+      await provider.start({
+        role: 'reviewer',
+        extra: {
+          memoryBlocks: [{ label: 'persona', value: 'reuse' }],
+        },
+      });
+      expect(spies.spawn).not.toHaveBeenCalled();
+      expect(spies.getTeammate).toHaveBeenCalledWith('reviewer');
+      expect(seed).toHaveBeenCalledWith('agent-existing', [{ label: 'persona', value: 'reuse' }]);
+    });
+
+    it('does nothing when no memoryBlocks are supplied', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime } = fakeRuntime();
+      inject(provider, runtime);
+      await provider.start({ role: 'reviewer' });
+      expect(seed).not.toHaveBeenCalled();
+    });
+
+    it('throws a useful error when memoryBlocks supplied but no seeder injected', async () => {
+      const provider = newProvider();
+      const { runtime } = fakeRuntime();
+      inject(provider, runtime);
+      await expect(
+        provider.start({
+          role: 'reviewer',
+          extra: { memoryBlocks: [{ label: 'p', value: 'v' }] },
+        }),
+      ).rejects.toThrow(/no memoryBlockSeeder was injected/);
+    });
+
+    it('filters out malformed block entries before seeding', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime } = fakeRuntime({ agentId: 'agent-1' });
+      inject(provider, runtime);
+      await provider.start({
+        role: 'reviewer',
+        extra: {
+          memoryBlocks: [
+            { label: 'good', value: 'ok' },
+            { label: '', value: 'missing label' },
+            { value: 'no label' },
+            { label: 'bad-value', value: 42 },
+            'not even a block',
+          ],
+        },
+      });
+      expect(seed).toHaveBeenCalledWith('agent-1', [{ label: 'good', value: 'ok' }]);
+    });
   });
 
   describe('memfs lifecycle', () => {
