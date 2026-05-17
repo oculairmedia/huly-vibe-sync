@@ -219,3 +219,38 @@ adopting them, but because they're the rules we agree to be checked
 against.
 
 <!-- VIBESYNC:layering-invariants:END -->
+
+<!-- VIBESYNC:runtime-provider-discipline:START -->
+
+## RuntimeProvider discipline
+
+Spawned Gastown role sessions (mayor, coder, reviewer, refinery,
+tester) dispatch through **one** runtime provider: `LettaTeamsProvider`
+in `src/orchestration/runtime/letta-teams-provider.ts`. That provider
+is the only file in the repo allowed to import `letta-teams-sdk`.
+Decision codified in beads `vibesync-brd`; full rationale in
+[`docs/architecture/gastown-orchestration.md`](docs/architecture/gastown-orchestration.md).
+
+We use letta-teams as a **teammate + per-turn dispatch +
+task-visibility** primitive. Specifically, **do not**:
+
+1. **Import from `letta-teams-sdk/council`.** Code review is owned by
+   `formulas/code-review.toml` driving a reviewer/coder/tester loop on
+   our own dispatcher — not by teams' built-in council module.
+2. **Rely on `letta-teams-sdk/init` to populate memory blocks.** Role
+   packs in `packs/<name>/roles/*.toml` are the source of truth for
+   memory block content. Teams' built-in init prompts are overridden
+   in the provider, not consumed.
+3. **Use teams' task-graph or dep semantics.** Formulas
+   (`src/orchestration/formula/`) and molecules (`.beads/` molecule
+   rows) own dep graphs, retry, and `wait_for`. Teams gives us
+   `dispatch + wait`; everything above that lives in VibeSync.
+4. **Add a second path to `@letta-ai/letta-code-sdk`.** The retired
+   `LettaCodeSubagentProvider` was a duplicate route to the same
+   destination teams already reaches. One provider, one chokepoint.
+
+If a change would cross any of these, the layering invariant has been
+crossed — block in review and route the work above the
+`RuntimeProvider` interface instead.
+
+<!-- VIBESYNC:runtime-provider-discipline:END -->

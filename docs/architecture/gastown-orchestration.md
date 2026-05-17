@@ -26,23 +26,34 @@ role packs, layering invariants) is built **here**, on top.
 │   src/orchestration/ (new) hosts everything below the dotted line │
 │                                                                   │
 │   …………… RuntimeProvider interface ……………                          │
-│   ┌─────────────────────┬──────────────────────┐                  │
-│   │ LettaTeamsProvider  │ LettaCodeSubagent    │ ACPProvider  │ A2UI…
-│   │ (via letta-teams-   │ Provider             │              │     │
-│   │  sdk, primary)      │ (letta-code workers) │              │     │
-│   └─────────────────────┴──────────────────────┴──────────────┴────┘
+│   ┌──────────────────────┬─────────────────┬───────────────┐      │
+│   │ LettaTeamsProvider   │ LettaPMAgent    │ ACPProvider   │ A2UI │
+│   │ (via letta-teams-sdk │ Provider        │ (JSON-RPC     │ Prov │
+│   │  — primary path for  │ (persistent     │  stdio for    │ ider │
+│   │  spawned Gastown     │  per-project    │  third-party  │      │
+│   │  roles)              │  PM agents)     │  agents)      │      │
+│   └──────────────────────┴─────────────────┴───────────────┴──────┘
 └───────────────────────────────────────────────────────────────────┘
-            │                          │                  │
-            ▼                          ▼                  ▼
-   Letta server agents       letta-code subagents    third-party
-   (memory, conv, tools)     (admin-shim path)        ACP agents
+            │                      │                  │
+            ▼                      ▼                  ▼
+   Letta server agents       Persistent Letta    third-party
+   spawned per molecule      PM agent per        ACP agents
+   role via teams daemon     project
 ```
 
 VibeSync gets to keep the integration code it already has
 (`src/letta/`) and **adds** an orchestration plane that can dispatch
-to multiple runtime backends. letta-teams-sdk becomes one backend
-(the primary one for stateful chat agents); letta-code subagents
-become another; ACP / A2UI providers slot in alongside.
+to multiple runtime backends. letta-teams-sdk is **the** backend for
+spawned Gastown role sessions (mayor, coder, reviewer, refinery,
+tester). The persistent per-project PM agent path keeps its own
+provider; ACP / A2UI providers slot in alongside.
+
+> **Decision codified in `vibesync-brd`** — we adopt letta-teams-sdk
+> as the primary RuntimeProvider for role dispatch and drop the
+> earlier `LettaCodeSubagentProvider` (CLI subprocess + stream-json).
+> letta-teams already depends on `@letta-ai/letta-code-sdk` under the
+> hood, so the CLI-subprocess provider was a duplicate path to the
+> same destination. One provider, one chokepoint.
 
 ## Why VibeSync is the right home
 
@@ -98,6 +109,29 @@ export class LettaTeamsProvider implements RuntimeProvider {
 If the SDK's surface shifts between releases, only this file moves.
 Everything above the `RuntimeProvider` interface stays stable.
 
+### What we use from letta-teams (and what we don't)
+
+letta-teams-sdk is a layered package. We adopt the lower layers and
+deliberately re-implement the upper ones in VibeSync so the
+orchestration plane stays ours and stays reversible.
+
+| Surface                               | Used? | Why                                                                      |
+|---------------------------------------|-------|---------------------------------------------------------------------------|
+| `runtime.daemon` (process lifecycle)  | ✅    | Free supervision; we wrap it in HealthPatrol for restart-on-stall.        |
+| `runtime.teammates` (spawn / target)  | ✅    | 1:1 with our `RuntimeProvider.start` — one teammate = one role session.   |
+| `runtime.tasks.dispatch` (per-turn)   | ✅    | Maps onto `RuntimeProvider.prompt`. The right granularity for steps.      |
+| `task-visibility` (progress events)   | ✅    | Source of truth for `SessionEvent` we publish onto the orchestration bus. |
+| `memfs` (ephemeral fs per teammate)   | ✅    | Useful for code-acting roles (coder, refinery). Vanilla letta-code lacks. |
+| `init.js` (memory-block bootstrap)    | ❌    | Role packs in `packs/<name>/roles/*.toml` are the source of truth for     |
+|                                       |       | memory block content. We override teams' built-in init prompts.           |
+| `council/` (built-in code review)     | ❌    | We have `formulas/code-review.toml` driving our own reviewer/coder/tester |
+|                                       |       | loop. Two paths to the same outcome invites confusion; we ignore theirs.  |
+| Task-graph / dep semantics            | ❌    | `formulas/` + molecules in `.beads/` own dep graphs, retry, wait_for.     |
+
+The contract: this provider is allowed to import the SDK; nothing
+else in `src/orchestration/` is. If the SDK reshapes between minor
+versions, only `letta-teams-provider.ts` changes.
+
 ## Where Gas Town's patterns fit
 
 Same shape as the original letta-teams pitch, just hosted in VibeSync
@@ -152,11 +186,21 @@ interface RuntimeProvider {
 ```
 
 Initial impls (in order of priority):
-- `LettaTeamsProvider` (via letta-teams-sdk) — primary stateful chat path
-- `LettaCodeSubagentProvider` — spawn letta-code workers for code-focused turns
-- `ACPProvider` — JSON-RPC stdio for third-party agents
-- `A2UIProvider` — server side for letta-mobile / web client UI rendering
-- `FakeProvider` — for tests
+- `LettaTeamsProvider` (via letta-teams-sdk) — **the** path for spawned
+  role sessions inside a molecule (mayor, coder, reviewer, refinery,
+  tester). All Gastown formula steps route through this provider.
+- `LettaPMAgentProvider` — persistent per-project PM agents via
+  `@letta-ai/letta-client`. Different lifetime, different concern;
+  not a substitute for the teams provider.
+- `ACPProvider` — JSON-RPC stdio for third-party agents.
+- `A2UIProvider` — server side for letta-mobile / web client UI rendering.
+- `FakeProvider` — for tests.
+
+> `LettaCodeSubagentProvider` (CLI subprocess + stream-json) was an
+> earlier path; it has been retired in favor of letta-teams-sdk per
+> `vibesync-brd`. Both reached the same destination
+> (`@letta-ai/letta-code-sdk`); keeping only the teams path
+> concentrates SDK churn in one file and avoids two daemons-per-host.
 
 Memory blocks, conversation IDs, fork semantics, A2UI capabilities all
 belong **above** the interface, in formulas + role configs. Keep the
@@ -234,6 +278,18 @@ ships.
 
 - **Don't fork letta-teams.** Consume it via npm. If we hit a wall,
   open an upstream issue first, fork second.
+- **Don't use letta-teams' `council/`, `init.js`, or task-graph
+  features.** We adopt teams as a teammate + per-turn dispatch +
+  task-visibility primitive only. The orchestration layer above —
+  formulas, molecules, role memory-block content — stays in
+  VibeSync (`src/orchestration/` + `packs/`). If a contributor finds
+  themselves importing from `letta-teams-sdk/council` or relying on
+  teams' built-in init prompts to populate memory blocks, the
+  layering invariant has been crossed.
+- **Don't ship a second path to letta-code-sdk.** letta-teams already
+  depends on `@letta-ai/letta-code-sdk`; a separate CLI-subprocess
+  provider would be a duplicate route to the same destination. The
+  retired `LettaCodeSubagentProvider` is the cautionary example.
 - **Don't put role names in core code.** Roles live in packs and
   prompt templates. Cite layering invariant #5 in reviews.
 - **Don't invent a new TOML schema** that competes with Gas City's.

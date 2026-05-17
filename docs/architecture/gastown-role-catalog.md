@@ -62,8 +62,11 @@ config), not a hard type.
 
 **Maps to VibeSync:** Use letta-teams-sdk teammate fork semantics
 (`name/fork-name`) for ephemeral worker conversations against a
-persistent root teammate. Or use the LettaCodeSubagentProvider for
-one-shot code-focused work where the worker is genuinely short-lived.
+persistent root teammate. Polecats are short-lived teammate forks
+dispatched via the same `LettaTeamsProvider` — not a separate
+provider. (The earlier proposal to use a dedicated
+`LettaCodeSubagentProvider` for short-lived workers was retired in
+`vibesync-brd`; one provider, one chokepoint.)
 
 **Recommendation:** Polecats are a pattern, not a role. Add a `polecat`
 formula that wraps "spawn an ephemeral worker, dispatch one message,

@@ -5,16 +5,22 @@
  * higher layers (formulas, molecules, dispatch) don't need to know which
  * agent runtime backs a session. Today there's one implementation:
  *
- *   - LettaPMAgentProvider — wraps src/letta/ (the existing PM-agent path)
+ *   - LettaPMAgentProvider — wraps src/letta/ (persistent PM-agent path)
+ *   - LettaTeamsProvider — consumes letta-teams-sdk; the path for
+ *     spawned Gastown role sessions (mayor / coder / reviewer /
+ *     refinery / tester). Decision codified in vibesync-brd.
  *
  * Future implementations will plug in alongside without changing this
  * interface:
  *
- *   - LettaTeamsProvider — consumes letta-teams-sdk (vibesync-y0z)
- *   - LettaCodeSubagentProvider — spawns letta-code workers (vibesync-rjg)
  *   - ACPProvider — JSON-RPC over stdio (vibesync-oq4)
  *   - A2UIProvider — server side for letta-mobile / web UI rendering (vibesync-0tw)
  *   - FakeProvider — in-memory, for tests
+ *
+ * Retired:
+ *
+ *   - LettaCodeSubagentProvider — duplicate path; letta-teams already
+ *     depends on @letta-ai/letta-code-sdk. See vibesync-brd.
  *
  * Layering invariant #5 (zero hardcoded roles) discipline: this interface
  * MUST NOT widen to include role-specific concerns (memory blocks, Letta
@@ -129,7 +135,7 @@ export interface RuntimeProvider {
   /**
    * Wake a session that may have gone idle. Many providers (Letta REST,
    * letta-teams-sdk) treat this as a no-op; subprocess-based providers
-   * (ACP, letta-code subagent) use it to send a no-op JSON-RPC ping.
+   * (ACP) use it to send a no-op JSON-RPC ping.
    */
   nudge(handle: SessionHandle): Promise<void>;
 
