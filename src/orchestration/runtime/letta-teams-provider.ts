@@ -28,6 +28,7 @@
  * See vibesync-y0z, vibesync-6wn (epic), vibesync-6wn.2 (this journey).
  */
 
+import type { EventBus, EventInput } from '../events/bus.js';
 import type {
   ContentBlock,
   RuntimeProvider,
@@ -56,6 +57,8 @@ interface SessionState {
   activeTaskId: string | null;
   /** Tripped by stop(); observe() exits with a `stopped` event. */
   stopped: boolean;
+  /** Optional molecule id sourced from SessionSpec.extra at start time. */
+  moleculeId?: string;
 }
 
 export interface LettaTeamsProviderOptions {
@@ -69,6 +72,15 @@ export interface LettaTeamsProviderOptions {
   readonly initialTaskTimeoutMs?: number;
   /** Injectable sleep — tests pass a fake to avoid real timers. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /**
+   * Optional orchestration EventBus. When provided, every SessionEvent
+   * yielded from observe() also publishes onto the bus as a
+   * `runtime/session.<kind>` event tagged with the teammate target and
+   * the active task id. Omitted in unit tests; supplied at production
+   * wiring time so other layers (HealthPatrol, dispatcher, TUI) can
+   * subscribe instead of polling.
+   */
+  readonly eventBus?: EventBus;
 }
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
@@ -81,11 +93,13 @@ export class LettaTeamsProvider implements RuntimeProvider {
   private readonly pollIntervalMs: number;
   private readonly initialTaskTimeoutMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly eventBus: EventBus | null;
 
   constructor(opts: LettaTeamsProviderOptions = {}) {
     this.pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.initialTaskTimeoutMs = opts.initialTaskTimeoutMs ?? DEFAULT_INITIAL_TASK_TIMEOUT_MS;
     this.sleep = opts.sleep ?? defaultSleep;
+    this.eventBus = opts.eventBus ?? null;
   }
 
   /**
@@ -136,7 +150,10 @@ export class LettaTeamsProvider implements RuntimeProvider {
       providerKind: 'letta-teams',
       target,
     };
-    this.sessions.set(handle.id, { activeTaskId: null, stopped: false });
+    const moleculeId = readStringExtra(spec, 'moleculeId');
+    const session: SessionState = { activeTaskId: null, stopped: false };
+    if (moleculeId !== undefined) session.moleculeId = moleculeId;
+    this.sessions.set(handle.id, session);
     return handle;
   }
 
@@ -187,7 +204,9 @@ export class LettaTeamsProvider implements RuntimeProvider {
     const session = this.sessions.get(h.id);
     if (!session) {
       // Handle never went through start() on this provider instance.
-      yield { kind: 'error', ts: nowIso(), code: 'unknown_session', message: `No session for ${h.id}` };
+      const ev: SessionEvent = { kind: 'error', ts: nowIso(), code: 'unknown_session', message: `No session for ${h.id}` };
+      this.publish(h, session, ev);
+      yield ev;
       return;
     }
 
@@ -197,13 +216,17 @@ export class LettaTeamsProvider implements RuntimeProvider {
     const taskWaitStart = Date.now();
     while (!session.activeTaskId && !session.stopped) {
       if (Date.now() - taskWaitStart > this.initialTaskTimeoutMs) {
-        yield { kind: 'stopped', ts: nowIso() };
+        const ev: SessionEvent = { kind: 'stopped', ts: nowIso() };
+        this.publish(h, session, ev);
+        yield ev;
         return;
       }
       await this.sleep(this.pollIntervalMs);
     }
     if (session.stopped) {
-      yield { kind: 'stopped', ts: nowIso() };
+      const ev: SessionEvent = { kind: 'stopped', ts: nowIso() };
+      this.publish(h, session, ev);
+      yield ev;
       return;
     }
     const taskId = session.activeTaskId!;
@@ -214,54 +237,69 @@ export class LettaTeamsProvider implements RuntimeProvider {
 
     while (true) {
       if (session.stopped) {
-        yield { kind: 'stopped', ts: nowIso() };
+        const ev: SessionEvent = { kind: 'stopped', ts: nowIso() };
+        this.publish(h, session, ev);
+        yield ev;
         return;
       }
 
       const state = await runtime.tasks.get(taskId);
       if (!state) {
-        yield {
+        const ev: SessionEvent = {
           kind: 'error',
           ts: nowIso(),
           code: 'task_vanished',
           message: `Task ${taskId} no longer present in runtime`,
         };
+        this.publish(h, session, ev);
+        yield ev;
         return;
       }
 
       if (!startedEmitted) {
-        yield { kind: 'started', ts: state.createdAt };
+        const ev: SessionEvent = { kind: 'started', ts: state.createdAt };
+        this.publish(h, session, ev);
+        yield ev;
         startedEmitted = true;
       }
 
       if (lastStatus !== 'running' && state.status === 'running') {
-        yield { kind: 'first-token', ts: state.startedAt ?? nowIso() };
+        const ev: SessionEvent = { kind: 'first-token', ts: state.startedAt ?? nowIso() };
+        this.publish(h, session, ev);
+        yield ev;
       }
 
       const toolCalls = state.toolCalls ?? [];
       for (let i = lastToolCount; i < toolCalls.length; i += 1) {
-        yield* toolCallEvents(toolCalls[i]!);
+        for (const ev of toolCallEvents(toolCalls[i]!)) {
+          this.publish(h, session, ev);
+          yield ev;
+        }
       }
       lastToolCount = toolCalls.length;
 
       if (state.status === 'done') {
-        yield {
+        const ev: SessionEvent = {
           kind: 'turn-done',
           ts: state.completedAt ?? nowIso(),
           stopReason: 'done',
         };
+        this.publish(h, session, ev);
+        yield ev;
         // Clear the active task so the next observe() waits for the
         // following prompt() rather than re-streaming this turn.
         session.activeTaskId = null;
         return;
       }
       if (state.status === 'error') {
-        yield {
+        const ev: SessionEvent = {
           kind: 'error',
           ts: state.completedAt ?? nowIso(),
           code: 'task_error',
           message: state.error ?? 'task error',
         };
+        this.publish(h, session, ev);
+        yield ev;
         session.activeTaskId = null;
         return;
       }
@@ -269,6 +307,60 @@ export class LettaTeamsProvider implements RuntimeProvider {
       lastStatus = state.status;
       await this.sleep(this.pollIntervalMs);
     }
+  }
+
+  /**
+   * Forward one SessionEvent to the orchestration EventBus, if one was
+   * supplied at construction time. Tagged as `runtime/session.<kind>`
+   * with the teammate target and the active task id; molecule_id is
+   * carried over from SessionSpec.extra when present.
+   *
+   * No-op when no bus is wired (unit tests rely on this).
+   */
+  private publish(
+    handle: LettaTeamsSessionHandle,
+    session: SessionState | undefined,
+    event: SessionEvent,
+  ): void {
+    if (!this.eventBus) return;
+    const input: EventInput = {
+      layer: 'runtime',
+      kind: `runtime/session.${event.kind}`,
+      teammate: handle.target,
+      ...(session?.activeTaskId ? { task_id: session.activeTaskId } : {}),
+      ...(session?.moleculeId ? { molecule_id: session.moleculeId } : {}),
+      payload: sessionEventPayload(event),
+    };
+    this.eventBus.emit(input);
+  }
+}
+
+/**
+ * Strip the discriminant + ts from a SessionEvent so the remaining
+ * fields ride as payload on the bus envelope. The envelope already
+ * carries kind (via `runtime/session.<kind>`) and ts (auto-added by
+ * EventBus.emit), so duplicating them in payload would be redundant.
+ */
+function sessionEventPayload(event: SessionEvent): Record<string, unknown> {
+  switch (event.kind) {
+    case 'message-delta':
+      return { text: event.text };
+    case 'tool-call':
+      return { tool: event.tool, args: event.args };
+    case 'tool-result':
+      return { tool: event.tool, result: event.result, ok: event.ok };
+    case 'usage':
+      return { prompt: event.prompt, completion: event.completion };
+    case 'turn-done':
+      return event.stopReason !== undefined ? { stopReason: event.stopReason } : {};
+    case 'error':
+      return { code: event.code, message: event.message };
+    case 'started':
+    case 'first-token':
+    case 'stopped':
+      return {};
+    default:
+      return {};
   }
 }
 

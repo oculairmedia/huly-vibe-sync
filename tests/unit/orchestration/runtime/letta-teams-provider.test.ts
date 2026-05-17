@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LettaTeamsProvider } from '../../../../src/orchestration/runtime/index.js';
 import type { SessionEvent } from '../../../../src/orchestration/runtime/provider.js';
+import { EventBus, type Event } from '../../../../src/orchestration/events/bus.js';
 
 /**
  * Unit-tests for LettaTeamsProvider. The SDK import is real; we inject
@@ -369,5 +370,135 @@ describe('LettaTeamsProvider', () => {
     const h = await provider.start({ role: 'r' });
     await provider.stop(h);
     expect(spies.remove).toHaveBeenCalledWith('r');
+  });
+
+  describe('EventBus integration', () => {
+    function makeBus(): { bus: EventBus; events: Event[] } {
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      return { bus, events };
+    }
+
+    it('publishes one runtime/session.* event per yielded SessionEvent', async () => {
+      const { bus, events } = makeBus();
+      const provider = newProvider({ eventBus: bus });
+      const { runtime } = fakeRuntime({
+        taskTimeline: [
+          { id: 'task-r', status: 'pending', createdAt: '2026-05-17T00:00:00.000Z' },
+          {
+            id: 'task-r',
+            status: 'running',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            startedAt: '2026-05-17T00:00:01.000Z',
+          },
+          {
+            id: 'task-r',
+            status: 'done',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            startedAt: '2026-05-17T00:00:01.000Z',
+            completedAt: '2026-05-17T00:00:02.000Z',
+          },
+        ],
+      });
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'r' });
+      await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+      const yielded: SessionEvent[] = [];
+      for await (const ev of provider.observe(h)) yielded.push(ev);
+
+      expect(events.map((e) => e.kind)).toEqual([
+        'runtime/session.started',
+        'runtime/session.first-token',
+        'runtime/session.turn-done',
+      ]);
+      expect(events.length).toBe(yielded.length);
+      for (const e of events) {
+        expect(e.layer).toBe('runtime');
+        expect(e.teammate).toBe('r');
+        expect(e.task_id).toBe('task-r');
+      }
+    });
+
+    it('carries molecule_id from SessionSpec.extra into every published event', async () => {
+      const { bus, events } = makeBus();
+      const provider = newProvider({ eventBus: bus });
+      const { runtime } = fakeRuntime({
+        taskTimeline: [
+          {
+            id: 'task-r',
+            status: 'done',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            completedAt: '2026-05-17T00:00:01.000Z',
+          },
+        ],
+      });
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'r', extra: { moleculeId: 'mol-42' } });
+      await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+      for await (const _ of provider.observe(h)) void _;
+
+      expect(events.length).toBeGreaterThan(0);
+      for (const e of events) expect(e.molecule_id).toBe('mol-42');
+    });
+
+    it('carries tool-call args + tool-result ok/result into payload', async () => {
+      const { bus, events } = makeBus();
+      const provider = newProvider({ eventBus: bus });
+      const { runtime } = fakeRuntime({
+        taskTimeline: [
+          {
+            id: 'task-r',
+            status: 'running',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            startedAt: '2026-05-17T00:00:00.500Z',
+            toolCalls: [{ name: 'read_file', input: 'src/foo.ts', success: true }],
+          },
+          {
+            id: 'task-r',
+            status: 'done',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            completedAt: '2026-05-17T00:00:02.000Z',
+            toolCalls: [
+              { name: 'read_file', input: 'src/foo.ts', success: true },
+              { name: 'write_file', input: 'src/foo.ts', success: false, error: 'EACCES' },
+            ],
+          },
+        ],
+      });
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'r' });
+      await provider.prompt(h, [{ type: 'text', text: 'edit' }]);
+      for await (const _ of provider.observe(h)) void _;
+
+      const toolCalls = events.filter((e) => e.kind === 'runtime/session.tool-call');
+      const toolResults = events.filter((e) => e.kind === 'runtime/session.tool-result');
+      expect(toolCalls.map((e) => e.payload?.['tool'])).toEqual(['read_file', 'write_file']);
+      expect(toolResults.map((e) => e.payload?.['ok'])).toEqual([true, false]);
+      expect(toolResults[1]!.payload?.['result']).toBe('EACCES');
+    });
+
+    it('publishes nothing when no bus is supplied', async () => {
+      const provider = newProvider();
+      const { runtime } = fakeRuntime({
+        taskTimeline: [
+          {
+            id: 'task-r',
+            status: 'done',
+            createdAt: '2026-05-17T00:00:00.000Z',
+            completedAt: '2026-05-17T00:00:01.000Z',
+          },
+        ],
+      });
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'r' });
+      await provider.prompt(h, [{ type: 'text', text: 'go' }]);
+      // Sanity check: observe() still yields events to the consumer.
+      const yielded: SessionEvent[] = [];
+      for await (const ev of provider.observe(h)) yielded.push(ev);
+      expect(yielded.length).toBeGreaterThan(0);
+      // No assertion against a bus — there is none. This case just
+      // pins the no-op contract under the type checker.
+    });
   });
 });
