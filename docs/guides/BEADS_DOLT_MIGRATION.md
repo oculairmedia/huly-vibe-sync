@@ -227,9 +227,9 @@ These projects are advertised as Beads-backed by Vibesync, but the configured fi
 
 ## Related Vibesync Beads issues
 
-- `huly-vibe-sync-bxe` — Plan Beads/Dolt migration for all registered projects
-- `huly-vibe-sync-8sz` — Migrate legacy Beads stores to Dolt server mode
-- `huly-vibe-sync-bi3` — Resolve registry drift for Beads projects without local `.beads` stores
-- `huly-vibe-sync-1sb` — Add Beads/Dolt preflight diagnostics before project work
-- `huly-vibe-sync-y9b` — Verify DoltHub remotes for migrated Beads projects
-- `huly-vibe-sync-v02` — Add project AGENTS.md Beads preflight guidance during migration
+- `vibesync-bxe` — Plan Beads/Dolt migration for all registered projects
+- `vibesync-8sz` — Migrate legacy Beads stores to Dolt server mode
+- `vibesync-bi3` — Resolve registry drift for Beads projects without local `.beads` stores
+- `vibesync-1sb` — Add Beads/Dolt preflight diagnostics before project work
+- `vibesync-y9b` — Verify DoltHub remotes for migrated Beads projects
+- `vibesync-v02` — Add project AGENTS.md Beads preflight guidance during migration
