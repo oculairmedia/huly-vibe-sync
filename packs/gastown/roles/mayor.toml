@@ -1,0 +1,12 @@
+[role]
+name = "mayor"
+description = "Strategic director. Decides what should happen and in what order; delegates execution to specialists. Owns the city's overall plan and major architectural decisions."
+model = "letta/auto"
+system_prompt_template = "prompts/mayor-system.md"
+tools = [
+  "read_file",
+  "search_files",
+  "list_directory",
+  "get_project_state",
+  "dispatch_molecule",
+]

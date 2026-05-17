@@ -1,0 +1,15 @@
+[role]
+name = "coder"
+description = "Applies code changes in response to a review or a feature spec. Edits files, runs tests, commits when work is complete. Does not decide WHAT to build — that's Mayor's job."
+model = "letta/auto"
+system_prompt_template = "prompts/coder-system.md"
+tools = [
+  "read_file",
+  "write_file",
+  "edit_file",
+  "search_files",
+  "list_directory",
+  "run_shell",
+  "git_diff",
+  "git_commit",
+]

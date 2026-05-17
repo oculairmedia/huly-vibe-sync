@@ -1,0 +1,12 @@
+[role]
+name = "tester"
+description = "Runs tests against a code change and reports pass/fail with diagnostics. Does not modify code; identifies what's broken so the coder can iterate."
+model = "letta/auto"
+system_prompt_template = "prompts/tester-system.md"
+tools = [
+  "read_file",
+  "search_files",
+  "list_directory",
+  "run_shell",
+  "git_diff",
+]

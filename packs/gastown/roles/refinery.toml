@@ -1,0 +1,12 @@
+[role]
+name = "refinery"
+description = "Periodic cleanup teammate. Summarizes accumulated conversation history, archives closed molecule_step beads past retention, prunes stale state. Runs on a schedule, not interactively."
+model = "letta/auto"
+system_prompt_template = "prompts/refinery-system.md"
+tools = [
+  "read_file",
+  "list_directory",
+  "search_files",
+  "bd_query",
+  "bd_archive",
+]

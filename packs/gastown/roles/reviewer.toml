@@ -1,0 +1,11 @@
+[role]
+name = "reviewer"
+description = "Reads a code change and produces a verdict (LGTM / changes-requested). Identifies bugs, style issues, missing tests, missing docs. Outputs a structured review."
+model = "letta/auto"
+system_prompt_template = "prompts/reviewer-system.md"
+tools = [
+  "read_file",
+  "search_files",
+  "list_directory",
+  "git_diff",
+]

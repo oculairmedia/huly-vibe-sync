@@ -1,0 +1,7 @@
+[formula.refinery-sweep]
+description = "Periodic sweep: refinery teammate summarizes recent activity and archives closed molecule_step beads past the configured retention threshold. Single-step formula; intended to run on a schedule."
+
+[[formula.refinery-sweep.steps]]
+role = "refinery"
+prompt_template = "prompts/refinery-system.md"
+wait_for = "completion"
