@@ -571,6 +571,77 @@ program
     }
   });
 
+// ── refresh-agents-md ──────────────────────────────────────────────
+
+program
+  .command('refresh-agents-md')
+  .description('Re-render AGENTS.md from global templates across the project registry')
+  .option('--project-id <id>', 'Refresh only the project with this identifier')
+  .option('--all', 'Refresh every registered project (default when no --project-id)')
+  .option('--dry-run', 'Compute the changes but do not write files')
+  .action(async (opts: Record<string, unknown>) => {
+    const { json: jsonOut } = getGlobalOpts();
+    if (opts.projectId && opts.all) {
+      die('Pass --project-id OR --all, not both');
+    }
+    const body: Record<string, unknown> = {};
+    if (opts.projectId) body.projectId = String(opts.projectId);
+    if (opts.dryRun) body.dryRun = true;
+    try {
+      const result = toRecord(
+        await fetchJson('/api/admin/agents-md/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          timeoutMs: 60_000,
+        }),
+      );
+      if (jsonOut) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      const total = Number(result.total ?? 0);
+      const updated = Number(result.updated ?? 0);
+      const dryRunCount = Number(result.dryRun ?? 0);
+      const skipped = Number(result.skipped ?? 0);
+      const errors = Number(result.errors ?? 0);
+      console.log(
+        chalk.bold(
+          `AGENTS.md refresh: ${total} project${total === 1 ? '' : 's'} — ` +
+            chalk.green(`${updated} updated`) +
+            (dryRunCount > 0 ? `, ${chalk.cyan(`${dryRunCount} dry-run`)}` : '') +
+            (skipped > 0 ? `, ${chalk.yellow(`${skipped} skipped`)}` : '') +
+            (errors > 0 ? `, ${chalk.red(`${errors} errors`)}` : ''),
+        ),
+      );
+      const results = toArray(result.results);
+      if (!results.length) {
+        console.log(chalk.yellow('No projects in scope. Check --project-id or registry contents.'));
+        return;
+      }
+      const rows = results.map((r: unknown) => {
+        const row = toRecord(r);
+        const status = String(row.status ?? '');
+        const colored =
+          status === 'updated' ? chalk.green(status) :
+          status === 'dry-run' ? chalk.cyan(status) :
+          status === 'skipped' ? chalk.yellow(status) :
+          status === 'error' ? chalk.red(status) : status;
+        const detail =
+          status === 'error' ? String(row.error ?? '') :
+          status === 'skipped' ? String(row.reason ?? '') :
+          toArray(row.changes).map((c: unknown) => {
+            const ch = toRecord(c);
+            return `${ch.section}:${ch.action}`;
+          }).join(', ');
+        return [String(row.identifier ?? ''), String(row.name ?? ''), colored, detail];
+      });
+      console.log(formatTable(['Project', 'Name', 'Status', 'Detail'], rows as never));
+    } catch (err) {
+      die((err as Error)?.message || String(err));
+    }
+  });
+
 // ── sync ───────────────────────────────────────────────────────────
 
 program

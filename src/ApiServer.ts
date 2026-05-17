@@ -12,6 +12,7 @@ import { registerFilesRoutes } from './api/routes/files.js';
 import { registerDocsRoutes } from './api/routes/docs.js';
 import { registerTemporalRoutes } from './api/routes/temporal.js';
 import { registerAgentRoutes } from './api/routes/agents.js';
+import { registerAgentsMdRoutes } from './api/routes/agentsMd.js';
 import { sseManager } from './api/SSEManager.js';
 import { syncHistory } from './api/SyncHistoryStore.js';
 import { ConfigurationHandler } from './api/ConfigurationHandler.js';
@@ -93,6 +94,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
   registerDocsRoutes(app);
   registerTemporalRoutes(app, routeDeps as never);
   registerAgentRoutes(app, routeDeps as never);
+  registerAgentsMdRoutes(app, routeDeps as never);
 
   const mcpConfig = (deps.config as Record<string, Record<string, unknown>>)?.projectMcp || {};
   const mcpPath = (mcpConfig.path as string) || '/mcp';
