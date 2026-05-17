@@ -141,6 +141,39 @@ export class LettaTeamsProvider implements RuntimeProvider {
     await runtime.daemon.ensureRunning();
   }
 
+  /**
+   * Build a HealthPatrol-shaped supervisor for the teams daemon. Returns
+   * a small adapter that delegates to runtime.daemon.{isRunning,
+   * ensureRunning, stop}; the patrol does the restart-on-stall, backoff,
+   * and circuit-break work. Wire on application startup:
+   *
+   *     patrol.trackDaemon(provider.daemonSupervisor());
+   */
+  daemonSupervisor(): {
+    readonly id: string;
+    readonly providerKind: string;
+    isRunning(): Promise<boolean>;
+    ensureRunning(): Promise<void>;
+    stop(): Promise<unknown>;
+  } {
+    return {
+      id: 'letta-teams-daemon',
+      providerKind: this.kind,
+      isRunning: async () => {
+        const runtime = await this.getRuntime();
+        return runtime.daemon.isRunning();
+      },
+      ensureRunning: async () => {
+        const runtime = await this.getRuntime();
+        await runtime.daemon.ensureRunning();
+      },
+      stop: async () => {
+        const runtime = await this.getRuntime();
+        return runtime.daemon.stop();
+      },
+    };
+  }
+
   async start(spec: SessionSpec): Promise<SessionHandle> {
     const runtime = await this.getRuntime();
     await runtime.daemon.ensureRunning();

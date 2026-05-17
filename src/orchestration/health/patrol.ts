@@ -53,6 +53,40 @@ interface TrackedSession {
 }
 
 /**
+ * Supervisor target for a singleton background process (e.g. the
+ * letta-teams-sdk daemon). Mirrors the small piece of the daemon
+ * surface HealthPatrol needs without coupling the patrol to a
+ * specific provider's internals — implementations live next to the
+ * provider that owns the daemon.
+ *
+ * Layering invariant: HealthPatrol calls only these three methods.
+ * Any provider-specific state (sockets, lockfiles, ports) is hidden
+ * behind the supervisor.
+ */
+export interface DaemonSupervisor {
+  /** Stable id used in bus payloads (e.g. 'letta-teams-daemon'). */
+  readonly id: string;
+  /** Provider kind that owns this daemon, mirrored onto bus payloads. */
+  readonly providerKind: string;
+  /** Cheap liveness check; should not throw. */
+  isRunning(): boolean | Promise<boolean>;
+  /** Idempotent start. Resolves once the daemon is up. */
+  ensureRunning(): Promise<void>;
+  /** Graceful shutdown. Called before restart. */
+  stop(): Promise<unknown>;
+}
+
+interface TrackedDaemon {
+  readonly supervisor: DaemonSupervisor;
+  /** Consecutive restart attempts at the current circuit-breaker state. */
+  restartCount: number;
+  /** ms epoch when the next restart is permitted (backoff gate). */
+  nextRestartAt: number;
+  /** Marked unhealthy after circuit breaker trips. */
+  unhealthy: boolean;
+}
+
+/**
  * Test-time clock seam. Lets unit tests advance time without real sleeps.
  */
 export interface Clock {
@@ -65,6 +99,7 @@ export class HealthPatrol {
   private readonly cfg: Required<HealthPatrolConfig>;
   private readonly clock: Clock;
   private readonly sessions = new Map<string, TrackedSession>();
+  private readonly daemons = new Map<string, TrackedDaemon>();
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(bus: EventBus, cfg: HealthPatrolConfig = {}, clock: Clock = defaultClock) {
@@ -114,6 +149,21 @@ export class HealthPatrol {
   /** Stop tracking a session. */
   untrack(handleId: string): void {
     this.sessions.delete(handleId);
+  }
+
+  /** Begin supervising a singleton daemon (e.g. the letta-teams daemon). */
+  trackDaemon(supervisor: DaemonSupervisor): void {
+    this.daemons.set(supervisor.id, {
+      supervisor,
+      restartCount: 0,
+      nextRestartAt: 0,
+      unhealthy: false,
+    });
+  }
+
+  /** Stop supervising a daemon. */
+  untrackDaemon(id: string): void {
+    this.daemons.delete(id);
   }
 
   /**
@@ -174,6 +224,53 @@ export class HealthPatrol {
     for (const s of toRestart) {
       await this.restart(s, now);
     }
+
+    // Daemon supervision — same backoff + circuit-breaker semantics as
+    // session restarts, but the "stall" signal is `isRunning() === false`
+    // instead of an activity timestamp. A daemon that reports running
+    // resets its restart counter (no need for a separate markActive).
+    const daemonsToRestart: TrackedDaemon[] = [];
+    for (const d of this.daemons.values()) {
+      if (d.unhealthy) continue;
+      let running = false;
+      try {
+        running = await d.supervisor.isRunning();
+      } catch {
+        running = false;
+      }
+      if (running) {
+        if (d.restartCount > 0) d.restartCount = 0;
+        continue;
+      }
+      this.bus.emit({
+        layer: 'health-patrol',
+        kind: 'daemon.down',
+        payload: {
+          daemon: d.supervisor.id,
+          providerKind: d.supervisor.providerKind,
+          restart_count: d.restartCount,
+        },
+      });
+      if (now < d.nextRestartAt) continue;
+      if (d.restartCount >= this.cfg.circuitBreakerThreshold) {
+        d.unhealthy = true;
+        this.bus.emit({
+          layer: 'health-patrol',
+          kind: 'daemon.unhealthy',
+          payload: {
+            daemon: d.supervisor.id,
+            providerKind: d.supervisor.providerKind,
+            restart_count: d.restartCount,
+            threshold: this.cfg.circuitBreakerThreshold,
+          },
+        });
+        continue;
+      }
+      daemonsToRestart.push(d);
+    }
+    for (const d of daemonsToRestart) {
+      await this.restartDaemon(d, now);
+    }
   }
 
   private async restart(s: TrackedSession, now: number): Promise<void> {
@@ -225,5 +322,55 @@ export class HealthPatrol {
       restartCount: s.restartCount,
       unhealthy: s.unhealthy,
     }));
+  }
+
+  /** Diagnostic: snapshot of currently tracked daemons. */
+  daemonSnapshot(): readonly { readonly id: string; readonly restartCount: number; readonly unhealthy: boolean }[] {
+    return [...this.daemons.values()].map((d) => ({
+      id: d.supervisor.id,
+      restartCount: d.restartCount,
+      unhealthy: d.unhealthy,
+    }));
+  }
+
+  private async restartDaemon(d: TrackedDaemon, now: number): Promise<void> {
+    const backoff = Math.min(
+      this.cfg.initialBackoffMs * 2 ** d.restartCount,
+      this.cfg.maxBackoffMs,
+    );
+    d.restartCount += 1;
+    d.nextRestartAt = now + backoff;
+    this.bus.emit({
+      layer: 'health-patrol',
+      kind: 'daemon.restarting',
+      payload: {
+        daemon: d.supervisor.id,
+        providerKind: d.supervisor.providerKind,
+        restart_count: d.restartCount,
+        backoff_ms: backoff,
+      },
+    });
+    try {
+      await d.supervisor.stop();
+      await d.supervisor.ensureRunning();
+      this.bus.emit({
+        layer: 'health-patrol',
+        kind: 'daemon.restarted',
+        payload: {
+          daemon: d.supervisor.id,
+          providerKind: d.supervisor.providerKind,
+        },
+      });
+    } catch (err) {
+      this.bus.emit({
+        layer: 'health-patrol',
+        kind: 'daemon.restart_failed',
+        payload: {
+          daemon: d.supervisor.id,
+          providerKind: d.supervisor.providerKind,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { EventBus } from '../../../../src/orchestration/events/index.js';
-import { HealthPatrol } from '../../../../src/orchestration/health/index.js';
+import { EventBus, type Event } from '../../../../src/orchestration/events/index.js';
+import { HealthPatrol, type DaemonSupervisor } from '../../../../src/orchestration/health/index.js';
 import type {
   RuntimeProvider,
   SessionEvent,
@@ -178,5 +178,171 @@ describe('HealthPatrol', () => {
     patrol.stop();
     patrol.stop();
     expect(true).toBe(true);
+  });
+
+  describe('daemon supervision', () => {
+    function fakeDaemon(opts: {
+      running: boolean | (() => boolean);
+      throwOnIsRunning?: boolean;
+      throwOnEnsureRunning?: boolean;
+    }): {
+      supervisor: DaemonSupervisor;
+      starts: () => number;
+      stops: () => number;
+      setRunning: (v: boolean) => void;
+    } {
+      let starts = 0;
+      let stops = 0;
+      let running = typeof opts.running === 'function' ? opts.running() : opts.running;
+      const supervisor: DaemonSupervisor = {
+        id: 'letta-teams-daemon',
+        providerKind: 'letta-teams',
+        async isRunning() {
+          if (opts.throwOnIsRunning) throw new Error('probe failed');
+          return running;
+        },
+        async ensureRunning() {
+          starts += 1;
+          if (opts.throwOnEnsureRunning) throw new Error('start failed');
+          running = true;
+        },
+        async stop() {
+          stops += 1;
+          running = false;
+        },
+      };
+      return {
+        supervisor,
+        starts: () => starts,
+        stops: () => stops,
+        setRunning: (v: boolean) => {
+          running = v;
+        },
+      };
+    }
+
+    it('no-op probe when the daemon is running', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: true });
+      const patrol = new HealthPatrol(bus, {}, clock);
+      patrol.trackDaemon(d.supervisor);
+
+      await patrol.probe();
+      expect(events).toEqual([]);
+      expect(d.starts()).toBe(0);
+    });
+
+    it('emits daemon.down + daemon.restarting + daemon.restarted when the daemon is missing', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: false });
+      const patrol = new HealthPatrol(bus, { initialBackoffMs: 1_000 }, clock);
+      patrol.trackDaemon(d.supervisor);
+
+      await patrol.probe();
+      expect(events.map((e) => e.kind)).toEqual([
+        'daemon.down',
+        'daemon.restarting',
+        'daemon.restarted',
+      ]);
+      expect(d.stops()).toBe(1);
+      expect(d.starts()).toBe(1);
+    });
+
+    it('emits daemon.restart_failed and stays in backoff when ensureRunning throws', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: false, throwOnEnsureRunning: true });
+      const patrol = new HealthPatrol(bus, { initialBackoffMs: 1_000 }, clock);
+      patrol.trackDaemon(d.supervisor);
+
+      await patrol.probe();
+      expect(events.map((e) => e.kind)).toContain('daemon.restart_failed');
+      const failed = events.find((e) => e.kind === 'daemon.restart_failed');
+      expect(failed?.payload?.['error']).toBe('start failed');
+    });
+
+    it('trips the circuit breaker after N consecutive restarts', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      // Daemon never becomes running; every probe is a restart cycle.
+      const d = fakeDaemon({ running: false, throwOnEnsureRunning: true });
+      const patrol = new HealthPatrol(
+        bus,
+        { initialBackoffMs: 100, circuitBreakerThreshold: 3 },
+        clock,
+      );
+      patrol.trackDaemon(d.supervisor);
+
+      for (let i = 0; i < 3; i += 1) {
+        await patrol.probe();
+        clock.advance(1_000);
+      }
+      // 4th probe should NOT attempt another restart — circuit broken.
+      await patrol.probe();
+
+      const restartingCount = events.filter((e) => e.kind === 'daemon.restarting').length;
+      const unhealthy = events.find((e) => e.kind === 'daemon.unhealthy');
+      expect(restartingCount).toBe(3);
+      expect(unhealthy).toBeTruthy();
+      expect(patrol.daemonSnapshot()[0]?.unhealthy).toBe(true);
+    });
+
+    it('resets the restart counter once the daemon reports running again', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: false });
+      const patrol = new HealthPatrol(bus, { initialBackoffMs: 100 }, clock);
+      patrol.trackDaemon(d.supervisor);
+
+      // First probe: daemon is down → restart succeeds via fakeDaemon
+      // setting running=true inside ensureRunning(). Restart count goes
+      // to 1 before the restart, then the SECOND probe should see
+      // running=true and reset it back to 0.
+      await patrol.probe();
+      expect(patrol.daemonSnapshot()[0]?.restartCount).toBe(1);
+
+      clock.advance(1_000);
+      await patrol.probe();
+      expect(patrol.daemonSnapshot()[0]?.restartCount).toBe(0);
+    });
+
+    it('treats isRunning() throwing the same as "not running"', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: true, throwOnIsRunning: true });
+      const patrol = new HealthPatrol(bus, { initialBackoffMs: 100 }, clock);
+      patrol.trackDaemon(d.supervisor);
+
+      await patrol.probe();
+      expect(events.some((e) => e.kind === 'daemon.down')).toBe(true);
+    });
+
+    it('untrackDaemon stops supervising', async () => {
+      const clock = manualClock();
+      const bus = new EventBus({ noPersist: true });
+      const events: Event[] = [];
+      bus.subscribe((e) => events.push(e));
+      const d = fakeDaemon({ running: false });
+      const patrol = new HealthPatrol(bus, {}, clock);
+      patrol.trackDaemon(d.supervisor);
+      patrol.untrackDaemon(d.supervisor.id);
+
+      await patrol.probe();
+      expect(events).toEqual([]);
+    });
   });
 });

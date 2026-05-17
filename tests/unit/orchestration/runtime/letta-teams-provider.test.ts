@@ -33,6 +33,8 @@ function fakeRuntime(opts: { taskTimeline?: TaskStateLike[] } = {}) {
     taskId: `task-${input.target}`,
   }));
   const ensureRunning = vi.fn(async () => undefined);
+  const daemonIsRunning = vi.fn(() => true);
+  const daemonStop = vi.fn(async () => true);
 
   // tasks.get returns successive states from the supplied timeline,
   // sticking on the last entry once exhausted. Default: a single
@@ -54,11 +56,11 @@ function fakeRuntime(opts: { taskTimeline?: TaskStateLike[] } = {}) {
 
   return {
     runtime: {
-      daemon: { ensureRunning },
+      daemon: { ensureRunning, isRunning: daemonIsRunning, stop: daemonStop },
       teammates: { exists, spawn, remove },
       tasks: { dispatch, get },
     },
-    spies: { exists, spawn, remove, dispatch, ensureRunning, get },
+    spies: { exists, spawn, remove, dispatch, ensureRunning, get, daemonIsRunning, daemonStop },
   };
 }
 
@@ -419,6 +421,27 @@ describe('LettaTeamsProvider', () => {
       await provider.stop(h1);
       expect(spies.remove).toHaveBeenCalledTimes(1);
       expect(spies.remove).toHaveBeenLastCalledWith('mol-1-reviewer');
+    });
+  });
+
+  describe('daemonSupervisor()', () => {
+    it('returns an adapter that delegates to the SDK daemon surface', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const sup = provider.daemonSupervisor();
+
+      expect(sup.id).toBe('letta-teams-daemon');
+      expect(sup.providerKind).toBe('letta-teams');
+
+      await sup.ensureRunning();
+      expect(spies.ensureRunning).toHaveBeenCalledTimes(1);
+
+      expect(await sup.isRunning()).toBe(true);
+      expect(spies.daemonIsRunning).toHaveBeenCalled();
+
+      await sup.stop();
+      expect(spies.daemonStop).toHaveBeenCalledTimes(1);
     });
   });
 
