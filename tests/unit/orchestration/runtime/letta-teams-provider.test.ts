@@ -372,6 +372,56 @@ describe('LettaTeamsProvider', () => {
     expect(spies.remove).toHaveBeenCalledWith('r');
   });
 
+  describe('molecule-scoped naming', () => {
+    it('uses ${moleculeId}-${role} as the teammate target when moleculeId is supplied', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'reviewer', extra: { moleculeId: 'mol-1' } });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ name: 'mol-1-reviewer' });
+      expect(h.id).toBe('letta-teams:mol-1-reviewer');
+    });
+
+    it('falls back to the bare role name when no moleculeId is supplied', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const h = await provider.start({ role: 'reviewer' });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ name: 'reviewer' });
+      expect(h.id).toBe('letta-teams:reviewer');
+    });
+
+    it('explicit extra.target wins over moleculeId-derived naming', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const h = await provider.start({
+        role: 'reviewer',
+        extra: { moleculeId: 'mol-1', target: 'reviewer-prime' },
+      });
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ name: 'reviewer-prime' });
+      expect(h.id).toBe('letta-teams:reviewer-prime');
+    });
+
+    it('two molecules running the same role spawn distinct teammates', async () => {
+      const provider = newProvider();
+      const { runtime, spies } = fakeRuntime();
+      inject(provider, runtime);
+      const h1 = await provider.start({ role: 'reviewer', extra: { moleculeId: 'mol-1' } });
+      const h2 = await provider.start({ role: 'reviewer', extra: { moleculeId: 'mol-2' } });
+
+      expect(spies.spawn).toHaveBeenCalledTimes(2);
+      expect(spies.spawn.mock.calls[0]![0]).toMatchObject({ name: 'mol-1-reviewer' });
+      expect(spies.spawn.mock.calls[1]![0]).toMatchObject({ name: 'mol-2-reviewer' });
+      expect(h1.id).not.toBe(h2.id);
+
+      // Stopping one removes only that molecule's teammate.
+      await provider.stop(h1);
+      expect(spies.remove).toHaveBeenCalledTimes(1);
+      expect(spies.remove).toHaveBeenLastCalledWith('mol-1-reviewer');
+    });
+  });
+
   describe('EventBus integration', () => {
     function makeBus(): { bus: EventBus; events: Event[] } {
       const bus = new EventBus({ noPersist: true });

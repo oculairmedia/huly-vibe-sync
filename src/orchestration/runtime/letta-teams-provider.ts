@@ -7,11 +7,29 @@
  * alongside LettaPMAgentProvider.
  *
  * Provider-specific start-spec extra fields:
- *   - extra.target?: string — explicit target name (overrides role).
+ *   - extra.moleculeId?: string — molecule the session belongs to.
+ *     Used to scope the teammate name (see Naming below) and tagged
+ *     onto every event emitted to the orchestration EventBus.
+ *   - extra.target?: string — explicit target name; overrides both
+ *     `role` and the moleculeId-derived default. Use this only when a
+ *     caller needs to attach to a pre-existing teammate by name.
  *   - extra.model?: string — LLM model handle.
  *   - extra.contextWindowLimit?: number — context window override.
  *   - extra.spawnPrompt?: string — rich init prompt.
  *   - extra.memfsEnabled?: boolean — memfs lifecycle (default false).
+ *
+ * Naming (vibesync-6wn.4):
+ *   letta-teams' teammate namespace is flat and global per daemon.
+ *   To keep concurrent molecules from colliding on the same role
+ *   teammate, the provider derives the target as:
+ *
+ *     extra.target ?? (extra.moleculeId ? `${moleculeId}-${role}` : role)
+ *
+ *   Two molecules running a "reviewer" role get distinct teammates
+ *   (`mol-1-reviewer` vs `mol-2-reviewer`); stop() on one does not
+ *   affect the other. Calls without a moleculeId fall back to the
+ *   bare role name — backwards-compatible with the early skeleton
+ *   tests and with any caller that has not yet adopted molecules.
  *
  * Discipline:
  *   - This file is in src/orchestration/runtime/; allowed to import the
@@ -126,7 +144,7 @@ export class LettaTeamsProvider implements RuntimeProvider {
   async start(spec: SessionSpec): Promise<SessionHandle> {
     const runtime = await this.getRuntime();
     await runtime.daemon.ensureRunning();
-    const target = readStringExtra(spec, 'target') ?? spec.role;
+    const target = resolveTeammateTarget(spec);
     const exists = await runtime.teammates.exists(target);
     if (!exists) {
       const input: SpawnTeammateInput = {
@@ -382,6 +400,24 @@ function nowIso(): string {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Pick the teams teammate target name for a SessionSpec.
+ *
+ * Order:
+ *   1. extra.target — explicit override; caller knows the exact target.
+ *   2. `${moleculeId}-${role}` — default when running inside a molecule.
+ *   3. role — bare fallback for sessions that do not belong to a molecule.
+ *
+ * Exported for unit-test introspection; production code goes through
+ * LettaTeamsProvider.start.
+ */
+export function resolveTeammateTarget(spec: SessionSpec): string {
+  const explicit = readStringExtra(spec, 'target');
+  if (explicit) return explicit;
+  const moleculeId = readStringExtra(spec, 'moleculeId');
+  return moleculeId ? `${moleculeId}-${spec.role}` : spec.role;
 }
 
 function expectHandle(handle: SessionHandle): LettaTeamsSessionHandle {
