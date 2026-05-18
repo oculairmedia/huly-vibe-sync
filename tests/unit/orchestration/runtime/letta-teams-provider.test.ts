@@ -496,6 +496,37 @@ describe('LettaTeamsProvider', () => {
       });
       expect(seed).toHaveBeenCalledWith('agent-1', [{ label: 'good', value: 'ok' }]);
     });
+
+    it('passes replace mode through to the memory block seeder', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime } = fakeRuntime({ agentId: 'agent-1' });
+      inject(provider, runtime);
+
+      await provider.start({
+        role: 'reviewer',
+        extra: {
+          memoryBlocks: [{ label: 'persona', value: 'replace me' }],
+          memoryBlockSeedMode: 'replace',
+        },
+      });
+
+      expect(seed).toHaveBeenCalledWith('agent-1', [{ label: 'persona', value: 'replace me' }], { mode: 'replace' });
+    });
+
+    it('calls the seeder for replace mode even when the role has no memory blocks', async () => {
+      const seed = vi.fn(async () => undefined);
+      const provider = newProvider({ memoryBlockSeeder: { seed } });
+      const { runtime } = fakeRuntime({ agentId: 'agent-1' });
+      inject(provider, runtime);
+
+      await provider.start({
+        role: 'reviewer',
+        extra: { memoryBlocks: [], memoryBlockSeedMode: 'replace' },
+      });
+
+      expect(seed).toHaveBeenCalledWith('agent-1', [], { mode: 'replace' });
+    });
   });
 
   describe('memfs lifecycle', () => {

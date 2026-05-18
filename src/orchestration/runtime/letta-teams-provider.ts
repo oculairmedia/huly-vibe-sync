@@ -107,6 +107,12 @@ export interface MemoryBlockInput {
   readonly limit?: number;
 }
 
+export type MemoryBlockSeedMode = 'augment' | 'replace';
+
+export interface MemoryBlockSeedOptions {
+  readonly mode?: MemoryBlockSeedMode;
+}
+
 /**
  * Adapter the provider calls to write a role pack's memory blocks
  * onto the Letta agent backing a spawned teammate. Implementations
@@ -118,7 +124,7 @@ export interface MemoryBlockInput {
  * diffing). Throwing surfaces as a session start failure.
  */
 export interface MemoryBlockSeeder {
-  seed(agentId: string, blocks: readonly MemoryBlockInput[]): Promise<void>;
+  seed(agentId: string, blocks: readonly MemoryBlockInput[], opts?: MemoryBlockSeedOptions): Promise<void>;
 }
 
 interface LettaTeamsSessionHandle extends SessionHandle {
@@ -280,7 +286,8 @@ export class LettaTeamsProvider implements RuntimeProvider {
     // Idempotent upsert — calling start() twice with the same blocks
     // is a no-op on the second pass (the seeder diffs internally).
     const memoryBlocks = readMemoryBlocks(spec);
-    if (memoryBlocks.length > 0) {
+    const memoryBlockMode = readMemoryBlockSeedMode(spec);
+    if (memoryBlocks.length > 0 || memoryBlockMode === 'replace') {
       if (!this.memoryBlockSeeder) {
         throw new Error(
           'LettaTeamsProvider: SessionSpec.extra.memoryBlocks supplied but no memoryBlockSeeder was injected. Wire one at construction time.',
@@ -291,7 +298,11 @@ export class LettaTeamsProvider implements RuntimeProvider {
           `LettaTeamsProvider: cannot seed memory blocks — teammate ${target} has no agentId (teams returned ${teammate ? 'a teammate without an agentId' : 'null'})`,
         );
       }
-      await this.memoryBlockSeeder.seed(teammate.agentId, memoryBlocks);
+      if (memoryBlockMode === 'replace') {
+        await this.memoryBlockSeeder.seed(teammate.agentId, memoryBlocks, { mode: 'replace' });
+      } else {
+        await this.memoryBlockSeeder.seed(teammate.agentId, memoryBlocks);
+      }
     }
 
     const handle: LettaTeamsSessionHandle = {
@@ -614,6 +625,10 @@ function readMemoryBlocks(spec: SessionSpec): MemoryBlockInput[] {
     }
   }
   return out;
+}
+
+function readMemoryBlockSeedMode(spec: SessionSpec): MemoryBlockSeedMode {
+  return spec.extra?.['memoryBlockSeedMode'] === 'replace' ? 'replace' : 'augment';
 }
 
 /**

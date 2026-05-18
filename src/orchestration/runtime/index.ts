@@ -22,6 +22,7 @@ export { LettaTeamsProvider } from './letta-teams-provider.js';
 export type {
   LettaTeamsProviderOptions,
   MemoryBlockInput,
+  MemoryBlockSeedOptions,
   MemoryBlockSeeder,
 } from './letta-teams-provider.js';
 
