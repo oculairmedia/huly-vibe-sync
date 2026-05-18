@@ -13,6 +13,8 @@ import { createAstMemorySync } from './AstMemorySync';
 import { logger } from './logger';
 import { createBookStackWatcher } from './BookStackWatcher';
 import { ProjectRegistry } from './ProjectRegistry';
+import { bootOrchestrationPlane, type OrchestrationHandle } from './orchestration/boot.js';
+import { DoltClient } from './orchestration/store/index.js';
 
 import { createSyncController } from './SyncController';
 import { createEventHandlers } from './EventHandlers';
@@ -28,6 +30,7 @@ function formatError(err: unknown): string {
 
 let temporalOrchestration: Record<string, (...args: unknown[]) => Promise<unknown>> | null = null;
 const USE_TEMPORAL_ORCHESTRATION = process.env.USE_TEMPORAL_ORCHESTRATION === 'true';
+const ENABLE_ORCHESTRATION = process.env.ENABLE_ORCHESTRATION === 'true';
 
 async function getTemporalOrchestration(): Promise<Record<string, (...args: unknown[]) => Promise<unknown>> | null> {
   if (!temporalOrchestration && USE_TEMPORAL_ORCHESTRATION) {
@@ -299,6 +302,22 @@ async function main(): Promise<void> {
     }
   }
 
+  let orchestration: OrchestrationHandle | null = null;
+  if (ENABLE_ORCHESTRATION) {
+    try {
+      const dolt = new DoltClient();
+      orchestration = await bootOrchestrationPlane({ dolt });
+      logger.info('Orchestration plane initialized');
+    } catch (orchestrationError) {
+      logger.warn(
+        { err: orchestrationError },
+        'Failed to initialize orchestration plane, continuing without it',
+      );
+    }
+  } else {
+    logger.info('Orchestration plane disabled (ENABLE_ORCHESTRATION is not true)');
+  }
+
   createApiServer({
     config,
     healthStats,
@@ -312,6 +331,7 @@ async function main(): Promise<void> {
     beadsIssueService,
     beadsAdapter,
     beadsIssueMirror,
+    orchestration,
   } as never);
 
   await syncController.runSyncWithTimeout();

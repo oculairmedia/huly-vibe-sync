@@ -13,6 +13,7 @@ import { registerDocsRoutes } from './api/routes/docs.js';
 import { registerTemporalRoutes } from './api/routes/temporal.js';
 import { registerAgentRoutes } from './api/routes/agents.js';
 import { registerAgentsMdRoutes } from './api/routes/agentsMd.js';
+import { registerFormulaRoutes } from './api/routes/formulas.js';
 import { sseManager } from './api/SSEManager.js';
 import { syncHistory } from './api/SyncHistoryStore.js';
 import { ConfigurationHandler } from './api/ConfigurationHandler.js';
@@ -26,6 +27,7 @@ import type {
   BeadsIssueServiceApi,
   DoltHubProvisionerApi,
   HandleContext,
+  OrchestrationApi,
   ProjectRegistryApi,
   RouteContext,
 } from './types/api.js';
@@ -73,6 +75,7 @@ interface ApiServerDeps {
   beadsIssueService?: BeadsIssueServiceApi | null;
   beadsAdapter?: BeadsAdapterApi | null;
   beadsIssueMirror?: BeadsIssueMirrorApi | null;
+  orchestration?: OrchestrationApi | null;
 }
 
 export function createApiServer(deps: ApiServerDeps): http.Server {
@@ -95,6 +98,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
   registerTemporalRoutes(app, routeDeps as never);
   registerAgentRoutes(app, routeDeps as never);
   registerAgentsMdRoutes(app, routeDeps as never);
+  registerFormulaRoutes(app, routeDeps as never);
 
   const mcpConfig = (deps.config as Record<string, Record<string, unknown>>)?.projectMcp || {};
   const mcpPath = (mcpConfig.path as string) || '/mcp';
