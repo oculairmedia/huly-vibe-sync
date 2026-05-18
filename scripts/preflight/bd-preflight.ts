@@ -22,23 +22,46 @@
  * Exit code 0 = all clean; 1 = warnings; 2 = errors.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readlinkSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-interface CheckResult {
+export interface CheckResult {
   readonly name: string;
   readonly level: 'ok' | 'warn' | 'error' | 'skip';
   readonly detail: string;
 }
 
-interface Report {
+export interface Report {
   readonly project: string;
   readonly checks: readonly CheckResult[];
   readonly summary: { readonly ok: number; readonly warn: number; readonly error: number; readonly skip: number };
 }
 
-function tryExec(cmd: string): { ok: boolean; stdout: string; stderr: string } {
+interface ExecResult {
+  readonly ok: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+interface PreflightDeps {
+  readonly tryExec: (cmd: string) => ExecResult;
+  readonly readlinkSync: (path: string) => string;
+}
+
+const defaultDeps: PreflightDeps = {
+  tryExec,
+  readlinkSync,
+};
+
+function projectRootFromDoltCwd(cwd: string): string | null {
+  const markers = ['/.beads/shared-server/dolt', '/.beads/dolt'];
+  const marker = markers.find((candidate) => cwd.endsWith(candidate));
+  return marker ? cwd.slice(0, -marker.length) : null;
+}
+
+export function tryExec(cmd: string): ExecResult {
   try {
     const stdout = execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
     return { ok: true, stdout, stderr: '' };
@@ -56,7 +79,68 @@ function whichOk(binary: string): boolean {
   return tryExec(`which ${binary}`).ok;
 }
 
-function preflight(projectRoot: string): Report {
+export function inspectDoltServerPortOwner(port: number, expectedDoltData: string, deps: PreflightDeps = defaultDeps): CheckResult {
+  const ss = deps.tryExec(`ss -H -tlnp 'sport = :${port}' 2>&1`);
+  if (!ss.ok) {
+    return {
+      name: 'dolt-server-port-owner',
+      level: 'skip',
+      detail: `could not inspect port ${port} ownership with ss — ${String(ss.stderr || ss.stdout).slice(0, 160)}`,
+    };
+  }
+
+  const line = ss.stdout
+    .split('\n')
+    .map((entry) => entry.trim())
+    .find((entry) => entry.length > 0);
+  if (!line) {
+    return {
+      name: 'dolt-server-port-owner',
+      level: 'warn',
+      detail: `port ${port} is not currently listening — bd may start the Dolt server on demand`,
+    };
+  }
+
+  const pid = /pid=(\d+)/.exec(line)?.[1];
+  if (!pid) {
+    return {
+      name: 'dolt-server-port-owner',
+      level: 'warn',
+      detail: `port ${port} is listening but owner PID was unavailable: ${line.slice(0, 180)}`,
+    };
+  }
+
+  let cwd: string;
+  try {
+    cwd = deps.readlinkSync(`/proc/${pid}/cwd`);
+  } catch (err) {
+    return {
+      name: 'dolt-server-port-owner',
+      level: 'warn',
+      detail: `port ${port} is owned by pid ${pid}, but its cwd could not be read: ${(err as Error).message}`,
+    };
+  }
+
+  if (cwd === expectedDoltData) {
+    const projectRoot = projectRootFromDoltCwd(cwd);
+    return {
+      name: 'dolt-server-port-owner',
+      level: 'ok',
+      detail: `port=${port} pid=${pid} project=${projectRoot ?? 'unknown'} cwd=${cwd}`,
+    };
+  }
+
+  const ownerProjectRoot = projectRootFromDoltCwd(cwd);
+  const expectedProjectRoot = projectRootFromDoltCwd(expectedDoltData);
+
+  return {
+    name: 'dolt-server-port-owner',
+    level: 'error',
+    detail: `port ${port} is owned by pid ${pid} for project ${ownerProjectRoot ?? 'unknown'} at ${cwd}, expected project ${expectedProjectRoot ?? 'unknown'} at ${expectedDoltData}. bd may appear empty or repeatedly auto-import JSONL. Remediate via bd-managed recovery: stop the stale owner only after confirming its cwd, restart the intended project's bd Dolt server, or repair registry/config drift; do not mutate .beads/dolt directly.`,
+  };
+}
+
+export function preflight(projectRoot: string, deps: PreflightDeps = defaultDeps): Report {
   const checks: CheckResult[] = [];
   const beadsDir = join(projectRoot, '.beads');
 
@@ -102,10 +186,12 @@ function preflight(projectRoot: string): Report {
 
   // 5. New dolt-server.port file present (post-migration shape)
   const newPort = join(beadsDir, 'dolt-server.port');
+  let parsedPort: number | null = null;
   if (existsSync(newPort)) {
     const raw = readFileSync(newPort, 'utf8').trim();
     const port = Number.parseInt(raw, 10);
     if (Number.isFinite(port) && port > 0) {
+      parsedPort = port;
       checks.push({ name: 'dolt-server-port', level: 'ok', detail: `port=${port}` });
     } else {
       checks.push({ name: 'dolt-server-port', level: 'error', detail: `invalid port "${raw}"` });
@@ -118,6 +204,9 @@ function preflight(projectRoot: string): Report {
   const doltData = join(beadsDir, 'dolt');
   if (existsSync(doltData)) {
     checks.push({ name: '.beads/dolt-data-dir', level: 'ok', detail: doltData });
+    if (parsedPort !== null) {
+      checks.push(inspectDoltServerPortOwner(parsedPort, doltData, deps));
+    }
   } else {
     checks.push({ name: '.beads/dolt-data-dir', level: 'warn', detail: 'no .beads/dolt directory — non-Dolt backend?' });
   }
@@ -195,7 +284,7 @@ function finalize(projectRoot: string, checks: CheckResult[]): Report {
   return { project: projectRoot, checks, summary };
 }
 
-function format(report: Report): string {
+export function format(report: Report): string {
   const lines: string[] = [];
   lines.push(`# bd preflight: ${report.project}`);
   lines.push('');
@@ -210,13 +299,19 @@ function format(report: Report): string {
   return lines.join('\n');
 }
 
-const args = process.argv.slice(2);
-const jsonMode = args.includes('--json');
-const target = resolve(args.find((a) => !a.startsWith('--')) ?? process.cwd());
-const report = preflight(target);
-if (jsonMode) {
-  console.log(JSON.stringify(report, null, 2));
-} else {
-  console.log(format(report));
+function main(): void {
+  const args = process.argv.slice(2);
+  const jsonMode = args.includes('--json');
+  const target = resolve(args.find((a) => !a.startsWith('--')) ?? process.cwd());
+  const report = preflight(target);
+  if (jsonMode) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(format(report));
+  }
+  process.exit(report.summary.error > 0 ? 2 : report.summary.warn > 0 ? 1 : 0);
 }
-process.exit(report.summary.error > 0 ? 2 : report.summary.warn > 0 ? 1 : 0);
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main();
+}
