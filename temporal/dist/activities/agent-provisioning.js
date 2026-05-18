@@ -120,7 +120,7 @@ async function syncAgentMemoryFromControl(agentId) {
 async function fetchAgentsToProvision(projectIdentifiers) {
     console.log('[Activity:FetchAgents] Fetching agents to provision...');
     try {
-        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('src/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || path_1.default.join(process.cwd(), 'logs', 'sync-state.db');
         const db = createSyncDatabase(dbPath);
         let registryProjects;
@@ -464,7 +464,7 @@ async function updateProjectAgentsMd(input) {
             console.log(`[Activity:UpdateAgentsMd] No filesystem path for ${projectIdentifier}, skipping`);
             return { success: true, error: 'no_project_path' };
         }
-        const { agentsMdGenerator } = await Promise.resolve(`${appRootModule('lib/AgentsMdGenerator.js')}`).then(s => __importStar(require(s)));
+        const { agentsMdGenerator } = await Promise.resolve(`${appRootModule('src/AgentsMdGenerator.js')}`).then(s => __importStar(require(s)));
         const agentsMdPath = path_1.default.join(projectPath, 'AGENTS.md');
         const agentName = `PM - ${projectName}`;
         const vars = {
@@ -509,7 +509,7 @@ async function checkAgentExists(input) {
     console.log(`[Activity:CheckAgent] Checking if agent exists for ${projectIdentifier}...`);
     try {
         // First check the sync database
-        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('src/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {
@@ -560,7 +560,7 @@ async function updateProjectAgent(input) {
     const { projectIdentifier, agentId } = input;
     console.log(`[Activity:UpdateAgent] Updating database for ${projectIdentifier} with agent ${agentId}...`);
     try {
-        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('src/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
         const db = createSyncDatabase(dbPath);
         try {

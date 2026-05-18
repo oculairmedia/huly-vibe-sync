@@ -1394,8 +1394,8 @@ describe('createApiServer - HTTP Routes', () => {
     it('should return Prometheus metrics', async () => {
       const res = await makeRequest(port, 'GET', '/metrics');
       expect(res.statusCode).toBe(200);
-      // body is text 'metrics', not JSON
-      expect(res.body).toBe('metrics');
+      // body is Prometheus text, not JSON
+      expect(res.body).toContain('# HELP');
     });
   });
 

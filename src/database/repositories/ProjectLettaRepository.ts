@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 
-interface LettaAgentInfo {
+export interface LettaAgentInfo {
   agentId: string;
   folderId?: string | null;
   sourceId?: string | null;

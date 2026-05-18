@@ -65,11 +65,11 @@ async function getDb() {
     }
     dbInitPromise = (async () => {
         if (!createSyncDatabaseCached) {
-            const databaseModule = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+            const databaseModule = await Promise.resolve(`${appRootModule('src/database.js')}`).then(s => __importStar(require(s)));
             createSyncDatabaseCached = databaseModule.createSyncDatabase;
         }
         if (!computeIssueContentHashCached) {
-            const utilsModule = await Promise.resolve(`${appRootModule('lib/database/utils.js')}`).then(s => __importStar(require(s)));
+            const utilsModule = await Promise.resolve(`${appRootModule('src/database/utils.js')}`).then(s => __importStar(require(s)));
             computeIssueContentHashCached = utilsModule.computeIssueContentHash;
         }
         dbInstance = createSyncDatabaseCached(resolveDbPath());

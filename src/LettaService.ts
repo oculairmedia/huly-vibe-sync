@@ -8,7 +8,7 @@ import { LettaFolderSourceService } from './letta/LettaFolderSourceService.js';
 
 export class LettaService {
   _config: LettaConfig;
-  client: LettaClient;
+  private _client: LettaClient;
   baseURL: string;
   apiURL: string;
   password: string;
@@ -38,7 +38,7 @@ export class LettaService {
     const cfg = config as unknown as Record<string, unknown>;
 
     this._config = config;
-    this.client = client;
+    this._client = client;
     this.baseURL = config.baseURL;
     this.apiURL = config.apiURL;
     this.password = config.password;
@@ -65,13 +65,40 @@ export class LettaService {
     this.fileService = (this._folders as unknown as { fileService: unknown }).fileService;
   }
 
+  get client(): LettaClient { return this._client; }
+
+  set client(client: LettaClient) {
+    this._client = client;
+    this._config.client = client;
+    const configClient = client as unknown as Record<string, unknown>;
+    this._memory.config.client = configClient;
+    this._lifecycle.config.client = configClient;
+    this._tools.config.client = configClient;
+    this._folders.config.client = client as unknown as typeof this._folders.config.client;
+  }
+
+  private _syncRuntimeConfig(): void {
+    this._config.controlAgentName = this.controlAgentName;
+    this._config.sharedHumanBlockId = this.sharedHumanBlockId;
+    if (this.sharedHumanBlockId) this._memory.config.sharedHumanBlockId = this.sharedHumanBlockId;
+    else delete this._memory.config.sharedHumanBlockId;
+    this._lifecycle.config.controlAgentName = this.controlAgentName;
+    const lifecycleCache = this._lifecycle as unknown as { _controlAgentCache?: unknown };
+    lifecycleCache._controlAgentCache = this._controlAgentCache;
+  }
+
+  private _syncControlAgentCache(): void {
+    const lifecycleCache = this._lifecycle as unknown as { _controlAgentCache?: unknown };
+    this._controlAgentCache = lifecycleCache._controlAgentCache ?? null;
+  }
+
   clearCache(): void { this._folders.clearCache(); this._lifecycle.clearControlAgentCache(); this._controlAgentCache = null; console.log('[Letta] Cache cleared'); }
 
-  async ensureControlAgent() { return this._lifecycle.ensureControlAgent(); }
-  async getControlAgentConfig(agentId: string | null = null) { return this._lifecycle.getControlAgentConfig(agentId); }
-  async ensureAgent(projectIdentifier: string, projectName: string) { return this._lifecycle.ensureAgent(projectIdentifier, projectName); }
-  async getAgent(agentId: string) { return this._lifecycle.getAgent(agentId); }
-  async listAgents(filters: Record<string, unknown> = {}) { return this._lifecycle.listAgents(filters); }
+  async ensureControlAgent() { this._syncRuntimeConfig(); const result = await this._lifecycle.ensureControlAgent(); this._syncControlAgentCache(); return result; }
+  async getControlAgentConfig(agentId: string | null = null) { this._syncRuntimeConfig(); const result = await this._lifecycle.getControlAgentConfig(agentId); this._syncControlAgentCache(); return result; }
+  async ensureAgent(projectIdentifier: string, projectName: string) { this._syncRuntimeConfig(); const result = await this._lifecycle.ensureAgent(projectIdentifier, projectName); this._syncControlAgentCache(); return result; }
+  async getAgent(agentId: string) { this._syncRuntimeConfig(); return this._lifecycle.getAgent(agentId); }
+  async listAgents(filters: Record<string, unknown> = {}) { this._syncRuntimeConfig(); return this._lifecycle.listAgents(filters); }
   _buildPersonaBlock(projectIdentifier: string, projectName: string) { return this._lifecycle._buildPersonaBlock(projectIdentifier, projectName); }
 
   _loadAgentState() { return (this._persistence as unknown as { _loadAgentState: () => unknown })._loadAgentState(); }
@@ -81,17 +108,17 @@ export class LettaService {
   saveAgentIdToProjectFolder(projectPath: string, agentId: string, projectInfo?: Record<string, unknown>) { return (this._persistence as unknown as { saveAgentIdToProjectFolder: (p: string, a: string, i?: Record<string, unknown>) => unknown }).saveAgentIdToProjectFolder(projectPath, agentId, projectInfo); }
   updateAgentsMdWithProjectInfo(projectPath: string, agentId: string, projectInfo: Record<string, unknown>) { return (this._persistence as unknown as { updateAgentsMdWithProjectInfo: (p: string, a: string, i: Record<string, unknown>) => unknown }).updateAgentsMdWithProjectInfo(projectPath, agentId, projectInfo); }
 
-  async attachPmTools(agentId: string) { return this._tools.attachPmTools(agentId); }
-  async syncToolsFromControl(agentId: string, forceSync?: boolean) { return this._tools.syncToolsFromControl(agentId, forceSync); }
-  async attachMcpTools(agentId: string) { return this._tools.attachMcpTools(agentId); }
+  async attachPmTools(agentId: string) { this._syncRuntimeConfig(); return this._tools.attachPmTools(agentId); }
+  async syncToolsFromControl(agentId: string, forceSync?: boolean) { this._syncRuntimeConfig(); return this._tools.syncToolsFromControl(agentId, forceSync); }
+  async attachMcpTools(agentId: string) { this._syncRuntimeConfig(); return this._tools.attachMcpTools(agentId); }
   async _ensureMcpTool(name: string, url: string) { return this._tools._ensureMcpTool(name, url); }
   async ensureSearchFolderPassagesTool() { return this._tools.ensureSearchFolderPassagesTool(); }
   async attachSearchFolderPassagesTool(agentId: string) { return this._tools.attachSearchFolderPassagesTool(agentId); }
   async setAgentIdEnvVar(agentId: string) { return this._tools.setAgentIdEnvVar(agentId); }
 
-  async _updatePersonaBlock(agentId: string, personaContent: string) { return (this._memory as unknown as { _updatePersonaBlock: (a: string, c: string) => Promise<void> })._updatePersonaBlock(agentId, personaContent); }
-  async _ensureTemplateBlocks(agentId: string, opts: Record<string, unknown>) { return (this._memory as unknown as { _ensureTemplateBlocks: (a: string, o: Record<string, unknown>) => Promise<void> })._ensureTemplateBlocks(agentId, opts); }
-  async _attachSharedHumanBlock(agentId: string) { return (this._memory as unknown as { _attachSharedHumanBlock: (a: string) => Promise<void> })._attachSharedHumanBlock(agentId); }
+  async _updatePersonaBlock(agentId: string, personaContent: string) { this._syncRuntimeConfig(); return (this._memory as unknown as { _updatePersonaBlock: (a: string, c: string) => Promise<void> })._updatePersonaBlock(agentId, personaContent); }
+  async _ensureTemplateBlocks(agentId: string, opts: Record<string, unknown>) { this._syncRuntimeConfig(); return (this._memory as unknown as { _ensureTemplateBlocks: (a: string, o: Record<string, unknown>) => Promise<void> })._ensureTemplateBlocks(agentId, opts); }
+  async _attachSharedHumanBlock(agentId: string) { this._syncRuntimeConfig(); return (this._memory as unknown as { _attachSharedHumanBlock: (a: string) => Promise<void> })._attachSharedHumanBlock(agentId); }
   async upsertMemoryBlocks(agentId: string, blocks: { label: string; value: unknown }[]) { return this._memory.upsertMemoryBlocks(agentId, blocks); }
   _hashContent(content: string) { return this._memory._hashContent(content); }
   async initializeScratchpad(agentId: string) { return this._memory.initializeScratchpad(agentId); }

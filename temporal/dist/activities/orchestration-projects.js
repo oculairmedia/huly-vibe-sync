@@ -60,7 +60,7 @@ function appRootModule(modulePath) {
 async function fetchRegistryProjects() {
     console.log('[Temporal:Orchestration] Fetching projects from registry');
     try {
-        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('lib/database.js')}`).then(s => __importStar(require(s)));
+        const { createSyncDatabase } = await Promise.resolve(`${appRootModule('src/database.js')}`).then(s => __importStar(require(s)));
         const dbPath = process.env.DB_PATH || path_1.default.join(process.cwd(), 'logs', 'sync-state.db');
         const db = createSyncDatabase(dbPath);
         try {

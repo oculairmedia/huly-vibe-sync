@@ -27,7 +27,7 @@ export async function fetchRegistryProjects(): Promise<HulyProject[]> {
   console.log('[Temporal:Orchestration] Fetching projects from registry');
 
   try {
-    const { createSyncDatabase } = await import(appRootModule('lib/database.js'));
+    const { createSyncDatabase } = await import(appRootModule('src/database.js'));
     const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'logs', 'sync-state.db');
     const db = createSyncDatabase(dbPath);
 
