@@ -16,7 +16,7 @@
  * See vibesync-6wn.9.
  */
 
-import type { MemoryBlockInput, MemoryBlockSeeder } from '../orchestration/runtime/index.js';
+import type { MemoryBlockInput, MemoryBlockSeedOptions, MemoryBlockSeeder } from '../orchestration/runtime/index.js';
 
 interface BlocksApi {
   create(input: { label: string; value: string; limit?: number }): Promise<{ id: string }>;
@@ -26,6 +26,7 @@ interface BlocksApi {
 interface AgentsBlocksApi {
   list(agentId: string, opts?: { limit?: number }): Promise<{ id?: string; label?: string; value?: string; limit?: number }[]>;
   attach(agentId: string, blockId: string): Promise<unknown>;
+  detach(agentId: string, blockId: string): Promise<unknown>;
 }
 
 interface LettaClientShape {
@@ -36,8 +37,8 @@ interface LettaClientShape {
 export class LettaTeamsMemoryBlockSeeder implements MemoryBlockSeeder {
   constructor(private readonly client: LettaClientShape) {}
 
-  async seed(agentId: string, blocks: readonly MemoryBlockInput[]): Promise<void> {
-    if (blocks.length === 0) return;
+  async seed(agentId: string, blocks: readonly MemoryBlockInput[], opts: MemoryBlockSeedOptions = {}): Promise<void> {
+    if (blocks.length === 0 && opts.mode !== 'replace') return;
     const existing = await this.client.agents.blocks.list(agentId, { limit: 200 });
     const byLabel = new Map<string, { id?: string; value?: string; limit?: number }>();
     for (const b of existing) {
@@ -61,6 +62,15 @@ export class LettaTeamsMemoryBlockSeeder implements MemoryBlockSeeder {
         ...(block.limit !== undefined ? { limit: block.limit } : {}),
       });
       await this.client.agents.blocks.attach(agentId, created.id);
+    }
+
+    if (opts.mode === 'replace') {
+      const allowedLabels = new Set(blocks.map((block) => block.label));
+      for (const block of existing) {
+        if (!block.id || typeof block.label !== 'string') continue;
+        if (allowedLabels.has(block.label)) continue;
+        await this.client.agents.blocks.detach(agentId, block.id);
+      }
     }
   }
 }

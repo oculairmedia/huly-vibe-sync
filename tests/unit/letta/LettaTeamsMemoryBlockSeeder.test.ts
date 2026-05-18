@@ -5,6 +5,7 @@ import { LettaTeamsMemoryBlockSeeder } from '../../../src/letta/LettaTeamsMemory
 function fakeClient(opts: { existing?: { id: string; label: string; value: string; limit?: number }[] } = {}) {
   const list = vi.fn(async () => opts.existing ?? []);
   const attach = vi.fn(async () => undefined);
+  const detach = vi.fn(async () => undefined);
   const create = vi.fn(async (input: { label: string; value: string; limit?: number }) => ({
     id: `block-${input.label}`,
   }));
@@ -12,9 +13,9 @@ function fakeClient(opts: { existing?: { id: string; label: string; value: strin
   return {
     client: {
       blocks: { create, modify },
-      agents: { blocks: { list, attach } },
+      agents: { blocks: { list, attach, detach } },
     },
-    spies: { list, attach, create, modify },
+    spies: { list, attach, create, modify, detach },
   };
 }
 
@@ -86,5 +87,42 @@ describe('LettaTeamsMemoryBlockSeeder', () => {
     const seeder = new LettaTeamsMemoryBlockSeeder(client);
     await seeder.seed('agent-1', [{ label: 'p', value: 'v' }]);
     expect(spies.list).toHaveBeenCalledWith('agent-1', { limit: 200 });
+  });
+
+  it('replace mode detaches blocks not declared by the role without deleting them', async () => {
+    const { client, spies } = fakeClient({
+      existing: [
+        { id: 'role-persona', label: 'persona', value: 'Role persona' },
+        { id: 'role-scope', label: 'scope', value: 'Role scope' },
+        { id: 'default-anti-patterns', label: 'anti-patterns', value: 'default' },
+        { id: 'default-coordination', label: 'coordination-contract', value: 'default' },
+        { id: 'default-completion', label: 'completion-contract', value: 'default' },
+        { id: 'default-operating', label: 'operating-contract', value: 'default' },
+        { id: 'default-execution', label: 'execution-standards', value: 'default' },
+        { id: 'default-identity', label: 'identity', value: 'default' },
+      ],
+    });
+    const seeder = new LettaTeamsMemoryBlockSeeder(client);
+
+    await seeder.seed(
+      'agent-1',
+      [
+        { label: 'persona', value: 'Role persona' },
+        { label: 'scope', value: 'Role scope' },
+      ],
+      { mode: 'replace' },
+    );
+
+    expect(spies.detach).toHaveBeenCalledTimes(6);
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-anti-patterns');
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-coordination');
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-completion');
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-operating');
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-execution');
+    expect(spies.detach).toHaveBeenCalledWith('agent-1', 'default-identity');
+    expect(spies.modify).not.toHaveBeenCalled();
+    expect(spies.create).not.toHaveBeenCalled();
+    expect(spies.attach).not.toHaveBeenCalled();
+    expect('delete' in client.blocks).toBe(false);
   });
 });
