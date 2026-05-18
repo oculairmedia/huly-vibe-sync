@@ -41,6 +41,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,
@@ -114,7 +115,7 @@ export class ACPProvider implements RuntimeProvider {
     }
   }
 
-  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void> {
+  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult> {
     const h = expectHandle(handle);
     const conn = this.connections.get(handle.id);
     if (!conn) throw new Error(`ACPProvider.prompt: no connection for ${handle.id}`);
@@ -132,6 +133,7 @@ export class ACPProvider implements RuntimeProvider {
       throw new Error(`ACPProvider.prompt: stdin not writable for ${handle.id}`);
     }
     conn.child.stdin.write(JSON.stringify(request) + '\n');
+    return {};
   }
 
   async nudge(_handle: SessionHandle): Promise<void> {

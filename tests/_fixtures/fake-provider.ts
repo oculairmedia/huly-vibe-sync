@@ -1,5 +1,6 @@
 import type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,
@@ -43,8 +44,9 @@ export function newFakeProvider(args: { readonly kind?: string; readonly script?
     async stop(handle: SessionHandle): Promise<void> {
       recorder.stops.push(handle);
     },
-    async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void> {
+    async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult> {
       recorder.prompts.push({ handle, content });
+      return { taskId: `${handle.id}:prompt-${recorder.prompts.length}` };
     },
     async nudge(handle: SessionHandle): Promise<void> {
       recorder.nudges.push(handle);

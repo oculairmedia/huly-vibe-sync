@@ -263,9 +263,57 @@ export class DoltClient {
     return rows.map(toBeadRow);
   }
 
+  /** Find steps in a molecule currently marked as running. */
+  async findRunningStepsForMolecule(rootId: string): Promise<BeadRow[]> {
+    const [rows] = await this.pool.execute<mysql.RowDataPacket[]>(
+      `
+      SELECT i.*
+      FROM issues i
+      JOIN dependencies parent_dep
+        ON parent_dep.issue_id = i.id
+       AND parent_dep.depends_on_id = ?
+       AND parent_dep.type = 'parent-child'
+      WHERE i.issue_type = 'molecule_step'
+        AND i.status = 'in_progress'
+      `,
+      [rootId],
+    );
+    return rows.map(toBeadRow);
+  }
+
   /** Mark a step as running (status='in_progress'). */
   async markStepRunning(stepId: string): Promise<void> {
     await this.pool.execute(`UPDATE issues SET status = 'in_progress' WHERE id = ?`, [stepId]);
+  }
+
+  /** Persist provider-opaque runtime task metadata for restart re-attachment. */
+  async recordStepTask(stepId: string, task: { readonly taskId: string; readonly providerKind: string; readonly sessionId: string }): Promise<void> {
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.execute<mysql.RowDataPacket[]>(
+        `SELECT metadata FROM issues WHERE id = ?`,
+        [stepId],
+      );
+      const existing = rows[0]?.['metadata'];
+      const meta = typeof existing === 'string' ? JSON.parse(existing) : (existing ?? {});
+      meta.exec = {
+        ...(meta.exec ?? {}),
+        task_id: task.taskId,
+        provider_kind: task.providerKind,
+        session_id: task.sessionId,
+      };
+      await conn.execute(
+        `UPDATE issues SET metadata = CAST(? AS JSON) WHERE id = ?`,
+        [JSON.stringify(meta), stepId],
+      );
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   }
 
   /** Mark a step as done with an optional output payload merged into metadata. */

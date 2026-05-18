@@ -32,6 +32,7 @@
 
 import type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,
@@ -88,12 +89,13 @@ export class LettaPMAgentProvider implements RuntimeProvider {
     // record; the underlying Letta agent stays alive for the next start.
   }
 
-  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void> {
+  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult> {
     const h = expectLettaHandle(handle);
     const messageContent = toLettaMessageContent(content);
     await this.services.client.agents.messages.create(h.agentId, {
       messages: [{ role: 'user', content: messageContent }],
     });
+    return {};
   }
 
   async nudge(_handle: SessionHandle): Promise<void> {

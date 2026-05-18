@@ -32,6 +32,7 @@
 
 import type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,
@@ -88,9 +89,9 @@ export class A2UIProvider implements RuntimeProvider {
     await this.inner.stop(h.innerHandle);
   }
 
-  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void> {
+  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult> {
     const h = expectHandle(handle);
-    await this.inner.prompt(h.innerHandle, content);
+    return this.inner.prompt(h.innerHandle, content);
   }
 
   async nudge(handle: SessionHandle): Promise<void> {

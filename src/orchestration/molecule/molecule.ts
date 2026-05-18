@@ -66,7 +66,9 @@ export interface MoleculeStore {
     readonly dependsOnStepIds?: readonly string[];
   }): Promise<void>;
   findReadyStepsForMolecule(rootId: string): Promise<readonly BeadRow[]>;
+  findRunningStepsForMolecule(rootId: string): Promise<readonly BeadRow[]>;
   markStepRunning(stepId: string): Promise<void>;
+  recordStepTask(stepId: string, task: { readonly taskId: string; readonly providerKind: string; readonly sessionId: string }): Promise<void>;
   markStepDone(stepId: string, output: unknown): Promise<void>;
   markStepFailed(stepId: string, errorTrace: string): Promise<void>;
 }
@@ -159,6 +161,11 @@ export class MoleculeWalker {
     return this.store.findReadyStepsForMolecule(rootId);
   }
 
+  /** Return step beads currently marked as running for this molecule. */
+  async findRunning(rootId: string): Promise<readonly BeadRow[]> {
+    return this.store.findRunningStepsForMolecule(rootId);
+  }
+
   /**
    * Dispatch the molecule from a formula spec: create the root + every
    * step bead with the right edges, but do NOT run anything yet. The
@@ -212,6 +219,11 @@ export class MoleculeWalker {
   /** Mark a step as running. Pass-through to the store. */
   async startStep(stepId: string): Promise<void> {
     await this.store.markStepRunning(stepId);
+  }
+
+  /** Persist provider-opaque task metadata for restart re-attachment. */
+  async recordStepTask(stepId: string, task: { readonly taskId: string; readonly providerKind: string; readonly sessionId: string }): Promise<void> {
+    await this.store.recordStepTask(stepId, task);
   }
 
   /** Mark a step as done. Pass-through. */

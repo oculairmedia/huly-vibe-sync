@@ -81,8 +81,29 @@ export class InMemoryDoltClient {
       .filter((row) => this.blockingEdges(row.id).every((edge) => this.beads.get(edge.depends_on_id)?.status === 'closed'));
   }
 
+  async findRunningStepsForMolecule(rootId: string): Promise<BeadRow[]> {
+    const stepIds = this.dependencies
+      .filter((edge) => edge.type === 'parent-child' && edge.depends_on_id === rootId)
+      .map((edge) => edge.issue_id);
+
+    return stepIds
+      .map((id) => this.beads.get(id))
+      .filter((row): row is BeadRow => row?.issue_type === 'molecule_step' && row.status === 'in_progress');
+  }
+
   async markStepRunning(stepId: string): Promise<void> {
     this.updateBead(stepId, { status: 'in_progress' });
+  }
+
+  async recordStepTask(stepId: string, task: { readonly taskId: string; readonly providerKind: string; readonly sessionId: string }): Promise<void> {
+    const row = this.requireBead(stepId);
+    this.updateBead(stepId, {
+      metadata: mergeExec(row.metadata, {
+        task_id: task.taskId,
+        provider_kind: task.providerKind,
+        session_id: task.sessionId,
+      }),
+    });
   }
 
   async markStepDone(stepId: string, output: unknown): Promise<void> {

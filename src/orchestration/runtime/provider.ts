@@ -43,6 +43,17 @@ export interface SessionHandle {
 }
 
 /**
+ * Provider metadata for a prompt accepted by the runtime.
+ *
+ * `taskId` is intentionally provider-opaque. Dispatchers may persist it
+ * on molecule-step beads so a later process can re-attach through the
+ * same RuntimeProvider; they must not interpret it directly.
+ */
+export interface PromptResult {
+  readonly taskId?: string;
+}
+
+/**
  * Caller-supplied configuration for starting a session. Each provider
  * extends this with its own typed start-spec; the interface defines only
  * the irreducible fields every provider needs.
@@ -125,7 +136,7 @@ export interface RuntimeProvider {
    * provider has accepted the prompt; the actual reply streams via
    * `observe`. Does NOT wait for turn completion.
    */
-  prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void>;
+  prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult>;
 
   /**
    * Wake a session that may have gone idle. Many providers (Letta REST,

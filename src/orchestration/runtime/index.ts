@@ -8,6 +8,7 @@
 
 export type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,

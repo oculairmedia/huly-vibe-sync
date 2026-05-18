@@ -45,6 +45,7 @@ export interface Event {
     | 'runtime'
     | 'daemon'
     | 'formula'
+    | 'dispatcher'
     | 'molecule'
     | 'council'
     | 'health-patrol'

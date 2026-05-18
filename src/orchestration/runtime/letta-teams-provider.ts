@@ -24,6 +24,8 @@
  *   - extra.runTeamsInit?: boolean — opt back in to letta-teams' built-
  *     in init.js memory-block bootstrap. Default false. See "Memory
  *     blocks" below.
+ *   - extra.resumeTaskId?: string — restore observation for a previously
+ *     dispatched teams task after the VibeSync process restarts.
  *
  * memfs lifecycle (vibesync-6wn.6):
  *   letta-teams owns the memfs lifecycle inside the teammate's
@@ -79,6 +81,7 @@
 import type { EventBus, EventInput } from '../events/bus.js';
 import type {
   ContentBlock,
+  PromptResult,
   RuntimeProvider,
   SessionEvent,
   SessionHandle,
@@ -297,7 +300,8 @@ export class LettaTeamsProvider implements RuntimeProvider {
       target,
     };
     const moleculeId = readStringExtra(spec, 'moleculeId');
-    const session: SessionState = { activeTaskId: null, stopped: false };
+    const resumeTaskId = readStringExtra(spec, 'resumeTaskId');
+    const session: SessionState = { activeTaskId: resumeTaskId ?? null, stopped: false };
     if (moleculeId !== undefined) session.moleculeId = moleculeId;
     this.sessions.set(handle.id, session);
     return handle;
@@ -314,7 +318,7 @@ export class LettaTeamsProvider implements RuntimeProvider {
     await runtime.teammates.remove(h.target);
   }
 
-  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<void> {
+  async prompt(handle: SessionHandle, content: readonly ContentBlock[]): Promise<PromptResult> {
     const h = expectHandle(handle);
     const runtime = await this.getRuntime();
     const message = contentToText(content);
@@ -322,6 +326,7 @@ export class LettaTeamsProvider implements RuntimeProvider {
     const session = this.sessions.get(h.id) ?? { activeTaskId: null, stopped: false };
     session.activeTaskId = taskId;
     this.sessions.set(h.id, session);
+    return { taskId };
   }
 
   async nudge(_handle: SessionHandle): Promise<void> {
@@ -380,6 +385,7 @@ export class LettaTeamsProvider implements RuntimeProvider {
     let lastStatus: TaskStatus | undefined;
     let lastToolCount = 0;
     let startedEmitted = false;
+    let resultEmitted = false;
 
     while (true) {
       if (session.stopped) {
@@ -425,6 +431,16 @@ export class LettaTeamsProvider implements RuntimeProvider {
       lastToolCount = toolCalls.length;
 
       if (state.status === 'done') {
+        if (!resultEmitted && typeof state.result === 'string' && state.result.length > 0) {
+          const resultEvent: SessionEvent = {
+            kind: 'message-delta',
+            ts: state.completedAt ?? nowIso(),
+            text: state.result,
+          };
+          this.publish(h, session, resultEvent);
+          yield resultEvent;
+          resultEmitted = true;
+        }
         const ev: SessionEvent = {
           kind: 'turn-done',
           ts: state.completedAt ?? nowIso(),
@@ -554,7 +570,13 @@ function expectHandle(handle: SessionHandle): LettaTeamsSessionHandle {
       `LettaTeamsProvider: handle from wrong provider (got ${handle.providerKind}, want letta-teams)`,
     );
   }
-  return handle as LettaTeamsSessionHandle;
+  const existingTarget = 'target' in handle && typeof handle.target === 'string' ? handle.target : undefined;
+  const parsedTarget = handle.id.startsWith('letta-teams:') ? handle.id.slice('letta-teams:'.length) : undefined;
+  const target = existingTarget ?? parsedTarget;
+  if (!target) {
+    throw new Error(`LettaTeamsProvider: handle ${handle.id} is missing a teammate target`);
+  }
+  return { ...handle, providerKind: 'letta-teams', target };
 }
 
 function readStringExtra(spec: SessionSpec, key: string): string | undefined {

@@ -207,12 +207,38 @@ describe('LettaTeamsProvider', () => {
     const events: SessionEvent[] = [];
     for await (const ev of provider.observe(h)) events.push(ev);
 
-    expect(events.map((e) => e.kind)).toEqual(['started', 'first-token', 'turn-done']);
+    expect(events.map((e) => e.kind)).toEqual(['started', 'first-token', 'message-delta', 'turn-done']);
     expect(events[0]!.ts).toBe('2026-05-17T00:00:00.000Z');
     expect(events[1]!.ts).toBe('2026-05-17T00:00:01.000Z');
-    const last = events[2] as Extract<SessionEvent, { kind: 'turn-done' }>;
+    expect(events[2]).toMatchObject({ kind: 'message-delta', text: 'ok' });
+    const last = events[3] as Extract<SessionEvent, { kind: 'turn-done' }>;
     expect(last.ts).toBe('2026-05-17T00:00:02.000Z');
     expect(last.stopReason).toBe('done');
+  });
+
+  it('observe can reattach to a task id supplied at start time', async () => {
+    const provider = newProvider();
+    const { runtime, spies } = fakeRuntime({
+      taskTimeline: [
+        {
+          id: 'task-resume-1',
+          status: 'done',
+          createdAt: '2026-05-17T00:00:00.000Z',
+          completedAt: '2026-05-17T00:00:01.000Z',
+          result: 'recovered',
+        },
+      ],
+    });
+    inject(provider, runtime);
+    const h = await provider.start({ role: 'reviewer', extra: { moleculeId: 'mol-1', resumeTaskId: 'task-resume-1' } });
+    const events: SessionEvent[] = [];
+
+    for await (const ev of provider.observe(h)) events.push(ev);
+
+    expect(spies.dispatch).not.toHaveBeenCalled();
+    expect(spies.get).toHaveBeenCalledWith('task-resume-1');
+    expect(events.map((e) => e.kind)).toEqual(['started', 'message-delta', 'turn-done']);
+    expect(events[1]).toMatchObject({ kind: 'message-delta', text: 'recovered' });
   });
 
   it('observe emits tool-call + tool-result frames as toolCalls grow', async () => {
@@ -378,6 +404,16 @@ describe('LettaTeamsProvider', () => {
     const h = await provider.start({ role: 'r' });
     await provider.stop(h);
     expect(spies.remove).toHaveBeenCalledWith('r');
+  });
+
+  it('stop can reconstruct the teammate target from a persisted handle id', async () => {
+    const provider = newProvider();
+    const { runtime, spies } = fakeRuntime();
+    inject(provider, runtime);
+
+    await provider.stop({ id: 'letta-teams:mol-1-reviewer', providerKind: 'letta-teams' });
+
+    expect(spies.remove).toHaveBeenCalledWith('mol-1-reviewer');
   });
 
   describe('memory-block seeding', () => {
