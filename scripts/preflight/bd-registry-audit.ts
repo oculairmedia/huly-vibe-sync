@@ -22,13 +22,15 @@
  *   bun scripts/preflight/bd-registry-audit.ts                 # report
  *   bun scripts/preflight/bd-registry-audit.ts --json          # JSON
  *   bun scripts/preflight/bd-registry-audit.ts --drift-only    # only drifts/errors
+ *   bun scripts/preflight/bd-registry-audit.ts --db /path/db   # explicit registry DB
  */
 
 // @ts-expect-error bun-only import; resolved at runtime under Bun
 import Database from 'bun:sqlite';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { inspectDoltServerPortOwner } from './bd-preflight.js';
 
 interface ProjectRow {
   readonly identifier: string;
@@ -42,6 +44,7 @@ type Category =
   | 'ok-dolt-server'           // migrated + healthy
   | 'ok-jsonl-only'            // local-only, intentional
   | 'legacy-pre-migration'     // has deprecated dolt_server_port
+  | 'port-owner-conflict'      // dolt-server.port belongs to another project process
   | 'drifted-no-beads-dir'     // tracker says beads, dir missing
   | 'placeholder-empty'        // .beads/ present but empty
   | 'no-filesystem-path'       // registry has no path
@@ -96,6 +99,14 @@ function classifyProject(row: ProjectRow): AuditRow {
     return { identifier: row.identifier, name: row.name, path: row.filesystem_path, category: 'legacy-pre-migration', detail: 'deprecated dolt_server_port file present — needs migration to dolt-server.port' };
   }
   if (hasDoltData && hasNewPort) {
+    const port = readProjectPort(join(beadsDir, 'dolt-server.port'));
+    if (port === null) {
+      return { identifier: row.identifier, name: row.name, path: row.filesystem_path, category: 'unknown', detail: 'invalid .beads/dolt-server.port value' };
+    }
+    const owner = inspectDoltServerPortOwner(port, join(beadsDir, 'dolt'));
+    if (owner.level === 'error') {
+      return { identifier: row.identifier, name: row.name, path: row.filesystem_path, category: 'port-owner-conflict', detail: owner.detail };
+    }
     // Migrated. Check remote.
     const remote = tryExec(`cd ${row.filesystem_path} && bd dolt remote 2>&1`);
     if (!remote.ok || remote.stdout.trim().length === 0 || /no remote/.test(remote.stdout)) {
@@ -107,6 +118,15 @@ function classifyProject(row: ProjectRow): AuditRow {
     return { identifier: row.identifier, name: row.name, path: row.filesystem_path, category: 'ok-jsonl-only', detail: 'config present, no dolt data — intentional jsonl-only' };
   }
   return { identifier: row.identifier, name: row.name, path: row.filesystem_path, category: 'unknown', detail: `mixed state: config=${hasConfig} dolt=${hasDoltData} port=${hasNewPort}` };
+}
+
+function readProjectPort(path: string): number | null {
+  try {
+    const port = Number.parseInt(readFileSync(path, 'utf8').trim(), 10);
+    return Number.isFinite(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
 }
 
 function readRegistry(dbPath: string): ProjectRow[] {
@@ -121,10 +141,23 @@ function readRegistry(dbPath: string): ProjectRow[] {
   }
 }
 
+function readDbPath(args: readonly string[]): string {
+  const dbIndex = args.indexOf('--db');
+  if (dbIndex >= 0) {
+    const explicit = args[dbIndex + 1];
+    if (!explicit) {
+      console.error('--db requires a SQLite database path');
+      process.exit(2);
+    }
+    return explicit;
+  }
+  return process.env.VIBESYNC_DB_PATH || '/opt/stacks/vibesync/logs/sync-state.db';
+}
+
 const args = process.argv.slice(2);
 const jsonMode = args.includes('--json');
 const driftOnly = args.includes('--drift-only');
-const dbPath = '/opt/stacks/vibesync/vibesync.db';
+const dbPath = readDbPath(args);
 
 if (!existsSync(dbPath)) {
   console.error(`registry DB not found at ${dbPath}`);
@@ -136,7 +169,8 @@ try {
   projects = readRegistry(dbPath);
 } catch (err) {
   // Empty DB or schema mismatch — common during fresh installs.
-  console.error(`failed to read registry: ${(err as Error).message}`);
+  console.error(`failed to read registry at ${dbPath}: ${(err as Error).message}`);
+  console.error('Pass --db <path> or set VIBESYNC_DB_PATH if the service uses a non-default registry database.');
   process.exit(2);
 }
 
@@ -152,6 +186,7 @@ const buckets: Record<Category, AuditRow[]> = {
   'ok-dolt-server': [],
   'ok-jsonl-only': [],
   'legacy-pre-migration': [],
+  'port-owner-conflict': [],
   'drifted-no-beads-dir': [],
   'placeholder-empty': [],
   'no-filesystem-path': [],
@@ -181,6 +216,7 @@ if (jsonMode) {
 // Exit non-zero if there's drift requiring attention (matches 8sz/bi3/y9b acceptance).
 const driftCount =
   buckets['legacy-pre-migration'].length +
+  buckets['port-owner-conflict'].length +
   buckets['drifted-no-beads-dir'].length +
   buckets['no-filesystem-path'].length +
   buckets['path-not-accessible'].length +
