@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { readFileSync, readlinkSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { logger as defaultLogger } from './logger';
 import type {
@@ -9,6 +10,8 @@ import type {
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = 'main';
+const DEFAULT_FLEET_PORT_START = 32000;
+const DEFAULT_FLEET_PORT_END = 60999;
 
 interface CommandResult {
   stdout: string;
@@ -58,8 +61,14 @@ interface BeadsProject {
   name?: string;
 }
 
+interface RegistryProject {
+  identifier: string;
+  filesystem_path?: string | null;
+}
+
 interface DbProject {
   projects?: {
+    getAllProjects?: () => RegistryProject[];
     setProjectBeadsRemote?: (identifier: string, data: Record<string, unknown>) => void;
     setProjectBeadsRemoteError?: (identifier: string, error: string) => void;
   };
@@ -228,6 +237,7 @@ export class DoltHubProvisioningService {
     const commands: string[] = [];
 
     try {
+      await this.ensureUniqueBeadsPort(project, commands);
       const createResult = await this.createDoltHubDatabase(project, plan);
       const remoteResult = await this.configureBeadsRemote(
         project.filesystem_path,
@@ -371,6 +381,26 @@ export class DoltHubProvisioningService {
     return { changed, pushed };
   }
 
+  private async ensureUniqueBeadsPort(project: BeadsProject, commands: string[]): Promise<void> {
+    const currentPort = readBeadsPort(project.filesystem_path);
+    if (currentPort === null) return;
+
+    const conflict = this.hasConfiguredPortDuplicate(project, currentPort) || hasWrongPortOwner(project.filesystem_path, currentPort);
+    if (!conflict) return;
+
+    const nextPort = findFreeFleetPort(this.db?.projects?.getAllProjects?.() ?? []);
+    await this.runBd(project.filesystem_path, ['dolt', 'set', 'port', String(nextPort)], commands);
+    await this.runBd(project.filesystem_path, ['dolt', 'start'], commands);
+  }
+
+  private hasConfiguredPortDuplicate(project: BeadsProject, currentPort: number): boolean {
+    const projects = this.db?.projects?.getAllProjects?.() ?? [];
+    return projects.some((candidate) => {
+      if (candidate.identifier === project.identifier || !candidate.filesystem_path) return false;
+      return readBeadsPort(candidate.filesystem_path) === currentPort;
+    });
+  }
+
   private async listBeadsRemotes(
     projectPath: string,
     commands: string[],
@@ -396,6 +426,57 @@ export class DoltHubProvisioningService {
       timeout,
       env: process.env as NodeJS.ProcessEnv,
     });
+  }
+}
+
+function readBeadsPort(projectPath: string): number | null {
+  try {
+    const raw = readFileSync(path.join(projectPath, '.beads', 'dolt-server.port'), 'utf8').trim();
+    const port = Number.parseInt(raw, 10);
+    return Number.isFinite(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasWrongPortOwner(projectPath: string, port: number): boolean {
+  try {
+    const output = execFileSync('ss', ['-H', '-tlnp', `sport = :${port}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const line = output.split('\n').find((entry) => entry.trim().length > 0);
+    if (!line) return false;
+    const pid = /pid=(\d+)/.exec(line)?.[1];
+    if (!pid) return false;
+    return readlinkSync(`/proc/${pid}/cwd`) !== path.join(projectPath, '.beads', 'dolt');
+  } catch {
+    return false;
+  }
+}
+
+function findFreeFleetPort(projects: readonly RegistryProject[]): number {
+  const reserved = new Set<number>();
+  for (const project of projects) {
+    if (!project.filesystem_path) continue;
+    const port = readBeadsPort(project.filesystem_path);
+    if (port !== null) reserved.add(port);
+  }
+  for (const port of readListeningPorts()) reserved.add(port);
+  for (let port = DEFAULT_FLEET_PORT_START; port <= DEFAULT_FLEET_PORT_END; port++) {
+    if (!reserved.has(port)) return port;
+  }
+  throw new Error(`No free Beads/Dolt port in range ${DEFAULT_FLEET_PORT_START}-${DEFAULT_FLEET_PORT_END}`);
+}
+
+function readListeningPorts(): Set<number> {
+  try {
+    const output = execFileSync('ss', ['-H', '-tln'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const ports = new Set<number>();
+    for (const line of output.split('\n')) {
+      const match = /:(\d+)\s/.exec(line);
+      if (match?.[1]) ports.add(Number.parseInt(match[1], 10));
+    }
+    return ports;
+  } catch {
+    return new Set();
   }
 }
 
