@@ -21,7 +21,7 @@
  * docs/architecture/bd-conventions.md.
  */
 
-import type { BeadRow, DependencyRow, DoltClient } from '../store/index.js';
+import type { BeadRow, DependencyRow } from '../store/index.js';
 
 /**
  * Step spec — what to do at each node of a formula. Provided by the
@@ -47,6 +47,28 @@ export interface MoleculeView {
   readonly steps: readonly BeadRow[];
   readonly byName: ReadonlyMap<string, BeadRow>;
   readonly edges: readonly DependencyRow[];
+}
+
+export interface MoleculeStore {
+  getBead(id: string): Promise<BeadRow | null>;
+  getBeadDependencies(id: string): Promise<DependencyRow[]>;
+  insertMoleculeRoot(args: {
+    readonly id: string;
+    readonly formulaName: string;
+    readonly title: string;
+    readonly motivatingBeadId?: string;
+  }): Promise<void>;
+  insertMoleculeStep(args: {
+    readonly id: string;
+    readonly parentRootId: string;
+    readonly stepName: string;
+    readonly title: string;
+    readonly dependsOnStepIds?: readonly string[];
+  }): Promise<void>;
+  findReadyStepsForMolecule(rootId: string): Promise<readonly BeadRow[]>;
+  markStepRunning(stepId: string): Promise<void>;
+  markStepDone(stepId: string, output: unknown): Promise<void>;
+  markStepFailed(stepId: string, errorTrace: string): Promise<void>;
 }
 
 /**
@@ -95,7 +117,7 @@ function randomToken(length: number): string {
  * in-memory projection; for now the SQL query is correct and small.
  */
 export class MoleculeWalker {
-  constructor(private readonly store: DoltClient) {}
+  constructor(private readonly store: MoleculeStore) {}
 
   /**
    * Materialize a molecule from its root id. Reads the root, all step
