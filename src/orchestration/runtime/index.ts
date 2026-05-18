@@ -24,8 +24,6 @@ export type {
   MemoryBlockSeeder,
 } from './letta-teams-provider.js';
 
-export { LettaCodeSubagentProvider } from './letta-code-subagent-provider.js';
-
 export { A2UIProvider } from './a2ui-provider.js';
 export type { A2uiCapability } from './a2ui-provider.js';
 

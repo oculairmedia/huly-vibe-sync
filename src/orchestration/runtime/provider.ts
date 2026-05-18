@@ -17,11 +17,6 @@
  *   - A2UIProvider — server side for letta-mobile / web UI rendering (vibesync-0tw)
  *   - FakeProvider — in-memory, for tests
  *
- * Retired:
- *
- *   - LettaCodeSubagentProvider — duplicate path; letta-teams already
- *     depends on @letta-ai/letta-code-sdk. See vibesync-brd.
- *
  * Layering invariant #5 (zero hardcoded roles) discipline: this interface
  * MUST NOT widen to include role-specific concerns (memory blocks, Letta
  * conversation IDs, fork semantics, A2UI capability negotiation, etc.).

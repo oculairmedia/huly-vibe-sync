@@ -1,5 +1,12 @@
 # Handoff — close out the letta-teams adoption epic
 
+> **Status (2026-05-17):** Executed. Smoke script
+> `scripts/smoke/letta-teams-code-review.ts` ran green against the
+> self-hosted Letta server; `LettaCodeSubagentProvider` was retired
+> in the same commit; `vibesync-6wn`, `vibesync-6wn.8`, and
+> `vibesync-brd` were closed. This doc is kept for re-running the
+> smoke test on a new backend, not as open work.
+
 ## Prompt (copy this to start a new session)
 
 > I'm picking up `vibesync-6wn` (letta-teams adoption epic) on branch

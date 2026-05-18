@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ACPProvider,
   A2UIProvider,
-  LettaCodeSubagentProvider,
   type RuntimeProvider,
   type SessionEvent,
   type SessionHandle,
@@ -11,30 +10,12 @@ import {
 } from '../../../../src/orchestration/runtime/index.js';
 
 /**
- * Smoke tests for the three SKELETON providers (rjg / 0tw / oq4).
- * Verify constructor shape, handle-routing discipline, and
- * provider-specific spec validation. Full integration (real
- * letta-code spawn, real A2UI client, real ACP agent) is deferred to
- * follow-up beads once the consumer side stabilizes.
+ * Smoke tests for the SKELETON providers (0tw / oq4). Verify
+ * constructor shape, handle-routing discipline, and provider-specific
+ * spec validation. Full integration (real A2UI client, real ACP
+ * agent) is deferred to follow-up beads once the consumer side
+ * stabilizes.
  */
-
-describe('LettaCodeSubagentProvider', () => {
-  it('requires agentId when conversationId is the default', async () => {
-    const provider = new LettaCodeSubagentProvider();
-    await expect(provider.start({ role: 'r' })).rejects.toThrow(
-      /agentId is required when conversationId is "default"/,
-    );
-  });
-
-  it('rejects prompt with a handle from another provider', async () => {
-    const provider = new LettaCodeSubagentProvider();
-    await expect(
-      provider.prompt({ id: 'x', providerKind: 'letta-pm-agent' } as never, [
-        { type: 'text', text: 'hi' },
-      ]),
-    ).rejects.toThrow(/handle from wrong provider/);
-  });
-});
 
 describe('A2UIProvider', () => {
   it('requires inner SessionSpec', async () => {
