@@ -104,6 +104,59 @@ describe('FormulaDispatcher', () => {
     expect(betaPrompt?.type === 'text' ? betaPrompt.text : '').toBe('Beta alpha-output');
   });
 
+  it('fans out independent ready steps before waiting for either to finish', async () => {
+    const { dispatcher, events } = newHarness({
+      script: scriptByRole({ alpha: 'alpha-output', beta: 'beta-output' }),
+    });
+
+    const result = await dispatcher.run({ formula: parallelFormula(), pack: parallelPack(), input: 'go' });
+
+    expect(result.outputs).toEqual({ alpha: 'alpha-output', beta: 'beta-output' });
+    const lifecycle = events
+      .filter((event) => event.kind === 'dispatcher/step.started' || event.kind === 'dispatcher/step.finished')
+      .map((event) => `${event.kind}:${String(event.payload.stepName)}`);
+    expect(lifecycle.slice(0, 2)).toEqual(['dispatcher/step.started:alpha', 'dispatcher/step.started:beta']);
+    expect(lifecycle).toEqual([
+      'dispatcher/step.started:alpha',
+      'dispatcher/step.started:beta',
+      'dispatcher/step.finished:alpha',
+      'dispatcher/step.finished:beta',
+    ]);
+  });
+
+  it('respects maxParallelSteps when choosing a ready-step batch', async () => {
+    const { dispatcher, events } = newHarness({
+      maxParallelSteps: 1,
+      script: scriptByRole({ alpha: 'alpha-output', beta: 'beta-output' }),
+    });
+
+    await dispatcher.run({ formula: parallelFormula(), pack: parallelPack(), input: 'go' });
+
+    const lifecycle = events
+      .filter((event) => event.kind === 'dispatcher/step.started' || event.kind === 'dispatcher/step.finished')
+      .map((event) => `${event.kind}:${String(event.payload.stepName)}`);
+    expect(lifecycle).toEqual([
+      'dispatcher/step.started:alpha',
+      'dispatcher/step.finished:alpha',
+      'dispatcher/step.started:beta',
+      'dispatcher/step.finished:beta',
+    ]);
+  });
+
+  it('passes role memory block replace policy into runtime extra', async () => {
+    const { dispatcher, provider } = newHarness({
+      script: scriptByRole({ reviewer: 'review output', coder: 'code output', tester: 'test output' }),
+    });
+
+    await dispatcher.run({ formula: codeReviewFormula(), pack: newPack({ replaceMemoryRoles: ['reviewer'] }), input: 'please review' });
+
+    expect(provider.recorder.starts[0]?.extra).toMatchObject({
+      memoryBlockSeedMode: 'replace',
+      memoryBlocks: [{ label: 'persona', value: 'reviewer persona', limit: 1000 }],
+    });
+    expect(provider.recorder.starts[1]?.extra).not.toHaveProperty('memoryBlockSeedMode');
+  });
+
   it('resumes a running step by re-attaching to the persisted runtime task id', async () => {
     const { dispatcher, store, provider, events } = newHarness({
       script: (spec) => eventScript([{ kind: 'message-delta', text: `recovered ${String(spec.extra?.['resumeTaskId'] ?? '')}` }]),
@@ -202,7 +255,7 @@ describe('FormulaDispatcher', () => {
   });
 });
 
-function newHarness(args: { readonly script: (spec: SessionSpec) => AsyncIterable<SessionEvent> }) {
+function newHarness(args: { readonly script: (spec: SessionSpec) => AsyncIterable<SessionEvent>; readonly maxParallelSteps?: number }) {
   const store = new InMemoryDoltClient();
   const provider = newFakeProvider({ kind: 'fake-runtime', script: args.script });
   const eventBus = new EventBus({ noPersist: true });
@@ -212,6 +265,7 @@ function newHarness(args: { readonly script: (spec: SessionSpec) => AsyncIterabl
     provider,
     walker: new MoleculeWalker(store),
     eventBus,
+    ...(args.maxParallelSteps === undefined ? {} : { maxParallelSteps: args.maxParallelSteps }),
   });
   return { dispatcher, store, provider, events };
 }
@@ -228,9 +282,31 @@ function codeReviewFormula(): Formula {
   };
 }
 
+function parallelFormula(): Formula {
+  return {
+    name: 'parallel-review',
+    description: 'Parallel review',
+    steps: [
+      { name: 'alpha', role: 'alpha', promptTemplate: 'prompts/alpha.md', waitFor: 'completion' },
+      { name: 'beta', role: 'beta', promptTemplate: 'prompts/beta.md', waitFor: 'completion' },
+    ],
+  };
+}
+
+function parallelPack(): Pack {
+  return newPack({
+    roles: ['alpha', 'beta'],
+    prompts: {
+      'prompts/alpha.md': 'Alpha ${input}',
+      'prompts/beta.md': 'Beta ${input}',
+    },
+  });
+}
+
 function newPack(args: {
   readonly roles?: readonly string[];
   readonly prompts?: Readonly<Record<string, string>>;
+  readonly replaceMemoryRoles?: readonly string[];
 } = {}): Pack {
   const prompts = args.prompts ?? {
     'prompts/reviewer.md': 'Review ${input}',
@@ -244,6 +320,7 @@ function newPack(args: {
     writeFileSync(path, content);
   }
   const roles = args.roles ?? ['reviewer', 'coder', 'tester'];
+  const replaceMemoryRoles = new Set(args.replaceMemoryRoles ?? []);
   return {
     manifest: { name: 'test-pack', version: '1.0.0' },
     root,
@@ -251,6 +328,7 @@ function newPack(args: {
     roles: roles.map((role) => ({
       name: role,
       memoryBlocks: [{ label: 'persona', value: `${role} persona`, limit: 1000 }],
+      ...(replaceMemoryRoles.has(role) ? { memoryBlocksPolicy: { mode: 'replace' as const } } : {}),
     })),
     formulas: [],
   };

@@ -9,6 +9,9 @@ import { renderTemplate } from './render.js';
 /**
  * FormulaDispatcher runs formula steps and records enough provider-opaque
  * execution metadata on molecule-step beads to resume after restart.
+ * Ready steps fan out in parallel up to `maxParallelSteps`; dependency ordering
+ * still comes from MoleculeWalker, so formulas can opt into parallelism by
+ * declaring independent steps.
  *
  * Example restart recovery:
  *
@@ -40,6 +43,7 @@ export interface FormulaDispatcherOptions {
   readonly walker: MoleculeWalker;
   readonly eventBus: EventBus;
   readonly idPrefix?: string;
+  readonly maxParallelSteps?: number;
 }
 
 export class FormulaDispatchError extends Error {
@@ -65,12 +69,14 @@ export class FormulaDispatcher {
   private readonly walker: MoleculeWalker;
   private readonly eventBus: EventBus;
   private readonly idPrefix: string;
+  private readonly maxParallelSteps: number;
 
   constructor(opts: FormulaDispatcherOptions) {
     this.provider = opts.provider;
     this.walker = opts.walker;
     this.eventBus = opts.eventBus;
     this.idPrefix = opts.idPrefix ?? 'mol';
+    this.maxParallelSteps = normalizeMaxParallelSteps(opts.maxParallelSteps);
   }
 
   async run(input: DispatchInput): Promise<DispatchResult> {
@@ -95,11 +101,13 @@ export class FormulaDispatcher {
     try {
       while (!(await this.walker.isComplete(moleculeId))) {
         const ready = await this.walker.findReady(moleculeId);
-        const step = ready[0];
-        if (!step) {
+        if (ready.length === 0) {
           throw new FormulaDispatchError(`FormulaDispatcher: molecule ${moleculeId} has no ready steps but is incomplete`, moleculeId);
         }
-        await this.runStep({ input, step, moleculeId, outputs, rolesByName });
+        const batch = ready.slice(0, this.maxParallelSteps);
+        const settled = await Promise.allSettled(batch.map((step) => this.runStep({ input, step, moleculeId, outputs, rolesByName })));
+        const failed = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failed) throw failed.reason;
       }
     } catch (error) {
       this.emit('dispatcher/formula.failed', moleculeId, undefined, {
@@ -253,6 +261,7 @@ export class FormulaDispatcher {
           stepName,
           memfsEnabled: false,
           memoryBlocks: roleConfig.memoryBlocks ?? [],
+          ...(roleConfig.memoryBlocksPolicy?.mode === 'replace' ? { memoryBlockSeedMode: 'replace' } : {}),
         },
       });
       const promptResult = await this.provider.prompt(handle, [{ type: 'text', text: rendered }]);
@@ -420,6 +429,15 @@ function readExec(row: BeadRow): Record<string, unknown> {
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function normalizeMaxParallelSteps(value: number | undefined): number {
+  if (value === undefined) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+  if (value < 1) {
+    throw new Error('FormulaDispatcher: maxParallelSteps must be at least 1');
+  }
+  return Math.floor(value);
 }
 
 function stringifyError(error: unknown): string {
