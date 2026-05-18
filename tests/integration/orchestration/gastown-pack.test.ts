@@ -43,6 +43,14 @@ describe('gastown pack', () => {
     expect(tester?.tools).toContain('run_shell');
   });
 
+  it('all roles carry at least persona and scope memory blocks', () => {
+    const pack = loadPack(PACK_ROOT, 'project');
+    for (const role of pack.roles) {
+      expect(role.memoryBlocks?.map((block) => block.label)).toEqual(expect.arrayContaining(['persona', 'scope']));
+      expect(role.memoryBlocks?.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
   it('code-review formula declares reviewer → coder → tester chain', () => {
     const pack = loadPack(PACK_ROOT, 'project');
     const f = pack.formulas.find((x) => x.name === 'code-review');
