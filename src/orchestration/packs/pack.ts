@@ -42,6 +42,12 @@ export interface MemoryBlock {
   readonly limit?: number;
 }
 
+export type MemoryBlocksPolicyMode = 'augment' | 'replace';
+
+export interface MemoryBlocksPolicy {
+  readonly mode: MemoryBlocksPolicyMode;
+}
+
 export interface RoleConfig {
   /** Role identifier (used in formulas). */
   readonly name: string;
@@ -61,6 +67,8 @@ export interface RoleConfig {
    * memory at start time.
    */
   readonly memoryBlocks?: readonly MemoryBlock[];
+  /** Controls whether role blocks augment existing memory or replace non-role blocks. Defaults to augment. */
+  readonly memoryBlocksPolicy?: MemoryBlocksPolicy;
 }
 
 export interface PackManifest {
@@ -246,6 +254,19 @@ function parseRoleFromTables(
       };
     });
   }
+  const policyRaw = (topTable?.['memory_blocks_policy'] ?? roleTable['memory_blocks_policy']) as unknown;
+  let memoryBlocksPolicy: MemoryBlocksPolicy | undefined;
+  if (policyRaw !== undefined) {
+    const policyTable = Array.isArray(policyRaw) ? policyRaw[0] : policyRaw;
+    if (!isRecord(policyTable)) {
+      throw new Error(`pack ${packRoot}: role ${fileName} memory_blocks_policy must be a table`);
+    }
+    const mode = policyTable['mode'];
+    if (mode !== 'augment' && mode !== 'replace') {
+      throw new Error(`pack ${packRoot}: role ${fileName} memory_blocks_policy.mode must be "augment" or "replace"`);
+    }
+    memoryBlocksPolicy = { mode };
+  }
   return {
     name,
     ...(description !== undefined ? { description } : {}),
@@ -253,6 +274,7 @@ function parseRoleFromTables(
     ...(systemPromptTemplate !== undefined ? { systemPromptTemplate } : {}),
     ...(tools !== undefined ? { tools } : {}),
     ...(memoryBlocks !== undefined ? { memoryBlocks } : {}),
+    ...(memoryBlocksPolicy !== undefined ? { memoryBlocksPolicy } : {}),
   };
 }
 

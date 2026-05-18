@@ -142,6 +142,25 @@ describe('Pack loading', () => {
     expect(pack.roles[0]!.memoryBlocks).toEqual([{ label: 'p', value: 'ok' }]);
   });
 
+  it('parses [[memory_blocks_policy]] replace mode off a role TOML', () => {
+    const packRoot = writePack(tmp, 'pack', {
+      roles: {
+        'r.toml': '[role]\nname = "r"\n\n[[memory_blocks_policy]]\nmode = "replace"\n',
+      },
+    });
+    const pack = loadPack(packRoot, 'global');
+    expect(pack.roles[0]!.memoryBlocksPolicy).toEqual({ mode: 'replace' });
+  });
+
+  it('rejects invalid memory_blocks_policy modes', () => {
+    writePack(tmp, 'bad', {
+      roles: {
+        'r.toml': '[role]\nname = "r"\n\n[[memory_blocks_policy]]\nmode = "delete"\n',
+      },
+    });
+    expect(() => loadPack(join(tmp, 'bad'))).toThrow(/memory_blocks_policy\.mode/);
+  });
+
   it('validatePackPath returns ok:true for a valid pack', () => {
     writePack(tmp, 'good');
     expect(validatePackPath(join(tmp, 'good'))).toEqual({ ok: true });
