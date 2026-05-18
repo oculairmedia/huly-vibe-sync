@@ -63,12 +63,12 @@ export async function getDb(): Promise<any> {
 
   dbInitPromise = (async () => {
     if (!createSyncDatabaseCached) {
-      const databaseModule = await import(appRootModule('lib/database.js'));
+      const databaseModule = await import(appRootModule('src/database.js'));
       createSyncDatabaseCached = databaseModule.createSyncDatabase;
     }
 
     if (!computeIssueContentHashCached) {
-      const utilsModule = await import(appRootModule('lib/database/utils.js'));
+      const utilsModule = await import(appRootModule('src/database/utils.js'));
       computeIssueContentHashCached = utilsModule.computeIssueContentHash;
     }
 
