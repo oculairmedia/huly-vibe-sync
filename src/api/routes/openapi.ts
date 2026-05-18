@@ -1,0 +1,46 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import type { App, SendJson } from '../../types/api.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+interface OpenApiRouteDeps {
+  sendJson: SendJson;
+}
+
+export function registerOpenApiRoutes(app: App, deps: OpenApiRouteDeps): void {
+  const { sendJson } = deps;
+
+  // Serve OpenAPI spec
+  app.registerRoute({
+    match: ({ pathname, method }) => pathname === '/openapi.json' && method === 'GET',
+    handle: async ({ res }) => {
+      try {
+        // Try to load the generated OpenAPI spec from dist/
+        const specPath = path.join(__dirname, '../../..', 'dist', 'openapi.json');
+        if (fs.existsSync(specPath)) {
+          const spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
+          sendJson(res, 200, spec);
+        } else {
+          // Fallback: return a minimal spec if the file doesn't exist
+          sendJson(res, 200, {
+            openapi: '3.1.0',
+            info: {
+              title: 'Vibesync API',
+              description: 'Project sync service with PM agent orchestration',
+              version: '1.0.0',
+            },
+            paths: {},
+            components: { schemas: {} },
+          });
+        }
+      } catch (error) {
+        sendJson(res, 500, {
+          error: 'Failed to load OpenAPI spec',
+          details: (error as Error).message,
+        });
+      }
+    },
+  });
+}
