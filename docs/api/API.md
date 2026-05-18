@@ -388,4 +388,6 @@ Hosts the project MCP server over Streamable HTTP when `config.projectMcp.enable
 
 ## Documentation readiness notes
 
-There is no generated OpenAPI, Swagger, Scalar, or Redoc artifact in this repository today. This file is the current human-maintained lookup reference and should be updated when route registrations change.
+Vibesync now generates an OpenAPI 3.1 document from Zod route schemas during `bun run build:openapi` and serves it at `GET /openapi.json`. Interactive Scalar documentation is available at `GET /docs` and reads from that generated spec.
+
+This Markdown file remains a human-maintained narrative reference; endpoint schemas should be kept current in `src/openapi/` so `/openapi.json` and `/docs` stay aligned with the runtime API.

@@ -86,6 +86,8 @@ MCP:
   POST /mcp                          - Project MCP server (path configurable)
 
 Reference:
+  GET  /openapi.json                  - OpenAPI 3.1 specification
+  GET  /docs                          - Interactive Scalar API reference
   docs/api/API.md                    - Current human-maintained API reference
 
 Event Types (SSE):
