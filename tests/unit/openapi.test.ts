@@ -1,15 +1,41 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { createScalarDocsHtml } from '../../src/api/routes/openapi.js';
+
+interface OpenApiParameter {
+  name: string;
+  in: string;
+  required?: boolean;
+}
+
+interface OpenApiSpec {
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+  };
+  paths: Record<string, {
+    get?: {
+      parameters?: OpenApiParameter[];
+      responses: Record<string, {
+        content?: Record<string, unknown>;
+      }>;
+    };
+  }>;
+  components: {
+    schemas: Record<string, unknown>;
+  };
+}
 
 describe('OpenAPI Spec Generation', () => {
   let specPath: string;
-  let spec: any;
+  let spec: OpenApiSpec;
 
   beforeAll(() => {
     specPath = path.join(process.cwd(), 'dist', 'openapi.json');
     expect(fs.existsSync(specPath)).toBe(true);
-    spec = JSON.parse(fs.readFileSync(specPath, 'utf-8'));
+    spec = JSON.parse(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
   });
 
   it('should generate a valid OpenAPI 3.1.0 spec', () => {
@@ -81,9 +107,17 @@ describe('OpenAPI Spec Generation', () => {
     const projectPath = spec.paths['/api/projects/{id}'];
     expect(projectPath.get).toBeDefined();
     expect(projectPath.get.parameters).toBeDefined();
-    const idParam = projectPath.get.parameters.find((p: any) => p.name === 'id');
+    const idParam = projectPath.get.parameters?.find((parameter) => parameter.name === 'id');
     expect(idParam).toBeDefined();
     expect(idParam.in).toBe('path');
     expect(idParam.required).toBe(true);
+  });
+
+  it('should render Scalar docs against the generated OpenAPI endpoint', () => {
+    const html = createScalarDocsHtml();
+    expect(html).toContain('Vibesync API Reference');
+    expect(html).toContain('https://cdn.jsdelivr.net/npm/@scalar/api-reference');
+    expect(html).toContain("url: '/openapi.json'");
+    expect(html).toContain("Scalar.createApiReference('#app'");
   });
 });

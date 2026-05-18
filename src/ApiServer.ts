@@ -100,7 +100,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
   registerAgentRoutes(app, routeDeps as never);
   registerAgentsMdRoutes(app, routeDeps as never);
   registerFormulaRoutes(app, routeDeps as never);
-    registerOpenApiRoutes(app, routeDeps as never);
+  registerOpenApiRoutes(app, routeDeps as never);
 
   const mcpConfig = (deps.config as Record<string, Record<string, unknown>>)?.projectMcp || {};
   const mcpPath = (mcpConfig.path as string) || '/mcp';
@@ -173,6 +173,7 @@ export function createApiServer(deps: ApiServerDeps): http.Server {
           'POST /api/projects/:id/beads-remote/provision', 'POST /api/admin/agents-md/refresh',
           'GET /formulas', 'POST /formulas/:name/run', 'GET /molecules/:id',
           'POST /molecules/:id/resume', 'DELETE /molecules/:id', 'GET /molecules/:id/events',
+          'GET /openapi.json', 'GET /docs',
           `POST ${mcpPath}`,
         ],
       });
